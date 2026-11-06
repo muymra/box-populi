@@ -76,14 +76,16 @@ From memory when the docs were written. Check each before relying on it, then mo
 | BGG XML details: zero for unknown, double-encoded descriptions, "N+" poll rows, `inbound="true"` on an expansion's base link | `parse.ts`, `poll.ts` |
 | Cloudflare free tier: 100k requests, 5M D1 rows read, 100k rows written per day; index updates count as writes; 50 subrequests per request | Scale budget, D09, D10 |
 | D1: 100 bound parameters per statement, no named parameters, foreign keys on by default, `batch()` is transactional | `db.ts`, migrations, tests |
-| Pages Functions have no cron triggers; a deployed Pages project reads `vars` and the D1 binding from `wrangler.jsonc` | Lazy cleanup, config |
+| Pages Functions have no cron triggers | Lazy cleanup |
 | The SvelteKit 3 page shows on phones without horizontal scrolling below 500 px (headless Chrome can't render narrower here) | Every page |
-| D1 Time Travel and `wrangler d1 export` exist for backups | SELF_HOSTING.md |
+| D1 Time Travel exists for backups (`wrangler d1 export` works: exported the demo database on 2026-11-06) | SELF_HOSTING.md |
 
 ## Verified
 
 | Fact | Checked | Source |
 |---|---|---|
+| A deployed Pages project reads `vars` and the D1 binding from `wrangler.jsonc` | 2026-11-06 | Both production instances run on them |
+| `wrangler d1 export` works for backups, also by binding name (`DB`) | 2026-11-06 | Exported the demo database |
 | BGG requires a registered application and a bearer token for nearly all XML API use; approval may take a week or more | 2026-11-06 | BGG "Using the XML API" page, via search summary (the page blocks automated fetches) |
 | BGG expects third-party code to let each user supply their own token | 2026-11-06 | same |
 | BGG data is licensed for non-commercial use only, must be credited with the "Powered by BGG" logo, may not be modified, and may not be used to train AI | 2026-11-06 | BGG "XML API Terms of Use" wiki page, via search summary |
