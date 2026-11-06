@@ -1,9 +1,10 @@
-import { error } from '@sveltejs/kit';
-import { requireRead } from '#lib/server/authz.ts';
+import { error, redirect } from '@sveltejs/kit';
+import { requireRead, requireRole } from '#lib/server/authz.ts';
+import { addCopy, removeCopy } from '#lib/server/games.ts';
 import { all, jsonArray, one } from '#lib/server/db.ts';
 import { getDb } from '#lib/server/platform.ts';
 import type { PollSource } from '#lib/catalog/types.ts';
-import type { PageServerLoad } from './$types';
+import type { Actions, PageServerLoad } from './$types';
 
 type GameDetail = {
 	id: number;
@@ -32,7 +33,7 @@ type GameDetail = {
 export const load: PageServerLoad = async (event) => {
 	const db = getDb();
 	const { groupId } = event.params;
-	await requireRead(event, db, groupId);
+	const access = await requireRead(event, db, groupId);
 
 	const gameId = Number(event.params.gameId);
 	if (!Number.isInteger(gameId) || gameId <= 0) error(404, 'Game not found');
@@ -102,7 +103,12 @@ export const load: PageServerLoad = async (event) => {
 			: Promise.resolve([])
 	]);
 
+	const me = event.locals.user;
+	const mine = me ? (await one(db, 'SELECT 1 AS x FROM copies WHERE user_id = ?1 AND game_id = ?2', me.id, gameId)) != null : false;
+
 	return {
+		mine,
+		canEdit: access.role != null && !access.readonly,
 		game: {
 			id: game.id,
 			bggId: game.bgg_id,
@@ -140,4 +146,27 @@ export const load: PageServerLoad = async (event) => {
 		expansions,
 		bases: bases.map((b) => ({ id: b.id, name: b.name }))
 	};
+};
+
+function gameIdParam(raw: string): number {
+	const id = Number(raw);
+	if (!Number.isInteger(id) || id <= 0) error(404, 'Game not found');
+	return id;
+}
+
+export const actions: Actions = {
+	add: async (event) => {
+		const db = getDb();
+		await requireRole(event, db, event.params.groupId, 'member');
+		if (!(await addCopy(db, event.locals.user!.id, gameIdParam(event.params.gameId), Date.now()))) error(404, 'Game not found');
+		return { copyAdded: true };
+	},
+
+	remove: async (event) => {
+		const db = getDb();
+		await requireRole(event, db, event.params.groupId, 'member');
+		await removeCopy(db, event.locals.user!.id, gameIdParam(event.params.gameId));
+		// If nobody else in the group owns it, the game page would now 404, so go back to the catalog.
+		redirect(303, `/g/${event.params.groupId}`);
+	}
 };

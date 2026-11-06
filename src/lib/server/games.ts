@@ -1,0 +1,225 @@
+// Writing games and copies. BGG fields are stored exactly as parsed; nothing edits them later
+// (TECH.md "No modification"). Every change to a person's copies bumps their groups' catalogs.
+import { all, one, stmt, type DB } from './db.ts';
+import { bumpCatalogForUser } from './catalog.ts';
+import { buildSearchText, normalize } from '#lib/catalog/normalize.ts';
+import type { BggClient, BggSearchHit, BggThing } from './bgg/types.ts';
+
+const UPSERT_THING = `INSERT INTO games (bgg_id, name, search_text, year, description, image_url, thumb_url,
+	min_players, max_players, best_mask, rec_mask, poll_source, min_playtime, max_playtime, weight, users_rated,
+	mechanics, categories, base_bgg_ids, is_expansion, is_manual, fetched_at)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, 0, ?21)
+ON CONFLICT(bgg_id) DO UPDATE SET
+	name = excluded.name, search_text = excluded.search_text, year = excluded.year,
+	description = excluded.description, image_url = excluded.image_url, thumb_url = excluded.thumb_url,
+	min_players = excluded.min_players, max_players = excluded.max_players,
+	best_mask = excluded.best_mask, rec_mask = excluded.rec_mask, poll_source = excluded.poll_source,
+	min_playtime = excluded.min_playtime, max_playtime = excluded.max_playtime,
+	weight = excluded.weight, users_rated = excluded.users_rated,
+	mechanics = excluded.mechanics, categories = excluded.categories, base_bgg_ids = excluded.base_bgg_ids,
+	is_expansion = excluded.is_expansion, fetched_at = excluded.fetched_at`;
+
+export function upsertThingStatement(db: DB, t: BggThing, now: number): D1PreparedStatement {
+	return stmt(
+		db,
+		UPSERT_THING,
+		t.bggId,
+		t.name,
+		buildSearchText(t.name, t.alternateNames),
+		t.year,
+		t.description,
+		t.imageUrl,
+		t.thumbUrl,
+		t.minPlayers,
+		t.maxPlayers,
+		t.bestMask,
+		t.recMask,
+		t.pollSource,
+		t.minPlaytime,
+		t.maxPlaytime,
+		t.weight,
+		t.usersRated,
+		JSON.stringify(t.mechanics),
+		JSON.stringify(t.categories),
+		JSON.stringify(t.baseBggIds),
+		t.type === 'boardgameexpansion' ? 1 : 0,
+		now
+	);
+}
+
+/** A placeholder row for a BGG game whose details haven't been fetched (fetched_at NULL). */
+export function stubStatement(
+	db: DB,
+	s: { bggId: number; name: string; year: number | null; isExpansion?: boolean; imageUrl?: string | null; thumbUrl?: string | null }
+): D1PreparedStatement {
+	return stmt(
+		db,
+		`INSERT INTO games (bgg_id, name, search_text, year, is_expansion, image_url, thumb_url) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+		 ON CONFLICT(bgg_id) DO NOTHING`,
+		s.bggId,
+		s.name,
+		buildSearchText(s.name),
+		s.year,
+		s.isExpansion ? 1 : 0,
+		s.imageUrl ?? null,
+		s.thumbUrl ?? null
+	);
+}
+
+/** Exact title first, then titles starting with the query, then the rest; BGG's order within each. */
+export function rankHits(hits: BggSearchHit[], query: string, limit = 10): BggSearchHit[] {
+	const q = normalize(query);
+	const tier = (h: BggSearchHit) => {
+		const name = normalize(h.name);
+		return name === q ? 0 : name.startsWith(q) ? 1 : 2;
+	};
+	return hits
+		.map((h, i) => ({ h, i, t: tier(h) }))
+		.sort((a, b) => a.t - b.t || a.i - b.i)
+		.slice(0, limit)
+		.map((x) => x.h);
+}
+
+export type SearchResult = {
+	gameId: number;
+	bggId: number;
+	name: string;
+	year: number | null;
+	thumbUrl: string | null;
+	isExpansion: boolean;
+	owned: boolean;
+};
+
+/**
+ * BGG title search for the add page (TECH.md "Search"): one `search` call, then one `thing` call
+ * for the top hits that aren't cached yet. Every hit ends up as a games row, so it can be added.
+ */
+export async function searchBgg(db: DB, client: BggClient, query: string, userId: string, now: number): Promise<SearchResult[]> {
+	const top = rankHits(await client.search(query), query);
+	if (top.length === 0) return [];
+	const ids = top.map((h) => h.bggId);
+	const placeholders = ids.map((_, i) => `?${i + 1}`).join(', ');
+
+	const cached = await all<{ bgg_id: number }>(db, `SELECT bgg_id FROM games WHERE fetched_at IS NOT NULL AND bgg_id IN (${placeholders})`, ...ids);
+	const cachedIds = new Set(cached.map((r) => r.bgg_id));
+	const missing = top.filter((h) => !cachedIds.has(h.bggId));
+	if (missing.length) {
+		const things = await client.things(missing.map((h) => h.bggId));
+		const fetched = new Set(things.map((t) => t.bggId));
+		await db.batch([
+			...things.map((t) => upsertThingStatement(db, t, now)),
+			...missing.filter((h) => !fetched.has(h.bggId)).map((h) => stubStatement(db, { ...h, isExpansion: h.type === 'boardgameexpansion' }))
+		]);
+	}
+
+	const rows = await all<{ id: number; bgg_id: number; name: string; year: number | null; thumb_url: string | null; is_expansion: number; users_rated: number | null; owned: number }>(
+		db,
+		`SELECT g.id, g.bgg_id, g.name, g.year, g.thumb_url, g.is_expansion, g.users_rated,
+			EXISTS (SELECT 1 FROM copies c WHERE c.game_id = g.id AND c.user_id = ?${ids.length + 1}) AS owned
+		 FROM games g WHERE g.bgg_id IN (${placeholders})`,
+		...ids,
+		userId
+	);
+	const q = normalize(query);
+	return rows
+		.sort((a, b) => Number(normalize(b.name) === q) - Number(normalize(a.name) === q) || (b.users_rated ?? 0) - (a.users_rated ?? 0))
+		.map((r) => ({
+			gameId: r.id,
+			bggId: r.bgg_id,
+			name: r.name,
+			year: r.year,
+			thumbUrl: r.thumb_url,
+			isExpansion: r.is_expansion === 1,
+			owned: r.owned === 1
+		}));
+}
+
+export async function addCopy(db: DB, userId: string, gameId: number, now: number): Promise<boolean> {
+	const game = await one(db, 'SELECT 1 AS x FROM games WHERE id = ?1', gameId);
+	if (!game) return false;
+	await db.batch([
+		stmt(db, 'INSERT INTO copies (user_id, game_id, added_at) VALUES (?1, ?2, ?3) ON CONFLICT(user_id, game_id) DO NOTHING', userId, gameId, now),
+		bumpCatalogForUser(db, userId)
+	]);
+	return true;
+}
+
+export async function removeCopy(db: DB, userId: string, gameId: number): Promise<void> {
+	await db.batch([stmt(db, 'DELETE FROM copies WHERE user_id = ?1 AND game_id = ?2', userId, gameId), bumpCatalogForUser(db, userId)]);
+}
+
+export type ManualGameInput = {
+	name: string;
+	minPlayers: number | null;
+	maxPlayers: number | null;
+	minPlaytime: number | null;
+	maxPlaytime: number | null;
+	imageUrl: string | null;
+};
+
+export type ManualParse = { ok: true; value: ManualGameInput } | { ok: false; error: string };
+
+function optionalInt(raw: FormDataEntryValue | null, min: number, max: number): number | null | 'bad' {
+	const s = typeof raw === 'string' ? raw.trim() : '';
+	if (!s) return null;
+	if (!/^\d+$/.test(s)) return 'bad';
+	const n = Number(s);
+	return n >= min && n <= max ? n : 'bad';
+}
+
+export function parseManualGame(form: FormData): ManualParse {
+	const name = String(form.get('name') ?? '').replace(/\s+/g, ' ').trim();
+	if (!name || name.length > 120 || /\p{C}/u.test(name)) return { ok: false, error: 'Give the game a name, up to 120 characters.' };
+	const minPlayers = optionalInt(form.get('minPlayers'), 1, 99);
+	const maxPlayers = optionalInt(form.get('maxPlayers'), 1, 99);
+	const minPlaytime = optionalInt(form.get('minPlaytime'), 1, 1440);
+	const maxPlaytime = optionalInt(form.get('maxPlaytime'), 1, 1440);
+	if ([minPlayers, maxPlayers].includes('bad')) return { ok: false, error: 'Player counts are whole numbers from 1 to 99.' };
+	if ([minPlaytime, maxPlaytime].includes('bad')) return { ok: false, error: 'Play time is in whole minutes, up to 1440.' };
+	if (typeof minPlayers === 'number' && typeof maxPlayers === 'number' && minPlayers > maxPlayers) return { ok: false, error: 'The fewest players can’t be more than the most.' };
+	if (typeof minPlaytime === 'number' && typeof maxPlaytime === 'number' && minPlaytime > maxPlaytime) return { ok: false, error: 'The shortest play time can’t be longer than the longest.' };
+
+	const rawImage = String(form.get('imageUrl') ?? '').trim();
+	let imageUrl: string | null = null;
+	if (rawImage) {
+		try {
+			const url = new URL(rawImage);
+			if (url.protocol !== 'https:') throw new Error();
+			imageUrl = url.toString();
+		} catch {
+			return { ok: false, error: 'The image address must start with https://.' };
+		}
+	}
+	return {
+		ok: true,
+		value: {
+			name,
+			minPlayers: minPlayers as number | null,
+			maxPlayers: maxPlayers as number | null,
+			minPlaytime: minPlaytime as number | null,
+			maxPlaytime: maxPlaytime as number | null,
+			imageUrl
+		}
+	};
+}
+
+/** Creates a hand-entered game and the person's copy of it. Returns the new game's id. */
+export async function addManualGame(db: DB, userId: string, input: ManualGameInput, now: number): Promise<number> {
+	const row = await one<{ id: number }>(
+		db,
+		`INSERT INTO games (name, search_text, min_players, max_players, min_playtime, max_playtime, image_url, thumb_url, is_manual, created_by, fetched_at)
+		 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, 1, ?8, ?9) RETURNING id`,
+		input.name,
+		buildSearchText(input.name),
+		input.minPlayers,
+		input.maxPlayers,
+		input.minPlaytime,
+		input.maxPlaytime,
+		input.imageUrl,
+		userId,
+		now
+	);
+	if (!row) throw new Error('Inserting the game returned no id');
+	await addCopy(db, userId, row.id, now);
+	return row.id;
+}

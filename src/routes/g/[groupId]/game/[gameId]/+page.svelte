@@ -78,6 +78,17 @@
 		{#if data.wishers.length}
 			<p class="muted">Wanted by {data.wishers.join(', ')}</p>
 		{/if}
+		{#if data.canEdit}
+			{#if data.mine}
+				<form method="POST" action="?/remove" class="copy-action">
+					<button class="btn">Remove from my games</button>
+				</form>
+			{:else}
+				<form method="POST" action="?/add" class="copy-action">
+					<button class="btn">I own this too</button>
+				</form>
+			{/if}
+		{/if}
 	</section>
 
 	{#if data.expansions.length}
@@ -164,6 +175,9 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.4rem;
+	}
+	.copy-action {
+		margin-top: 0.75rem;
 	}
 	.description {
 		white-space: pre-line;

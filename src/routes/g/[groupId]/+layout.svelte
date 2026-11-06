@@ -16,6 +16,9 @@
 	<nav aria-label="Group">
 		<a href={base} aria-current={current === base ? 'page' : undefined}>Catalog</a>
 		<a href="{base}/pick" aria-current={current === `${base}/pick` ? 'page' : undefined}>What should we play?</a>
+		{#if data.role && !data.readonly}
+			<a href="{base}/add" aria-current={current === `${base}/add` ? 'page' : undefined}>Add games</a>
+		{/if}
 	</nav>
 </div>
 
@@ -55,7 +58,8 @@
 	}
 	nav {
 		display: flex;
-		gap: 1rem;
+		flex-wrap: wrap;
+		gap: 0.25rem 1rem;
 	}
 	nav a {
 		text-decoration: none;

@@ -1,8 +1,8 @@
 # Status
 
-Last updated 2026-11-06 (Friday night). Runs locally: create a group, join with a code, personal links across devices, the account page, and the demo group's catalog, game pages and picker. 94 tests pass. Nothing is deployed, and no Cloudflare or BGG credentials exist yet.
+Last updated 2026-11-06 (Friday night). Runs locally: create a group, join with a code, personal links across devices, the account page, adding games (BGG search on test data, or by hand), removing your copy, and the catalog, game pages and picker. 106 tests pass. Nothing is deployed, and no Cloudflare or BGG credentials exist yet.
 
-**Next up:** the add-game page (Saturday 6: BGG search on `BGG_MODE=fake`, manual entry), then removing copies (10), then import (Sunday 11).
+**Next up:** BGG collection import with the hydrate loop (Sunday 11), then links (13), then group settings and roles (14). The live BGG client is written and tested against a fake server, but has never talked to BGG: that waits for the token.
 
 Agents: tick items as they're done, add a line to the session log at the bottom, and move assumptions to "Verified" with a date and source when you confirm them.
 
@@ -35,12 +35,12 @@ Not secret. Secrets never go in this file.
 2. [x] `instance.ts` with validation and the missing-setting error page (in `hooks.server.ts`). TECH: "Configuration and secrets."
 3. [x] Identity without accounts (D25): display names, device sessions, personal links, `/signin`, `/welcome`, `/key/[token]`, `/me`, `hooks.server.ts` session resolution, `last_seen_at` touch. TECH: "Identity and sessions," "Authorization." Done so far: `authz.ts`, `permissions.ts` with tests, `return-to.ts`.
 4. [x] Create group, join by code and link, `codes.ts`, join and creation rate limits by IP, instance limits, invite box with the code on the group page. TECH: "Group codes."
-5. [ ] BGG client interface, fake client, `BGG_MODE=off`, `parse.ts` and `poll.ts` with hand-written fixtures and tests. Done so far: all of that plus the pacer (`pace.ts`) and its SQL test. Left: the live client (`client.ts`) using the pacer, User-Agent and backoff, and `BGG_MODE=off` handling in the UI. TECH: "BoardGameGeek integration."
-6. [ ] Add-game page: BGG search with ranking, manual entry.
+5. [x] BGG client interface, fake client, `BGG_MODE=off` (add page falls back to manual entry), `parse.ts` and `poll.ts` with fixtures and tests, the pacer, and the live client (`client.ts`: token, User-Agent, pacing, backoff on 429/5xx, batches of 20), tested with a mocked `fetch`. Not yet run against BGG. TECH: "BoardGameGeek integration."
+6. [x] Add-game page: BGG search with ranking (`/api/bgg/search`, 30 per minute per person), add with one tap, manual entry with validation.
 7. [x] `scripts/seed-demo.ts`, invented games for now; `--bgg-user` waits for the live client. TECH: "Demo group."
 8. [x] Catalog endpoint with ETag; `src/lib/catalog/` filter, URL params, normalize and buckets with tests; catalog page with incremental rendering and the phone filter layout. TECH: "Catalog delivery."
 9. [x] Game page, including expansions and the BGG attribution (text badge until the official logo file is located).
-10. [ ] Remove a copy, leave a group. Done so far: leaving (on the account page, with the owner guard).
+10. [x] Remove a copy (game page: "Remove from my games" / "I own this too"), leave a group (account page, with the owner guard).
 
 Checkpoint: the app answers "who has X" and "what fits 5 players in under an hour" against the demo data.
 
@@ -109,3 +109,4 @@ From memory when the docs were written. Check each before relying on it, then mo
 - 2026-11-06 (evening): Build started. Scaffolded on SvelteKit 3 with pnpm (D24). Built and tested: schema migration, D1 test adapter on `node:sqlite`, catalog filter/sort/URL/picker logic, join codes, the role table, instance config, BGG XML parsing with hand-written fixtures, the BGG pacer, the catalog payload and ETag endpoint, the demo seed (invented games), and the landing, privacy, sign-in, catalog, game and picker pages. 78 tests pass, `pnpm check` is clean, and pages were checked in headless Chrome at 500 and 1280 px.
 - 2026-11-06 (evening): Replaced Google sign-in with no-account identity (D25) after Carlo judged sign-in too complicated for friends and hosters. PRD, TECH, SELF_HOSTING, AGENTS updated; migration 0001 rewritten before any deploy.
 - 2026-11-06 (night): Built no-account identity (D25): people, device sessions, personal links with confirm-before-sign-in, `/groups/new`, `/join`, `/welcome`, `/key/[token]`, `/me`, `/signed-out`, IP rate limits, the invite box. 94 tests. Walked through create, join, second-device sign-in, link regeneration, sign out everywhere and a hostile `returnTo` against the dev server. Lessons: a dev server started before a database reset keeps the deleted file open (`SQLITE_CANTOPEN`), so stop old `vite dev` processes by PID (`ss -ltnp | grep 5173`); `pkill -f` with the command line matches its own shell. With curl, form POSTs need a Content-Type (SvelteKit 3 answers 415 without one) and `Accept: text/html` to get the 303.
+- 2026-11-06 (night): Add-game page. Live BGG client with mocked-fetch tests, `searchBgg` (one search plus one `thing` call for uncached top hits; every hit stored so it can be added), add and remove copies, manual entry, "Add games" in group nav for members of editable groups. 106 tests; checked end to end on the dev server including the demo 403 and a rejected `javascript:` image URL. Game ids for new games now land above the demo range (9,000,001+); harmless, since the demo seed deletes by `created_by`.
