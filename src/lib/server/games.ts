@@ -164,8 +164,9 @@ const MAX_USABLE_IDS = 98;
 /**
  * Which of these games this person may put on their shelf or wishlist from this group, each with
  * whether it's already on their shelf. BGG and Wikidata games come from public search, so any id
- * is fine. A hand-entered game must be their own, or one the group can already see: otherwise
- * guessing ids would reveal other groups' hand-entered titles. One query, whatever the count.
+ * is fine; such a game always has a BGG or Wikidata id. Anything else (a hand-entered game, or the
+ * demo's invented ones) must be their own, or one the group can already see: otherwise guessing ids
+ * would reveal other groups' titles. One query, whatever the count.
  */
 export async function usableGames(db: DB, groupId: string, userId: string, gameIds: number[]): Promise<Map<number, { owned: boolean }>> {
 	const ids = [...new Set(gameIds)];
@@ -177,7 +178,7 @@ export async function usableGames(db: DB, groupId: string, userId: string, gameI
 		`SELECT g.id, EXISTS (SELECT 1 FROM copies c WHERE c.user_id = ?2 AND c.game_id = g.id) AS owned
 		 FROM games g
 		 WHERE g.id IN (${placeholders}) AND (
-			(g.source <> 'manual' AND g.is_manual <> 1)
+			(g.source <> 'manual' AND g.is_manual <> 1 AND (g.bgg_id IS NOT NULL OR g.wikidata_id IS NOT NULL))
 			OR g.created_by = ?2
 			OR EXISTS (SELECT 1 FROM copies c JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1 WHERE c.game_id = g.id)
 			OR EXISTS (SELECT 1 FROM wishlist w JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1 WHERE w.game_id = g.id))`,

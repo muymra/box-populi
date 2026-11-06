@@ -18,7 +18,7 @@ The screenshots show the demo group, which has invented games and people.
 
 ## Run it locally
 
-Needs Node 22.17+ and pnpm.
+Needs Node 22.18+ and pnpm.
 
 ```sh
 pnpm install      # also creates wrangler.jsonc and .dev.vars from the examples

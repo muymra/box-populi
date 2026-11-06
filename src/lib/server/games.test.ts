@@ -203,4 +203,11 @@ describe('gameUsableInGroup', () => {
 		await run(db, `INSERT INTO copies (user_id, game_id, added_at) VALUES ('bo', 2, 0)`);
 		expect(await gameUsableInGroup(db, 'g1', 'ada', 2)).toBe(true);
 	});
+
+	it('treats a game with neither a BGG nor a Wikidata id, like the demo’s invented ones, as private', async () => {
+		await run(db, `INSERT INTO games (id, name, search_text) VALUES (9000001, 'Invented', 'invented')`); // source defaults to 'bgg'
+		expect(await gameUsableInGroup(db, 'g1', 'ada', 9000001)).toBe(false);
+		await run(db, `INSERT INTO games (id, wikidata_id, name, search_text, source) VALUES (7, 'Q7', 'From Wikidata', 'from wikidata', 'wikidata')`);
+		expect(await gameUsableInGroup(db, 'g1', 'ada', 7)).toBe(true);
+	});
 });

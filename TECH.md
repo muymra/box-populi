@@ -19,7 +19,7 @@ Facts about third-party services below (BGG API terms, Cloudflare limits, librar
 | XML parsing | `fast-xml-parser` | Workers have no `DOMParser`. |
 | Images | Link to BGG's image CDN, thumbnails only in lists; see "Images" under the BGG section | Copying images would reproduce files whose rights sit with their uploaders and publishers. Disclosed on Carlo's BGG application. |
 | IDs | `crypto.randomUUID()` for users and groups; integer keys for games and copies | No dependency. |
-| Package manager | pnpm; Node 22.17 or newer (SvelteKit 3's minimum) | pnpm is what the build machine has on Linux; its npm is the Windows one, which breaks on WSL paths. |
+| Package manager | pnpm; Node 22.18 or newer (the first that strips TypeScript types by default, which `pnpm install` and the scripts rely on) | pnpm is what the build machine has on Linux; its npm is the Windows one, which breaks on WSL paths. |
 | Tests | Vitest, colocated as `*.test.ts`; SQL tests on Node's built-in `node:sqlite` with the real migrations | Pure logic is most of the risk; no native module to build. See "Testing." |
 
 Cloudflare is steering new projects toward Workers with static assets over Pages. Pages still works, and Carlo chose pages.dev (DECISIONS D03). Pages Functions lack cron triggers, which this design works around with lazy cleanup. Moving to Workers later means swapping the adapter and the config file.

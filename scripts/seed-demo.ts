@@ -3,7 +3,7 @@
 //   node scripts/seed-demo.ts                 invented games, no BGG data (works without a token)
 //   node scripts/seed-demo.ts --games 600     more of them
 //
-// Seeding from a real BGG collection (--bgg-user) arrives with the live BGG client. The output is
+// Seeding from a real BGG collection (--bgg-user) isn't built yet; it would need a BGG token. The output is
 // gitignored either way. Apply with `pnpm db:seed` (local) or
 // `wrangler d1 execute box-populi --remote --file seed/demo.sql`.
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -16,7 +16,7 @@ const { values } = parseArgs({
 	options: { games: { type: 'string', default: '400' }, 'bgg-user': { type: 'string' }, seed: { type: 'string', default: '7' } }
 });
 if (values['bgg-user']) {
-	console.error('Seeding from a BGG collection needs the live BGG client, which is not built yet. Run without --bgg-user.');
+	console.error('Seeding from a BGG collection isn’t built yet. Run without --bgg-user.');
 	process.exit(1);
 }
 

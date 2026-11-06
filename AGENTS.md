@@ -40,8 +40,8 @@ pnpm test:libsql      # the same suite on the libSQL (Turso) wrapper, foreign ke
 pnpm check            # wrangler types check + svelte-check
 pnpm gen              # regenerate worker-configuration.d.ts after changing wrangler config keys
 pnpm gen:themes       # rewrite src/lib/themes.css after editing a palette in src/lib/themes.ts
-pnpm exec wrangler d1 migrations create box-populi <name>   # new migration file
-pnpm deploy           # build and `wrangler pages deploy` (needs a Cloudflare login)
+pnpm exec wrangler d1 migrations create DB <name>   # new migration file
+pnpm run deploy       # build and `wrangler pages deploy` (needs a Cloudflare login); bare `pnpm deploy` is pnpm's own command
 BOX_TARGET=node pnpm build     # also vercel, netlify; see TECH.md "Hosting targets"
 ```
 

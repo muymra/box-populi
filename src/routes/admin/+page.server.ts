@@ -6,6 +6,7 @@ import { clearAdminCookie } from '#lib/server/cookies.ts';
 import { getAppearance, saveAppearance } from '#lib/server/appearance.ts';
 import { CUSTOM_DEFAULTS } from '#lib/themes.ts';
 import { getDb } from '#lib/server/platform.ts';
+import { activeGameSource } from '#lib/server/instance.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 function requireAdmin(event: Pick<RequestEvent, 'locals'>): void {
@@ -23,6 +24,7 @@ export const load: PageServerLoad = async (event) => {
 		groups,
 		log,
 		bggMode: event.locals.config.bggMode,
+		gameSource: activeGameSource(event.locals.config),
 		groupCreation: event.locals.config.groupCreation,
 		look: {
 			hasCustom: appearance.colors != null,

@@ -27,7 +27,7 @@ This guide sets up an instance on your own Cloudflare account, which is the main
 
 - A Cloudflare account (free plan is enough).
 - Optional: a BoardGameGeek account to register an application. Apply first, because approval can take a week or more. The instance runs without it, with manual game entry only.
-- Node 22.17 or newer, pnpm (`corepack enable pnpm`, or install it with your package manager), and git.
+- Node 22.18 or newer (the setup scripts are TypeScript, which Node runs directly from 22.18), pnpm (`corepack enable pnpm`, or install it with your package manager), and git.
 
 ## 1. Apply for BGG access (optional, do it first)
 

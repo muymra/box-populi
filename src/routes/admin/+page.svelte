@@ -77,7 +77,10 @@
 	</p>
 
 	{#if data.bggMode === 'off'}
-		<p class="banner">BoardGameGeek search and import aren’t set up here (<code>BGG_MODE=off</code>). Groups add games by hand.</p>
+		<p class="banner">
+			BoardGameGeek search and import aren’t set up here (<code>BGG_MODE=off</code>).
+			{#if data.gameSource === 'wikidata'}Groups find games on Wikidata or type them in (<code>GAME_SOURCE=wikidata</code>).{:else}Groups type their games in (<code>GAME_SOURCE=manual</code>).{/if}
+		</p>
 	{/if}
 	{#if data.groupCreation === 'admins'}
 		<p class="banner">
