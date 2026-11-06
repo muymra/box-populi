@@ -2,7 +2,7 @@
 
 Last updated 2026-11-06 (Friday night). Redesigned as the cube shelf (DECISIONS D26, DESIGN.md). Runs locally: create a group, join with a code, personal links across devices, the account page, adding games (BGG search on test data, or by hand), removing your copy, and the catalog, game pages and picker. 106 tests pass. Nothing is deployed, and no Cloudflare or BGG credentials exist yet.
 
-**Next up:** group settings and roles (Sunday 14), then the admin page (15), then the demo group on production (16). The live BGG client is written and tested against a fake server, but has never talked to BGG: that waits for the token.
+**Next up:** the instance admin page (Sunday 15), then the demo group on production (16), then wishlist and Wanted (17). The live BGG client is written and tested against a fake server, but has never talked to BGG: that waits for the token.
 
 Agents: tick items as they're done, add a line to the session log at the bottom, and move assumptions to "Verified" with a date and source when you confirm them.
 
@@ -49,7 +49,7 @@ Checkpoint: the app answers "who has X" and "what fits 5 players in under an hou
 11. [x] Import, confirm, and the hydrate loop with progress and resume (`importer.ts`, `/api/bgg/import`, `/import/confirm`, `/hydrate`, `ImportPanel`, `HydrateProgress`, the "still loading" note on group pages). TECH: "Import and hydrate."
 12. [x] Picker with "who's here." TECH: "Picker."
 13. [x] Links, with URL validation, and generated links (`links.ts`, the game page's `addLink` and `deleteLink` actions).
-14. [ ] Group settings: members list, roles, rename, code, remove, transfer, delete.
+14. [x] Group settings: members list, roles, rename, code, remove, transfer, delete (`group-admin.ts`, the Group tab at `/g/[groupId]/group`).
 15. [ ] `/admin`: key sign-in, totals, groups table, suspend, delete, log. TECH: "Instance administration."
 16. [ ] Demo group live on production at `/demo`.
 17. [ ] Wishlist and the Wanted view.
@@ -114,3 +114,4 @@ From memory when the docs were written. Check each before relying on it, then mo
 - 2026-11-06 (night): Fixed design drift the documenter reported. Focus rings use the ink colour, not player blue. "Best at N" is a neutral tag and the cube mark's second box is kraft, so marigold only means "chosen". Boxes use `--r-cube` (2px). Every font size and corner radius now sits on the DESIGN.md scale, and `impeccable detect` reports 0 findings. DESIGN.md and design.json are updated to match.
 - 2026-11-06 (night): BGG collection import. Preview stores nothing; confirm re-fetches the collection so names never come from the browser; details load 20 games per call through the pacer and resume from any group page ("Details are still loading … Finish loading them"). 113 tests. Checked end to end on the dev server in fake mode (preview, 202 pending, unknown user, bad username, add, hydrate, note, catalog) and visually at phone and desktop width.
 - 2026-11-06 (night): Rules and tutorial links on the game page. Members add an address with a kind and optional title; the kind is guessed from the address as it's typed. The adder, a co-admin or the owner can remove one. The YouTube "how to play" search link stays generated. 9 new tests. Checked over HTTP (add, duplicate, `javascript:` refused, signed-out redirect, delete rights for member and owner) and visually at phone width in light mode and desktop in dark mode.
+- 2026-11-06 (night): Group settings on the Group tab. The members list is sorted by last activity, searchable past 8 people, and shows role, game count, colour and "active N days ago". Each row offers only what the actor's role allows: make co-admin, make a regular member, hand over ownership, remove (the last two behind a confirm step). Co-admins rename the group and make a new code; the owner deletes it by typing its name. TECH's route was `/settings`; the code uses the existing `/group` tab, and TECH now says so. 8 new tests. Checked over HTTP for owner, co-admin and member (13 cases, including a removed member getting 404) and visually at phone width in light mode and desktop in dark mode.

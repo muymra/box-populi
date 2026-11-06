@@ -375,6 +375,8 @@ The role table from the PRD lives in `src/lib/server/permissions.ts` as a pure f
 | Promote, demote, transfer ownership, delete group | `owner`; promote and transfer only to a current member other than self |
 | Leave group | any member; refused for the owner while other members remain |
 
+The group actions live in `src/lib/server/group-admin.ts`. Each reads the target's role fresh and calls `can()`; `memberActions()` gives the page the same answers, so it only shows controls that will work. Handing over ownership demotes the old owner before promoting the new one, because the one-owner index is checked per statement. Deleting compares the typed name ignoring case and repeated spaces.
+
 `hooks.server.ts` touches `memberships.last_seen_at` on group routes when the stored value is more than an hour old. That's one write per member per hour at most.
 
 Instance limits apply in the actions: creating a group checks `GROUP_CREATION`, the caller's owned-group count against `MAX_GROUPS_PER_USER`, and 5 `group_create` events per IP per day. Joining checks `MAX_MEMBERS_PER_GROUP` and refuses suspended and demo groups.
@@ -649,7 +651,7 @@ URL params: `n`, `t`, `w`, `present` (comma-separated user ids), `seen` (ids alr
 | `/g/[groupId]/add` | BGG search, manual entry, import. | `requireRole(member)` |
 | `/g/[groupId]/pick` | Picker. | `requireRead` |
 | `/g/[groupId]/wanted` | Games members want that nobody in the group owns. | `requireRead` |
-| `/g/[groupId]/settings` | Members and roles, rename, code, delete. Members see the list; admins and the owner see their controls. | `requireRole(member)` |
+| `/g/[groupId]/group` | The Group tab: invite code, members list, and the settings actions (`rename`, `newCode`, `promote`, `demote`, `transfer`, `remove`, `delete`). Members see the code and the list; co-admins and the owner see the controls their role allows. | `requireRead`; each action `requireRole(admin)` or `requireRole(owner)` |
 | `/me` | Display name, groups, new personal link, sign out of this device or everywhere, account deletion. Later: my games, loans and wishlist. | `requireUser` |
 | `GET /api/g/[groupId]/catalog` | Catalog payload with ETag. | `requireRead` |
 | `GET /api/bgg/search` | BGG search proxy. | `requireUser` |
