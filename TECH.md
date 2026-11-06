@@ -71,6 +71,7 @@ box-populi/
     lib/
       catalog/                  pure TS: runs in browser, server and tests
         types.ts                CatalogPayload and friends
+        colors.ts               player colours (by join order) and box-front colours
         normalize.ts            search normalization, buildSearchText()
         players.ts              player-count bitmasks and formatting
         buckets.ts              weight buckets, weight and time formatting
@@ -78,7 +79,7 @@ box-populi/
         pick.ts                 picker draw, gamesAtHand(), seededRng()
         client.ts               browser fetch of the catalog, safe localStorage
         testing.ts              builders for tests
-      components/               GameCard, GameCover, CheckList, BggCredit
+      components/               BoxFront, Cube, OwnerEdge, ListRow (Spines view), CubeMark, CheckList, BggCredit, PersonalLink, CopyButton
       server/                   server-only (SvelteKit 3 treats any `server` directory so)
         platform.ts             the only importer of `cloudflare:workers`: getDb(), getConfig(), afterResponse()
         db.ts                   D1 helpers

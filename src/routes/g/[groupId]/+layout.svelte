@@ -38,7 +38,7 @@
 	{#if data.user}
 		<a href="/me" class="me">{data.user.name}</a>
 	{:else}
-		<a href="/join" class="me">Join</a>
+		<a href="/join" class="me">Join a group</a>
 	{/if}
 </header>
 

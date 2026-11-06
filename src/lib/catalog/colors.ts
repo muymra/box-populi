@@ -24,18 +24,18 @@ export function playerColor(index: number): PlayerColor {
  * Every pair passes 4.5:1.
  */
 export const BOX_COLORS = [
-	{ bg: '#b49a7a', ink: '#1f1d1a' },
-	{ bg: '#3d3a36', ink: '#f4f1ec' },
-	{ bg: '#d6cdbd', ink: '#2b2a28' },
-	{ bg: '#5c636b', ink: '#ffffff' },
-	{ bg: '#6b5948', ink: '#ffffff' },
-	{ bg: '#9a948a', ink: '#1f1d1a' },
-	{ bg: '#2f3336', ink: '#f1eee8' },
-	{ bg: '#c4b59c', ink: '#2b2a28' },
-	{ bg: '#4b4038', ink: '#f4efe8' },
-	{ bg: '#7d7569', ink: '#ffffff' },
-	{ bg: '#e3dccf', ink: '#2b2a28' },
-	{ bg: '#55524d', ink: '#ffffff' }
+	{ bg: '#b49a7a', ink: '#1f1d1a' }, // kraft
+	{ bg: '#e3dccf', ink: '#2b2a28' }, // oatmeal
+	{ bg: '#9a948a', ink: '#1f1d1a' }, // stone
+	{ bg: '#c4b59c', ink: '#2b2a28' }, // putty
+	{ bg: '#3d3a36', ink: '#f4f1ec' }, // charcoal
+	{ bg: '#d6cdbd', ink: '#2b2a28' }, // sand
+	{ bg: '#a8ab9a', ink: '#1f1d1a' }, // sage stone
+	{ bg: '#bdb8ae', ink: '#2b2a28' }, // dove
+	{ bg: '#6b5948', ink: '#ffffff' }, // umber
+	{ bg: '#c9bfae', ink: '#2b2a28' }, // linen
+	{ bg: '#a9a196', ink: '#1f1d1a' }, // pebble
+	{ bg: '#4b4038', ink: '#f4efe8' } // espresso
 ] as const;
 
 /** Stable colour for a game's printed box front, from its name. */

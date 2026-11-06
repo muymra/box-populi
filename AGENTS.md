@@ -12,6 +12,7 @@ This file applies to any coding agent or LLM working here. `CLAUDE.md` imports i
 4. [DECISIONS.md](./DECISIONS.md): choices already made. Don't reopen them without Carlo.
 5. [SELF_HOSTING.md](./SELF_HOSTING.md): what a hoster does. Keep it true when config or deploy steps change.
 6. [PRODUCT.md](./PRODUCT.md): users, positioning, voice and product principles, the starting point for any UI or copy work.
+7. [DESIGN.md](./DESIGN.md): the cube shelf visual system (tokens, colour roles, components, motion). Read it before touching any UI; the Impeccable design hook checks edits against it.
 
 ## Which document owns what
 

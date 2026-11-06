@@ -1,0 +1,1064 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-06T00:00:00Z",
+  "title": "Design System: Box Populi",
+  "extensions": {
+    "colorMeta": {
+      "laminate": {
+        "role": "neutral",
+        "displayName": "White Laminate",
+        "canonical": "oklch(96.7% 0.003 106)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#262625",
+          "#454544",
+          "#666664",
+          "#898988",
+          "#aeaeac",
+          "#cececc",
+          "#eeeeed"
+        ]
+      },
+      "cube": {
+        "role": "neutral",
+        "displayName": "Cube White",
+        "canonical": "oklch(98.8% 0.001 106)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#262626",
+          "#454544",
+          "#666665",
+          "#898988",
+          "#aeaead",
+          "#cececd",
+          "#eeeeee"
+        ]
+      },
+      "shelf-gap": {
+        "role": "neutral",
+        "displayName": "Shelf Gap",
+        "canonical": "oklch(90.4% 0.010 87)",
+        "tonalRamp": [
+          "#0c0b09",
+          "#282623",
+          "#474540",
+          "#686660",
+          "#8b8983",
+          "#b0aea9",
+          "#cfcdc9",
+          "#f0eeeb"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Shelf Rule",
+        "canonical": "oklch(85.5% 0.012 85)",
+        "tonalRamp": [
+          "#0c0b08",
+          "#282622",
+          "#47453f",
+          "#69665f",
+          "#8c8982",
+          "#b0aea8",
+          "#d0cdc8",
+          "#f0eeea"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Shelf Ink",
+        "canonical": "oklch(28.5% 0.004 85)",
+        "tonalRamp": [
+          "#0b0b0a",
+          "#272625",
+          "#464543",
+          "#676664",
+          "#8a8987",
+          "#afaeac",
+          "#cecdcc",
+          "#efeeed"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Shelf Ink, second",
+        "canonical": "oklch(44.4% 0.011 78)",
+        "tonalRamp": [
+          "#0c0b09",
+          "#282623",
+          "#484540",
+          "#696560",
+          "#8c8883",
+          "#b1ada8",
+          "#d0cdc9",
+          "#f0eeea"
+        ]
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Shelf Ink, third",
+        "canonical": "oklch(51.2% 0.014 80)",
+        "tonalRamp": [
+          "#0d0b08",
+          "#292622",
+          "#48443e",
+          "#6a655e",
+          "#8d8881",
+          "#b1ada7",
+          "#d1cdc8",
+          "#f1eee9"
+        ]
+      },
+      "label": {
+        "role": "neutral",
+        "displayName": "Shelf Label",
+        "canonical": "oklch(28.5% 0.004 85)",
+        "tonalRamp": [
+          "#0b0b0a",
+          "#272625",
+          "#464543",
+          "#676664",
+          "#8a8987",
+          "#afaeac",
+          "#cecdcc",
+          "#efeeed"
+        ]
+      },
+      "label-ink": {
+        "role": "neutral",
+        "displayName": "Label Ink",
+        "canonical": "oklch(96.7% 0.003 106)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#262625",
+          "#454544",
+          "#666664",
+          "#898988",
+          "#aeaeac",
+          "#cececc",
+          "#eeeeed"
+        ]
+      },
+      "label-ink-2": {
+        "role": "neutral",
+        "displayName": "Label Ink, second",
+        "canonical": "oklch(82.2% 0.014 82)",
+        "tonalRamp": [
+          "#0d0b08",
+          "#292622",
+          "#48453f",
+          "#6a655e",
+          "#8d8981",
+          "#b1ada7",
+          "#d0cdc8",
+          "#f1eee9"
+        ]
+      },
+      "label-line": {
+        "role": "neutral",
+        "displayName": "Label Line",
+        "canonical": "oklch(45.5% 0.011 78)",
+        "tonalRamp": [
+          "#0c0b09",
+          "#282623",
+          "#484540",
+          "#696560",
+          "#8c8883",
+          "#b1ada8",
+          "#d0cdc9",
+          "#f0eeea"
+        ]
+      },
+      "label-field": {
+        "role": "neutral",
+        "displayName": "Label Field",
+        "canonical": "oklch(34.2% 0.006 78)",
+        "tonalRamp": [
+          "#0c0b0a",
+          "#272624",
+          "#464542",
+          "#686663",
+          "#8b8986",
+          "#afaeab",
+          "#cfcdcb",
+          "#efeeec"
+        ]
+      },
+      "marigold": {
+        "role": "primary",
+        "displayName": "Marigold",
+        "canonical": "oklch(80.0% 0.134 81)",
+        "tonalRamp": [
+          "#120900",
+          "#332304",
+          "#5a4005",
+          "#845f07",
+          "#ae801f",
+          "#cea861",
+          "#e9c98f",
+          "#fdeccf"
+        ]
+      },
+      "marigold-ink": {
+        "role": "primary",
+        "displayName": "Marigold Ink",
+        "canonical": "oklch(28.5% 0.004 85)",
+        "tonalRamp": [
+          "#0b0b0a",
+          "#272625",
+          "#464543",
+          "#676664",
+          "#8a8987",
+          "#afaeac",
+          "#cecdcc",
+          "#efeeed"
+        ]
+      },
+      "danger": {
+        "role": "neutral",
+        "displayName": "Danger",
+        "canonical": "oklch(49.3% 0.157 32)",
+        "tonalRamp": [
+          "#1d0100",
+          "#4d0701",
+          "#7a2113",
+          "#ab3c29",
+          "#d06450",
+          "#ef917f",
+          "#fdbbae",
+          "#fee9e4"
+        ]
+      },
+      "danger-soft": {
+        "role": "neutral",
+        "displayName": "Danger Soft",
+        "canonical": "oklch(92.5% 0.024 34)",
+        "tonalRamp": [
+          "#100908",
+          "#2e2421",
+          "#4f413e",
+          "#73625e",
+          "#968581",
+          "#b9aaa7",
+          "#d7cac7",
+          "#f6ece9"
+        ]
+      },
+      "note": {
+        "role": "neutral",
+        "displayName": "Note Paper",
+        "canonical": "oklch(96.0% 0.033 88)",
+        "tonalRamp": [
+          "#0e0b04",
+          "#2b261a",
+          "#4b4435",
+          "#6e6552",
+          "#918875",
+          "#b4ad9d",
+          "#d3cdbf",
+          "#f3eee2"
+        ]
+      },
+      "focus": {
+        "role": "neutral",
+        "displayName": "Focus Blue",
+        "canonical": "oklch(50.3% 0.136 259)",
+        "tonalRamp": [
+          "#000924",
+          "#072450",
+          "#1d437e",
+          "#3565af",
+          "#5a89d2",
+          "#87afee",
+          "#b3d0fb",
+          "#e5efff"
+        ]
+      },
+      "laminate-dark": {
+        "role": "neutral",
+        "displayName": "White Laminate (dark mode)",
+        "canonical": "oklch(21.6% 0.007 67)",
+        "tonalRamp": [
+          "#0c0b0a",
+          "#282624",
+          "#474442",
+          "#696562",
+          "#8c8885",
+          "#b0adaa",
+          "#d0cdcb",
+          "#f0eeec"
+        ]
+      },
+      "cube-dark": {
+        "role": "neutral",
+        "displayName": "Cube White (dark mode)",
+        "canonical": "oklch(25.5% 0.010 67)",
+        "tonalRamp": [
+          "#0d0b09",
+          "#292623",
+          "#484441",
+          "#6a6561",
+          "#8d8884",
+          "#b1ada9",
+          "#d0cdca",
+          "#f1eeeb"
+        ]
+      },
+      "shelf-gap-dark": {
+        "role": "neutral",
+        "displayName": "Shelf Gap (dark mode)",
+        "canonical": "oklch(31.6% 0.013 72)",
+        "tonalRamp": [
+          "#0d0b08",
+          "#292622",
+          "#48443f",
+          "#6a655f",
+          "#8d8882",
+          "#b2ada8",
+          "#d1cdc8",
+          "#f1eeea"
+        ]
+      },
+      "rule-dark": {
+        "role": "neutral",
+        "displayName": "Shelf Rule (dark mode)",
+        "canonical": "oklch(37.5% 0.012 72)",
+        "tonalRamp": [
+          "#0d0b08",
+          "#292622",
+          "#48443f",
+          "#6a655f",
+          "#8d8882",
+          "#b2ada8",
+          "#d1cdc8",
+          "#f1eeea"
+        ]
+      },
+      "ink-dark": {
+        "role": "neutral",
+        "displayName": "Shelf Ink (dark mode)",
+        "canonical": "oklch(94.7% 0.010 82)",
+        "tonalRamp": [
+          "#0c0b09",
+          "#282623",
+          "#474540",
+          "#696660",
+          "#8c8983",
+          "#b0ada9",
+          "#d0cdc9",
+          "#f0eeeb"
+        ]
+      },
+      "ink-2-dark": {
+        "role": "neutral",
+        "displayName": "Shelf Ink, second (dark mode)",
+        "canonical": "oklch(80.1% 0.017 79)",
+        "tonalRamp": [
+          "#0d0b07",
+          "#292620",
+          "#49443d",
+          "#6b655c",
+          "#8e887f",
+          "#b2ada5",
+          "#d1cdc6",
+          "#f1eee8"
+        ]
+      },
+      "ink-3-dark": {
+        "role": "neutral",
+        "displayName": "Shelf Ink, third (dark mode)",
+        "canonical": "oklch(69.9% 0.020 78)",
+        "tonalRamp": [
+          "#0d0b07",
+          "#2a2620",
+          "#4a443c",
+          "#6c655a",
+          "#8f887e",
+          "#b3ada4",
+          "#d2cdc5",
+          "#f2eee7"
+        ]
+      },
+      "label-dark": {
+        "role": "neutral",
+        "displayName": "Shelf Label (dark mode)",
+        "canonical": "oklch(29.2% 0.013 72)",
+        "tonalRamp": [
+          "#0d0b08",
+          "#292622",
+          "#49443f",
+          "#6b655f",
+          "#8e8882",
+          "#b2ada7",
+          "#d1cdc8",
+          "#f1eeea"
+        ]
+      },
+      "label-ink-2-dark": {
+        "role": "neutral",
+        "displayName": "Label Ink, second (dark mode)",
+        "canonical": "oklch(80.8% 0.019 78)",
+        "tonalRamp": [
+          "#0d0b07",
+          "#2a2620",
+          "#4a443c",
+          "#6c655b",
+          "#8f887e",
+          "#b3ada4",
+          "#d2cdc5",
+          "#f2eee8"
+        ]
+      },
+      "label-line-dark": {
+        "role": "neutral",
+        "displayName": "Label Line (dark mode)",
+        "canonical": "oklch(45.0% 0.018 77)",
+        "tonalRamp": [
+          "#0d0b07",
+          "#2a2620",
+          "#4a443c",
+          "#6c655b",
+          "#8f887e",
+          "#b3ada5",
+          "#d2cdc6",
+          "#f2eee8"
+        ]
+      },
+      "label-field-dark": {
+        "role": "neutral",
+        "displayName": "Label Field (dark mode)",
+        "canonical": "oklch(22.5% 0.010 67)",
+        "tonalRamp": [
+          "#0d0b09",
+          "#292623",
+          "#484441",
+          "#6a6561",
+          "#8d8884",
+          "#b1ada9",
+          "#d0cdca",
+          "#f1eeeb"
+        ]
+      },
+      "danger-dark": {
+        "role": "neutral",
+        "displayName": "Danger (dark mode)",
+        "canonical": "oklch(73.8% 0.129 33)",
+        "tonalRamp": [
+          "#1e0100",
+          "#471208",
+          "#722c1e",
+          "#a04736",
+          "#c56d5b",
+          "#e49787",
+          "#fdbbad",
+          "#ffe9e4"
+        ]
+      },
+      "danger-soft-dark": {
+        "role": "neutral",
+        "displayName": "Danger Soft (dark mode)",
+        "canonical": "oklch(27.4% 0.044 33)",
+        "tonalRamp": [
+          "#130806",
+          "#33211d",
+          "#563e39",
+          "#7c5e57",
+          "#a0817a",
+          "#c2a7a1",
+          "#dfc8c2",
+          "#fdeae5"
+        ]
+      },
+      "note-dark": {
+        "role": "neutral",
+        "displayName": "Note Paper (dark mode)",
+        "canonical": "oklch(28.8% 0.029 77)",
+        "tonalRamp": [
+          "#0f0a05",
+          "#2c251c",
+          "#4c4437",
+          "#6f6454",
+          "#928778",
+          "#b6ac9f",
+          "#d5ccc1",
+          "#f4ede4"
+        ]
+      },
+      "focus-dark": {
+        "role": "neutral",
+        "displayName": "Focus Blue (dark mode)",
+        "canonical": "oklch(76.9% 0.117 262)",
+        "tonalRamp": [
+          "#010923",
+          "#10254b",
+          "#284377",
+          "#4165a5",
+          "#6589c9",
+          "#8fafe6",
+          "#b4cffe",
+          "#e6effe"
+        ]
+      },
+      "player-red": {
+        "role": "secondary",
+        "displayName": "Player Red",
+        "canonical": "oklch(56.5% 0.175 31)",
+        "tonalRamp": [
+          "#1e0100",
+          "#4d0702",
+          "#7f180c",
+          "#b13222",
+          "#d85d4b",
+          "#f58d7b",
+          "#fdbbaf",
+          "#ffe9e5"
+        ]
+      },
+      "player-blue": {
+        "role": "secondary",
+        "displayName": "Player Blue",
+        "canonical": "oklch(50.3% 0.136 259)",
+        "tonalRamp": [
+          "#000924",
+          "#072450",
+          "#1d437e",
+          "#3565af",
+          "#5a89d2",
+          "#87afee",
+          "#b3d0fb",
+          "#e5efff"
+        ]
+      },
+      "player-pink": {
+        "role": "secondary",
+        "displayName": "Player Pink",
+        "canonical": "oklch(54.5% 0.160 353)",
+        "tonalRamp": [
+          "#1d000d",
+          "#48052b",
+          "#741e4b",
+          "#a3386d",
+          "#c96091",
+          "#e88db4",
+          "#fdb6d3",
+          "#fee7f0"
+        ]
+      },
+      "player-green": {
+        "role": "secondary",
+        "displayName": "Player Green",
+        "canonical": "oklch(52.9% 0.106 155)",
+        "tonalRamp": [
+          "#001005",
+          "#052f18",
+          "#155230",
+          "#2d774b",
+          "#579a6f",
+          "#86bd98",
+          "#addbbb",
+          "#d4f9df"
+        ]
+      },
+      "player-purple": {
+        "role": "secondary",
+        "displayName": "Player Purple",
+        "canonical": "oklch(49.3% 0.114 303)",
+        "tonalRamp": [
+          "#10041e",
+          "#2e1c43",
+          "#4f376d",
+          "#735599",
+          "#9679bc",
+          "#b9a1db",
+          "#d7c3f4",
+          "#f2ebfe"
+        ]
+      },
+      "player-orange": {
+        "role": "secondary",
+        "displayName": "Player Orange",
+        "canonical": "oklch(54.5% 0.143 45)",
+        "tonalRamp": [
+          "#190500",
+          "#431701",
+          "#702f0a",
+          "#a24711",
+          "#c86d41",
+          "#e69874",
+          "#fbbea3",
+          "#feeae1"
+        ]
+      },
+      "player-teal": {
+        "role": "secondary",
+        "displayName": "Player Teal",
+        "canonical": "oklch(49.6% 0.079 194)",
+        "tonalRamp": [
+          "#000e0e",
+          "#012d2d",
+          "#0b4f4f",
+          "#257372",
+          "#519795",
+          "#82bab9",
+          "#aad8d7",
+          "#d2f7f6"
+        ]
+      },
+      "player-black": {
+        "role": "secondary",
+        "displayName": "Player Black",
+        "canonical": "oklch(28.5% 0.004 85)",
+        "tonalRamp": [
+          "#0b0b0a",
+          "#272625",
+          "#464543",
+          "#676664",
+          "#8a8987",
+          "#afaeac",
+          "#cecdcc",
+          "#efeeed"
+        ]
+      },
+      "box-kraft": {
+        "role": "tertiary",
+        "displayName": "Box print, kraft",
+        "canonical": "oklch(70.1% 0.054 73)",
+        "tonalRamp": [
+          "#120901",
+          "#312413",
+          "#53412b",
+          "#786245",
+          "#9c8569",
+          "#beaa93",
+          "#dccbb6",
+          "#faecdc"
+        ]
+      },
+      "box-oatmeal": {
+        "role": "tertiary",
+        "displayName": "Box print, oatmeal",
+        "canonical": "oklch(89.6% 0.019 83)",
+        "tonalRamp": [
+          "#0d0b07",
+          "#292620",
+          "#49443c",
+          "#6b655b",
+          "#8e887e",
+          "#b2ada4",
+          "#d1cdc5",
+          "#f1eee8"
+        ]
+      },
+      "box-stone": {
+        "role": "tertiary",
+        "displayName": "Box print, stone",
+        "canonical": "oklch(66.9% 0.016 81)",
+        "tonalRamp": [
+          "#0d0b08",
+          "#292621",
+          "#49443d",
+          "#6b655c",
+          "#8e8880",
+          "#b2ada6",
+          "#d1cdc7",
+          "#f1eee9"
+        ]
+      },
+      "box-putty": {
+        "role": "tertiary",
+        "displayName": "Box print, putty",
+        "canonical": "oklch(77.9% 0.038 81)",
+        "tonalRamp": [
+          "#0f0a04",
+          "#2d2519",
+          "#4e4332",
+          "#71644f",
+          "#948772",
+          "#b7ac9a",
+          "#d6ccbd",
+          "#f5ede1"
+        ]
+      },
+      "box-charcoal": {
+        "role": "tertiary",
+        "displayName": "Box print, charcoal",
+        "canonical": "oklch(35.0% 0.008 75)",
+        "tonalRamp": [
+          "#0c0b09",
+          "#282624",
+          "#474541",
+          "#696561",
+          "#8c8984",
+          "#b0adaa",
+          "#d0cdca",
+          "#f0eeec"
+        ]
+      },
+      "box-sand": {
+        "role": "tertiary",
+        "displayName": "Box print, sand",
+        "canonical": "oklch(85.1% 0.024 82)",
+        "tonalRamp": [
+          "#0e0b06",
+          "#2a261e",
+          "#4a443a",
+          "#6d6558",
+          "#90887b",
+          "#b4ada2",
+          "#d3cdc3",
+          "#f2eee6"
+        ]
+      },
+      "box-sage-stone": {
+        "role": "tertiary",
+        "displayName": "Box print, sage stone",
+        "canonical": "oklch(73.4% 0.024 115)",
+        "tonalRamp": [
+          "#0b0c06",
+          "#26271f",
+          "#44463b",
+          "#656859",
+          "#888b7c",
+          "#adafa3",
+          "#cdcfc4",
+          "#eef0e7"
+        ]
+      },
+      "box-dove": {
+        "role": "tertiary",
+        "displayName": "Box print, dove",
+        "canonical": "oklch(78.4% 0.015 85)",
+        "tonalRamp": [
+          "#0d0b08",
+          "#292621",
+          "#48453e",
+          "#6a665d",
+          "#8d8980",
+          "#b1ada6",
+          "#d0cdc7",
+          "#f1eee9"
+        ]
+      },
+      "box-umber": {
+        "role": "tertiary",
+        "displayName": "Box print, umber",
+        "canonical": "oklch(47.7% 0.035 65)",
+        "tonalRamp": [
+          "#100a04",
+          "#2e241b",
+          "#504235",
+          "#746252",
+          "#978675",
+          "#baab9d",
+          "#d8cbbf",
+          "#f7ece3"
+        ]
+      },
+      "box-linen": {
+        "role": "tertiary",
+        "displayName": "Box print, linen",
+        "canonical": "oklch(80.8% 0.026 81)",
+        "tonalRamp": [
+          "#0e0b06",
+          "#2b261d",
+          "#4b4439",
+          "#6d6556",
+          "#90887a",
+          "#b4ada1",
+          "#d3cdc2",
+          "#f3eee5"
+        ]
+      },
+      "box-pebble": {
+        "role": "tertiary",
+        "displayName": "Box print, pebble",
+        "canonical": "oklch(71.3% 0.018 76)",
+        "tonalRamp": [
+          "#0d0b07",
+          "#2a2620",
+          "#4a443d",
+          "#6c655b",
+          "#8f887e",
+          "#b3ada5",
+          "#d2cdc6",
+          "#f2eee8"
+        ]
+      },
+      "box-espresso": {
+        "role": "tertiary",
+        "displayName": "Box print, espresso",
+        "canonical": "oklch(38.0% 0.020 58)",
+        "tonalRamp": [
+          "#0e0a07",
+          "#2b2520",
+          "#4c433d",
+          "#6f645b",
+          "#92877f",
+          "#b6aca5",
+          "#d4ccc6",
+          "#f4ede8"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Landing page headline only."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page titles and game names on game pages."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section headings and the group name from 760px."
+      },
+      "title-small": {
+        "displayName": "Title small",
+        "purpose": "Sub-section headings."
+      },
+      "box-title": {
+        "displayName": "Box title",
+        "purpose": "Titles printed on box fronts, sized from the box width."
+      },
+      "spine-title": {
+        "displayName": "Spine title",
+        "purpose": "Titles along spines in the Spines view."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Running text, capped at 68ch."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Form labels, hints, small buttons, list facts."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Cube captions, tags, bottom tab labels; tabular figures."
+      }
+    },
+    "shadows": [
+      {
+        "name": "lift",
+        "value": "0 1px 1px rgb(43 42 40 / 0.06), 0 6px 14px -6px rgb(43 42 40 / 0.18)",
+        "purpose": "A box off its shelf: hovered or focused cube, pulled picker boxes, game-page hero box."
+      },
+      {
+        "name": "lift-dark",
+        "value": "0 1px 1px rgb(0 0 0 / 0.3), 0 8px 18px -8px rgb(0 0 0 / 0.6)",
+        "purpose": "The lift shadow in dark mode."
+      },
+      {
+        "name": "box-hairline",
+        "value": "inset 0 0 0 1px rgb(0 0 0 / 0.08)",
+        "purpose": "Printed edge of box fronts and spines."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Shared curve for lifts, slides and the picker pull."
+      },
+      {
+        "name": "control",
+        "value": "0.15s",
+        "purpose": "Button colour and press transitions; pressed buttons drop 1px."
+      },
+      {
+        "name": "cube-lift",
+        "value": "0.2s, translateY(-3px)",
+        "purpose": "Box rises with the lift shadow on hover or focus."
+      },
+      {
+        "name": "spine-slide",
+        "value": "0.18s, translateX(4px)",
+        "purpose": "Spine slides right on hover or focus."
+      },
+      {
+        "name": "picker-pull",
+        "value": "0.55s, translateY(28px) scale(0.96) to rest, 70ms stagger, tilts -2.5deg / 1.75deg / -1.25deg",
+        "purpose": "The one authored motion: three boxes pulled off the shelf. No animation and no tilt under reduced motion."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "transition-duration and animation-duration 0.01ms",
+        "purpose": "Global rule under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "spines-stack",
+        "value": "480px"
+      },
+      {
+        "name": "game-head",
+        "value": "640px"
+      },
+      {
+        "name": "tabs-top",
+        "value": "760px"
+      },
+      {
+        "name": "home-hero",
+        "value": "900px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ink-filled main action of a view; marigold never fills a button.",
+      "html": "<button class=\"ds-btn ds-btn-primary\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"2\" y=\"10\" width=\"12\" height=\"12\" rx=\"2\"/><path d=\"m17.92 14 3.5-3.5a2.24 2.24 0 0 0 0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6\"/><path d=\"M6 18h.01\"/><path d=\"M10 14h.01\"/><path d=\"M15 6h.01\"/><path d=\"M18 9h.01\"/></svg>Pull three games</button>",
+      "css": ".ds-btn { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1.5px solid var(--rule, #d3cfc7); background: var(--cube, #fbfbfa); color: var(--ink, #2b2a28); font-size: 1rem; font-weight: 650; cursor: pointer; transition: border-color 0.15s, background-color 0.15s, transform 0.15s cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn:active { transform: translateY(1px); } .ds-btn:focus-visible { outline: 2px solid var(--focus, #2f62b0); outline-offset: 2px; } .ds-btn-primary { background: var(--ink, #2b2a28); border-color: var(--ink, #2b2a28); color: var(--laminate, #f4f4f2); } .ds-btn-primary:hover { background: color-mix(in srgb, var(--ink, #2b2a28) 88%, var(--laminate, #f4f4f2)); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outlined button for every other action.",
+      "html": "<button class=\"ds-btn2\">Clear filters</button>",
+      "css": ".ds-btn2 { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1.5px solid var(--rule, #d3cfc7); background: var(--cube, #fbfbfa); color: var(--ink, #2b2a28); font-size: 1rem; font-weight: 650; cursor: pointer; transition: border-color 0.15s, transform 0.15s cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn2:hover { border-color: var(--ink-3, #6b665e); } .ds-btn2:active { transform: translateY(1px); } .ds-btn2:focus-visible { outline: 2px solid var(--focus, #2f62b0); outline-offset: 2px; }"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Text input and select on cube white with a 1.5px rule border.",
+      "html": "<label class=\"ds-label\">Display name<input class=\"ds-field\" placeholder=\"Ada\"></label>",
+      "css": ".ds-label { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; display: flex; flex-direction: column; gap: 6px; font-weight: 650; color: var(--ink, #2b2a28); max-width: 20rem; } .ds-field { font: inherit; font-weight: 400; width: 100%; min-height: 46px; padding: 0 12px; border-radius: 8px; border: 1.5px solid var(--rule, #d3cfc7); background: var(--cube, #fbfbfa); color: var(--ink, #2b2a28); } .ds-field::placeholder { color: var(--ink-3, #6b665e); } .ds-field:focus { border-color: var(--ink-3, #6b665e); } .ds-field:focus-visible { outline: 2px solid var(--focus, #2f62b0); outline-offset: 2px; }"
+    },
+    {
+      "name": "Label Strip",
+      "kind": "chip",
+      "refersTo": "label-strip",
+      "description": "The dark shelf label holding search and filter chips; marigold marks active filters.",
+      "html": "<div class=\"ds-strip\"><div class=\"ds-search\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/></svg><input placeholder=\"Search 432 games\"></div><div class=\"ds-controls\"><button class=\"ds-chip\" aria-pressed=\"true\">4 players</button><button class=\"ds-chip\" aria-pressed=\"false\">Light</button><button class=\"ds-chip\" aria-pressed=\"true\">Medium</button><button class=\"ds-chip\" aria-pressed=\"false\">Heavy</button></div></div>",
+      "css": ".ds-strip { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; background: var(--label, #2b2a28); color: var(--label-ink, #f4f4f2); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; } .ds-search { display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--label-field, #3a3835); border-radius: 8px; color: var(--label-ink-2, #c9c4bb); } .ds-search:focus-within { outline: 2px solid var(--mark, #e9b44c); outline-offset: 1px; } .ds-search input { font: inherit; flex: 1; min-width: 0; min-height: 44px; border: 0; background: none; color: var(--label-ink, #f4f4f2); outline: none; } .ds-search input::placeholder { color: var(--label-ink-2, #c9c4bb); } .ds-controls { display: flex; flex-wrap: wrap; gap: 6px; } .ds-chip { font: inherit; min-height: 38px; border-radius: 4px; border: 1.5px solid var(--label-line, #5a5650); background: transparent; color: var(--label-ink, #f4f4f2); font-size: 0.875rem; font-weight: 650; padding: 0 12px; cursor: pointer; } .ds-chip[aria-pressed='true'] { background: var(--mark, #e9b44c); border-color: var(--mark, #e9b44c); color: var(--mark-ink, #2b2a28); } .ds-chip:focus-visible { outline: 2px solid var(--mark, #e9b44c); outline-offset: 2px; }"
+    },
+    {
+      "name": "Tab Bar",
+      "kind": "nav",
+      "refersTo": "tab",
+      "description": "Group tabs in the top bar from 760px; the current tab fills marigold.",
+      "html": "<nav class=\"ds-tabs\"><a href=\"#\" aria-current=\"page\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect width=\"7\" height=\"7\" x=\"3\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"7\" x=\"14\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"7\" x=\"14\" y=\"14\" rx=\"1\"/><rect width=\"7\" height=\"7\" x=\"3\" y=\"14\" rx=\"1\"/></svg>Shelf</a><a href=\"#\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/></svg>Group</a></nav>",
+      "css": ".ds-tabs { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; display: flex; gap: 4px; } .ds-tabs a { display: flex; align-items: center; gap: 8px; padding: 0 14px; min-height: 42px; border-radius: 8px; color: var(--ink-2, #57534d); text-decoration: none; font-size: 0.9375rem; font-weight: 650; } .ds-tabs a[aria-current='page'] { background: var(--mark, #e9b44c); color: var(--mark-ink, #2b2a28); } .ds-tabs a:not([aria-current='page']):hover { background: var(--gap, #e2dfd8); color: var(--ink, #2b2a28); } .ds-tabs a:focus-visible { outline: 2px solid var(--focus, #2f62b0); outline-offset: 2px; }"
+    },
+    {
+      "name": "Tag",
+      "kind": "chip",
+      "refersTo": "tag",
+      "description": "Small shelf-gap pill for categories and facts.",
+      "html": "<span class=\"ds-tag\">Worker placement</span> <span class=\"ds-tag\">Medium</span>",
+      "css": ".ds-tag { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 999px; background: var(--gap, #e2dfd8); color: var(--ink-2, #57534d); font-size: 0.75rem; font-weight: 600; white-space: nowrap; }"
+    },
+    {
+      "name": "Cube",
+      "kind": "card",
+      "refersTo": "cube",
+      "description": "Signature: a printed box front standing in its cube, the players-and-time caption, and the owner-colour edge. The box lifts on hover.",
+      "html": "<div class=\"ds-shelf\"><a href=\"#\" class=\"ds-cube\"><div class=\"ds-slot\"><div class=\"ds-box\" style=\"--box-bg:#b49a7a;--box-ink:#1f1d1a\"><span class=\"ds-box-title\">Amber Lighthouse</span></div></div><div class=\"ds-cap\">3–6p · 20–40 min</div><div class=\"ds-edge\"><span style=\"background:#c8402e\"></span><span style=\"background:#2f62b0\"></span></div></a><a href=\"#\" class=\"ds-cube\"><div class=\"ds-slot\"><div class=\"ds-box\" style=\"--box-bg:#4b4038;--box-ink:#f4efe8\"><span class=\"ds-box-title\">Brass Foundry</span></div></div><div class=\"ds-cap\">4p · 30–45 min</div><div class=\"ds-edge\"><span style=\"background:#6f4f96\"></span></div></a><a href=\"#\" class=\"ds-cube\"><div class=\"ds-slot\"><div class=\"ds-box\" style=\"--box-bg:#e3dccf;--box-ink:#2b2a28\"><span class=\"ds-box-title\">Amber Garden</span></div></div><div class=\"ds-cap\">3–4p · 15 min</div><div class=\"ds-edge\"><span style=\"background:#2e7d4f\"></span></div></a></div>",
+      "css": ".ds-shelf { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; display: grid; grid-template-columns: repeat(3, 142px); gap: 8px; padding: 8px; background: var(--gap, #e2dfd8); border-radius: 6px; width: max-content; } .ds-cube { display: flex; flex-direction: column; gap: 6px; padding: 12px 12px 0; background: var(--cube, #fbfbfa); color: var(--ink, #2b2a28); text-decoration: none; } .ds-cube:focus-visible { outline: 2px solid var(--focus, #2f62b0); outline-offset: 2px; } .ds-slot { aspect-ratio: 1 / 1.04; padding: 0 6%; display: flex; align-items: flex-end; } .ds-box { position: relative; width: 100%; height: 100%; border-radius: 2px; background: var(--box-bg); color: var(--box-ink); overflow: hidden; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08); container-type: inline-size; transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1); } .ds-box::before { content: ''; position: absolute; left: 0; right: 0; top: 16%; height: 1px; background: color-mix(in srgb, var(--box-ink) 22%, transparent); } .ds-cube:hover .ds-box, .ds-cube:focus-visible .ds-box { transform: translateY(-3px); box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08), 0 1px 1px rgb(43 42 40 / 0.06), 0 6px 14px -6px rgb(43 42 40 / 0.18); } .ds-box-title { position: absolute; inset: 22% 9% 8%; font-weight: 800; font-stretch: 78%; line-height: 1.05; letter-spacing: -0.005em; font-size: clamp(0.5625rem, 15.5cqi, 1.875rem); overflow: hidden; } .ds-cap { font-size: 0.75rem; font-weight: 600; color: var(--ink-2, #57534d); text-align: center; font-variant-numeric: tabular-nums; } .ds-edge { display: flex; gap: 2px; height: 6px; } .ds-edge span { flex: 1; border-radius: 1px; }"
+    },
+    {
+      "name": "Spine",
+      "kind": "custom",
+      "refersTo": "",
+      "description": "The Spines view row: a box lying on its side in its cardboard print, owners' colours on its end.",
+      "html": "<div class=\"ds-list\"><a href=\"#\" class=\"ds-spine\" style=\"--sb:#c4b59c;--si:#2b2a28\"><span class=\"ds-st\">Amber Guild</span><span class=\"ds-sf\">2–4p · 120 min · Medium</span><span class=\"ds-end\"><span style=\"background:#b23f78\"></span></span></a><a href=\"#\" class=\"ds-spine\" style=\"--sb:#6b5948;--si:#ffffff\"><span class=\"ds-st\">Amber Canals</span><span class=\"ds-sf\">1–2p · 30 min · Light</span><span class=\"ds-end\"><span style=\"background:#c8402e\"></span><span style=\"background:#17706f\"></span></span></a></div>",
+      "css": ".ds-list { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; display: flex; flex-direction: column; gap: 4px; padding: 8px; background: var(--gap, #e2dfd8); border-radius: 6px; max-width: 36rem; } .ds-spine { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 46px; padding-left: 12px; background: var(--sb); color: var(--si); text-decoration: none; border-radius: 2px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08); transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1); } .ds-spine:hover, .ds-spine:focus-visible { transform: translateX(4px); } .ds-spine:focus-visible { outline: 2px solid var(--focus, #2f62b0); outline-offset: 2px; } .ds-st { font-weight: 800; font-stretch: 80%; font-size: 1.0625rem; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-sf { font-size: 0.8125rem; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; } .ds-end { align-self: stretch; display: flex; flex-direction: column; gap: 2px; width: 12px; } .ds-end > span { flex: 1; }"
+    },
+    {
+      "name": "Person Toggle",
+      "kind": "chip",
+      "refersTo": "person-toggle",
+      "description": "Picker's who's-here toggle with the member's player-colour dot; selected fills marigold.",
+      "html": "<button class=\"ds-person\" aria-pressed=\"true\"><span class=\"ds-dot\" style=\"background:#c8402e\"></span>Ada</button> <button class=\"ds-person\" aria-pressed=\"false\"><span class=\"ds-dot\" style=\"background:#2f62b0\"></span>Bram</button>",
+      "css": ".ds-person { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px 0 10px; border-radius: 999px; border: 1.5px solid var(--rule, #d3cfc7); background: var(--laminate, #f4f4f2); color: var(--ink, #2b2a28); font-size: 1rem; font-weight: 650; cursor: pointer; } .ds-person[aria-pressed='true'] { background: var(--mark, #e9b44c); border-color: var(--mark, #e9b44c); color: var(--mark-ink, #2b2a28); } .ds-person:focus-visible { outline: 2px solid var(--focus, #2f62b0); outline-offset: 2px; } .ds-dot { width: 14px; height: 14px; border-radius: 3px; }"
+    },
+    {
+      "name": "Banner",
+      "kind": "card",
+      "refersTo": "banner",
+      "description": "A note pinned to the shelf: demo, suspended, errors.",
+      "html": "<p class=\"ds-banner\">The host has suspended this group. It's read-only.</p><p class=\"ds-banner ds-err\">The shelf didn't load. Reload the page to try again.</p>",
+      "css": ".ds-banner { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; padding: 12px 16px; border-radius: 8px; background: var(--note, #fbf1d9); color: var(--ink, #2b2a28); margin: 12px 0; max-width: 68ch; } .ds-err { background: var(--danger-soft, #f6e1dc); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Cube Shelf",
+    "overview": "**Creative North Star: \"The Cube Shelf\"**\n\nThe catalog is drawn as the group's shared cube-storage shelf. Each game is a box standing in its own square cube; the cubes sit in a grid separated by grey shelf gaps; the front edge of every cube is painted in the player colours of the people who own the game. Filters live on a dark shelf label above the grid. The ground is pale laminate, the ink is near-black, and almost everything else is low-chroma cardboard, so the owner edges are the only saturated colour on the shelf.\n\nDensity follows the use: three cubes across on a phone at the table, five to seven on a desktop at home, and a denser Spines view (boxes lying on their sides) for scanning long collections. The type is one family, Archivo, used heavy and semi-condensed for anything printed on a box and at normal width for interface text. Dark mode is the same shelf in black-brown laminate, with the same roles swapped value for value.\n\nThe world refuses the category default for game catalogs: a dark app with a grid of box-art cards and a filter sidebar. Box art from BoardGameGeek appears inside the cube when a game has it, hotlinked and cover-fitted, never copied; games without art get a printed box front so a hand-entered shelf still looks like a shelf.",
+    "keyCharacteristics": [
+      "Square cubes on a shelf-gap grid, each closed by a 6px owner-colour edge.",
+      "Pale laminate ground, near-black ink, one dark label strip per screen for filters and search.",
+      "Player colours by join order are the only saturated colour; marigold marks what is chosen.",
+      "Printed box fronts in cardboard tones with a lid seam and a heavy condensed title.",
+      "Archivo alone, steered by weight (400 to 800) and width (78% to 100%).",
+      "Flat at rest; a box lifts with one soft shadow when touched, and the picker tilts three boxes off the shelf."
+    ],
+    "rules": [
+      {
+        "name": "The Marigold Means Chosen Rule",
+        "body": "Marigold appears only on something the person has turned on: an active filter, the current tab, a selected person, selected text, a focused field in the label strip. It never decorates, never marks ownership, and never fills a button.",
+        "section": "colors"
+      },
+      {
+        "name": "The Owner Edge Rule",
+        "body": "Player colours are the only saturated colour on the shelf, and they always mean a person. Assign them by join order, never by preference or by game, and never add a player colour that shares a hue with marigold.",
+        "section": "colors"
+      },
+      {
+        "name": "The Cardboard Print Rule",
+        "body": "A box front without art is a low-chroma cardboard print outside the player hues, light in most cases, dark in no more than about a quarter, and every print-and-ink pair is at least 4.5:1.",
+        "section": "colors"
+      },
+      {
+        "name": "The Printed Title Rule",
+        "body": "Anything that stands for a physical box (box fronts, spines, the hero box) sets its title at 800 and 78 to 80% width. Interface headings stay at 88% width and 780 or lighter, so the printed voice is reserved for the boxes.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Family Rule",
+        "body": "Archivo carries every role. Hierarchy comes from weight and the width axis; no second family, no letter-spaced uppercase labels. The join code is the one tracked-out uppercase setting, because it is a code people read aloud.",
+        "section": "typography"
+      },
+      {
+        "name": "The Shelf Gap Rule",
+        "body": "Cubes are separated by the shelf-gap colour showing between them, not by borders or shadows. A new grid of games sits on the same gap ground.",
+        "section": "layout"
+      },
+      {
+        "name": "The Thumb Reach Rule",
+        "body": "Below 760px the group tabs are a fixed bottom bar with 52px targets and safe-area padding; the filter row scrolls sideways in one line rather than wrapping. Tap targets are 44px for buttons and search, 38px for filter chips, 40px for person toggles.",
+        "section": "layout"
+      },
+      {
+        "name": "The Lift On Touch Rule",
+        "body": "Only a box gets a shadow, and only when it is off the shelf: touched, pulled, or shown on its own page. Panels, buttons and chips stay flat.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do put every grid of games on the shelf-gap ground with 6px gaps (8px from 760px) and close each cube with the owner edge.",
+      "Do take player colours from `playerColor()` by join order and box prints from `boxColor()` by name; both live in `src/lib/catalog/colors.ts`.",
+      "Do keep marigold for state: active filters, the current tab, selected people, text selection and focused label-strip fields.",
+      "Do set box and spine titles at 800 and 78 to 80% width, and interface headings at 780 and 88%.",
+      "Do hotlink BGG box art and fall back to the printed front when it is missing or fails to load.",
+      "Do render the BGG credit footer on every page, including new routes outside the root layout.",
+      "Do give any new motion a reduced-motion state with no animation and no tilt."
+    ],
+    "donts": [
+      "Don't use marigold for decoration, emphasis, ownership or a primary button.",
+      "Don't add a saturated colour to the shelf other than the owner edges, and don't add a player colour near marigold's hue.",
+      "Don't add a box print that is saturated, sits in a player hue, or falls below 4.5:1 with its ink; keep dark prints to about a quarter of the set.",
+      "Don't download, proxy or re-host BGG box art.",
+      "Don't put eyebrows or kickers (small uppercase labels) above headings.",
+      "Don't use hard offset shadows; the lift shadow is the only shadow.",
+      "Don't use gradient text.",
+      "Don't separate cubes with borders or card shadows; the shelf gap does that."
+    ]
+  }
+}

@@ -5,7 +5,7 @@
 	import BoxFront from '#lib/components/BoxFront.svelte';
 	import OwnerEdge from '#lib/components/OwnerEdge.svelte';
 	import { fetchCatalog, storage } from '#lib/catalog/client.ts';
-	import { WEIGHT_BUCKETS, BUCKET_LABELS, formatPlaytime, type WeightBucket } from '#lib/catalog/buckets.ts';
+	import { WEIGHT_BUCKETS, formatPlaytime, type WeightBucket } from '#lib/catalog/buckets.ts';
 	import { formatPlayerRange, maskHas } from '#lib/catalog/players.ts';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { DEFAULT_FILTERS, filterGames } from '#lib/catalog/filter.ts';
@@ -117,10 +117,12 @@
 					</select>
 				</label>
 				<label>
-					At most
+					Complexity
 					<select class="field" bind:value={ceiling}>
 						<option value={null}>Any</option>
-						{#each WEIGHT_BUCKETS as b (b)}<option value={b}>{BUCKET_LABELS[b]}</option>{/each}
+						<option value="light">Light only</option>
+						<option value="medium">Up to medium</option>
+						<option value="heavy">Up to heavy</option>
 					</select>
 				</label>
 			</div>
