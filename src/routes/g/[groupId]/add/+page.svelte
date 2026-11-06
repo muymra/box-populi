@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import Search from '@lucide/svelte/icons/search';
 	import Check from '@lucide/svelte/icons/check';
+	import Gift from '@lucide/svelte/icons/gift';
 	import BoxFront from '#lib/components/BoxFront.svelte';
 	import ImportPanel from '#lib/components/ImportPanel.svelte';
 	import HydrateProgress from '#lib/components/HydrateProgress.svelte';
@@ -9,7 +10,7 @@
 
 	let { data, form }: PageProps = $props();
 
-	type Result = { gameId: number; bggId: number; name: string; year: number | null; thumbUrl: string | null; isExpansion: boolean; owned: boolean };
+	type Result = { gameId: number; bggId: number; name: string; year: number | null; thumbUrl: string | null; isExpansion: boolean; owned: boolean; wanted: boolean };
 
 	let query = $state('');
 	let results = $state<Result[]>([]);
@@ -100,6 +101,21 @@
 					{:else}
 						<form
 							method="POST"
+							action="?/want"
+							use:enhance={() =>
+								async ({ result }) => {
+									if (result.type === 'success') r.wanted = !r.wanted;
+								}}
+						>
+							<input type="hidden" name="gameId" value={r.gameId} />
+							<input type="hidden" name="on" value={r.wanted ? '0' : '1'} />
+							<button class="btn want" aria-pressed={r.wanted} aria-label="{r.wanted ? 'Wanted' : 'Want'}: {r.name}">
+								<Gift size={16} aria-hidden="true" />
+								<span class="want-text">{r.wanted ? 'Wanted' : 'Want'}</span>
+							</button>
+						</form>
+						<form
+							method="POST"
 							action="?/add"
 							use:enhance={() =>
 								async ({ result }) => {
@@ -110,7 +126,7 @@
 								}}
 						>
 							<input type="hidden" name="gameId" value={r.gameId} />
-							<button class="btn primary">Add</button>
+							<button class="btn primary" aria-label="Add {r.name} to my games">Add</button>
 						</form>
 					{/if}
 				</li>
@@ -232,6 +248,20 @@
 	}
 	.info .muted {
 		font-size: var(--t-small);
+	}
+	.want[aria-pressed='true'] {
+		border-color: var(--ink);
+		background: var(--gap);
+	}
+	/* Phones: the gift alone, so the title keeps its width. The label stays for screen readers. */
+	@media (max-width: 479px) {
+		.want {
+			width: 44px;
+			padding: 0;
+		}
+		.want-text {
+			display: none;
+		}
 	}
 	.owned {
 		display: inline-flex;

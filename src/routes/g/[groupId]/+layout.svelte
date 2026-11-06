@@ -4,6 +4,7 @@
 	import Dices from '@lucide/svelte/icons/dices';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Users from '@lucide/svelte/icons/users';
+	import Gift from '@lucide/svelte/icons/gift';
 	import CubeMark from '#lib/components/CubeMark.svelte';
 	import type { LayoutProps } from './$types';
 
@@ -14,6 +15,7 @@
 		[
 			{ href: base, label: 'Shelf', icon: LayoutGrid, show: true },
 			{ href: `${base}/pick`, label: 'Play tonight', icon: Dices, show: true },
+			{ href: `${base}/wanted`, label: 'Wanted', icon: Gift, show: true },
 			{ href: `${base}/add`, label: 'Add games', icon: Plus, show: !!data.role && !data.readonly },
 			{ href: `${base}/group`, label: 'Group', icon: Users, show: true }
 		].filter((t) => t.show)
@@ -185,6 +187,15 @@
 			margin-left: var(--s-3);
 			padding-left: var(--s-4);
 			border-left: 1px solid var(--rule);
+		}
+	}
+	/* Five tabs don't fit beside the group name with icons until about 1100px; drop the icons until then. */
+	@media (min-width: 760px) and (max-width: 1099px) {
+		.tabbar a {
+			padding: 0 10px;
+		}
+		.tabbar a :global(svg) {
+			display: none;
 		}
 	}
 </style>

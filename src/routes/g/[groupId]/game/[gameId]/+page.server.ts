@@ -2,6 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { requireRead, requireRole } from '#lib/server/authz.ts';
 import { addCopy, removeCopy } from '#lib/server/games.ts';
 import { addLink, canDeleteLink, deleteLink, parseLink } from '#lib/server/links.ts';
+import { addWish, removeWish } from '#lib/server/wishlist.ts';
 import { linkHost } from '#lib/link-kinds.ts';
 import { loadMembers } from '#lib/server/catalog.ts';
 import { all, jsonArray, one } from '#lib/server/db.ts';
@@ -72,7 +73,9 @@ export const load: PageServerLoad = async (event) => {
 			`SELECT u.id, u.name FROM wishlist w
 			 JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1
 			 JOIN users u ON u.id = w.user_id
-			 WHERE w.game_id = ?2 ORDER BY u.name`,
+			 WHERE w.game_id = ?2
+			   AND NOT EXISTS (SELECT 1 FROM copies c WHERE c.user_id = w.user_id AND c.game_id = w.game_id)
+			 ORDER BY u.name`,
 			groupId,
 			gameId
 		),
@@ -112,9 +115,11 @@ export const load: PageServerLoad = async (event) => {
 	const canEdit = access.role != null && !access.readonly;
 	const actor = me && access.role ? { id: me.id, role: access.role } : null;
 	const mine = me ? (await one(db, 'SELECT 1 AS x FROM copies WHERE user_id = ?1 AND game_id = ?2', me.id, gameId)) != null : false;
+	const wanted = me ? wishers.some((w) => w.id === me.id) : false;
 
 	return {
 		mine,
+		wanted,
 		canEdit,
 		game: {
 			id: game.id,
@@ -184,6 +189,19 @@ export const actions: Actions = {
 		await removeCopy(db, event.locals.user!.id, gameIdParam(event.params.gameId));
 		// If nobody else in the group owns it, the game page would now 404, so go back to the catalog.
 		redirect(303, `/g/${event.params.groupId}`);
+	},
+
+	want: async (event) => {
+		const db = getDb();
+		const { groupId } = event.params;
+		await requireRole(event, db, groupId, 'member');
+		const gameId = gameIdParam(event.params.gameId);
+		if ((await event.request.formData()).get('on') === '0') {
+			await removeWish(db, event.locals.user!.id, gameId);
+			return { wishChanged: true };
+		}
+		if (!(await addWish(db, groupId, event.locals.user!.id, gameId, Date.now()))) error(404, 'Game not found');
+		return { wishChanged: true };
 	},
 
 	addLink: async (event) => {

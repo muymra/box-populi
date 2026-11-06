@@ -88,6 +88,7 @@ export type SearchResult = {
 	thumbUrl: string | null;
 	isExpansion: boolean;
 	owned: boolean;
+	wanted: boolean;
 };
 
 /**
@@ -112,10 +113,11 @@ export async function searchBgg(db: DB, client: BggClient, query: string, userId
 		]);
 	}
 
-	const rows = await all<{ id: number; bgg_id: number; name: string; year: number | null; thumb_url: string | null; is_expansion: number; users_rated: number | null; owned: number }>(
+	const rows = await all<{ id: number; bgg_id: number; name: string; year: number | null; thumb_url: string | null; is_expansion: number; users_rated: number | null; owned: number; wanted: number }>(
 		db,
 		`SELECT g.id, g.bgg_id, g.name, g.year, g.thumb_url, g.is_expansion, g.users_rated,
-			EXISTS (SELECT 1 FROM copies c WHERE c.game_id = g.id AND c.user_id = ?${ids.length + 1}) AS owned
+			EXISTS (SELECT 1 FROM copies c WHERE c.game_id = g.id AND c.user_id = ?${ids.length + 1}) AS owned,
+			EXISTS (SELECT 1 FROM wishlist w WHERE w.game_id = g.id AND w.user_id = ?${ids.length + 1}) AS wanted
 		 FROM games g WHERE g.bgg_id IN (${placeholders})`,
 		...ids,
 		userId
@@ -130,7 +132,8 @@ export async function searchBgg(db: DB, client: BggClient, query: string, userId
 			year: r.year,
 			thumbUrl: r.thumb_url,
 			isExpansion: r.is_expansion === 1,
-			owned: r.owned === 1
+			owned: r.owned === 1,
+			wanted: r.wanted === 1
 		}));
 }
 

@@ -650,7 +650,7 @@ URL params: `n`, `t`, `w`, `present` (comma-separated user ids), `seen` (ids alr
 | `/g/[groupId]/game/[gameId]` | Game page: details, owners, links, wishlisters, expansions. | `requireRead` |
 | `/g/[groupId]/add` | BGG search, manual entry, import. | `requireRole(member)` |
 | `/g/[groupId]/pick` | Picker. | `requireRead` |
-| `/g/[groupId]/wanted` | Games members want that nobody in the group owns. | `requireRead` |
+| `/g/[groupId]/wanted` | The Wanted tab: games members want that nobody in the group owns, with who wants each and a "Me too" toggle. Wishes are set by the `want` action here, on the game page and on the add page (`on=0` removes). | `requireRead`; `want` needs `requireRole(member)` |
 | `/g/[groupId]/group` | The Group tab: invite code, members list, and the settings actions (`rename`, `newCode`, `promote`, `demote`, `transfer`, `remove`, `delete`). Members see the code and the list; co-admins and the owner see the controls their role allows. | `requireRead`; each action `requireRole(admin)` or `requireRole(owner)` |
 | `/me` | Display name, groups, new personal link, sign out of this device or everywhere, account deletion. Later: my games, loans and wishlist. | `requireUser` |
 | `GET /api/g/[groupId]/catalog` | Catalog payload with ETag. | `requireRead` |
@@ -659,10 +659,10 @@ URL params: `n`, `t`, `w`, `present` (comma-separated user ids), `seen` (ids alr
 
 Mutations on pages are SvelteKit form actions. They work without client JavaScript, and SvelteKit's origin check covers CSRF for form posts. The JSON endpoints are reached only with the `SameSite=Lax` session cookie, which browsers don't send on cross-site POSTs.
 
-The Wanted view's query:
+The Wanted view's query (`wantedGames` in `src/lib/server/wishlist.ts`). A hand-entered game can only be wished for when the group can already see it, so guessing ids can't reveal another group's titles; BGG games can be wished for from search. A person who owns a game isn't listed among its wishers on the game page.
 
 ```sql
-SELECT g.id, g.name, g.thumb_url, GROUP_CONCAT(w.user_id) AS wanted_by
+SELECT g.id, g.name, g.thumb_url, json_group_array(w.user_id) AS wanted_by
 FROM wishlist w
 JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1
 JOIN games g       ON g.id = w.game_id

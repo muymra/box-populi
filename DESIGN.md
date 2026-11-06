@@ -355,7 +355,7 @@ Ink-filled and plain, so marigold stays free for state.
 
 ### Navigation
 - **Top bar:** cube mark, group name at title size, tabs, then the person's name behind a 1px divider. 56px tall, 64px from 760px, 1px rule underneath.
-- **Tabs:** Shelf, Play tonight, Add games, Group, each a Lucide icon plus label. Below 760px they form a fixed bottom bar on laminate (12px labels, 52px targets) where the current tab's icon sits in a marigold pill. From 760px they sit in the top bar at 15px, and the whole current tab fills marigold; others take a shelf-gap fill on hover.
+- **Tabs:** Shelf, Play tonight, Wanted, Add games, Group, each a Lucide icon plus label. Between 760 and 1099px the top bar drops the icons and tightens to 10px padding so all five fit beside the group name. Below 760px they form a fixed bottom bar on laminate (12px labels, 52px targets) where the current tab's icon sits in a marigold pill. From 760px they sit in the top bar at 15px, and the whole current tab fills marigold; others take a shelf-gap fill on hover.
 - **View switch:** a two-button segmented control (Cubes, Spines) with a 1.5px rule border; the pressed side fills with ink, not marigold.
 
 ### Cube

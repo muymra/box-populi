@@ -3,6 +3,7 @@ import { requireRole } from '#lib/server/authz.ts';
 import { one } from '#lib/server/db.ts';
 import { addCopy, addManualGame, parseManualGame } from '#lib/server/games.ts';
 import { pendingDetails } from '#lib/server/importer.ts';
+import { addWish, removeWish } from '#lib/server/wishlist.ts';
 import { getDb } from '#lib/server/platform.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -24,6 +25,22 @@ export const actions: Actions = {
 			return fail(400, { addError: 'That game couldn’t be added. Search again and retry.' });
 		}
 		return { added: gameId };
+	},
+
+	want: async (event) => {
+		const db = getDb();
+		await requireRole(event, db, event.params.groupId, 'member');
+		const form = await event.request.formData();
+		const gameId = Number(form.get('gameId'));
+		if (!Number.isInteger(gameId) || gameId <= 0) return fail(400, { addError: 'That game couldn’t be found. Search again and retry.' });
+		if (form.get('on') === '0') {
+			await removeWish(db, event.locals.user!.id, gameId);
+			return { wanted: false };
+		}
+		if (!(await addWish(db, event.params.groupId, event.locals.user!.id, gameId, Date.now()))) {
+			return fail(400, { addError: 'That game couldn’t be found. Search again and retry.' });
+		}
+		return { wanted: true };
 	},
 
 	manual: async (event) => {

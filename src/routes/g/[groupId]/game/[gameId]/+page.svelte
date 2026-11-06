@@ -9,6 +9,7 @@
 	import LinkIcon from '@lucide/svelte/icons/link';
 	import Search from '@lucide/svelte/icons/search';
 	import Plus from '@lucide/svelte/icons/plus';
+	import Gift from '@lucide/svelte/icons/gift';
 	import { enhance } from '$app/forms';
 	import { guessKind, KIND_LABELS, LINK_KINDS, type LinkKind } from '#lib/link-kinds.ts';
 	import BoxFront from '#lib/components/BoxFront.svelte';
@@ -127,9 +128,20 @@
 			<p class="muted wanted">Wanted by {data.wishers.map((w) => w.name).join(', ')}</p>
 		{/if}
 		{#if data.canEdit}
-			<form method="POST" action={data.mine ? '?/remove' : '?/add'} class="copy-action">
-				<button class="btn">{data.mine ? 'Remove from my games' : 'I own this too'}</button>
-			</form>
+			<div class="copy-actions">
+				<form method="POST" action={data.mine ? '?/remove' : '?/add'}>
+					<button class="btn">{data.mine ? 'Remove from my games' : data.owners.length ? 'I own this too' : 'I own this'}</button>
+				</form>
+				{#if !data.mine}
+					<form method="POST" action="?/want" use:enhance>
+						<input type="hidden" name="on" value={data.wanted ? '0' : '1'} />
+						<button class="btn want" aria-pressed={data.wanted}>
+							<Gift size={18} aria-hidden="true" />
+							{data.wanted ? 'On your wishlist' : 'I want this'}
+						</button>
+					</form>
+				{/if}
+			</div>
 		{/if}
 	</section>
 
@@ -355,8 +367,14 @@
 	.wanted {
 		margin-top: var(--s-3);
 	}
-	.copy-action {
+	.copy-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--s-2);
 		margin-top: var(--s-4);
+	}
+	.want[aria-pressed='true'] {
+		border-color: var(--ink);
 	}
 	.links {
 		list-style: none;
