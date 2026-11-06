@@ -5,6 +5,7 @@
 	import favicon from '#lib/assets/favicon.svg';
 	import BggCredit from '#lib/components/BggCredit.svelte';
 	import CubeMark from '#lib/components/CubeMark.svelte';
+	import { SOURCE_URL } from '#lib/project.ts';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
@@ -24,6 +25,8 @@
 			<nav aria-label="Account">
 				{#if data.user}
 					<a href="/me" class="me">{data.user.name}</a>
+				{:else if data.demoMode}
+					<a href={SOURCE_URL} class="me" rel="noopener">Run your own</a>
 				{:else}
 					<a href="/join" class="me">Join a group</a>
 				{/if}

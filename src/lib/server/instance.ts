@@ -14,6 +14,10 @@ export type InstanceConfig = {
 	bggMode: BggMode;
 	bggToken: string | null;
 	bggMinIntervalMs: number;
+	/** `demo`: the home page introduces the demo group and links to GitHub instead of joining. */
+	instanceMode: 'standard' | 'demo';
+	/** `block`: robots.txt disallows everything and every response carries X-Robots-Tag: noindex. */
+	searchEngines: 'allow' | 'block';
 };
 
 export type ConfigResult = { ok: true; config: InstanceConfig } | { ok: false; errors: string[] };
@@ -47,6 +51,15 @@ export function parseInstanceConfig(env: Record<string, unknown>, opts: { dev: b
 		errors.push(`INSTANCE_CONTACT must start with mailto: or https: (got "${instanceContact}").`);
 	} else if (!opts.dev && instanceContact === EXAMPLE_CONTACT) {
 		errors.push('INSTANCE_CONTACT still has the example value. Set your own contact address.');
+	}
+
+	const instanceModeRaw = str(env, 'INSTANCE_MODE') || 'standard';
+	if (instanceModeRaw !== 'standard' && instanceModeRaw !== 'demo') {
+		errors.push(`INSTANCE_MODE must be "standard" or "demo" (got "${instanceModeRaw}").`);
+	}
+	const searchEnginesRaw = str(env, 'SEARCH_ENGINES') || 'allow';
+	if (searchEnginesRaw !== 'allow' && searchEnginesRaw !== 'block') {
+		errors.push(`SEARCH_ENGINES must be "allow" or "block" (got "${searchEnginesRaw}").`);
 	}
 
 	const groupCreationRaw = str(env, 'GROUP_CREATION') || 'anyone';
@@ -87,7 +100,9 @@ export function parseInstanceConfig(env: Record<string, unknown>, opts: { dev: b
 		adminKey,
 		bggMode,
 		bggToken,
-		bggMinIntervalMs: int('BGG_MIN_INTERVAL_MS', MIN_BGG_INTERVAL_MS, MIN_BGG_INTERVAL_MS)
+		bggMinIntervalMs: int('BGG_MIN_INTERVAL_MS', MIN_BGG_INTERVAL_MS, MIN_BGG_INTERVAL_MS),
+		instanceMode: instanceModeRaw === 'demo' ? 'demo' : 'standard',
+		searchEngines: searchEnginesRaw === 'block' ? 'block' : 'allow'
 	};
 
 	return errors.length ? { ok: false, errors } : { ok: true, config };

@@ -1,6 +1,8 @@
 <script lang="ts">
 	import BoxFront from '#lib/components/BoxFront.svelte';
 	import OwnerEdge from '#lib/components/OwnerEdge.svelte';
+	import Code from '@lucide/svelte/icons/code';
+	import { SELF_HOSTING_URL, SOURCE_URL } from '#lib/project.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -19,7 +21,48 @@
 	const NAMES = ['Ada', 'Bram', 'Chen', 'Dewi', 'Eli', 'Fen'];
 </script>
 
-{#if data.groups.length}
+{#snippet exampleShelf()}
+	<figure class="example" aria-label="Example shelf with invented games">
+		<ul class="shelf">
+			{#each EXAMPLE as game, i (game.name)}
+				<li class="cube" style:--i={i}>
+					<span class="slot"><BoxFront name={game.name} /></span>
+					<OwnerEdge owners={game.owners.map((o) => ({ name: NAMES[o], colorIndex: o }))} />
+				</li>
+			{/each}
+		</ul>
+		<figcaption class="muted">Example shelf. Each colour along a cube's edge is the friend who owns it.</figcaption>
+	</figure>
+{/snippet}
+
+{#if data.demoMode}
+	<section class="hero">
+		<div class="pitch">
+			<h1>Every game your group owns, on one shelf</h1>
+			<p class="lede">
+				Box Populi pools a board game group's collections into one searchable shelf. This copy runs a demo group of invented
+				games and people, so you can look around without joining anything.
+			</p>
+			{#if data.demoExists}
+				<ul class="tries">
+					<li><a href="/demo">Filter the shelf</a> by players, time and complexity</li>
+					<li>Open a game to see who owns it and where its rules are</li>
+					<li>Let <a href="/g/demo/pick">Play tonight</a> pull three games for whoever showed up</li>
+				</ul>
+			{/if}
+			<div class="actions">
+				{#if data.demoExists}<a class="btn primary" href="/demo">Browse the demo shelf</a>{/if}
+				<a class="btn" href={SOURCE_URL} rel="noopener"><Code size={18} aria-hidden="true" /> Code on GitHub</a>
+			</div>
+			<p class="lede small open-source">
+				Free and open source. Run it for your own group on a free Cloudflare account with
+				<a href={SELF_HOSTING_URL} rel="noopener">the self-hosting guide</a>.
+			</p>
+			{#if !data.demoExists}<p class="banner">The demo group isn't loaded on this instance yet.</p>{/if}
+		</div>
+		{@render exampleShelf()}
+	</section>
+{:else if data.groups.length}
 	<section class="mine">
 		<h1>Your groups</h1>
 		<ul class="groups">
@@ -52,21 +95,21 @@
 			</div>
 			{#if data.demoExists}<p class="demo"><a href="/demo">Or look around a demo shelf first</a></p>{/if}
 		</div>
-		<figure class="example" aria-label="Example shelf with invented games">
-			<ul class="shelf">
-				{#each EXAMPLE as game, i (game.name)}
-					<li class="cube" style:--i={i}>
-						<span class="slot"><BoxFront name={game.name} /></span>
-						<OwnerEdge owners={game.owners.map((o) => ({ name: NAMES[o], colorIndex: o }))} />
-					</li>
-				{/each}
-			</ul>
-			<figcaption class="muted">Example shelf. Each colour along a cube's edge is the friend who owns it.</figcaption>
-		</figure>
+		{@render exampleShelf()}
 	</section>
 {/if}
 
 <style>
+	.open-source {
+		margin-top: var(--s-4);
+	}
+	.tries {
+		margin: 0 0 var(--s-4);
+		padding-left: 1.2em;
+		color: var(--ink-2);
+		display: grid;
+		gap: var(--s-1);
+	}
 	.hero {
 		display: grid;
 		gap: var(--s-6);

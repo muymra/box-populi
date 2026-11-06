@@ -36,5 +36,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.isAdmin = adminCookie != null && adminKey != null && (await verifyAdminCookie(adminKey, adminCookie, Date.now()));
 	if (adminCookie && !event.locals.isAdmin) clearAdminCookie(event.cookies, event.url);
 
-	return resolve(event);
+	const response = await resolve(event);
+	// SEARCH_ENGINES=block: an instance meant only for the people who have its links.
+	if (config.config.searchEngines === 'block') response.headers.set('x-robots-tag', 'noindex, nofollow');
+	return response;
 };

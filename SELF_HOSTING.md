@@ -51,6 +51,8 @@ In `wrangler.jsonc` under `"vars"`:
 | `INSTANCE_NAME` | What your instance is called, e.g. "Utrecht Board Gamers." |
 | `INSTANCE_CONTACT` | `mailto:you@example.com` or a contact page URL. Required. |
 | `GROUP_CREATION` | `anyone`, or `admins` if only you should create groups. |
+| `INSTANCE_MODE` | `standard`. Set `demo` for an instance that only shows the demo group: its home page introduces the demo and links to GitHub. |
+| `SEARCH_ENGINES` | `allow`. Set `block` if only your groups should find the instance; search engines are asked not to index it. |
 | `MAX_GROUPS_PER_USER` | Default `5`. |
 | `MAX_MEMBERS_PER_GROUP` | Default `100`. |
 | `BGG_MODE` | Leave it empty. BGG turns on when the `BGG_TOKEN` secret exists. Set `off` to keep BGG off even with a token. |

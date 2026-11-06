@@ -6,6 +6,7 @@
 	import Users from '@lucide/svelte/icons/users';
 	import Gift from '@lucide/svelte/icons/gift';
 	import CubeMark from '#lib/components/CubeMark.svelte';
+	import { SOURCE_URL } from '#lib/project.ts';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
@@ -39,6 +40,8 @@
 	</nav>
 	{#if data.user}
 		<a href="/me" class="me">{data.user.name}</a>
+	{:else if data.demoMode}
+		<a href={SOURCE_URL} class="me" rel="noopener">Run your own</a>
 	{:else}
 		<a href="/join" class="me">Join a group</a>
 	{/if}
@@ -50,7 +53,10 @@
 	</p>
 {/if}
 {#if data.group.isDemo}
-	<p class="note">Demo shelf: invented games and people, read-only.</p>
+	<p class="note">
+		Demo shelf: invented games and people, read-only. Box Populi is free and open source;
+		<a href={SOURCE_URL} rel="noopener">run your own from GitHub</a>.
+	</p>
 {:else if data.group.suspended}
 	<p class="banner">
 		The host has suspended this group{data.group.suspendedReason ? `: ${data.group.suspendedReason}` : ''}. It's read-only.

@@ -130,6 +130,8 @@ The repo commits `wrangler.example.jsonc`. `pnpm install` copies it to `wrangler
 | `INSTANCE_NAME` | var | `Box Populi` | Header, page titles, privacy page. |
 | `INSTANCE_CONTACT` | var | required | A `mailto:` or `https:` URL for reaching the hoster. Shown on the privacy page and on suspension notices. |
 | `GROUP_CREATION` | var | `anyone` | `anyone` or `admins`. With `admins`, only the hoster (signed in to `/admin`) creates groups; anyone can still join with a code. |
+| `INSTANCE_MODE` | var | `standard` | `standard` or `demo`. `demo` turns the home page into an introduction to the demo group, with links to the GitHub repo and SELF_HOSTING.md instead of joining, and the signed-out header link becomes "Run your own". For an instance that exists to show the demo. |
+| `SEARCH_ENGINES` | var | `allow` | `allow` or `block`. `block` serves a `robots.txt` that disallows everything and adds `X-Robots-Tag: noindex, nofollow` to every response, for an instance only its groups should know about. `allow` still disallows `/admin` and `/key/`. |
 | `MAX_GROUPS_PER_USER` | var | `5` | Groups one user can own. |
 | `MAX_MEMBERS_PER_GROUP` | var | `100` | Joins are refused past this. |
 

@@ -2,6 +2,7 @@
 // pacer, carries the bearer token and an identifying User-Agent, and backs the whole instance off
 // when BGG throttles. Not yet run against BGG itself: STATUS.md tracks that.
 import pkg from '../../../../package.json';
+import { SOURCE_URL } from '#lib/project.ts';
 import { parseCollection, parseSearch, parseThings } from './parse.ts';
 import { BACKOFF_MS, backOff, reserveSlot } from './pace.ts';
 import { FakeBggClient } from './fake.ts';
@@ -28,7 +29,7 @@ export class BggAuthError extends Error {
 }
 
 export function userAgent(origin: string): string {
-	return `BoxPopuli/${pkg.version} (+https://github.com/muymra/box-populi; instance=${origin})`;
+	return `BoxPopuli/${pkg.version} (+${SOURCE_URL}; instance=${origin})`;
 }
 
 function retryAfterMs(header: string | null): number | null {

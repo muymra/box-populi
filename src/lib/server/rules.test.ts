@@ -119,6 +119,17 @@ describe('instance config', () => {
 		expect(parseInstanceConfig({ ...env, BGG_MODE: 'live' }, { dev: false }).ok).toBe(false);
 	});
 
+	it('reads the instance mode and search-engine setting', () => {
+		const env = { INSTANCE_CONTACT: 'mailto:host@example.org', ADMIN_KEY: 'a-long-enough-admin-key-0123456789' };
+		const ok = parseInstanceConfig(env, { dev: false });
+		expect(ok.ok && [ok.config.instanceMode, ok.config.searchEngines]).toEqual(['standard', 'allow']);
+		const set = parseInstanceConfig({ ...env, INSTANCE_MODE: 'demo', SEARCH_ENGINES: 'block' }, { dev: false });
+		expect(set.ok && [set.config.instanceMode, set.config.searchEngines]).toEqual(['demo', 'block']);
+		const bad = parseInstanceConfig({ ...env, INSTANCE_MODE: 'showcase', SEARCH_ENGINES: 'no' }, { dev: false });
+		expect(bad.ok).toBe(false);
+		if (!bad.ok) expect(bad.errors.join('\n')).toMatch(/INSTANCE_MODE[\s\S]*SEARCH_ENGINES/);
+	});
+
 	it('rejects a short admin key even in dev', () => {
 		const result = parseInstanceConfig({ ...base, ADMIN_KEY: 'short' }, { dev: true });
 		expect(result.ok).toBe(false);

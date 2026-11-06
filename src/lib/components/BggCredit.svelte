@@ -4,6 +4,10 @@
 	TODO: replace the text badge with the official "Powered by BGG" logo file once its location
 	is confirmed (STATUS.md, unverified assumptions). Don't redraw the logo.
 -->
+<script lang="ts">
+	import { SOURCE_URL } from '#lib/project.ts';
+</script>
+
 <footer class="credit">
 	<div class="container inner">
 		<p>
@@ -12,7 +16,7 @@
 		</p>
 		<p class="small">
 			Box Populi is not affiliated with or endorsed by BoardGameGeek.
-			<a href="/privacy">Privacy</a> · <a href="https://github.com/muymra/box-populi" rel="noopener">Source</a>
+			<a href="/privacy">Privacy</a> · <a href={SOURCE_URL} rel="noopener">Source</a>
 		</p>
 	</div>
 </footer>
