@@ -1,8 +1,8 @@
 # Status
 
-Last updated 2026-11-06 (Friday night). Redesigned as the cube shelf (DECISIONS D26, DESIGN.md). Runs locally: create a group, join with a code, personal links across devices, the account page, adding games (BGG search on test data, or by hand), removing your copy, and the catalog, game pages and picker. 106 tests pass. Nothing is deployed, and no Cloudflare or BGG credentials exist yet.
+Last updated 2026-11-06 (Friday night). Every weekend item is built and 148 tests pass. Two instances run on Cloudflare Pages: the public demo at `box-populi.pages.dev` (`INSTANCE_MODE=demo`) and Carlo's private instance for his own groups, whose address stays out of this public repo. **`migrations/0001_init.sql` was applied to production on 2026-11-06, so it's frozen: schema changes go in new migration files.**
 
-**Next up:** the two items that need Carlo's Cloudflare login: the demo group on production (Sunday 16) and following SELF_HOSTING.md from scratch into a second project (21). Every other weekend item is done. After that, the PRD's stretch list. The live BGG client is written and tested against a fake server, but has never talked to BGG: that waits for the token.
+**Next up:** confirm both instances serve with their admin keys (the redeploy after setting them hit a Cloudflare outage on 2026-11-06), then tick item 16. After that, the PRD's stretch list. The live BGG client is written and tested against a fake server, but has never talked to BGG: that waits for the token.
 
 Agents: tick items as they're done, add a line to the session log at the bottom, and move assumptions to "Verified" with a date and source when you confirm them.
 
@@ -14,9 +14,10 @@ Not secret. Secrets never go in this file.
 |---|---|
 | GitHub repository | `https://github.com/muymra/box-populi`, public, branch `main` (given on the BGG application) |
 | License | MIT (DECISIONS D22) |
-| Cloudflare Pages project | not created |
-| Production URL | not created; planned `box-populi.pages.dev` |
-| D1 database name and id | not created; planned name `box-populi` |
+| Cloudflare Pages projects | `box-populi`, the public demo. A second, private project serves Carlo's groups and is deliberately not named here. Both are classic Pages projects (`--force`, see SELF_HOSTING.md). |
+| Production URL | `https://box-populi.pages.dev` (demo) |
+| D1 database name and id | `box-populi`, `082d8def-1901-4a9c-bd64-5dfb85b5cf4f`, region APAC (the demo's) |
+| First production migration | `0001_init.sql`, applied 2026-11-06 to both instances |
 | BGG application | submitted 2026-11-06, awaiting review. If declined, follow TECH.md "If BGG declines the application." |
 | BGG username for the demo seed | unknown; Carlo to supply |
 
@@ -24,10 +25,10 @@ Not secret. Secrets never go in this file.
 
 - [ ] Read BGG's five policy pages in a browser (links in TECH.md "Access and terms"): Using the XML API, XML API Terms of Use, Commercial Use, the XML API2 wiki, and the site Terms of Service. Fix anything in TECH.md they contradict, and note where BGG publishes the "Powered by BGG" logo files.
 - [x] Submit the BGG application at `boardgamegeek.com/applications`, non-commercial. Submitted 2026-11-06. Approval can take a week or more.
-- [ ] Cloudflare: `pnpm exec wrangler login`, `pnpm exec wrangler d1 create box-populi`, `pnpm exec wrangler pages project create box-populi --production-branch main`. Put the database id in `wrangler.jsonc` and record it above.
+- [x] Cloudflare: login, D1 databases and Pages projects for both instances. Done 2026-11-06, recorded above.
 - [x] `git init` and the public GitHub repository, MIT licensed. Done 2026-11-06.
 - [x] Scaffold: SvelteKit 3 with the Cloudflare Pages adapter (`sv create`, pnpm), `wrangler.example.jsonc`, `.dev.vars.example`, merged `.gitignore`. Done 2026-11-06 (DECISIONS D24).
-- [ ] Deploy to pages.dev (needs the Cloudflare step above). The app shows a setup page until `INSTANCE_CONTACT`, `ADMIN_KEY` and `BGG_MODE` are set for production.
+- [x] Deploy to pages.dev. Done 2026-11-06; the first deploys showed the setup page naming `ADMIN_KEY`, as designed.
 
 ## Saturday 2026-11-07
 
@@ -56,7 +57,7 @@ Checkpoint: the app answers "who has X" and "what fits 5 players in under an hou
 18. [x] Lending (`lending.ts`, lend and return on the game page, a loans list on `/me`).
 19. [x] Account page: display name, new personal link, sign out of this device or everywhere, leave a group, account deletion with the owner guard.
 20. [x] Polish: empty states, `/privacy` from instance settings, README screenshots (`docs/screenshots/`).
-21. [ ] Follow SELF_HOSTING.md from scratch into a second Cloudflare Pages project and fix every step that's wrong.
+21. [x] Follow SELF_HOSTING.md from scratch into a second Cloudflare Pages project and fix every step that's wrong. Done 2026-11-06 with two fresh clones from GitHub; fixes in the session log.
 
 If time runs out, cut in the PRD's cut order and mark items "cut" here.
 
@@ -122,3 +123,4 @@ From memory when the docs were written. Check each before relying on it, then mo
 - 2026-11-06 (night): Lending. On a game page the owner lends their copy to a member of that group (picked from a list) or to someone outside (typed name), and marks it returned. `/me` lists what you lent, with "Mark as returned", and what you borrowed. A borrower who deletes their account clears the loan. 5 new tests. Checked over HTTP (lend to a member and outside, refusals, catalog `lentToUserId`/`lentOut`, both `/me` lists, return from `/me`) and visually at phone width.
 - 2026-11-06 (night): Polish. The privacy page claimed rate-limit addresses were kept at most a day, but old rows were only deleted when the same address hit the same limit again; every write now also deletes rows older than the longest window (24 hours), with a new `rate_events(at)` index in `0001_init.sql`. The page no longer mentions member pictures (there are none), lists loans and wishlists among what members see, and drops the BGG paragraphs when BGG is off. The picker explains an empty shelf and a no-match setup. The demo seed made fractional play times ("45–67.5 min"); it rounds to 5 minutes now. README: four screenshots of the demo group in `docs/screenshots/`, a features list instead of a plan, and BGG described as optional. 1 new test.
 - 2026-11-06 (night): Two instance settings for Carlo's setup of a private instance for his own groups and a public demo for his portfolio: `SEARCH_ENGINES=block` (robots.txt disallows all, `X-Robots-Tag: noindex` on every response) and `INSTANCE_MODE=demo` (home page introduces the demo and links to GitHub and SELF_HOSTING.md; the signed-out header link reads "Run your own"). `static/robots.txt` became a route. The demo banner now links to GitHub on every instance, and the upstream repo URL lives once in `src/lib/project.ts`. The private instance's address stays out of this repo, which is public. 1 new test. Checked locally in both modes (robots.txt, header, home page at desktop and phone width, demo banner).
+- 2026-11-06 (night): First production deploy, following SELF_HOSTING.md from fresh GitHub clones: the public demo (`box-populi.pages.dev`, demo group seeded) and Carlo's private instance (`GROUP_CREATION=admins`, `SEARCH_ENGINES=block`). Guide fixes: Wrangler 4.157 delegates `pages project create` to Workers, which fails without an entry point, so the guide adds `--force`; database commands now use the `DB` binding (checked with `migrations apply`, `execute` and `export`); the guide sets `database_name` as well as the id; secrets reach only later deployments; a new pages.dev address answers 522 for about 40 seconds after its first deploy. The redeploy after setting the admin keys failed with "Failed to publish your Function: Unknown internal error" during a Cloudflare partial outage (Singapore network); a preview deploy without the key failed the same way, so the key isn't the cause. Retrying in the background.
