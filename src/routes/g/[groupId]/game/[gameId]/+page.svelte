@@ -174,7 +174,7 @@
 					{@const c = playerColor(o.colorIndex)}
 					<li>
 						<span class="chip" style:background={c.bg} style:color={c.ink} aria-hidden="true">{o.name.slice(0, 1).toUpperCase()}</span>
-						<span class="who"><strong>{o.name}</strong>{#if o.note}<span class="muted">{' · '}{o.note}</span>{/if}</span>
+						<span class="who"><strong>{o.name}</strong></span>
 						{#if o.status}<span class="tag">{o.status}</span>{/if}
 					</li>
 				{/each}

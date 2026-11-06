@@ -149,7 +149,6 @@ Rules that follow from the table:
 - Search also matches alternate titles BGG knows about, including Dutch edition names: "Kolonisten van Catan" finds Catan.
 - One tap adds a copy. Games already in the shared cache add instantly.
 - Manual entry covers BGG outages and obscure titles: name, player range, play time, optional image URL. Manual games have no mechanics, weight or best-at data, and the UI marks them as hand-entered.
-- Optional copy field: an edition or language note, for example "Dutch edition."
 - Expansions are searchable and addable. They're hidden from the catalog by default and listed on their base game's page.
 - An instance can run without a BGG connection, for example while the hoster waits for BGG to approve their application. The add page then offers manual entry only and says why.
 

@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import Dices from '@lucide/svelte/icons/dices';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import BoxFront from '#lib/components/BoxFront.svelte';
+	import CopyButton from '#lib/components/CopyButton.svelte';
 	import OwnerEdge from '#lib/components/OwnerEdge.svelte';
 	import { fetchCatalog, storage } from '#lib/catalog/client.ts';
 	import { WEIGHT_BUCKETS, formatPlaytime, type WeightBucket } from '#lib/catalog/buckets.ts';
@@ -27,6 +30,9 @@
 	let draw = $state(0);
 	let note = $state<string | null>(null);
 	let memberQuery = $state('');
+	// True once the setup is read from the address or this device, so syncing doesn't erase it first.
+	let restored = $state(false);
+	const MINUTES = [30, 45, 60, 90, 120, 180];
 
 	const players = $derived(playersOverride ?? (present.length || null));
 	const memberIds = $derived(new Set(payload?.members.map((m) => m.id) ?? []));
@@ -42,18 +48,46 @@
 		return present.length ? gamesAtHand(filtered, new Set(present)) : filtered;
 	});
 
+	/**
+	 * The setup lives in the address (PRD "Picker"), so it can be shared or bookmarked: `here` (member
+	 * ids), `n` (players), `t` (minutes) and `w` (complexity ceiling). Returns false when there's none.
+	 */
+	function readSetup(params: Pick<URLSearchParams, 'get' | 'has'>): boolean {
+		if (!['here', 'n', 't', 'w'].some((k) => params.has(k))) return false;
+		present = (params.get('here') ?? '').split(',').filter((id) => memberIds.has(id));
+		const n = Number(params.get('n'));
+		playersOverride = Number.isInteger(n) && n >= 1 && n <= 12 ? n : null;
+		const t = Number(params.get('t'));
+		minutes = MINUTES.includes(t) ? t : null;
+		const w = params.get('w');
+		ceiling = (WEIGHT_BUCKETS as readonly string[]).includes(w ?? '') ? (w as WeightBucket) : null;
+		return true;
+	}
+
 	onMount(async () => {
 		try {
 			payload = await fetchCatalog(data.group.id);
-			const remembered = JSON.parse(storage.get(storageKey) ?? '[]');
-			if (Array.isArray(remembered)) present = remembered.filter((id) => memberIds.has(id));
+			// A shared link wins; otherwise this device's last "who's here" for this group.
+			if (!readSetup(page.url.searchParams)) {
+				const remembered = JSON.parse(storage.get(storageKey) ?? '[]');
+				if (Array.isArray(remembered)) present = remembered.filter((id) => memberIds.has(id));
+			}
+			restored = true;
 		} catch (e) {
 			loadError = e instanceof Error ? e.message : "Couldn't load the shelf.";
 		}
 	});
 
 	$effect(() => {
-		if (payload) storage.set(storageKey, JSON.stringify(present));
+		if (!restored) return;
+		storage.set(storageKey, JSON.stringify(present));
+		const params = new URLSearchParams();
+		if (present.length) params.set('here', present.join(','));
+		if (playersOverride) params.set('n', String(playersOverride));
+		if (minutes) params.set('t', String(minutes));
+		if (ceiling) params.set('w', ceiling);
+		const search = params.size ? `?${params}` : '';
+		if (search !== page.url.search) goto(`${page.url.pathname}${search}`, { replace: true, reset: false });
 	});
 
 	function togglePresent(id: string) {
@@ -113,7 +147,7 @@
 					Time
 					<select class="field" bind:value={minutes}>
 						<option value={null}>Any</option>
-						{#each [30, 45, 60, 90, 120, 180] as t (t)}<option value={t}>{t} min</option>{/each}
+						{#each MINUTES as t (t)}<option value={t}>{t} min</option>{/each}
 					</select>
 				</label>
 				<label>
@@ -132,6 +166,7 @@
 					<Dices size={20} aria-hidden="true" /> Pull three games
 				</button>
 				<p class="muted num">{candidates.length} {candidates.length === 1 ? 'game fits' : 'games fit'}</p>
+				{#if restored}<CopyButton text={page.url.href} label="Copy a link to this setup" />{/if}
 				{#if payload.games.length === 0}
 					<p class="hint">The shelf is empty, so there’s nothing to pull yet.{#if data.role && !data.readonly}{' '}<a href="/g/{data.group.id}/add">Add your games</a>{/if}</p>
 				{:else if candidates.length === 0}

@@ -61,9 +61,9 @@ export const load: PageServerLoad = async (event) => {
 	if (!game) error(404, 'Game not found');
 
 	const [owners, wishers, links, expansions, bases, members] = await Promise.all([
-		all<{ user_id: string; name: string; note: string | null; lent_to_name: string | null; lent_to_text: string | null; lent_in_group: number }>(
+		all<{ user_id: string; name: string; lent_to_name: string | null; lent_to_text: string | null; lent_in_group: number }>(
 			db,
-			`SELECT c.user_id, u.name, c.note, lu.name AS lent_to_name, c.lent_to_text,
+			`SELECT c.user_id, u.name, lu.name AS lent_to_name, c.lent_to_text,
 				EXISTS (SELECT 1 FROM memberships lm WHERE lm.group_id = ?1 AND lm.user_id = c.lent_to_user_id) AS lent_in_group
 			 FROM copies c
 			 JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1
@@ -170,7 +170,6 @@ export const load: PageServerLoad = async (event) => {
 			name: o.name,
 			isMe: o.user_id === me?.id,
 			colorIndex: colorOf.get(o.user_id) ?? 0,
-			note: o.note,
 			status: o.lent_to_text
 				? `Lent to ${o.lent_to_text}`
 				: o.lent_to_name

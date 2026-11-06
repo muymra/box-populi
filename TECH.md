@@ -251,7 +251,7 @@ CREATE TABLE copies (
   id               INTEGER PRIMARY KEY,
   user_id          TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   game_id          INTEGER NOT NULL REFERENCES games(id),
-  note             TEXT,                 -- edition, language
+  note             TEXT,                 -- unused: copy notes were dropped (D33)
   lent_to_user_id  TEXT REFERENCES users(id) ON DELETE SET NULL,
   lent_to_text     TEXT,                 -- lent outside the app
   added_at         INTEGER NOT NULL,
@@ -309,7 +309,7 @@ CREATE TABLE admin_actions (
 Notes on the choices:
 
 - **One row per game.** Tags, alternate names and expansion links are JSON columns because the browser does the filtering and nothing queries them in SQL, except the expansions list on a game page (`json_each(base_bgg_ids)`). This keeps hydrate writes to one row per game; see "Scale and budget."
-- **One copy per user per game.** Owning two copies is rare enough for the note field.
+- **One copy per user per game.** Owning two copies of a game isn't recorded.
 - **Bitmasks for the player poll.** "Best at 4" is `(best_mask >> 4) & 1`. Capped at 12 players so JavaScript's 32-bit `<<` stays safe.
 - **Roles live on `memberships`.** No owner column on `groups` to drift out of sync. The partial unique index makes a second owner impossible.
 - **Ownership transfer** is one `db.batch([...])`: demote the old owner to `admin`, then promote the new one. D1 batches run as a transaction. The order matters because the index rejects two owners at once.
@@ -668,6 +668,8 @@ This is the default for a new instance (D28). With `BGG_MODE=off`, the add page 
 4. `rng` is injected so tests can seed it.
 
 URL params: `n`, `t`, `w`, `present` (comma-separated user ids), `seen` (ids already shown). The last "who's here" selection is stored in `localStorage` under `bp:present:<groupId>`. Wrap every storage access in try/catch and treat failure as an empty selection.
+
+The setup lives in the address: `here` (comma-separated member ids), `n` (players), `t` (minutes) and `w` (complexity ceiling), kept in step with `goto(..., { replace: true, reset: false })` like the shelf's filters. Opening a link with any of them restores that setup; without them, the page starts from this device's last "who's here" for the group. A "Copy a link to this setup" button copies the address. The three pulled games aren't in the address; they're random each time.
 
 ## Demo group
 

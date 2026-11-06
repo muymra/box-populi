@@ -185,3 +185,7 @@ Built from D27's plan. With BGG off, `GAME_SOURCE` defaults to `wikidata`: membe
 Built from D29. `BOX_TARGET` picks the adapter and the platform module at build time. Docker runs on Node with a SQLite file through `node:sqlite`; Vercel and Netlify use Turso, the only SQLite-compatible database they can reach without a disk; Workers is the existing Cloudflare build with another config file. New dev dependencies: `@sveltejs/adapter-node`, `@sveltejs/adapter-vercel`, `@sveltejs/adapter-netlify` and `@libsql/client`, each needed by exactly one target and bundled into its build.
 **Why:** Carlo asked for all three after D29 planned them. The data layer only had to swap the D1 binding for a wrapper of the same shape, since every database involved speaks SQLite.
 **Trade-offs accepted:** the app deletes dependent rows itself (Turso doesn't run cascades over HTTP); two more wrappers to keep in step with the D1 API, guarded by `pnpm test:libsql`; Docker hosters own their backups and HTTPS (Caddy in the compose file). Vercel, Netlify and the Docker image are built but haven't run against real accounts yet.
+
+## D33. No copy notes (2026-11-06)
+
+The PRD's optional note on a copy ("Dutch edition") is dropped; nothing set it and Carlo chose not to build it. The `copies.note` column stays, unused, because applied migrations aren't edited.
