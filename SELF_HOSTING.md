@@ -36,11 +36,13 @@ pnpm install    # also creates wrangler.jsonc and .dev.vars from the examples
 
 ```sh
 pnpm exec wrangler login
-pnpm exec wrangler d1 create box-populi
-pnpm exec wrangler pages project create <your-project-name> --production-branch main
+pnpm exec wrangler d1 create <your-database-name>
+pnpm exec wrangler pages project create <your-project-name> --production-branch main --force
 ```
 
-Put the database id from the second command into `wrangler.jsonc` as `database_id`, and your project name as `name`. Your site will be at `https://<your-project-name>.pages.dev` unless you add a custom domain in the Cloudflare dashboard.
+In `wrangler.jsonc`, set `name` to your project name, and `database_name` and `database_id` to the values the second command prints. Keep `"binding": "DB"`: every database command below uses that binding, so it works whatever you named the database. Cloudflare picks the database's region from where you run the command; add `--location weur` (or `enam`, `apac` and so on) to choose.
+
+`--force` creates a classic Pages project. Since Wrangler 4.157, `pages project create` first tries to create the project on Cloudflare Workers, which fails for Box Populi with "Missing entry-point to Worker script"; Wrangler's own message suggests `--force`. You only need it once, when creating the project. Your site will be at `https://<your-project-name>.pages.dev` unless you add a custom domain in the Cloudflare dashboard.
 
 ## 4. Set the instance settings
 
@@ -61,22 +63,24 @@ In `wrangler.jsonc` under `"vars"`:
 ## 5. Store the admin key
 
 ```sh
-openssl rand -base64 32    # copy the output; this is your admin key
+openssl rand -base64 32    # copy the output into your password manager; this is your admin key
 pnpm exec wrangler pages secret put ADMIN_KEY --project-name <your-project-name>
-pnpm exec wrangler pages secret put BGG_TOKEN --project-name <your-project-name>   # once BGG approves you; redeploy after
+pnpm exec wrangler pages secret put BGG_TOKEN --project-name <your-project-name>   # once BGG approves you
 ```
+
+Secrets reach only deployments made after you set them. If you change one later, deploy again (step 6).
 
 ## 6. Create the tables and deploy
 
 ```sh
-pnpm exec wrangler d1 migrations apply box-populi --remote
+pnpm exec wrangler d1 migrations apply DB --remote
 pnpm build
 pnpm exec wrangler pages deploy
 ```
 
 ## 7. Check it
 
-1. Open your site. If a setting is missing, the page names it.
+1. Open your site. On a new project the address can answer with error 522 for about a minute after the first deploy; wait and reload. If a setting is missing, the page names it.
 2. Open `/admin/login` and enter your admin key. The admin page should show zero groups.
 3. Create a group with your name, save the personal link it shows you, add a game, and open the catalog.
 4. Open `/privacy` and check that it shows your instance name and contact.
@@ -87,8 +91,10 @@ A public, read-only sample group for people who want to look before signing up:
 
 ```sh
 node scripts/seed-demo.ts
-pnpm exec wrangler d1 execute box-populi --remote --file seed/demo.sql
+pnpm exec wrangler d1 execute DB --remote --file seed/demo.sql
 ```
+
+For an instance that exists only to show the demo, also set `INSTANCE_MODE` to `demo` and `GROUP_CREATION` to `admins`.
 
 This seeds about 440 invented games, which needs no BGG token. Seeding from a real BGG collection (`--bgg-user <name>`) arrives with the live BGG client; that version contains BGG data, so `seed/demo.sql` is gitignored either way. The landing page links to `/demo` once it exists.
 
@@ -97,7 +103,7 @@ This seeds about 440 invented games, which needs no BGG token. Seeding from a re
 ```sh
 git pull
 pnpm install
-pnpm exec wrangler d1 migrations apply box-populi --remote
+pnpm exec wrangler d1 migrations apply DB --remote
 pnpm build
 pnpm exec wrangler pages deploy
 ```
@@ -109,7 +115,7 @@ If a new version adds a required setting, the site names it on every page until 
 Export the database to a file:
 
 ```sh
-pnpm exec wrangler d1 export box-populi --remote --output backup-$(date +%F).sql
+pnpm exec wrangler d1 export DB --remote --output backup-$(date +%F).sql
 ```
 
 D1 also keeps a short point-in-time history (Time Travel) you can restore from with `pnpm exec wrangler d1 time-travel`. Check Cloudflare's docs for the current retention on your plan.

@@ -640,7 +640,7 @@ URL params: `n`, `t`, `w`, `present` (comma-separated user ids), `seen` (ids alr
 - Five made-up members with no `oauth_accounts` rows, so nobody can sign in as them.
 - `scripts/seed-demo.ts` runs on Node directly (`node scripts/seed-demo.ts`, type stripping, no build step). Built so far: it generates about 440 invented games with no BGG ids (so nothing links to unrelated BGG pages), spread across the five members with a fixed seed (most to one or two members, as in real groups), plus loans, expansions, hand-entered games and wishlist entries. Planned: `--bgg-user <name>` seeds from a real collection through the live client.
 - Demo games use ids from 9,000,001 up and `created_by = 'demo-ada'`, so a re-run can delete exactly them.
-- `pnpm db:seed` generates and applies it locally. For production: `pnpm exec wrangler d1 execute box-populi --remote --file seed/demo.sql`. The script starts by deleting the existing demo rows, so re-running it replaces the demo.
+- `pnpm db:seed` generates and applies it locally. For production: `pnpm exec wrangler d1 execute DB --remote --file seed/demo.sql`. The script starts by deleting the existing demo rows, so re-running it replaces the demo.
 - `/demo` redirects to `/g/demo`. `requireRead` lets anyone read it; `requireRole` refuses every mutation on it. Pages hide controls when `group.isDemo` is true, but the server check is the one that counts.
 - The same seed doubles as development data, so catalog work has real volume from Saturday morning.
 - `seed/demo.sql` is gitignored because it holds BGG data (names, descriptions, image URLs). Each hoster generates their own.
