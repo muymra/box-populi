@@ -150,7 +150,8 @@ describe('LiveBggClient', () => {
 		expect(calls[0].url).toBe('https://boardgamegeek.com/xmlapi2/search?query=catan&type=boardgame,boardgameexpansion');
 		expect(calls[0].headers.Authorization).toBe('Bearer secret-token');
 		expect(calls[0].headers['User-Agent']).toBe(userAgent('https://example.pages.dev'));
-		expect(calls[0].headers['User-Agent']).toMatch(/^BoxPopuli\/\d+\.\d+\.\d+ \(\+https:\/\/github\.com\/muymra\/box-populi; instance=https:\/\/example\.pages\.dev\)$/);
+		expect(userAgent('https://example.pages.dev', 'mailto:host@example.com')).toMatch(/^BoxPopuli\/[\w.-]+ \(https:\/\/example\.pages\.dev; mailto:host@example\.com; \+https:\/\/github\.com\/.+\)$/);
+		expect(calls[0].headers['User-Agent']).toMatch(/^BoxPopuli\/\d+\.\d+\.\d+ \(https:\/\/example\.pages\.dev; \+https:\/\/github\.com\/muymra\/box-populi\)$/);
 		expect(sleeps).toEqual([2000]);
 	});
 

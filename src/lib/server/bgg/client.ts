@@ -33,8 +33,13 @@ export class BggAuthError extends Error {
 	}
 }
 
-export function userAgent(origin: string): string {
-	return `BoxPopuli/${pkg.version} (+${SOURCE_URL}; instance=${origin})`;
+/**
+ * How we introduce ourselves to BGG and Wikidata: the software and version, then the instance,
+ * how to reach the person who runs it (INSTANCE_CONTACT), and the source code. Wikimedia asks for
+ * a way to contact the operator; the repository alone would reach the project, not this host.
+ */
+export function userAgent(origin: string, contact?: string): string {
+	return `BoxPopuli/${pkg.version} (${origin}; ${contact ? `${contact}; ` : ''}+${SOURCE_URL})`;
 }
 
 function retryAfterMs(header: string | null): number | null {
@@ -63,6 +68,8 @@ export type LiveClientOptions = {
 	db: DB;
 	intervalMs: number;
 	origin: string;
+	/** INSTANCE_CONTACT, for the User-Agent. */
+	contact?: string;
 	fetchFn?: typeof fetch;
 	now?: () => number;
 	sleep?: (ms: number) => Promise<void>;
@@ -98,7 +105,7 @@ export class LiveBggClient implements BggClient {
 			fetchFn(BGG_BASE + path, {
 				headers: {
 					Authorization: `Bearer ${this.opts.token}`,
-					'User-Agent': userAgent(this.opts.origin),
+					'User-Agent': userAgent(this.opts.origin, this.opts.contact),
 					Accept: 'application/xml, text/xml'
 				},
 				signal
@@ -144,5 +151,5 @@ export class LiveBggClient implements BggClient {
 export function getBggClient(config: InstanceConfig, db: DB, origin: string): BggClient | null {
 	if (config.bggMode === 'off') return null;
 	if (config.bggMode === 'fake') return new FakeBggClient();
-	return new LiveBggClient({ token: config.bggToken ?? '', db, intervalMs: config.bggMinIntervalMs, origin });
+	return new LiveBggClient({ token: config.bggToken ?? '', db, intervalMs: config.bggMinIntervalMs, origin, contact: config.instanceContact });
 }

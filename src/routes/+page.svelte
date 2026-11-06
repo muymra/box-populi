@@ -24,7 +24,7 @@
 	const GETS = [
 		['One shelf for everyone', 'Each member adds the games they own once, and they show in every group they’re in, with who owns which copy.'],
 		['Filters for game night', 'Players, time, complexity, mechanics, themes, owner, and whether a copy is lent out. A filtered view is a link you can share.'],
-		['Play tonight', 'Tick who showed up and get three games from what they own, weighted towards ones that play best at that count.'],
+		['Play tonight', 'Tick who showed up and get three games from what they own, weighted towards ones that play best at that count, plus quick fillers for while others arrive.'],
 		['Wanted and lending', 'Wishlists, a list of games someone wants and nobody in the group owns yet, and who has whose copy.'],
 		['Rules and tutorials', 'Members add rulebook and video links to each game, so the group stops searching for them every time.'],
 		['No accounts', 'Join with a group code and a name. A personal link signs you in on another device; there are no passwords or emails.']

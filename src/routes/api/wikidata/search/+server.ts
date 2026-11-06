@@ -21,7 +21,7 @@ export const GET: RequestHandler = async (event) => {
 	const db = getDb();
 	const refused = await refuseInactive(event, db, event.url.searchParams.get('groupId'));
 	if (refused) return refused;
-	const client = getWikidataClient(event.locals.config, userAgent(event.url.origin));
+	const client = getWikidataClient(event.locals.config, userAgent(event.url.origin, event.locals.config.instanceContact));
 	if (!client) return error(503, 'Wikidata search isn’t used on this site. Add the game by hand below.');
 
 	const now = Date.now();

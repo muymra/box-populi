@@ -537,7 +537,7 @@ export interface BggClient {
 
 Fixtures: the committed fixtures are hand-written in BGG's XML shape with invented games ("Test Game Alpha"). They cover a base game, an expansion with an inbound base link, a sparse player poll, a poll with an "N+" row, a game with zero weight votes, and a double-encoded description. Real responses are useful for checking the parser, but they're BGG data. They go in `fixtures/local/`, which is gitignored, so the public repo doesn't redistribute BGG data or feed it to AI training crawlers. Tests run on the committed fixtures and also on `fixtures/local/` when present.
 
-The live client sends `User-Agent: BoxPopuli/<version> (+https://github.com/muymra/box-populi; instance=<origin>)` on every request. `<version>` is read from `package.json` at build time, so it never needs editing. `<origin>` is the instance's own address (`url.origin` of the request that triggered the call), so BGG can tell instances apart and reach the right hoster instead of assuming all traffic is Carlo's. No email or personal data goes in the header.
+The live client sends `User-Agent: BoxPopuli/<version> (<origin>; <contact>; +https://github.com/muymra/box-populi)` on every request, and the Wikidata client sends the same. `<version>` is read from `package.json` at build time, so it never needs editing. `<origin>` is the instance's own address (`url.origin` of the request that triggered the call) and `<contact>` its `INSTANCE_CONTACT`, so BGG and Wikimedia can tell instances apart and reach the right hoster instead of assuming all traffic is Carlo's (Wikimedia's User-Agent policy asks for a way to contact the operator). The contact is the hoster's public address, already on the privacy page; no member data goes in the header.
 
 Pacing is instance-wide, through the one-row `bgg_pace` table, because isolates share no memory. Before each request the client reserves a slot (`reserveSlot` in `bgg/pace.ts`):
 
@@ -652,6 +652,18 @@ The original plan, in order. Steps 3 to 5 are built as the public-sources mode a
 5. **Import without BGG:** paste a list of titles, one per line, matched against Wikidata, with the unmatched ones becoming manual entries.
 
 Nothing in the current design needs to change for this. The client interface, the tolerance for missing fields, and `BGG_MODE=off` already make room for it.
+
+### Planned: BGG's ranks file as a local search index
+
+Not built; planned 2026-11-06 for when the BGG token is in. BGG publishes one CSV with the names, ids, ranks and average ratings of every game in its database, at `boardgamegeek.com/data_dumps/bg_ranks`. Its wiki puts the file under the XML API's licence and calls it the preferred way to get all game names and ranks. Searching a local copy instead of calling BGG's `search` for every query would cut most of an instance's BGG traffic and make search instant.
+
+1. **Getting the file.** The hoster downloads it from BGG themselves, as they register their own application; the file is BGG data, so it never goes in the repository or into anything an AI could train on. To confirm before building: whether the download needs a BGG login, the exact columns, and the row count.
+2. **Loading it.** A `bgg_index` table (`bgg_id` primary key, `name`, normalized `search_name`, `year`, `rank`, `is_expansion`), separate from `games`: `games` holds what members have added, the index is only for finding. A script turns the CSV into SQL batches applied with `wrangler d1 execute DB --remote` (or an upload on `/admin`, 1,000 rows per request as batches, which count as one query each).
+3. **Staying inside D1's free plan.** The free plan writes at most 100,000 rows a day, and going over locks the database until 00:00 UTC. Load only ranked games (BGG ranks a game once enough people have rated it), count the index's own writes, and split the first load across days if it comes near 50,000. Refresh monthly, writing only rows that changed.
+4. **Searching it.** Prefix and whole-word matches on `search_name`, most-rated first, the way `rankHits` ranks today. The file has only each game's primary name, so a search that finds nothing locally (a Dutch title, an obscure game) falls back to BGG's `search` through the pacer. Adding a game still fetches its details with `thing`, as now.
+5. **Credit.** Showing index results is showing BGG data, so `holdsBggData` counts a non-empty index and the footer credit stays.
+
+About 4 to 6 hours once the open points in step 1 are confirmed.
 
 ### Refresh
 

@@ -22,7 +22,7 @@ export const POST: RequestHandler = async (event) => {
 	if (!(await take(db, now, [userId, LIMITS.listMatch])).ok) return reply(429, { error: 'That’s a lot of lists. Wait ten minutes.' });
 
 	try {
-		const rows = await matchLines(db, body.groupId, userId, lines, getWikidataClient(event.locals.config, userAgent(event.url.origin)), now);
+		const rows = await matchLines(db, body.groupId, userId, lines, getWikidataClient(event.locals.config, userAgent(event.url.origin, event.locals.config.instanceContact)), now);
 		return reply(200, { rows });
 	} catch (e) {
 		if (e instanceof WikidataBusyError) return reply(503, { error: `Wikidata isn’t answering right now (${e.detail.slice(0, 60)}).`, retryAfterMs: 5000 });

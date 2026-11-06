@@ -10,7 +10,7 @@ A shared shelf for your board game group. Everyone adds the games they own, and 
 
 - **One shelf for everyone's games.** Each box has a coloured line for each friend who owns it.
 - **Finding something to play.** Pick "4 players" and "fits in an hour", add "not too heavy" if you like, and the shelf shows only what fits.
-- **Play tonight.** Tick who showed up and it suggests three games from what those people own.
+- **Play tonight.** Tick who showed up and it suggests three games from what those people own, plus a few quick fillers for while others arrive, if you like.
 - **Wishlists and lending.** See which games someone wants that nobody in the group has yet, and who borrowed whose copy.
 - **Rulebooks and videos.** Save the links once, next to the game, for everyone.
 - **No accounts.** You join with the group's five-character code and your name. No email, no password.
@@ -20,7 +20,7 @@ A shared shelf for your board game group. Everyone adds the games they own, and 
 |---|---|
 | ![The shelf on a phone, with tabs along the bottom](docs/screenshots/shelf-phone.png) | ![A game's page on a phone in dark mode: players, play time, complexity, who owns it, and a how-to-play link](docs/screenshots/game-phone-dark.png) |
 
-![Play tonight: Ada, Bram and Chen ticked as here, and three games suggested from what they own](docs/screenshots/picker-desktop.png)
+![Play tonight: Ada, Bram and Chen ticked as here, three games suggested from what they own, and a row of quick fillers below](docs/screenshots/picker-desktop.png)
 
 ![The same shelf in a different colour theme, filtered to games for 4 players that fit in an hour](docs/screenshots/themes-desktop.png)
 
