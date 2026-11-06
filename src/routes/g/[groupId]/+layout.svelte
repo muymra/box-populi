@@ -28,7 +28,9 @@
 <svelte:head><title>{data.group.name} · {data.instanceName}</title></svelte:head>
 
 <header class="group-bar">
-	<a class="home" href="/" aria-label="{data.instanceName}: all your groups"><CubeMark size={24} /></a>
+	<a class="home" href="/" aria-label="{data.instanceName}: all your groups">
+		{#if data.logoUrl}<img class="logo" src={data.logoUrl} alt="" />{:else}<CubeMark size={24} />{/if}
+	</a>
 	<h1>{data.group.name}</h1>
 	<nav class="tabbar" aria-label="Group">
 		{#each tabs as t (t.href)}
@@ -69,6 +71,13 @@
 </div>
 
 <style>
+	.logo {
+		display: block;
+		height: 28px;
+		width: auto;
+		max-width: 120px;
+		object-fit: contain;
+	}
 	.group-bar {
 		display: flex;
 		align-items: center;

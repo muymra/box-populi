@@ -60,6 +60,38 @@
 		</p>
 	{/if}
 
+	<section aria-labelledby="look-h">
+		<h2 id="look-h">Look of this site</h2>
+		<p class="muted intro">
+			Five colours make a custom theme; the shades in between are worked out for you, and any text that would be hard to read
+			is darkened or lightened until it isn't. It appears as "Custom" in the footer's Theme menu and the group theme menu.
+		</p>
+		<form method="POST" action="?/look" class="look" use:enhance={() => async ({ update }) => update({ reset: false })}>
+			<div class="swatches">
+				{#each [['page', 'Page'], ['surface', 'Cards and fields'], ['ink', 'Text'], ['strip', 'Filter strip'], ['accent', 'Accent (chosen things)']] as [key, label] (key)}
+					<label class="swatch">
+						<input type="color" name={key} value={data.look.colors[key as keyof typeof data.look.colors]} />
+						<span>{label}</span>
+					</label>
+				{/each}
+			</div>
+			<label class="check">
+				<input type="checkbox" name="customDefault" checked={data.look.customDefault} />
+				<span>Show the custom theme to everyone by default (people can still pick another in the footer)</span>
+			</label>
+			<label class="logo-field">
+				<span>Logo image address <span class="hint">(optional, https://; replaces the cube mark in the header)</span></span>
+				<input class="field" name="logoUrl" type="url" value={data.look.logoUrl} placeholder="https://example.com/logo.svg" />
+			</label>
+			{#if form?.lookError}<p class="banner error" role="alert">{form.lookError}</p>{/if}
+			{#if form?.lookSaved}<p class="muted" role="status">Saved. Other pages pick it up within a minute.</p>{/if}
+			<div class="inline">
+				<button class="btn primary small">{data.look.hasCustom ? 'Save' : 'Create the custom theme'}</button>
+				{#if data.look.hasCustom}<button class="btn small" name="remove" value="1">Remove the custom theme</button>{/if}
+			</div>
+		</form>
+	</section>
+
 	<section aria-labelledby="totals-h">
 		<h2 id="totals-h">Totals</h2>
 		<dl class="totals">
@@ -180,6 +212,50 @@
 </div>
 
 <style>
+	.look {
+		display: flex;
+		flex-direction: column;
+		gap: var(--s-4);
+		max-width: 40rem;
+	}
+	.swatches {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr));
+		gap: var(--s-3);
+	}
+	.swatch {
+		display: flex;
+		align-items: center;
+		gap: var(--s-2);
+		font-weight: 650;
+		font-size: var(--t-small);
+	}
+	.swatch input {
+		width: 44px;
+		height: 44px;
+		padding: 2px;
+		border: 1.5px solid var(--rule);
+		border-radius: var(--r-ctl);
+		background: var(--cube);
+		cursor: pointer;
+	}
+	.check {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--s-2);
+	}
+	.check input {
+		accent-color: var(--ink);
+		width: 18px;
+		height: 18px;
+		margin-top: 2px;
+	}
+	.logo-field {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		font-weight: 650;
+	}
 	.admin {
 		display: grid;
 		gap: var(--s-5);

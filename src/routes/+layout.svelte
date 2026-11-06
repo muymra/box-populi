@@ -33,12 +33,15 @@
 <svelte:head>
 	<link rel="icon" href={favicon} />
 	<title>{data.instanceName}</title>
+	{#if data.customTheme != null}<link rel="stylesheet" href="/custom-theme.css?v={data.customTheme}" />{/if}
 </svelte:head>
 
 {#if !inGroup}
 	<header class="top">
 		<div class="container bar">
-			<a class="brand" href="/"><CubeMark size={24} /><span>{data.instanceName}</span></a>
+			<a class="brand" href="/">
+				{#if data.logoUrl}<img class="logo" src={data.logoUrl} alt="" />{:else}<CubeMark size={24} />{/if}<span>{data.instanceName}</span>
+			</a>
 			<nav aria-label="Account">
 				{#if data.user}
 					<a href="/me" class="me">{data.user.name}</a>
@@ -56,9 +59,16 @@
 	{@render children()}
 </main>
 
-<BggCredit bind:deviceTheme bgg={data.bggCredit} wikidata={data.wikidataCredit} />
+<BggCredit bind:deviceTheme custom={data.customTheme != null} bgg={data.bggCredit} wikidata={data.wikidataCredit} />
 
 <style>
+	.logo {
+		display: block;
+		height: 28px;
+		width: auto;
+		max-width: 140px;
+		object-fit: contain;
+	}
 	.top {
 		background: var(--laminate);
 		border-bottom: 1px solid var(--rule);

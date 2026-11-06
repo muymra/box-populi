@@ -4,6 +4,7 @@ import { resolveSession, SESSION_COOKIE } from '#lib/server/identity.ts';
 import { clearAdminCookie, clearSessionCookie, setSessionCookie, THEME_COOKIE } from '#lib/server/cookies.ts';
 import { AUTO_THEME, isDeviceTheme, isThemeId, resolveTheme } from '#lib/themes.ts';
 import { groupThemeFor } from '#lib/server/group-admin.ts';
+import { getAppearance } from '#lib/server/appearance.ts';
 import { ADMIN_COOKIE, verifyAdminCookie } from '#lib/server/admin.ts';
 
 const escapeHtml = (s: string) =>
@@ -45,7 +46,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const groupId = event.url.pathname.match(/^\/g\/([^/]+)/)?.[1];
 	const groupTheme =
 		groupId && !isThemeId(event.locals.deviceTheme) ? await groupThemeFor(getDb(), groupId, event.locals.user?.id ?? null) : null;
-	event.locals.theme = resolveTheme(event.locals.deviceTheme, groupTheme, config.config.theme);
+	// The hoster's custom theme can replace THEME as the default (set on /admin).
+	event.locals.appearance = await getAppearance(getDb());
+	const instanceTheme = event.locals.appearance.colors && event.locals.appearance.customDefault ? 'custom' : config.config.theme;
+	event.locals.instanceTheme = instanceTheme;
+	event.locals.theme = resolveTheme(event.locals.deviceTheme, groupTheme, instanceTheme);
 	const theme = event.locals.theme;
 	const response = await resolve(event, { transformPageChunk: ({ html }) => html.replace('%bp.theme%', theme) });
 	// SEARCH_ENGINES=block: an instance meant only for the people who have its links.

@@ -1,5 +1,6 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 import type { InstanceConfig } from '#lib/server/instance.ts';
+import type { Appearance } from '#lib/server/appearance.ts';
 
 declare global {
 	namespace App {
@@ -13,6 +14,10 @@ declare global {
 			deviceTheme: string;
 			/** The colour theme for this request: the device's pick, else the group's, else the instance default. */
 			theme: string;
+			/** The instance's default theme: THEME, or the custom theme when /admin makes it the default. */
+			instanceTheme: string;
+			/** The custom theme and logo set on /admin. */
+			appearance: Appearance;
 		}
 	}
 }

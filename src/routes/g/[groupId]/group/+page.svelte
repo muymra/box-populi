@@ -7,7 +7,7 @@
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { lastActive } from '#lib/time.ts';
 	import { invalidateAll } from '$app/navigation';
-	import { AUTO_THEME, THEME_IDS, THEME_LABELS } from '#lib/themes.ts';
+	import { AUTO_THEME, CUSTOM_THEME, THEME_IDS, THEME_LABELS } from '#lib/themes.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -155,6 +155,7 @@
 				<label class="visually-hidden" for="group-theme">Group theme</label>
 				<select id="group-theme" class="field" name="theme" value={data.groupTheme ?? ''}>
 					<option value="">This site's default</option>
+					{#if data.customTheme != null}<option value={CUSTOM_THEME}>{THEME_LABELS[CUSTOM_THEME]}</option>{/if}
 					{#each THEME_IDS as id (id)}<option value={id}>{THEME_LABELS[id]}</option>{/each}
 				</select>
 				<button class="btn">Save</button>

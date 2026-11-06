@@ -9,7 +9,7 @@
 	import ThemePicker from './ThemePicker.svelte';
 
 	/** `bgg`: whether this instance shows BGG data and so must credit it (D30). */
-	let { deviceTheme = $bindable(), bgg, wikidata }: { deviceTheme: string; bgg: boolean; wikidata: boolean } = $props();
+	let { deviceTheme = $bindable(), custom, bgg, wikidata }: { deviceTheme: string; custom: boolean; bgg: boolean; wikidata: boolean } = $props();
 </script>
 
 <footer class="credit">
@@ -27,7 +27,7 @@
 			{#if bgg}Box Populi is not affiliated with or endorsed by BoardGameGeek.{/if}
 			<a href="/privacy">Privacy</a> · <a href={SOURCE_URL} rel="noopener">Source</a>
 		</p>
-		<div class="theme"><ThemePicker bind:current={deviceTheme} /></div>
+		<div class="theme"><ThemePicker bind:current={deviceTheme} {custom} /></div>
 	</div>
 </footer>
 

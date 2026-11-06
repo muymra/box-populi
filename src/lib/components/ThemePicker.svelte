@@ -7,9 +7,10 @@
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
 	import Palette from '@lucide/svelte/icons/palette';
-	import { AUTO_THEME, THEME_IDS, THEME_LABELS } from '#lib/themes.ts';
+	import { AUTO_THEME, CUSTOM_THEME, THEME_IDS, THEME_LABELS } from '#lib/themes.ts';
 
-	let { current = $bindable() }: { current: string } = $props();
+	/** `custom`: the instance has a custom theme set on /admin. */
+	let { current = $bindable(), custom = false }: { current: string; custom?: boolean } = $props();
 	let enhanced = $state(false);
 
 	$effect(() => {
@@ -32,6 +33,7 @@
 		<span>Theme</span>
 		<select name="theme" value={current} onchange={pick}>
 			<option value={AUTO_THEME}>Automatic</option>
+			{#if custom}<option value={CUSTOM_THEME}>{THEME_LABELS[CUSTOM_THEME]}</option>{/if}
 			{#each THEME_IDS as id (id)}<option value={id}>{THEME_LABELS[id]}</option>{/each}
 		</select>
 	</label>

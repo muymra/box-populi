@@ -10,6 +10,9 @@ export const load: LayoutServerLoad = async ({ locals }) => ({
 	demoMode: locals.config.instanceMode === 'demo',
 	theme: locals.theme,
 	deviceTheme: locals.deviceTheme,
-	instanceTheme: locals.config.theme,
+	instanceTheme: locals.instanceTheme,
+	// The custom theme's stylesheet version (null when there's none) and the logo replacing the cube mark.
+	customTheme: locals.appearance.colors ? locals.appearance.version : null,
+	logoUrl: locals.appearance.logoUrl,
 	user: locals.user ? { name: locals.user.name } : null
 });
