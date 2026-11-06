@@ -21,10 +21,10 @@
 	const TIME_OPTIONS = [20, 30, 45, 60, 90, 120, 180];
 	const PLAYER_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
 	const SORTS: Array<{ value: SortKey; label: string }> = [
-		{ value: 'title', label: 'A to Z' },
-		{ value: 'weight', label: 'Lightest first' },
-		{ value: 'time', label: 'Shortest first' },
-		{ value: 'added', label: 'Newest on the shelf' },
+		{ value: 'title', label: 'A–Z' },
+		{ value: 'weight', label: 'Lightest' },
+		{ value: 'time', label: 'Shortest' },
+		{ value: 'added', label: 'Newest' },
 		{ value: 'owned', label: 'Most owned' }
 	];
 
@@ -97,7 +97,7 @@
 	<label class="search">
 		<Search size={18} aria-hidden="true" />
 		<span class="visually-hidden">Search titles</span>
-		<input type="search" placeholder="Search {payload ? payload.games.length : ''} games" bind:value={filters.q} />
+		<input type="search" placeholder={payload ? `Search ${payload.games.length} games` : 'Search games'} bind:value={filters.q} />
 	</label>
 	<div class="controls">
 		<select bind:value={filters.players} class:on={filters.players != null} aria-label="Players">
@@ -116,6 +116,7 @@
 				<button type="button" class="chip" aria-pressed={filters.weights.includes(bucket)} onclick={() => toggleWeight(bucket)}>{BUCKET_LABELS[bucket]}</button>
 			{/each}
 		</span>
+		{#if anyFilter}<button type="button" class="chip clear" onclick={resetFilters}>Clear</button>{/if}
 		<button type="button" class="chip more" aria-expanded={moreOpen} aria-controls="more-filters" onclick={() => (moreOpen = !moreOpen)}>
 			<SlidersHorizontal size={16} aria-hidden="true" />
 			More{#if moreCount}<span class="count num">{moreCount}</span>{/if}
@@ -147,13 +148,12 @@
 		{/if}
 	</p>
 	<div class="bar-actions">
-		{#if anyFilter}<button type="button" class="link-button" onclick={resetFilters}>Clear filters</button>{/if}
 		<select bind:value={filters.sort} class="sort" aria-label="Sort">
 			{#each SORTS as s (s.value)}<option value={s.value}>{s.label}</option>{/each}
 		</select>
 		<div class="seg" role="group" aria-label="View">
 			<button type="button" aria-pressed={view === 'cubes'} onclick={() => setView('cubes')} title="Cubes"><LayoutGrid size={18} aria-hidden="true" /><span class="visually-hidden">Cubes</span></button>
-			<button type="button" aria-pressed={view === 'list'} onclick={() => setView('list')} title="List"><Rows3 size={18} aria-hidden="true" /><span class="visually-hidden">List</span></button>
+			<button type="button" aria-pressed={view === 'list'} onclick={() => setView('list')} title="Spines"><Rows3 size={18} aria-hidden="true" /><span class="visually-hidden">Spines</span></button>
 		</div>
 	</div>
 </div>
@@ -265,7 +265,7 @@
 	.controls select,
 	.chip {
 		min-height: 38px;
-		border-radius: 999px;
+		border-radius: 4px;
 		border: 1.5px solid var(--label-line);
 		background: transparent;
 		color: var(--label-ink);
@@ -275,8 +275,15 @@
 		cursor: pointer;
 	}
 	.controls select {
-		padding-right: 8px;
+		appearance: none;
+		padding-right: 30px;
 		max-width: 11rem;
+		background-image: var(--chevron-label);
+		background-repeat: no-repeat;
+		background-position: right 10px center;
+	}
+	.controls select.on {
+		background-image: var(--chevron-mark);
 	}
 	.controls select option {
 		color: var(--ink);
@@ -293,6 +300,9 @@
 		align-items: center;
 		gap: 6px;
 		margin-left: auto;
+	}
+	.chip.clear {
+		color: var(--label-ink-2);
 	}
 	.chip.more[aria-expanded='true'] {
 		border-color: var(--label-ink-2);
@@ -353,13 +363,17 @@
 		gap: var(--s-3);
 	}
 	.sort {
+		appearance: none;
 		min-height: 38px;
 		border-radius: var(--r-ctl);
 		border: 1.5px solid var(--rule);
-		background: var(--cube);
-		padding: 0 8px;
+		background: var(--cube) var(--chevron) no-repeat right 10px center;
+		padding: 0 30px 0 10px;
 		font-size: 0.875rem;
 		font-weight: 600;
+	}
+	.result-bar {
+		flex-wrap: nowrap;
 	}
 	.seg {
 		display: inline-flex;
@@ -411,16 +425,16 @@
 		}
 	}
 
+	/* Spines: boxes lying on their sides, stacked on one shelf */
 	.list {
 		list-style: none;
 		margin: 0;
-		padding: 0;
+		padding: 8px;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 4px;
 		background: var(--gap);
 		border-radius: 6px;
-		overflow: hidden;
 	}
 
 	.empty {

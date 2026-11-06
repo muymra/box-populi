@@ -245,7 +245,6 @@
 		place-items: center;
 		font-weight: 800;
 		font-size: 0.875rem;
-		box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.18);
 	}
 	.wanted {
 		margin-top: var(--s-3);

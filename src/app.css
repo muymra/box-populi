@@ -20,6 +20,9 @@
 	--danger-soft: #f6e1dc;
 	--note: #fbf1d9;
 	--focus: #2f62b0;
+	--chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%232b2a28' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+	--chevron-label: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23f4f4f2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+	--chevron-mark: var(--chevron);
 
 	--font: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif;
 	--r-cube: 3px;
@@ -54,15 +57,18 @@
 		--ink: #f1ede6;
 		--ink-2: #c4bdb2;
 		--ink-3: #a59d91;
-		--label: #0f0d0b;
+		/* a step lighter than the laminate so the label strip stays visible */
+		--label: #302b25;
 		--label-ink: #f1ede6;
-		--label-ink-2: #bdb5a8;
-		--label-line: #4a443c;
-		--label-field: #221f1b;
+		--label-ink-2: #c7bfb3;
+		--label-line: #5b544a;
+		--label-field: #1f1b17;
 		--danger: #f08a75;
 		--danger-soft: #3a1f19;
 		--note: #33291a;
 		--focus: #8ab4ff;
+		--chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23f1ede6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+		--chevron-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%232b2a28' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 		--shadow-lift: 0 1px 1px rgb(0 0 0 / 0.3), 0 8px 18px -8px rgb(0 0 0 / 0.6);
 		color-scheme: dark;
 	}
@@ -231,6 +237,12 @@ textarea {
 }
 
 /* Fields */
+select.field {
+	appearance: none;
+	padding-right: 32px;
+	background: var(--cube) var(--chevron) no-repeat right 12px center;
+}
+
 .field {
 	width: 100%;
 	min-height: 46px;

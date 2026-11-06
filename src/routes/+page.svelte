@@ -49,8 +49,8 @@
 			<div class="actions">
 				<a class="btn primary" href="/join">Join with a code</a>
 				{#if data.canCreate}<a class="btn" href="/groups/new">Create a group</a>{/if}
-				{#if data.demoExists}<a class="btn" href="/demo">See a demo shelf</a>{/if}
 			</div>
+			{#if data.demoExists}<p class="demo"><a href="/demo">Or look around a demo shelf first</a></p>{/if}
 		</div>
 		<figure class="example" aria-label="Example shelf with invented games">
 			<ul class="shelf">
@@ -101,6 +101,10 @@
 		gap: var(--s-2);
 		flex-wrap: wrap;
 		margin-top: var(--s-5);
+	}
+	.demo {
+		margin-top: var(--s-4);
+		font-weight: 650;
 	}
 	.example {
 		margin: 0;

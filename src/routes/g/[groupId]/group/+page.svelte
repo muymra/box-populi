@@ -83,7 +83,6 @@
 		display: grid;
 		place-items: center;
 		font-weight: 800;
-		box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.18);
 	}
 	.who {
 		display: flex;

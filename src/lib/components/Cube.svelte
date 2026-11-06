@@ -23,7 +23,9 @@
 	const players = $derived(formatPlayerRange(game.minPlayers, game.maxPlayers));
 	const time = $derived(formatPlaytime(game.minPlaytime, game.maxPlaytime));
 	const unavailable = $derived(!game.copies.some((c) => isCopyAvailable(c, memberIds)));
-	const caption = $derived([players && `${players}p`, time].filter(Boolean).join(' · '));
+	const caption = $derived(
+		[players && `${players}p`, time, owners.length > 4 ? `${owners.length} owners` : null].filter(Boolean).join(' · ')
+	);
 </script>
 
 <a class="cube" class:out={unavailable} {href} aria-label="{game.name}{game.year ? `, ${game.year}` : ''}{unavailable ? ', lent out' : ''}">

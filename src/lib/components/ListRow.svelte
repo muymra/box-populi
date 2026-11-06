@@ -1,10 +1,13 @@
-<!-- The list view of the shelf: one row per game, for fast scanning of long shelves. -->
+<!--
+	The Spines view: each game drawn as a box spine lying on its side, in its box-front colour,
+	with the title set along it and the owners' colours on the spine's end. Dense, for scanning
+	long shelves at the table.
+-->
 <script lang="ts">
-	import BoxFront from './BoxFront.svelte';
+	import { boxColor, playerColor } from '#lib/catalog/colors.ts';
 	import { BUCKET_LABELS, formatPlaytime, weightBucket } from '#lib/catalog/buckets.ts';
 	import { formatPlayerRange } from '#lib/catalog/players.ts';
 	import { isCopyAvailable } from '#lib/catalog/filter.ts';
-	import { playerColor } from '#lib/catalog/colors.ts';
 	import type { CatalogGame, CatalogMember } from '#lib/catalog/types.ts';
 
 	let {
@@ -14,101 +17,114 @@
 		memberIds
 	}: { game: CatalogGame; href: string; members: Map<string, CatalogMember>; memberIds: ReadonlySet<string> } = $props();
 
+	const color = $derived(boxColor(game.name));
 	const owners = $derived([...new Set(game.copies.map((c) => c.ownerId))].map((id) => members.get(id)).filter((m) => m != null));
+	const shown = $derived(owners.length > 4 ? owners.slice(0, 3) : owners);
 	const players = $derived(formatPlayerRange(game.minPlayers, game.maxPlayers));
 	const time = $derived(formatPlaytime(game.minPlaytime, game.maxPlaytime));
 	const bucket = $derived(weightBucket(game.weight));
 	const unavailable = $derived(!game.copies.some((c) => isCopyAvailable(c, memberIds)));
+	const facts = $derived(
+		[players && `${players}p`, time, bucket && BUCKET_LABELS[bucket], owners.length > 4 ? `${owners.length} owners` : null]
+			.filter(Boolean)
+			.join(' · ')
+	);
+	const ownerLabel = $derived(`Owned by ${owners.map((o) => o.name).join(', ')}`);
 </script>
 
-<a class="row" {href}>
-	<span class="mini"><BoxFront name={game.name} src={game.thumbUrl} size="mini" /></span>
-	<span class="name">
-		{game.name}
-		{#if game.isExpansion}<span class="tag">Expansion</span>{/if}
-		{#if unavailable}<span class="tag">Lent out</span>{/if}
-	</span>
+<a class="spine" class:out={unavailable} {href} style:--spine-bg={color.bg} style:--spine-ink={color.ink}>
+	<span class="title">{game.name}</span>
 	<span class="facts num">
-		<span>{players ? `${players} players` : ''}</span>
-		<span>{time ?? ''}</span>
-		<span>{bucket ? BUCKET_LABELS[bucket] : ''}</span>
+		{facts}
+		{#if game.isExpansion}<span class="flag">Expansion</span>{/if}
+		{#if unavailable}<span class="flag">Lent out</span>{/if}
 	</span>
-	<span class="owners" title={owners.map((o) => o.name).join(', ')}>
-		{#each owners.slice(0, 5) as o (o.id)}
-			<span class="dot" style:background={playerColor(o.colorIndex).bg}></span>
-		{/each}
-		{#if owners.length > 5}<span class="more num">+{owners.length - 5}</span>{/if}
+	<span class="end" role="img" aria-label={ownerLabel} title={ownerLabel}>
+		{#each shown as o (o.id)}<span style:background={playerColor(o.colorIndex).bg}></span>{/each}
+		{#if owners.length > 4}<span class="rest"></span>{/if}
 	</span>
 </a>
 
 <style>
-	.row {
+	.spine {
 		display: grid;
-		grid-template-columns: 32px minmax(0, 1fr) auto;
-		grid-template-areas: 'mini name owners' 'mini facts owners';
+		grid-template-columns: minmax(0, 1fr) auto auto;
 		align-items: center;
-		gap: 0 var(--s-3);
-		padding: var(--s-2) var(--s-3);
-		background: var(--cube);
-		color: var(--ink);
+		gap: var(--s-3);
+		min-height: 46px;
+		padding-left: var(--s-3);
+		background: var(--spine-bg);
+		color: var(--spine-ink);
 		text-decoration: none;
+		border-radius: 2px;
+		box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08);
+		transition: transform 0.18s var(--ease-out);
 	}
-	.row:hover {
-		background: color-mix(in srgb, var(--cube) 70%, var(--gap));
+	.spine:hover,
+	.spine:focus-visible {
+		transform: translateX(4px);
 	}
-	.mini {
-		grid-area: mini;
-		width: 32px;
-		height: 34px;
+	.out {
+		opacity: 0.55;
 	}
-	.name {
-		grid-area: name;
-		font-weight: 680;
-		display: flex;
-		flex-wrap: wrap;
-		gap: 2px 6px;
-		align-items: center;
-		min-width: 0;
-		overflow-wrap: anywhere;
+	.title {
+		font-weight: 800;
+		font-stretch: 80%;
+		font-size: 1.0625rem;
+		letter-spacing: -0.005em;
+		line-height: 1.1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		padding: var(--s-2) 0;
 	}
 	.facts {
-		grid-area: facts;
 		display: flex;
-		gap: 0 var(--s-3);
-		font-size: var(--t-small);
-		color: var(--ink-2);
-		flex-wrap: wrap;
-	}
-	.facts span:empty {
-		display: none;
-	}
-	.owners {
-		grid-area: owners;
-		display: flex;
-		gap: 3px;
 		align-items: center;
+		gap: 6px;
+		font-size: var(--t-small);
+		font-weight: 600;
+		white-space: nowrap;
 	}
-	.dot {
-		width: 10px;
-		height: 10px;
-		border-radius: 2px;
+	.flag {
+		padding: 0 6px;
+		border-radius: 3px;
+		background: var(--cube);
+		color: var(--ink);
+		font-size: 0.6875rem;
+		font-weight: 700;
 	}
-	.more {
-		font-size: 0.75rem;
-		color: var(--ink-2);
-		margin-left: 2px;
+	/* the spine's end, painted in the owners' colours */
+	.end {
+		align-self: stretch;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		width: 12px;
+		padding: 0;
 	}
-	@media (min-width: 720px) {
-		.row {
-			grid-template-columns: 32px minmax(0, 1fr) minmax(16rem, auto) 7rem;
-			grid-template-areas: 'mini name facts owners';
+	.end > span {
+		flex: 1;
+	}
+	.end > .rest {
+		background: var(--ink-3);
+	}
+	@media (max-width: 480px) {
+		.spine {
+			grid-template-columns: minmax(0, 1fr) auto;
+			grid-template-rows: auto auto;
+			row-gap: 0;
+			padding-block: 6px;
+		}
+		.title {
+			padding: 0;
 		}
 		.facts {
-			display: grid;
-			grid-template-columns: 7rem 5.5rem 4.5rem;
+			grid-row: 2;
 		}
-		.owners {
-			justify-content: flex-end;
+		.end {
+			grid-row: 1 / 3;
+			grid-column: 2;
 		}
 	}
 </style>

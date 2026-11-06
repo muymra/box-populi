@@ -104,17 +104,20 @@
 			<div class="limits">
 				<label>
 					Players
-					<input class="field num" type="number" min="1" max="99" inputmode="numeric" placeholder={present.length ? String(present.length) : 'Any'} bind:value={playersOverride} />
+					<select class="field num" bind:value={playersOverride}>
+						<option value={null}>{present.length ? `${present.length} here` : 'Any'}</option>
+						{#each Array.from({ length: 12 }, (_, i) => i + 1) as n (n)}<option value={n}>{n}</option>{/each}
+					</select>
 				</label>
 				<label>
-					Time we have
+					Time
 					<select class="field" bind:value={minutes}>
 						<option value={null}>Any</option>
 						{#each [30, 45, 60, 90, 120, 180] as t (t)}<option value={t}>{t} min</option>{/each}
 					</select>
 				</label>
 				<label>
-					No heavier than
+					At most
 					<select class="field" bind:value={ceiling}>
 						<option value={null}>Any</option>
 						{#each WEIGHT_BUCKETS as b (b)}<option value={b}>{BUCKET_LABELS[b]}</option>{/each}
@@ -214,8 +217,13 @@
 	}
 	.limits {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-		gap: var(--s-3);
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: var(--s-2);
+		max-width: 36rem;
+	}
+	.limits .field {
+		padding-left: 10px;
+		min-width: 0;
 	}
 	.limits label {
 		display: flex;

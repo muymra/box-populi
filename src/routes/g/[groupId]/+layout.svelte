@@ -4,6 +4,7 @@
 	import Dices from '@lucide/svelte/icons/dices';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Users from '@lucide/svelte/icons/users';
+	import CubeMark from '#lib/components/CubeMark.svelte';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
@@ -23,7 +24,8 @@
 
 <svelte:head><title>{data.group.name} · {data.instanceName}</title></svelte:head>
 
-<div class="group-head">
+<header class="group-bar">
+	<a class="home" href="/" aria-label="{data.instanceName}: all your groups"><CubeMark size={24} /></a>
 	<h1>{data.group.name}</h1>
 	<nav class="tabbar" aria-label="Group">
 		{#each tabs as t (t.href)}
@@ -33,10 +35,15 @@
 			</a>
 		{/each}
 	</nav>
-</div>
+	{#if data.user}
+		<a href="/me" class="me">{data.user.name}</a>
+	{:else}
+		<a href="/join" class="me">Join</a>
+	{/if}
+</header>
 
 {#if data.group.isDemo}
-	<p class="banner">A demo shelf: the games and people are invented, and nothing here can be changed.</p>
+	<p class="note">Demo shelf: invented games and people, read-only.</p>
 {:else if data.group.suspended}
 	<p class="banner">
 		The host has suspended this group{data.group.suspendedReason ? `: ${data.group.suspendedReason}` : ''}. It's read-only.
@@ -49,17 +56,47 @@
 </div>
 
 <style>
-	.group-head {
+	.group-bar {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: var(--s-4);
-		padding: var(--s-5) 0 var(--s-3);
+		gap: var(--s-3);
+		min-height: 56px;
+		margin: 0 calc(-1 * var(--s-4));
+		padding: 0 var(--s-4);
+		border-bottom: 1px solid var(--rule);
+	}
+	.home {
+		display: grid;
+		place-items: center;
+		color: var(--ink);
+		flex: none;
 	}
 	h1 {
-		margin: 0;
+		flex: 1;
 		min-width: 0;
-		overflow-wrap: anywhere;
+		margin: 0;
+		font-size: 1.25rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.me {
+		flex: none;
+		max-width: 9rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-weight: 600;
+		text-decoration: none;
+		padding: 8px 2px;
+	}
+	.me:hover {
+		text-decoration: underline;
+	}
+	.note {
+		margin: var(--s-3) 0 0;
+		font-size: var(--t-small);
+		color: var(--ink-2);
 	}
 	/* Phones: a bottom tab bar within thumb reach. */
 	.tabbar {
@@ -100,12 +137,20 @@
 		box-sizing: content-box;
 	}
 	.group-body {
-		padding-bottom: var(--s-4);
+		padding: var(--s-3) 0 var(--s-4);
 	}
-	/* Wider screens: the same tabs sit in the group header. */
+	/* Wider screens: the same tabs sit in the top bar. */
 	@media (min-width: 760px) {
+		.group-bar {
+			min-height: 64px;
+		}
+		h1 {
+			flex: 0 1 auto;
+			font-size: 1.375rem;
+		}
 		.tabbar {
 			position: static;
+			margin-left: auto;
 			background: none;
 			border: 0;
 			padding: 0;
@@ -130,6 +175,11 @@
 		.tabbar a:not([aria-current='page']):hover {
 			background: var(--gap);
 			color: var(--ink);
+		}
+		.me {
+			margin-left: var(--s-3);
+			padding-left: var(--s-4);
+			border-left: 1px solid var(--rule);
 		}
 	}
 </style>
