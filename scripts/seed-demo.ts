@@ -127,7 +127,7 @@ for (const g of games) {
 		copies.push({
 			user_id: owner,
 			game_id: g.id,
-			note: rng() < 0.05 ? 'Dutch edition' : null,
+			note: rng() < 0.05 ? 'Second edition' : null, // unused since D33; kept so the seed draws the same demo
 			lent_to_user_id: loan < 0.03 ? borrower : null,
 			lent_to_text: loan >= 0.03 && loan < 0.05 ? 'A neighbour' : null,
 			added_at: NOW - rand(0, 900) * DAY

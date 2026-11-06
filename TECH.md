@@ -564,7 +564,7 @@ Parse with `fast-xml-parser` using `ignoreAttributes: false` and `attributeNameP
     <thumbnail>https://cf.geekdo-images.com/…</thumbnail>
     <image>https://cf.geekdo-images.com/…</image>
     <name type="primary" value="CATAN"/>
-    <name type="alternate" value="De Kolonisten van Catan"/>
+    <name type="alternate" value="Die Siedler von Catan"/>
     <description>…&amp;#10;…</description>
     <yearpublished value="1995"/>
     <minplayers value="3"/> <maxplayers value="4"/>
@@ -660,7 +660,7 @@ Not built; planned 2026-11-06 for when the BGG token is in. BGG publishes one CS
 1. **Getting the file.** The hoster downloads it from BGG themselves, as they register their own application; the file is BGG data, so it never goes in the repository or into anything an AI could train on. To confirm before building: whether the download needs a BGG login, the exact columns, and the row count.
 2. **Loading it.** A `bgg_index` table (`bgg_id` primary key, `name`, normalized `search_name`, `year`, `rank`, `is_expansion`), separate from `games`: `games` holds what members have added, the index is only for finding. A script turns the CSV into SQL batches applied with `wrangler d1 execute DB --remote` (or an upload on `/admin`, 1,000 rows per request as batches, which count as one query each).
 3. **Staying inside D1's free plan.** The free plan writes at most 100,000 rows a day, and going over locks the database until 00:00 UTC. Load only ranked games (BGG ranks a game once enough people have rated it), count the index's own writes, and split the first load across days if it comes near 50,000. Refresh monthly, writing only rows that changed.
-4. **Searching it.** Prefix and whole-word matches on `search_name`, most-rated first, the way `rankHits` ranks today. The file has only each game's primary name, so a search that finds nothing locally (a Dutch title, an obscure game) falls back to BGG's `search` through the pacer. Adding a game still fetches its details with `thing`, as now.
+4. **Searching it.** Prefix and whole-word matches on `search_name`, most-rated first, the way `rankHits` ranks today. The file has only each game's primary name, so a search that finds nothing locally (a title in another language, an obscure game) falls back to BGG's `search` through the pacer. Adding a game still fetches its details with `thing`, as now.
 5. **Credit.** Showing index results is showing BGG data, so `holdsBggData` counts a non-empty index and the footer credit stays.
 
 About 4 to 6 hours once the open points in step 1 are confirmed.

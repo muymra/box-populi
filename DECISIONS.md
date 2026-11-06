@@ -188,7 +188,7 @@ Built from D29. `BOX_TARGET` picks the adapter and the platform module at build 
 
 ## D33. No copy notes (2026-11-06)
 
-The PRD's optional note on a copy ("Dutch edition") is dropped; nothing set it and Carlo chose not to build it. The `copies.note` column stays, unused, because applied migrations aren't edited.
+The PRD's optional note on a copy (such as which edition it is) is dropped; nothing set it and Carlo chose not to build it. The `copies.note` column stays, unused, because applied migrations aren't edited.
 
 ## D34. An instance-wide ceiling on wrong join codes (2026-11-06)
 

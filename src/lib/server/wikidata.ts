@@ -71,7 +71,7 @@ export function parseEntities(json: unknown, ids: string[]): WikidataGame[] {
 		const bggId = typeof rawBgg === 'string' && /^\d{1,9}$/.test(rawBgg) ? Number(rawBgg) : null;
 		const name = entity.labels?.en?.value ?? Object.values(entity.labels ?? {})[0]?.value;
 		if (bggId == null || !name) continue;
-		// Titles in other languages count as aliases, so "Kolonisten van Catan" matches Catan exactly.
+		// Titles in other languages count as aliases, so "Die Siedler von Catan" matches Catan exactly.
 		const otherNames = [
 			...Object.values(entity.labels ?? {}).map((l) => l.value),
 			...Object.values(entity.aliases ?? {}).flatMap((list) => list.map((a) => a.value))

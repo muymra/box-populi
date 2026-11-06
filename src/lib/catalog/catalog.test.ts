@@ -14,8 +14,8 @@ describe('normalize', () => {
 		expect(normalize('  Café   Terrasse ')).toBe('cafe terrasse');
 	});
 	it('keeps Latin alternates and drops other scripts', () => {
-		expect(buildSearchText('Catan', ['De Kolonisten van Catan', 'カタン', 'Catan'])).toBe(
-			'catan|de kolonisten van catan'
+		expect(buildSearchText('Catan', ['Die Siedler von Catan', 'カタン', 'Catan'])).toBe(
+			'catan|die siedler von catan'
 		);
 	});
 });
@@ -146,8 +146,8 @@ describe('filterGames', () => {
 	});
 
 	it('matches alternate titles without accents', () => {
-		const catan = game({ name: 'CATAN', search: buildSearchText('CATAN', ['De Kolonisten van Catan']) });
-		expect(filterGames([catan], f({ q: 'kolonisten' }), members)).toEqual([catan]);
+		const catan = game({ name: 'CATAN', search: buildSearchText('CATAN', ['Die Siedler von Catan']) });
+		expect(filterGames([catan], f({ q: 'siedler' }), members)).toEqual([catan]);
 	});
 
 	it('sorts with unknowns last', () => {

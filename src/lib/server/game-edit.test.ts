@@ -33,7 +33,7 @@ beforeEach(async () => {
 		db,
 		`INSERT INTO games (id, bgg_id, wikidata_id, name, search_text, source, is_manual, min_players, max_players) VALUES
 		 (1, NULL, NULL, 'Kitchen Table Game', 'kitchen table game', 'manual', 1, NULL, NULL),
-		 (2, 9900101, 'Q9900001', 'Lantern Harbour', 'lantern harbour|lantaarnhaven', 'wikidata', 0, 2, 4),
+		 (2, 9900101, 'Q9900001', 'Lantern Harbour', 'lantern harbour|port des lanternes', 'wikidata', 0, 2, 4),
 		 (3, 13, NULL, 'From BGG', 'from bgg', 'bgg', 0, 3, 4)`
 	);
 	await run(db, `INSERT INTO copies (user_id, game_id, added_at) VALUES ('bo', 1, 0), ('bo', 2, 0), ('bo', 3, 0), ('dee', 2, 0)`);
@@ -59,7 +59,7 @@ describe('corrections belong to the group that makes them', () => {
 		expect(await shelfNames('g2')).toContain('Lantern Harbour');
 		const mine = (await loadCatalog(db, 'g1', 1)).games.find((g) => g.id === 2)!;
 		expect(mine).toMatchObject({ minPlayers: 2, maxPlayers: 5, maxPlaytime: 45, weight: 3, thumbUrl: 'https://example.com/box.jpg' });
-		expect(mine.search).toContain('lantaarnhaven'); // the old titles still find it
+		expect(mine.search).toContain('port des lanternes'); // the old titles still find it
 		expect(await one(db, 'SELECT name, max_players, image_url, weight, edited_by FROM games WHERE id = 2')).toEqual({
 			name: 'Lantern Harbour',
 			max_players: 4,

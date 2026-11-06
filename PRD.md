@@ -147,7 +147,7 @@ Rules that follow from the table:
 ### Adding games
 
 - The search box queries BGG by title after three characters. Results show cover, title and year, with the most-rated match first, so "Catan" puts the base game above its dozens of spin-offs.
-- Search also matches alternate titles BGG knows about, including Dutch edition names: "Kolonisten van Catan" finds Catan.
+- Search also matches alternate titles BGG knows about, such as a game's names in other languages and editions: "Die Siedler von Catan" finds Catan.
 - One tap adds a copy. Games already in the shared cache add instantly.
 - Manual entry covers BGG outages and obscure titles: name, player range, play time, optional image URL. Manual games have no mechanics, themes or best-at data, and the UI marks them as hand-entered. A group can fill in the rest later (see "Correcting games").
 - Expansions are searchable and addable. They're hidden from the catalog by default and listed on their base game's page.

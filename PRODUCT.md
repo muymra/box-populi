@@ -49,7 +49,7 @@ Supporting claims, in order: the "who's here" picker, which suggests from the ga
   - adding games through BGG search or by hand, and removing your copy;
   - the public demo group.
 - **Planned:** BGG collection import, rules and video links, group roles and settings, wishlist and the Wanted view, lending, and the instance admin page. See STATUS.md.
-- **Language:** English only (confirmed). Dutch may come later; not planned.
+- **Language:** English only (confirmed). Other languages may come later; not planned.
 - **No accounts** (DECISIONS D25): no email, password or third-party sign-in. The app stores a display name, games, memberships, and hashed session and link tokens.
 - **BoardGameGeek terms** (DECISIONS D23):
   - non-commercial only: no ads, payments, donations or sponsorship;
