@@ -32,3 +32,4 @@ Thumbs.db
 .impeccable/live/*
 !.impeccable/live/config.json
 .impeccable/config.local.json
+.impeccable/hook.cache.json
