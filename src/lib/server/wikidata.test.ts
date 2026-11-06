@@ -74,6 +74,20 @@ describe('parsing Wikidata', () => {
 describe('the live client', () => {
 	const respond = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
+	it('calls the global fetch the way Workers require (never as a method of the client)', async () => {
+		const original = globalThis.fetch;
+		// Workers throw this when fetch runs with `this` bound to another object; Node doesn't.
+		globalThis.fetch = function (this: unknown) {
+			if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation: function call');
+			return Promise.resolve(respond({ search: [] }));
+		} as typeof fetch;
+		try {
+			await expect(new LiveWikidataClient('ua').search('azul')).resolves.toEqual([]);
+		} finally {
+			globalThis.fetch = original;
+		}
+	});
+
 	it('searches, then reads the matching items, with a User-Agent', async () => {
 		const seen: URL[] = [];
 		const client = new LiveWikidataClient('BoxPopuli/test', (async (input: URL, init?: RequestInit) => {

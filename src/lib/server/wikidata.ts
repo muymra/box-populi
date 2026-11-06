@@ -112,7 +112,8 @@ export function rankGames(games: WikidataGame[], query: string, limit = 10): Wik
 export class LiveWikidataClient implements WikidataClient {
 	constructor(
 		private userAgent: string,
-		private fetcher: typeof fetch = fetch
+		// Called through a plain function: Workers throw "Illegal invocation" when fetch runs as a method.
+		private fetcher: typeof fetch = (input, init) => fetch(input, init)
 	) {}
 
 	private async call(params: Record<string, string>): Promise<unknown> {
@@ -127,7 +128,8 @@ export class LiveWikidataClient implements WikidataClient {
 		};
 		let response: Response;
 		try {
-			response = await this.fetcher(url, {
+			const fetcher = this.fetcher;
+			response = await fetcher(url, {
 				headers: { 'user-agent': this.userAgent, 'api-user-agent': this.userAgent, accept: 'application/json' },
 				signal: AbortSignal.timeout(8000)
 			});

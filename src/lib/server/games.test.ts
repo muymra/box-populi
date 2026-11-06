@@ -115,6 +115,21 @@ describe('LiveBggClient', () => {
 		return { live, calls, sleeps };
 	}
 
+	it('calls the global fetch the way Workers require (never as a method of the client)', async () => {
+		const original = globalThis.fetch;
+		// Workers throw this when fetch runs with `this` bound to another object; Node doesn't.
+		globalThis.fetch = function (this: unknown) {
+			if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation: function call');
+			return Promise.resolve(new Response(xml(''), { status: 200 }));
+		} as typeof fetch;
+		try {
+			const live = new LiveBggClient({ token: 't', db, intervalMs: 2000, origin: 'https://example.pages.dev', now: () => NOW, sleep: async () => {} });
+			await expect(live.search('catan')).resolves.toEqual([]);
+		} finally {
+			globalThis.fetch = original;
+		}
+	});
+
 	it('sends the token and an identifying User-Agent, and spaces requests', async () => {
 		const ok = () => new Response(xml(''), { status: 200 });
 		const { live, calls, sleeps } = client([ok, ok]);

@@ -56,7 +56,9 @@ export class LiveBggClient implements BggClient {
 	private sleep: (ms: number) => Promise<void>;
 
 	constructor(private opts: LiveClientOptions) {
-		this.fetchFn = opts.fetchFn ?? fetch;
+		// A plain function, never `fetch` itself as a property: Workers throw "Illegal invocation"
+		// when fetch is called with `this` set to another object.
+		this.fetchFn = opts.fetchFn ?? ((input, init) => fetch(input, init));
 		this.now = opts.now ?? Date.now;
 		this.sleep = opts.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
 	}
@@ -68,7 +70,8 @@ export class LiveBggClient implements BggClient {
 		if (wait > MAX_SLOT_WAIT_MS) throw new BggBusyError(wait);
 		if (wait > 0) await this.sleep(wait);
 
-		const response = await this.fetchFn(BGG_BASE + path, {
+		const fetchFn = this.fetchFn;
+		const response = await fetchFn(BGG_BASE + path, {
 			headers: {
 				Authorization: `Bearer ${this.opts.token}`,
 				'User-Agent': userAgent(this.opts.origin),
