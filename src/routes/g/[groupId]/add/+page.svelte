@@ -6,6 +6,7 @@
 	import BoxFront from '#lib/components/BoxFront.svelte';
 	import ImportPanel from '#lib/components/ImportPanel.svelte';
 	import HydrateProgress from '#lib/components/HydrateProgress.svelte';
+	import ListPanel from '#lib/components/ListPanel.svelte';
 	import { formatPlayerRange } from '#lib/catalog/players.ts';
 	import type { PageProps } from './$types';
 
@@ -161,6 +162,15 @@
 		<p class="banner">Game search isn't set up on this site, so games are added by hand.</p>
 	{/if}
 
+	<section class="panel list" aria-labelledby="list-h">
+		<h2 id="list-h">Paste a list of games</h2>
+		<p class="muted">
+			Adding a whole collection? Paste the titles and check them in one go.{#if data.source === 'wikidata'}{' '}Each is looked up
+				on Wikidata; anything it doesn't know is added as typed.{/if}
+		</p>
+		<ListPanel groupId={data.group.id} shelfHref="/g/{data.group.id}" wikidata={data.source === 'wikidata'} />
+	</section>
+
 	<details class="manual" open={!searchable || !!form?.manualError}>
 		<summary>{searchable ? "Can't find it? Add it by hand" : 'Add a game by hand'}</summary>
 		<form method="POST" action="?/manual" class="stack">
@@ -188,6 +198,12 @@
 </section>
 
 <style>
+	.list {
+		margin-top: var(--s-6);
+	}
+	.list h2 {
+		margin-top: 0;
+	}
 	.add {
 		padding-top: var(--s-3);
 		max-width: 46rem;

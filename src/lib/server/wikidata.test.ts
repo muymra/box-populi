@@ -30,8 +30,8 @@ beforeEach(async () => {
 const ENTITIES = {
 	entities: {
 		Q1: {
-			labels: { en: { value: 'Lantern Harbour' } },
-			aliases: { en: [{ value: 'Lantern Harbor' }] },
+			labels: { en: { value: 'Lantern Harbour' }, nl: { value: 'Lantaarnhaven' } },
+			aliases: { en: [{ value: 'Lantern Harbor' }], de: [{ value: 'Laternenhafen' }] },
 			claims: {
 				P2339: [{ rank: 'normal', mainsnak: { snaktype: 'value', datavalue: { value: '9900101' } } }],
 				P1872: [{ rank: 'normal', mainsnak: { snaktype: 'value', datavalue: { value: { amount: '+2' } } } }],
@@ -58,7 +58,7 @@ const ENTITIES = {
 describe('parsing Wikidata', () => {
 	it('keeps only items with a BGG id and reads players and year by rank', () => {
 		expect(parseEntities(ENTITIES, ['Q1', 'Q2', 'Q3', 'Q404'])).toEqual([
-			{ wikidataId: 'Q1', bggId: 9900101, name: 'Lantern Harbour', aliases: ['Lantern Harbor'], year: 2019, minPlayers: 2, maxPlayers: 4 },
+			{ wikidataId: 'Q1', bggId: 9900101, name: 'Lantern Harbour', aliases: ['Lantaarnhaven', 'Lantern Harbor', 'Laternenhafen'], year: 2019, minPlayers: 2, maxPlayers: 4 },
 			{ wikidataId: 'Q3', bggId: 9900103, name: 'Kupferreiche', aliases: [], year: 2016, minPlayers: null, maxPlayers: null }
 		]);
 	});

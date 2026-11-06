@@ -70,6 +70,12 @@ export function parseEntities(json: unknown, ids: string[]): WikidataGame[] {
 		const bggId = typeof rawBgg === 'string' && /^\d{1,9}$/.test(rawBgg) ? Number(rawBgg) : null;
 		const name = entity.labels?.en?.value ?? Object.values(entity.labels ?? {})[0]?.value;
 		if (bggId == null || !name) continue;
+		// Titles in other languages count as aliases, so "Kolonisten van Catan" matches Catan exactly.
+		const otherNames = [
+			...Object.values(entity.labels ?? {}).map((l) => l.value),
+			...Object.values(entity.aliases ?? {}).flatMap((list) => list.map((a) => a.value))
+		];
+		const aliases = [...new Set(otherNames)].filter((n) => n !== name);
 		let minPlayers = quantity(claimValue(entity, P.minPlayers));
 		let maxPlayers = quantity(claimValue(entity, P.maxPlayers));
 		if (minPlayers != null && maxPlayers != null && minPlayers > maxPlayers) [minPlayers, maxPlayers] = [null, null];
@@ -77,7 +83,7 @@ export function parseEntities(json: unknown, ids: string[]): WikidataGame[] {
 			wikidataId: id,
 			bggId,
 			name: name.slice(0, 200),
-			aliases: (entity.aliases?.en ?? []).map((a) => a.value).slice(0, 20),
+			aliases: aliases.slice(0, 30),
 			year: year(claimValue(entity, P.published)) ?? year(claimValue(entity, P.inception)),
 			minPlayers,
 			maxPlayers
@@ -132,7 +138,8 @@ export class LiveWikidataClient implements WikidataClient {
 		};
 		const ids = (found.search ?? []).map((s) => s.id).filter((id): id is string => typeof id === 'string' && /^Q\d+$/.test(id));
 		if (ids.length === 0) return [];
-		const entities = await this.call({ action: 'wbgetentities', ids: ids.join('|'), props: 'labels|aliases|claims', languages: 'en' });
+		// Common languages of edition titles; the display name stays English when there is one.
+		const entities = await this.call({ action: 'wbgetentities', ids: ids.join('|'), props: 'labels|aliases|claims', languages: 'en|nl|de|fr|es|it|pt|sv|da|pl' });
 		return rankGames(parseEntities(entities, ids), query);
 	}
 }
