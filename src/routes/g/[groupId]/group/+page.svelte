@@ -6,7 +6,8 @@
 	import CopyButton from '#lib/components/CopyButton.svelte';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { lastActive } from '#lib/time.ts';
-	import { THEME_IDS, THEME_LABELS } from '#lib/themes.ts';
+	import { invalidateAll } from '$app/navigation';
+	import { AUTO_THEME, THEME_IDS, THEME_LABELS } from '#lib/themes.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -14,6 +15,15 @@
 	const inviteLink = $derived(data.code ? `${page.url.origin}/join/${data.code}` : null);
 
 	let query = $state('');
+
+	// A theme picked by name in the footer overrides the group's theme on this device.
+	const deviceOverrides = $derived(data.deviceTheme !== AUTO_THEME);
+	async function useGroupTheme() {
+		const body = new FormData();
+		body.set('theme', AUTO_THEME);
+		await fetch('/theme', { method: 'POST', body, headers: { accept: 'application/json' } });
+		await invalidateAll();
+	}
 	const shown = $derived.by(() => {
 		const q = query.trim().toLocaleLowerCase();
 		return q ? data.members.filter((m) => m.name.toLocaleLowerCase().includes(q)) : data.members;
@@ -149,6 +159,20 @@
 				</select>
 				<button class="btn">Save</button>
 			</form>
+			{#if form?.themeSaved}<p class="muted small" role="status">Saved.</p>{/if}
+			{#if deviceOverrides}
+				<div class="banner override">
+					<p>
+						This device shows <strong>{THEME_LABELS[data.deviceTheme] ?? data.deviceTheme}</strong>, picked in the footer's
+						Theme menu, so you won't see the group's theme here. Members on Automatic will.
+					</p>
+					<form method="POST" action="/theme" onsubmit={(e) => (e.preventDefault(), useGroupTheme())}>
+						<input type="hidden" name="theme" value={AUTO_THEME} />
+						<input type="hidden" name="returnTo" value="/g/{data.group.id}/group" />
+						<button class="btn small">Use the group's theme on this device</button>
+					</form>
+				</div>
+			{/if}
 			{#if form?.themeError}<p class="banner error" role="alert">{form.themeError}</p>{/if}
 		</section>
 	{/if}
@@ -175,6 +199,16 @@
 </div>
 
 <style>
+	.override {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--s-2);
+		margin-top: var(--s-3);
+	}
+	.override p {
+		margin: 0;
+	}
 	.group-page {
 		display: grid;
 		gap: var(--s-6);

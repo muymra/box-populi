@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
 	import { page } from '$app/state';
+	import { invalidateAll } from '$app/navigation';
 	import Palette from '@lucide/svelte/icons/palette';
 	import { AUTO_THEME, THEME_IDS, THEME_LABELS } from '#lib/themes.ts';
 
@@ -17,7 +18,10 @@
 
 	function pick(event: Event & { currentTarget: HTMLSelectElement }) {
 		current = event.currentTarget.value;
-		fetch('/theme', { method: 'POST', body: new FormData(event.currentTarget.form!), headers: { accept: 'application/json' } }).catch(() => {});
+		// Saved, then reloaded so anything that depends on this device's setting (the Group tab's note) is current.
+		fetch('/theme', { method: 'POST', body: new FormData(event.currentTarget.form!), headers: { accept: 'application/json' } })
+			.then(() => invalidateAll())
+			.catch(() => {});
 	}
 </script>
 

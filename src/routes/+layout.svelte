@@ -14,8 +14,13 @@
 	// This device's theme setting, changed by the footer picker; the page's theme follows it, then the
 	// group's theme (group layouts load `groupTheme`), then the instance's. The server renders the
 	// same answer into <html data-theme>, so this only matters after client-side navigation.
-	// svelte-ignore state_referenced_locally (the server's value seeds it once; the picker owns it after)
+	// svelte-ignore state_referenced_locally (seeded from the server, then kept in step with it below)
 	let deviceTheme = $state(data.deviceTheme);
+	// After any reload of data (the footer picker and the Group tab's button both trigger one), take
+	// the server's view of this device's setting.
+	$effect(() => {
+		deviceTheme = data.deviceTheme;
+	});
 	$effect(() => {
 		const groupTheme = (page.data as { groupTheme?: string | null }).groupTheme;
 		document.documentElement.dataset.theme = resolveTheme(deviceTheme, groupTheme, data.instanceTheme);
