@@ -134,6 +134,19 @@ export function matchesFilters(
 	return true;
 }
 
+/**
+ * Whether an active filter let this game through only because the game lacks that detail. The
+ * shelf marks these "Info missing" (PRD "Filters"), so a 2-player filter that shows a game with
+ * no player count says why.
+ */
+export function passedOnUnknown(game: CatalogGame, f: Filters): boolean {
+	if (f.players != null && (game.minPlayers == null || game.maxPlayers == null)) return true;
+	if (f.minutes != null && game.minPlaytime == null && game.maxPlaytime == null) return true;
+	if (f.weights.length > 0 && weightBucket(game.weight) == null) return true;
+	if (!game.incomplete) return false;
+	return (f.mechanics.length > 0 && game.mechanics.length === 0) || (f.categories.length > 0 && game.categories.length === 0);
+}
+
 const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
 
 function nullsLast(a: number | null, b: number | null): number {

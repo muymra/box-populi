@@ -3,7 +3,8 @@ import { createTestDb } from './testing/d1.ts';
 import { all, run } from './db.ts';
 import { addCopy } from './games.ts';
 import { FakeWikidataClient } from './wikidata.ts';
-import { addListItems, matchLines, parseListLine, splitList } from './game-list.ts';
+import { ADD_CHUNK, addListItems, MATCH_CHUNK, matchLines, parseListLine, splitList } from './game-list.ts';
+import { normalize } from '#lib/catalog/normalize.ts';
 
 let db: ReturnType<typeof createTestDb>;
 const NOW = 1_800_000_000_000;
@@ -54,6 +55,15 @@ describe('matching lines', () => {
 		expect(byLine['Secret Homebrew']).toMatchObject({ status: 'new', suggestion: null });
 	});
 
+	it('matches long titles and short ones exactly (D1 refuses LIKE patterns over 50 bytes)', async () => {
+		const long = 'Twilight Imperium: Fourth Edition – Prophecy of Kings';
+		await run(db, `INSERT INTO games (id, bgg_id, name, search_text) VALUES (20, 20, ?1, ?2)`, long, normalize(long));
+		for (let i = 0; i < 60; i++) await run(db, `INSERT INTO games (bgg_id, name, search_text) VALUES (?1, ?2, ?3)`, 100 + i, `Go Team ${i}`, `go team ${i}`);
+		await run(db, `INSERT INTO games (id, bgg_id, name, search_text) VALUES (500, 21, 'Go', 'go')`);
+		const rows = await matchLines(db, 'g1', 'ada', [long, 'Go'], null, NOW);
+		expect(rows.map((r) => (r.status === 'stored' ? r.game.gameId : r.status))).toEqual([20, 500]);
+	});
+
 	it('works without Wikidata, making everything unknown a new game', async () => {
 		const rows = await matchLines(db, 'g1', 'ada', ['Lantern Harbour'], null, NOW);
 		expect(rows).toEqual([{ line: 'Lantern Harbour', status: 'new', entry: expect.objectContaining({ title: 'Lantern Harbour' }), suggestion: null }]);
@@ -75,4 +85,52 @@ describe('adding a list', () => {
 		]);
 		await addCopy(db, 'ada', 1, NOW);
 	});
+
+	it('counts games already on the shelf as skipped', async () => {
+		expect(await addListItems(db, 'g1', 'ada', [{ gameId: 4 }, { gameId: 2 }, { gameId: 2 }], NOW)).toEqual({ added: 1, skipped: 2 });
+	});
+
+	// D1 on Cloudflare's free plan allows 50 queries per request, and a batch counts as one.
+	it('makes a fixed number of queries per chunk, however many rows it holds', async () => {
+		const counted = countQueries(db);
+		const lines = Array.from({ length: MATCH_CHUNK }, (_, i) => `Pasted Game ${i} | 2-4`);
+		await matchLines(counted.db, 'g1', 'ada', lines, null, NOW);
+		expect(counted.reset()).toBe(3);
+		const items = Array.from({ length: ADD_CHUNK }, (_, i) => (i % 2 ? { gameId: 2 } : { line: `Typed ${i}` }));
+		expect(await addListItems(counted.db, 'g1', 'ada', items, NOW)).toEqual({ added: 14, skipped: 11 });
+		expect(counted.reset()).toBe(2);
+		const titles = await all<{ name: string }>(db, `SELECT g.name FROM copies c JOIN games g ON g.id = c.game_id WHERE c.user_id = 'ada' AND g.name LIKE 'Typed %'`);
+		expect(titles).toHaveLength(13);
+	});
 });
+
+/** Wraps a database so a test can count the queries a call makes; a batch counts as one, as on D1. */
+function countQueries(raw: D1Database) {
+	let n = 0;
+	const wrap = (statement: D1PreparedStatement): D1PreparedStatement =>
+		new Proxy(statement, {
+			get(target, key) {
+				const value = Reflect.get(target, key) as unknown;
+				if (typeof value !== 'function') return value;
+				if (key === 'bind') return (...params: unknown[]) => wrap(value.apply(target, params));
+				if (key === 'first' || key === 'all' || key === 'run' || key === 'raw') return (...args: unknown[]) => (n++, value.apply(target, args));
+				return value.bind(target);
+			}
+		});
+	const db = new Proxy(raw, {
+		get(target, key) {
+			if (key === 'prepare') return (sql: string) => wrap(target.prepare(sql));
+			if (key === 'batch') return (statements: D1PreparedStatement[]) => (n++, target.batch(statements));
+			const value = Reflect.get(target, key) as unknown;
+			return typeof value === 'function' ? value.bind(target) : value;
+		}
+	});
+	return {
+		db,
+		reset() {
+			const count = n;
+			n = 0;
+			return count;
+		}
+	};
+}

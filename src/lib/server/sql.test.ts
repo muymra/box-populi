@@ -100,6 +100,15 @@ describe('catalog payload', () => {
 		expect(payload.games.find((g) => g.name === 'Stub')!.incomplete).toBe(true);
 	});
 
+	it('marks hand-entered and Wikidata games incomplete, so tag filters let them through', async () => {
+		const full = await gameRow('Full', { bgg_id: 80, mechanics: '["Dice Rolling"]' });
+		const wiki = await gameRow('From Wikidata', { bgg_id: 81, source: 'wikidata' });
+		const typed = await gameRow('Typed In', { source: 'manual', is_manual: 1 });
+		for (const id of [full, wiki, typed]) await copyRow('ann', id);
+		const payload = await loadCatalog(db, 'g1', 1);
+		expect(Object.fromEntries(payload.games.map((g) => [g.name, g.incomplete]))).toEqual({ Full: false, 'From Wikidata': true, 'Typed In': true });
+	});
+
 	it('bumps the version of every group a user is in', async () => {
 		await bumpCatalogForUser(db, 'ann').run();
 		expect(await catalogVersion(db, 'g1')).toBe(1);

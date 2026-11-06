@@ -33,7 +33,7 @@
 						<span class="muted small">{g.year ?? 'Year unknown'}{#if g.isExpansion}{' · '}expansion{/if}</span>
 						<span class="who">
 							<span class="chips" aria-hidden="true">
-								{#each g.wantedBy as w (w.name)}
+								{#each g.wantedBy as w (w.id)}
 									{@const c = playerColor(w.colorIndex)}
 									<span class="chip" style:background={c.bg} style:color={c.ink}>{w.name.slice(0, 1).toUpperCase()}</span>
 								{/each}

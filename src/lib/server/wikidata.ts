@@ -192,12 +192,14 @@ type CachedRow = { id: number; bgg_id: number | null; wikidata_id: string | null
 /**
  * Stores Wikidata games in the games cache so they can be added like any other, and returns
  * their game ids by Wikidata id. A game already known by its BGG id is linked, not replaced: BGG
- * data stays BGG data. Members' edits to a Wikidata game survive later searches.
+ * data stays BGG data. Members' edits to a Wikidata game survive later searches. Wikidata items
+ * that share a BGG id (an edition and the game, say) map to one game, the best-ranked item's.
  */
-export async function cacheWikidataGames(db: DB, games: WikidataGame[], now: number): Promise<Map<string, number>> {
+export async function cacheWikidataGames(db: DB, found: WikidataGame[], now: number): Promise<Map<string, number>> {
+	const games = found.filter((g, i) => found.findIndex((o) => o.wikidataId === g.wikidataId) === i);
 	if (games.length === 0) return new Map();
 	const qids = games.map((g) => g.wikidataId);
-	const bggIds = games.map((g) => g.bggId).filter((id): id is number => id != null);
+	const bggIds = [...new Set(games.map((g) => g.bggId).filter((id): id is number => id != null))];
 	const qPlaceholders = qids.map((_, i) => `?${i + 1}`).join(', ');
 	const bPlaceholders = bggIds.map((_, i) => `?${qids.length + i + 1}`).join(', ') || 'NULL';
 	const existing = await all<CachedRow>(
@@ -207,10 +209,18 @@ export async function cacheWikidataGames(db: DB, games: WikidataGame[], now: num
 		...bggIds
 	);
 
-	const statements = games.map((g) => {
-		const row = existing.find((r) => r.wikidata_id === g.wikidataId) ?? existing.find((r) => g.bggId != null && r.bgg_id === g.bggId);
+	// An item that shares a BGG id with another only links to that item's row; it never inserts a
+	// second row (bgg_id is unique) or rewrites the row's name and Wikidata id.
+	const inserting = new Set<number>(); // BGG ids a new row in this batch already takes
+	const statements = games.flatMap((g) => {
+		const own = existing.find((r) => r.wikidata_id === g.wikidataId);
+		const row = own ?? existing.find((r) => g.bggId != null && r.bgg_id === g.bggId);
 		const searchText = buildSearchText(g.name, g.aliases);
 		if (!row) {
+			if (g.bggId != null) {
+				if (inserting.has(g.bggId)) return [];
+				inserting.add(g.bggId);
+			}
 			return stmt(
 				db,
 				`INSERT INTO games (wikidata_id, bgg_id, name, search_text, year, min_players, max_players, source, fetched_at)
@@ -225,7 +235,7 @@ export async function cacheWikidataGames(db: DB, games: WikidataGame[], now: num
 				now
 			);
 		}
-		if (row.source === 'wikidata' && row.edited_at == null) {
+		if (row.source === 'wikidata' && row.edited_at == null && (own || row.wikidata_id == null)) {
 			return stmt(
 				db,
 				`UPDATE games SET wikidata_id = ?1, name = ?2, search_text = ?3, year = ?4, min_players = ?5, max_players = ?6, fetched_at = ?7 WHERE id = ?8`,
@@ -243,8 +253,19 @@ export async function cacheWikidataGames(db: DB, games: WikidataGame[], now: num
 	});
 	await db.batch(statements);
 
-	const rows = await all<{ id: number; wikidata_id: string }>(db, `SELECT id, wikidata_id FROM games WHERE wikidata_id IN (${qPlaceholders})`, ...qids);
-	return new Map(rows.map((r) => [r.wikidata_id, r.id]));
+	// By Wikidata id first, then by BGG id for items that share a game with another item.
+	const rows = await all<{ id: number; bgg_id: number | null; wikidata_id: string | null }>(
+		db,
+		`SELECT id, bgg_id, wikidata_id FROM games WHERE wikidata_id IN (${qPlaceholders}) OR bgg_id IN (${bPlaceholders})`,
+		...qids,
+		...bggIds
+	);
+	const ids = new Map<string, number>();
+	for (const g of games) {
+		const row = rows.find((r) => r.wikidata_id === g.wikidataId) ?? rows.find((r) => g.bggId != null && r.bgg_id === g.bggId);
+		if (row) ids.set(g.wikidataId, row.id);
+	}
+	return ids;
 }
 
 export type WikidataSearchResult = {
@@ -265,7 +286,7 @@ export type WikidataSearchResult = {
 export async function searchWikidata(db: DB, client: WikidataClient, query: string, userId: string, now: number): Promise<WikidataSearchResult[]> {
 	const games = await client.search(query);
 	const ids = await cacheWikidataGames(db, games, now);
-	const gameIds = [...ids.values()];
+	const gameIds = [...new Set(ids.values())];
 	if (gameIds.length === 0) return [];
 	const placeholders = gameIds.map((_, i) => `?${i + 2}`).join(', ');
 	const rows = await all<{ id: number; bgg_id: number | null; wikidata_id: string; name: string; year: number | null; min_players: number | null; max_players: number | null; owned: number; wanted: number }>(
@@ -277,9 +298,10 @@ export async function searchWikidata(db: DB, client: WikidataClient, query: stri
 		userId,
 		...gameIds
 	);
-	const byQid = new Map(rows.map((r) => [r.wikidata_id, r]));
-	return games
-		.map((g) => byQid.get(g.wikidataId))
+	const byId = new Map(rows.map((r) => [r.id, r]));
+	// In Wikidata's order, each game once even when several items led to it.
+	return [...new Set(games.map((g) => ids.get(g.wikidataId)))]
+		.map((id) => (id == null ? undefined : byId.get(id)))
 		.filter((r) => r != null)
 		.map((r) => ({
 			gameId: r.id,

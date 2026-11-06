@@ -155,29 +155,49 @@ export async function gameVisibleInGroup(db: DB, groupId: string, gameId: number
 	return row != null;
 }
 
+/** D1 binds at most 100 parameters; usableGames spends two on the group and the person. */
+const MAX_USABLE_IDS = 98;
+
 /**
- * Whether this person may put a game on their shelf or wishlist from this group. BGG and Wikidata
- * games come from public search, so any id is fine. A hand-entered game must be their own, or one the group
- * can already see: otherwise guessing ids would reveal other groups' hand-entered titles.
+ * Which of these games this person may put on their shelf or wishlist from this group, each with
+ * whether it's already on their shelf. BGG and Wikidata games come from public search, so any id
+ * is fine. A hand-entered game must be their own, or one the group can already see: otherwise
+ * guessing ids would reveal other groups' hand-entered titles. One query, whatever the count.
  */
-export async function gameUsableInGroup(db: DB, groupId: string, userId: string, gameId: number): Promise<boolean> {
-	const game = await one<{ source: string; is_manual: number; created_by: string | null }>(
+export async function usableGames(db: DB, groupId: string, userId: string, gameIds: number[]): Promise<Map<number, { owned: boolean }>> {
+	const ids = [...new Set(gameIds)];
+	if (ids.length === 0) return new Map();
+	if (ids.length > MAX_USABLE_IDS) throw new Error(`usableGames takes at most ${MAX_USABLE_IDS} ids`);
+	const placeholders = ids.map((_, i) => `?${i + 3}`).join(', ');
+	const rows = await all<{ id: number; owned: number }>(
 		db,
-		'SELECT source, is_manual, created_by FROM games WHERE id = ?1',
-		gameId
+		`SELECT g.id, EXISTS (SELECT 1 FROM copies c WHERE c.user_id = ?2 AND c.game_id = g.id) AS owned
+		 FROM games g
+		 WHERE g.id IN (${placeholders}) AND (
+			(g.source <> 'manual' AND g.is_manual <> 1)
+			OR g.created_by = ?2
+			OR EXISTS (SELECT 1 FROM copies c JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1 WHERE c.game_id = g.id)
+			OR EXISTS (SELECT 1 FROM wishlist w JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1 WHERE w.game_id = g.id))`,
+		groupId,
+		userId,
+		...ids
 	);
-	if (!game) return false;
-	if ((game.source !== 'manual' && game.is_manual !== 1) || game.created_by === userId) return true;
-	return gameVisibleInGroup(db, groupId, gameId);
+	return new Map(rows.map((r) => [r.id, { owned: r.owned === 1 }]));
+}
+
+export async function gameUsableInGroup(db: DB, groupId: string, userId: string, gameId: number): Promise<boolean> {
+	return (await usableGames(db, groupId, userId, [gameId])).has(gameId);
+}
+
+/** Puts a game on the person's shelf; a game already there stays as it was. Bump the catalog in the same batch. */
+export function copyStatement(db: DB, userId: string, gameId: number, now: number): D1PreparedStatement {
+	return stmt(db, 'INSERT INTO copies (user_id, game_id, added_at) VALUES (?1, ?2, ?3) ON CONFLICT(user_id, game_id) DO NOTHING', userId, gameId, now);
 }
 
 export async function addCopy(db: DB, userId: string, gameId: number, now: number): Promise<boolean> {
 	const game = await one(db, 'SELECT 1 AS x FROM games WHERE id = ?1', gameId);
 	if (!game) return false;
-	await db.batch([
-		stmt(db, 'INSERT INTO copies (user_id, game_id, added_at) VALUES (?1, ?2, ?3) ON CONFLICT(user_id, game_id) DO NOTHING', userId, gameId, now),
-		bumpCatalogForUser(db, userId)
-	]);
+	await db.batch([copyStatement(db, userId, gameId, now), bumpCatalogForUser(db, userId)]);
 	return true;
 }
 
@@ -240,23 +260,35 @@ export function parseManualGame(form: FormData): ManualParse {
 	};
 }
 
+/**
+ * A hand-entered game and its creator's copy, for a batch (which also needs a catalog bump). The
+ * first statement returns the new id; the second finds it with last_insert_rowid(), which holds
+ * because a batch is one transaction that nothing else runs inside.
+ */
+export function manualGameStatements(db: DB, userId: string, input: ManualGameInput, now: number): D1PreparedStatement[] {
+	return [
+		stmt(
+			db,
+			`INSERT INTO games (name, search_text, min_players, max_players, min_playtime, max_playtime, image_url, thumb_url, is_manual, source, created_by, fetched_at)
+			 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, 1, 'manual', ?8, ?9) RETURNING id`,
+			input.name,
+			buildSearchText(input.name),
+			input.minPlayers,
+			input.maxPlayers,
+			input.minPlaytime,
+			input.maxPlaytime,
+			input.imageUrl,
+			userId,
+			now
+		),
+		stmt(db, 'INSERT INTO copies (user_id, game_id, added_at) VALUES (?1, last_insert_rowid(), ?2)', userId, now)
+	];
+}
+
 /** Creates a hand-entered game and the person's copy of it. Returns the new game's id. */
 export async function addManualGame(db: DB, userId: string, input: ManualGameInput, now: number): Promise<number> {
-	const row = await one<{ id: number }>(
-		db,
-		`INSERT INTO games (name, search_text, min_players, max_players, min_playtime, max_playtime, image_url, thumb_url, is_manual, source, created_by, fetched_at)
-		 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, 1, 'manual', ?8, ?9) RETURNING id`,
-		input.name,
-		buildSearchText(input.name),
-		input.minPlayers,
-		input.maxPlayers,
-		input.minPlaytime,
-		input.maxPlaytime,
-		input.imageUrl,
-		userId,
-		now
-	);
-	if (!row) throw new Error('Inserting the game returned no id');
-	await addCopy(db, userId, row.id, now);
-	return row.id;
+	const [inserted] = await db.batch<{ id: number }>([...manualGameStatements(db, userId, input, now), bumpCatalogForUser(db, userId)]);
+	const id = inserted?.results[0]?.id;
+	if (id == null) throw new Error('Inserting the game returned no id');
+	return id;
 }

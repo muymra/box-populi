@@ -28,30 +28,38 @@ class SqliteStatement {
 		return (column ? row[column] : row) as T;
 	}
 
-	async all<T = Row>() {
+	private allSync<T>() {
 		return { results: this.prepared().all(...toArgs(this.params)) as T[], success: true, meta: {} };
 	}
 
-	async run() {
+	private runSync() {
 		const info = this.prepared().run(...toArgs(this.params));
 		return { success: true, results: [], meta: { changes: Number(info.changes), last_row_id: Number(info.lastInsertRowid) } };
 	}
 
+	async all<T = Row>() {
+		return this.allSync<T>();
+	}
+
+	async run() {
+		return this.runSync();
+	}
+
 	/** Used by batch(): statements with RETURNING need all(), others run(). */
-	async execute() {
-		return /\breturning\b/i.test(this.sql) ? this.all() : this.run();
+	executeSync() {
+		return /\breturning\b/i.test(this.sql) ? this.allSync() : this.runSync();
 	}
 }
 
 export function sqliteD1(raw: DatabaseSync): D1Database {
 	const db = {
 		prepare: (sql: string) => new SqliteStatement(raw, sql),
-		// D1's batch is a transaction.
+		// D1's batch is a transaction. It runs without yielding, so no other query can land inside
+		// it, and statements in it can rely on last_insert_rowid() from the one before.
 		async batch(statements: SqliteStatement[]) {
 			raw.exec('BEGIN');
 			try {
-				const results = [];
-				for (const s of statements) results.push(await s.execute());
+				const results = statements.map((s) => s.executeSync());
 				raw.exec('COMMIT');
 				return results;
 			} catch (error) {

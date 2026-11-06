@@ -5,7 +5,8 @@
 // when the instance uses it. The browser sends lines in small chunks (Cloudflare caps a request
 // at 50 outgoing calls on the free plan, and a Wikidata lookup is two).
 import { all, type DB } from './db.ts';
-import { addCopy, addManualGame, gameUsableInGroup } from './games.ts';
+import { bumpCatalogForUser } from './catalog.ts';
+import { copyStatement, manualGameStatements, usableGames } from './games.ts';
 import { cacheWikidataGames, type WikidataClient } from './wikidata.ts';
 import { normalize } from '#lib/catalog/normalize.ts';
 
@@ -73,16 +74,26 @@ const toMatched = (r: GameRow): MatchedGame => ({
 	source: r.is_manual === 1 ? 'manual' : (r.source as MatchedGame['source'])
 });
 
-/** Games whose title or alternate title is exactly `title`, normalized. */
-async function exactCandidates(db: DB, title: string): Promise<GameRow[]> {
-	const q = normalize(title);
-	const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+/**
+ * Stored games whose title or an alternate title is exactly one of `titles` (normalized), keyed by
+ * that title. One query for the whole chunk. It matches whole "|"-separated segments of
+ * search_text with instr(), not LIKE: D1 refuses LIKE patterns over 50 bytes, and a substring
+ * match with a LIMIT can miss the exact row for a short title.
+ */
+async function exactCandidates(db: DB, titles: string[]): Promise<Map<string, GameRow[]>> {
+	const wanted = [...new Set(titles.map(normalize).filter(Boolean))];
+	const byTitle = new Map(wanted.map((q) => [q, [] as GameRow[]]));
+	if (wanted.length === 0) return byTitle;
+	const where = wanted.map((_, i) => `instr('|' || search_text || '|', ?${i + 1}) > 0`).join(' OR ');
 	const rows = await all<GameRow>(
 		db,
-		`SELECT id, name, year, min_players, max_players, search_text, source, is_manual FROM games WHERE search_text LIKE ?1 ESCAPE '\\' LIMIT 50`,
-		like
+		`SELECT id, name, year, min_players, max_players, search_text, source, is_manual FROM games WHERE ${where}`,
+		...wanted.map((q) => `|${q}|`)
 	);
-	return rows.filter((r) => r.search_text.split('|').includes(q));
+	for (const row of rows) {
+		for (const segment of new Set(row.search_text.split('|'))) byTitle.get(segment)?.push(row);
+	}
+	return byTitle;
 }
 
 export async function matchLines(
@@ -105,14 +116,19 @@ export async function matchLines(
 	const owned = new Set(mine.map((r) => r.game_id));
 	const visible = new Set(inGroup.map((r) => r.game_id));
 
+	const parsedLines = lines.slice(0, MATCH_CHUNK).map((line) => ({ line, parsed: parseListLine(line) }));
+	const stored = await exactCandidates(
+		db,
+		parsedLines.flatMap(({ parsed }) => ('error' in parsed ? [] : [parsed.title]))
+	);
+
 	const rows: MatchRow[] = [];
-	for (const line of lines.slice(0, MATCH_CHUNK)) {
-		const parsed = parseListLine(line);
+	for (const { line, parsed } of parsedLines) {
 		if ('error' in parsed) {
 			rows.push({ line, status: 'error', error: parsed.error });
 			continue;
 		}
-		const candidates = await exactCandidates(db, parsed.title);
+		const candidates = stored.get(normalize(parsed.title)) ?? [];
 		const ownedHit = candidates.find((c) => owned.has(c.id));
 		if (ownedHit) {
 			rows.push({ line, status: 'owned', game: toMatched(ownedHit) });
@@ -155,34 +171,38 @@ export async function matchLines(
 /** A row to add: a matched game, or a line to type in as it was pasted (parsed again here). */
 export type AddItem = { gameId: number } | { line: string };
 
-/** Adds the chosen rows to the person's shelf. Typed-in titles repeated in one list become one game. */
+/**
+ * Adds the chosen rows to the person's shelf. Typed-in titles repeated in one chunk become one
+ * game; games already on the shelf count as skipped. Two queries for the whole chunk, a check and
+ * one batch, because D1 on Cloudflare's free plan allows 50 queries per request.
+ */
 export async function addListItems(db: DB, groupId: string, userId: string, items: AddItem[], now: number): Promise<{ added: number; skipped: number }> {
-	let added = 0;
+	const chunk = items.slice(0, ADD_CHUNK);
+	const usable = await usableGames(db, groupId, userId, chunk.flatMap((item) => ('gameId' in item ? [item.gameId] : [])));
+	const statements: D1PreparedStatement[] = [];
+	const copied = new Set<number>();
+	const created = new Set<string>();
 	let skipped = 0;
-	const created = new Map<string, number>();
-	for (const item of items.slice(0, ADD_CHUNK)) {
+	for (const item of chunk) {
 		if ('gameId' in item) {
-			if (!(await gameUsableInGroup(db, groupId, userId, item.gameId))) {
+			const game = usable.get(item.gameId);
+			if (!game || game.owned || copied.has(item.gameId)) {
 				skipped++;
 				continue;
 			}
-			await addCopy(db, userId, item.gameId, now);
-			added++;
+			copied.add(item.gameId);
+			statements.push(copyStatement(db, userId, item.gameId, now));
 			continue;
 		}
 		const entry = typeof item.line === 'string' ? parseListLine(item.line) : { error: 'missing' };
-		if ('error' in entry) {
+		if ('error' in entry || created.has(normalize(entry.title))) {
 			skipped++;
 			continue;
 		}
-		const key = normalize(entry.title);
-		if (created.has(key)) {
-			skipped++;
-			continue;
-		}
-		const id = await addManualGame(db, userId, { name: entry.title, minPlayers: entry.minPlayers, maxPlayers: entry.maxPlayers, minPlaytime: entry.minPlaytime, maxPlaytime: entry.maxPlaytime, imageUrl: null }, now);
-		created.set(key, id);
-		added++;
+		created.add(normalize(entry.title));
+		const { title, ...counts } = entry;
+		statements.push(...manualGameStatements(db, userId, { name: title, ...counts, imageUrl: null }, now));
 	}
-	return { added, skipped };
+	if (statements.length > 0) await db.batch([...statements, bumpCatalogForUser(db, userId)]);
+	return { added: copied.size + created.size, skipped };
 }

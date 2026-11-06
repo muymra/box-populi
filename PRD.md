@@ -174,7 +174,7 @@ Rules that follow from the table:
 | Availability | Hide games that are lent outside the group. On by default. A copy lent to a group member counts as available. |
 | Expansions | Hidden by default. |
 
-Games with unknown data (hand-entered, or details still loading) are never filtered out by a field they lack. They show with an "incomplete info" marker instead. The one exception is the "best at N" toggle, which by definition only matches games that have BGG vote data.
+Games with unknown data (hand-entered, from Wikidata, or details still loading) are never filtered out by a field they lack. When an active filter lets a game through only for that reason, it shows an "Info missing" flag. The one exception is the "best at N" toggle, which by definition only matches games that have BGG vote data.
 
 On a phone, the players and time controls sit above the results; everything else is behind a "More filters" sheet. Sorting: title, weight, play time, recently added, most owned. Each result shows cover, title, player range, time range, weight bucket, and up to three owner avatars with "+N" for the rest. Results render in pages of about 60 as you scroll, and the result count is always shown, so 1,500 games don't freeze a phone. Filter state lives in the URL, so a filtered view can be shared in chat. Filtering happens on the device once the catalog has loaded, so changing a filter is instant.
 

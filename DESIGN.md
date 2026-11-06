@@ -339,7 +339,7 @@ Ink-filled and plain, so marigold stays free for state.
 
 ### Tags and flags
 - **Tag:** shelf-gap pill, ink-2 text, 12px at 600. Used for categories and facts on game pages.
-- **Flag:** a cube-white pill with a 1px rule ring at the bottom of a box, 11px at 700, for "Lent out" and "Expansion". Lent-out boxes fade to 45% opacity at half saturation.
+- **Flag:** a cube-white pill with a 1px rule ring at the bottom of a box, 11px at 700, for "Lent out", "Info missing" (an active filter let the game through only because it lacks that detail) and "Expansion", one per box in that order; the Spines view shows each that applies. Lent-out boxes fade to 45% opacity at half saturation.
 
 ### Cards / Containers
 - **Corner Style:** 10px for panels, the label strip and empty states.

@@ -11,7 +11,7 @@
 	import CheckList from '#lib/components/CheckList.svelte';
 	import { fetchCatalog, storage } from '#lib/catalog/client.ts';
 	import { BUCKET_LABELS, WEIGHT_BUCKETS, type WeightBucket } from '#lib/catalog/buckets.ts';
-	import { filterGames, parseFilters, serializeFilters, tagOptions, type SortKey } from '#lib/catalog/filter.ts';
+	import { filterGames, parseFilters, passedOnUnknown, serializeFilters, tagOptions, type SortKey } from '#lib/catalog/filter.ts';
 	import type { CatalogPayload } from '#lib/catalog/types.ts';
 	import type { PageProps } from './$types';
 
@@ -187,13 +187,13 @@
 {:else if view === 'cubes' && results.length}
 	<ul class="shelf">
 		{#each results.slice(0, limit) as game (game.id)}
-			<li><Cube {game} href="/g/{data.group.id}/game/{game.id}" members={memberMap} {memberIds} /></li>
+			<li><Cube {game} href="/g/{data.group.id}/game/{game.id}" members={memberMap} {memberIds} unknown={passedOnUnknown(game, filters)} /></li>
 		{/each}
 	</ul>
 {:else if results.length}
 	<ul class="list">
 		{#each results.slice(0, limit) as game (game.id)}
-			<li><ListRow {game} href="/g/{data.group.id}/game/{game.id}" members={memberMap} {memberIds} /></li>
+			<li><ListRow {game} href="/g/{data.group.id}/game/{game.id}" members={memberMap} {memberIds} unknown={passedOnUnknown(game, filters)} /></li>
 		{/each}
 	</ul>
 {/if}

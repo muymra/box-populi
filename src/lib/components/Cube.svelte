@@ -7,12 +7,14 @@
 	import { isCopyAvailable } from '#lib/catalog/filter.ts';
 	import type { CatalogGame, CatalogMember } from '#lib/catalog/types.ts';
 
+	/** `unknown`: an active filter let this game through only because it lacks that detail. */
 	let {
 		game,
 		href,
 		members,
-		memberIds
-	}: { game: CatalogGame; href: string; members: Map<string, CatalogMember>; memberIds: ReadonlySet<string> } = $props();
+		memberIds,
+		unknown = false
+	}: { game: CatalogGame; href: string; members: Map<string, CatalogMember>; memberIds: ReadonlySet<string>; unknown?: boolean } = $props();
 
 	const owners = $derived(
 		[...new Set(game.copies.map((c) => c.ownerId))]
@@ -24,14 +26,19 @@
 	const time = $derived(formatPlaytime(game.minPlaytime, game.maxPlaytime));
 	const unavailable = $derived(!game.copies.some((c) => isCopyAvailable(c, memberIds)));
 	const caption = $derived([players && `${players}p`, time].filter(Boolean).join(' · '));
+	// One flag fits on a box: lent out first, then the filter note, then expansion.
+	const flag = $derived(unavailable ? 'Lent out' : unknown ? 'Info missing' : game.isExpansion ? 'Expansion' : null);
 </script>
 
-<a class="cube" class:out={unavailable} {href} aria-label="{game.name}{game.year ? `, ${game.year}` : ''}{unavailable ? ', lent out' : ''}">
+<a
+	class="cube"
+	class:out={unavailable}
+	{href}
+	aria-label="{game.name}{game.year ? `, ${game.year}` : ''}{unavailable ? ', lent out' : ''}{unknown ? ', info missing' : ''}"
+>
 	<div class="slot">
 		<BoxFront name={game.name} src={game.thumbUrl} />
-		{#if game.isExpansion || unavailable}
-			<span class="flag">{unavailable ? 'Lent out' : 'Expansion'}</span>
-		{/if}
+		{#if flag}<span class="flag">{flag}</span>{/if}
 	</div>
 	<div class="caption num">{caption || (game.isManual ? 'Hand-entered' : ' ')}</div>
 	<OwnerEdge {owners} />

@@ -24,12 +24,13 @@ type GameRow = {
 	categories: string;
 	is_expansion: number;
 	is_manual: number;
+	source: string;
 	fetched_at: number | null;
 };
 
 const GAME_COLUMNS = `g.id, g.bgg_id, g.name, g.search_text, g.year, g.thumb_url, g.min_players, g.max_players,
 	g.best_mask, g.rec_mask, g.poll_source, g.min_playtime, g.max_playtime, g.weight, g.users_rated,
-	g.mechanics, g.categories, g.is_expansion, g.is_manual, g.fetched_at`;
+	g.mechanics, g.categories, g.is_expansion, g.is_manual, g.source, g.fetched_at`;
 
 export function toCatalogGame(row: GameRow): Omit<CatalogGame, 'copies'> {
 	return {
@@ -52,7 +53,9 @@ export function toCatalogGame(row: GameRow): Omit<CatalogGame, 'copies'> {
 		categories: jsonArray<string>(row.categories),
 		isExpansion: row.is_expansion === 1,
 		isManual: row.is_manual === 1,
-		incomplete: row.is_manual === 1 || (row.bgg_id != null && row.fetched_at == null)
+		// Only BGG gives mechanics and themes. Hand-entered and Wikidata games never have them, and a
+		// BGG stub has none until its details load, so tag filters let these through (PRD "Filters").
+		incomplete: row.is_manual === 1 || row.source !== 'bgg' || (row.bgg_id != null && row.fetched_at == null)
 	};
 }
 

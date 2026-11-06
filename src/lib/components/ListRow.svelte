@@ -10,12 +10,14 @@
 	import { isCopyAvailable } from '#lib/catalog/filter.ts';
 	import type { CatalogGame, CatalogMember } from '#lib/catalog/types.ts';
 
+	/** `unknown`: an active filter let this game through only because it lacks that detail. */
 	let {
 		game,
 		href,
 		members,
-		memberIds
-	}: { game: CatalogGame; href: string; members: Map<string, CatalogMember>; memberIds: ReadonlySet<string> } = $props();
+		memberIds,
+		unknown = false
+	}: { game: CatalogGame; href: string; members: Map<string, CatalogMember>; memberIds: ReadonlySet<string>; unknown?: boolean } = $props();
 
 	const color = $derived(boxColor(game.name));
 	const owners = $derived([...new Set(game.copies.map((c) => c.ownerId))].map((id) => members.get(id)).filter((m) => m != null));
@@ -38,6 +40,7 @@
 		{facts}
 		{#if game.isExpansion}<span class="flag">Expansion</span>{/if}
 		{#if unavailable}<span class="flag">Lent out</span>{/if}
+		{#if unknown}<span class="flag">Info missing</span>{/if}
 	</span>
 	<span class="end" role="img" aria-label={ownerLabel} title={ownerLabel}>
 		{#each shown as o (o.id)}<span style:background={playerColor(o.colorIndex).bg}></span>{/each}

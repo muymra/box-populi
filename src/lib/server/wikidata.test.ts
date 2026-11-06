@@ -158,6 +158,20 @@ describe('caching Wikidata games', () => {
 		});
 	});
 
+	it('treats Wikidata items that share a BGG id as one game', async () => {
+		const [lantern] = FakeWikidataClient.GAMES;
+		const edition = { ...lantern, wikidataId: 'Q77', name: 'Lantern Harbour (second edition)' };
+		const ids = await cacheWikidataGames(db, [lantern, edition], NOW);
+		expect(ids.get('Q77')).toBe(ids.get(lantern.wikidataId));
+		expect(await all(db, 'SELECT wikidata_id, name FROM games')).toEqual([{ wikidata_id: lantern.wikidataId, name: 'Lantern Harbour' }]);
+		// A later search that finds the edition first still lands on the same game, unchanged.
+		const again = await cacheWikidataGames(db, [edition, lantern], NOW + 1);
+		expect(new Set(again.values())).toEqual(new Set([ids.get('Q77')]));
+
+		const client = { search: async () => [lantern, edition] };
+		expect((await searchWikidata(db, client, 'lantern', 'ada', NOW)).map((r) => r.name)).toEqual(['Lantern Harbour']);
+	});
+
 	it('searches with this person’s shelf and wishlist marked', async () => {
 		const fake = new FakeWikidataClient();
 		const [first] = await searchWikidata(db, fake, 'Lantern Harbor', 'ada', NOW);

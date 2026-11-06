@@ -25,7 +25,7 @@ export const load: PageServerLoad = async (event) => {
 			wantedBy: g.wantedBy
 				.map((id) => byId.get(id))
 				.filter((m) => m != null)
-				.map((m) => ({ name: m.name, colorIndex: m.colorIndex }))
+				.map((m) => ({ id: m.id, name: m.name, colorIndex: m.colorIndex }))
 				.sort((a, b) => a.name.localeCompare(b.name))
 		}))
 	};

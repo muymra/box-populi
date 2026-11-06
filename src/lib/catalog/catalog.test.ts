@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildSearchText, normalize } from './normalize.ts';
 import { countsFromMask, formatCounts, maskFromCounts, maskHas } from './players.ts';
 import { formatPlaytime, formatWeight, weightBucket } from './buckets.ts';
-import { DEFAULT_FILTERS, filterGames, parseFilters, serializeFilters, type Filters } from './filter.ts';
+import { DEFAULT_FILTERS, filterGames, parseFilters, passedOnUnknown, serializeFilters, type Filters } from './filter.ts';
 import { gamesAtHand, pick, seededRng } from './pick.ts';
 import { copy, game } from './testing.ts';
 
@@ -72,6 +72,19 @@ describe('filterGames', () => {
 		const manual = game({ minPlayers: null, maxPlayers: null, incomplete: true, isManual: true });
 		const result = filterGames([solo, party, manual], f({ players: 5 }), members);
 		expect(result.map((g) => g.id).sort()).toEqual([party.id, manual.id].sort());
+	});
+
+	it('marks games that pass a filter only because they lack the detail', () => {
+		const known = game({ mechanics: ['Dice Rolling'] });
+		const typed = game({ minPlayers: null, maxPlayers: null, minPlaytime: null, maxPlaytime: null, weight: null, incomplete: true });
+		expect(passedOnUnknown(typed, f({}))).toBe(false);
+		for (const filters of [f({ players: 3 }), f({ minutes: 30 }), f({ weights: ['light'] }), f({ mechanics: ['Dice Rolling'] })]) {
+			expect(filterGames([typed], filters, members)).toEqual([typed]);
+			expect(passedOnUnknown(typed, filters)).toBe(true);
+			expect(passedOnUnknown(known, filters)).toBe(false);
+		}
+		// A BGG game that simply has no such mechanic is filtered out, not marked.
+		expect(filterGames([game({ mechanics: [] })], f({ mechanics: ['Dice Rolling'] }), members)).toEqual([]);
 	});
 
 	it('best-at only matches games with vote data', () => {

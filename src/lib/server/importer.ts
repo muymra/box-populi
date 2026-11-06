@@ -53,7 +53,7 @@ export async function previewItems(db: DB, userId: string, items: BggCollectionI
 		.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
 }
 
-const CONFIRM_CHUNK = 50; // 50 games = 100 statements per batch
+const CONFIRM_CHUNK = 50; // 50 games = 100 statements per batch, plus the catalog bump
 
 /**
  * Creates a stub for every chosen game not yet cached and the person's copy of each. Only ids that
@@ -71,8 +71,10 @@ export async function confirmImport(
 	const before = (await ownedBggIds(db, userId)).size;
 	for (let i = 0; i < picked.length; i += CONFIRM_CHUNK) {
 		const chunk = picked.slice(i, i + CONFIRM_CHUNK);
-		await db.batch(
-			chunk.flatMap((item) => [
+		// Each batch bumps the catalog itself, so a request that stops part-way (D1 allows 50 queries
+		// per request on the free plan, about 2,000 games here) never leaves copies the catalog misses.
+		await db.batch([
+			...chunk.flatMap((item) => [
 				stubStatement(db, item),
 				stmt(
 					db,
@@ -83,10 +85,10 @@ export async function confirmImport(
 					now,
 					item.bggId
 				)
-			])
-		);
+			]),
+			bumpCatalogForUser(db, userId)
+		]);
 	}
-	await bumpCatalogForUser(db, userId).run();
 	const after = (await ownedBggIds(db, userId)).size;
 	return { added: after - before };
 }
