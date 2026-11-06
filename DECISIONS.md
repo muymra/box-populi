@@ -154,3 +154,15 @@ The Wikidata fallback planned for a BGG refusal (TECH.md "If BGG declines the ap
 **Why:** Carlo asked for it: applying to BGG is a hassle some hosters will skip, and today they get manual entry only.
 **Trade-offs accepted:** Wikidata covers about 4,800 games with BGG ids and has no weight, no best-at counts and few box images, so those groups fill in more by hand.
 **Revisit if:** BGG declines Carlo's application, which moves it into the weekend's scope.
+
+## D28. BGG is off until a token exists (2026-11-06)
+
+`BGG_MODE` is optional. Unset, an instance runs with BGG on when the `BGG_TOKEN` secret exists and off when it doesn't (fixtures in development). A new hoster deploys without applying to BGG, and adding the token later turns on search, import and game details with no other change. An explicit `BGG_MODE` still wins, and `live` without a token is still a setup error.
+**Why:** Carlo asked for BGG to be an upgrade rather than a requirement; before this, a deployed instance without a token showed a setup error until the hoster set `BGG_MODE=off`.
+**Revisit if:** the public-sources mode (D27) is built; an instance without a token could then default to it instead of manual entry only.
+
+## D29. More hosting targets go on the stretch list (2026-11-06)
+
+Docker (Node with a SQLite file) and Cloudflare Workers are planned stretch items; Vercel and Netlify come later. This replaces "no hosting targets besides Cloudflare" in the PRD's "Not doing".
+**Why:** Carlo asked which self-hosting options are cheap to support. The Cloudflare runtime is confined to `platform.ts`, and the data layer already runs on `node:sqlite` in tests.
+**Trade-offs accepted:** a second build to test before each release, and Docker hosters own their backups. Behind a reverse proxy they must set `ORIGIN` and `ADDRESS_HEADER`, or cookies lose `Secure` and rate limits see one IP.

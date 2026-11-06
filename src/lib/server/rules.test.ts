@@ -105,6 +105,20 @@ describe('instance config', () => {
 		}
 	});
 
+	it('turns BGG on by the token when BGG_MODE is unset', () => {
+		const env = { INSTANCE_CONTACT: 'mailto:host@example.org', ADMIN_KEY: 'a-long-enough-admin-key-0123456789' };
+		const mode = (extra: Record<string, string>, dev: boolean) => {
+			const result = parseInstanceConfig({ ...env, ...extra }, { dev });
+			if (!result.ok) throw new Error(result.errors.join('; '));
+			return result.config.bggMode;
+		};
+		expect(mode({}, false)).toBe('off');
+		expect(mode({ BGG_TOKEN: 'token' }, false)).toBe('live');
+		expect(mode({}, true)).toBe('fake');
+		expect(mode({ BGG_TOKEN: 'token', BGG_MODE: 'off' }, false)).toBe('off');
+		expect(parseInstanceConfig({ ...env, BGG_MODE: 'live' }, { dev: false }).ok).toBe(false);
+	});
+
 	it('rejects a short admin key even in dev', () => {
 		const result = parseInstanceConfig({ ...base, ADMIN_KEY: 'short' }, { dev: true });
 		expect(result.ok).toBe(false);

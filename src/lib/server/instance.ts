@@ -54,7 +54,10 @@ export function parseInstanceConfig(env: Record<string, unknown>, opts: { dev: b
 		errors.push(`GROUP_CREATION must be "anyone" or "admins" (got "${groupCreationRaw}").`);
 	}
 
-	const bggModeRaw = str(env, 'BGG_MODE') || 'live';
+	const bggToken = str(env, 'BGG_TOKEN') || null;
+	// Without BGG_MODE, BGG turns itself on when a token is present (D28). Without a token, a
+	// deployed instance runs with manual entry and development serves the fixtures.
+	const bggModeRaw = str(env, 'BGG_MODE') || (bggToken ? 'live' : opts.dev ? 'fake' : 'off');
 	let bggMode: BggMode = 'off';
 	if (bggModeRaw === 'live' || bggModeRaw === 'off' || bggModeRaw === 'fake') {
 		bggMode = bggModeRaw;
@@ -64,9 +67,8 @@ export function parseInstanceConfig(env: Record<string, unknown>, opts: { dev: b
 	if (bggMode === 'fake' && !opts.dev) {
 		errors.push('BGG_MODE "fake" serves test data and only works in development. Use "live" or "off".');
 	}
-	const bggToken = str(env, 'BGG_TOKEN') || null;
 	if (bggMode === 'live' && !bggToken) {
-		errors.push('BGG_MODE is "live" but BGG_TOKEN is not set. Add the token, or set BGG_MODE to "off".');
+		errors.push('BGG_MODE is "live" but BGG_TOKEN is not set. Add the token, or remove BGG_MODE to run without BoardGameGeek.');
 	}
 
 	const adminKey = str(env, 'ADMIN_KEY') || null;

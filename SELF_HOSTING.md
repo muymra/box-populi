@@ -22,7 +22,7 @@ This guide sets up an instance on your own Cloudflare account. It was written be
 
 ## 1. Apply for BGG access (optional, do it first)
 
-Go to `https://boardgamegeek.com/applications` and register a non-commercial application. Describe your own instance: who it's for, roughly how many people, and that it's Box Populi from `https://github.com/muymra/box-populi`. Carlo's application covers his instance only. When it's approved, create a token on the application's page. Until then you'll run with `BGG_MODE = "off"`.
+Go to `https://boardgamegeek.com/applications` and register a non-commercial application. Describe your own instance: who it's for, roughly how many people, and that it's Box Populi from `https://github.com/muymra/box-populi`. Carlo's application covers his instance only. When it's approved, create a token on the application's page and store it as `BGG_TOKEN` (step 5). The instance turns on BGG search, import and game details as soon as the token is there; until then it runs with manual entry.
 
 ## 2. Get the code
 
@@ -53,7 +53,7 @@ In `wrangler.jsonc` under `"vars"`:
 | `GROUP_CREATION` | `anyone`, or `admins` if only you should create groups. |
 | `MAX_GROUPS_PER_USER` | Default `5`. |
 | `MAX_MEMBERS_PER_GROUP` | Default `100`. |
-| `BGG_MODE` | `live` once you have a token, `off` until then. The example file says `fake`, which only works in development; a deployed instance with `fake` shows a setup error. |
+| `BGG_MODE` | Leave it empty. BGG turns on when the `BGG_TOKEN` secret exists. Set `off` to keep BGG off even with a token. |
 | `BGG_MIN_INTERVAL_MS` | Default `2000`, the minimum. Raise it if BGG asks you to. |
 
 ## 5. Store the admin key
@@ -61,7 +61,7 @@ In `wrangler.jsonc` under `"vars"`:
 ```sh
 openssl rand -base64 32    # copy the output; this is your admin key
 pnpm exec wrangler pages secret put ADMIN_KEY --project-name <your-project-name>
-pnpm exec wrangler pages secret put BGG_TOKEN --project-name <your-project-name>   # skip while BGG_MODE is off
+pnpm exec wrangler pages secret put BGG_TOKEN --project-name <your-project-name>   # once BGG approves you; redeploy after
 ```
 
 ## 6. Create the tables and deploy

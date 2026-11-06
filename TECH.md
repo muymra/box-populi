@@ -115,8 +115,8 @@ The repo commits `wrangler.example.jsonc`. `pnpm install` copies it to `wrangler
 |---|---|---|---|
 | `DB` | D1 binding | required | The database. |
 | `ADMIN_KEY` | secret | required in production | Signs the hoster in to `/admin`. At least 24 characters; generate one with `openssl rand -base64 32`. |
-| `BGG_TOKEN` | secret | required when `BGG_MODE=live` | The hoster's own BGG application token. BGG registers applications, not people. |
-| `BGG_MODE` | var | `live` | `live`, `off` or `fake`. `off` runs without a token: manual entry only, BGG search and import hidden. `fake` serves test fixtures and is for development only. |
+| `BGG_TOKEN` | secret | optional | The hoster's own BGG application token. BGG registers applications, not people. Adding it turns on BGG search, import and game details. |
+| `BGG_MODE` | var | from the token | `live`, `off` or `fake`. Unset, it's `live` when `BGG_TOKEN` exists, otherwise `off` (or `fake` in development), so an instance needs no BGG application to launch (D28). `off` means manual entry only, with BGG search and import hidden. `fake` serves test fixtures and is for development only. Setting `live` without a token is a setup error. |
 | `BGG_MIN_INTERVAL_MS` | var | `2000` | Minimum spacing between BGG requests across the whole instance. Values under 2000 are rejected, so the code can't be configured into hammering BGG. |
 | `INSTANCE_NAME` | var | `Box Populi` | Header, page titles, privacy page. |
 | `INSTANCE_CONTACT` | var | required | A `mailto:` or `https:` URL for reaching the hoster. Shown on the privacy page and on suspension notices. |
@@ -126,7 +126,7 @@ The repo commits `wrangler.example.jsonc`. `pnpm install` copies it to `wrangler
 
 `src/lib/server/instance.ts` reads and validates these once per isolate and exports a typed config. When a required value is missing, every request gets a plain error page naming the variable, so a misconfigured deploy is obvious from the first page load.
 
-Local values go in `.dev.vars` (copied from `.dev.vars.example`), with `BGG_MODE=fake` until a token arrives. Production secrets: `pnpm exec wrangler pages secret put <NAME> --project-name <project>`. Secrets never go in the repo, in STATUS.md, or in client bundles. Nothing under `src/lib/catalog/` and no `+page.svelte` may import from `#lib/server`.
+Local values go in `.dev.vars` (copied from `.dev.vars.example`). Without a token, development runs on the fake client. Production secrets: `pnpm exec wrangler pages secret put <NAME> --project-name <project>`. Secrets never go in the repo, in STATUS.md, or in client bundles. Nothing under `src/lib/catalog/` and no `+page.svelte` may import from `#lib/server`.
 
 Bindings and variables come from `import { env } from 'cloudflare:workers'` (SvelteKit 3 no longer passes them through `event.platform`). Only `src/lib/server/platform.ts` imports that module; everything else receives `db` or `config` as arguments, which keeps it testable in plain Node. `src/app.d.ts` types `App.Locals` as `{ config: InstanceConfig; user: { id; name } | null; isAdmin: boolean }`.
 
@@ -608,7 +608,7 @@ Search and import show "BGG isn't responding. Try again, or add the game by hand
 
 ### Running without a token
 
-With `BGG_MODE=off`, the add page offers manual entry only. A note explains that BGG search and import aren't set up on this instance, and instance admins also see it on `/admin`. Everything else works, minus mechanics, themes, weight and best-at data on hand-entered games. This lets a new hoster launch while their BGG application waits for approval. Switching to `live` later doesn't migrate manual games to BGG ones; a member who wants full data removes the manual copy and adds the BGG game.
+This is the default for a new instance (D28). With `BGG_MODE=off`, the add page offers manual entry only. A note explains that BGG search and import aren't set up on this instance, and instance admins also see it on `/admin`. Everything else works, minus mechanics, themes, weight and best-at data on hand-entered games. This lets a new hoster launch while their BGG application waits for approval. Switching to `live` later doesn't migrate manual games to BGG ones; a member who wants full data removes the manual copy and adds the BGG game.
 
 ## Picker
 

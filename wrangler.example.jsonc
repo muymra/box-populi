@@ -16,8 +16,9 @@
 		}
 	],
 	"vars": {
-		// "live" with a BGG token, "off" without one. "fake" serves test data and only works in dev.
-		"BGG_MODE": "fake",
+		// Leave BGG_MODE empty: BGG is on when the BGG_TOKEN secret exists and off when it doesn't, and
+		// development without a token serves test fixtures. "off" keeps BGG off even with a token.
+		"BGG_MODE": "",
 		"BGG_MIN_INTERVAL_MS": "2000",
 		"INSTANCE_NAME": "Box Populi",
 		"INSTANCE_CONTACT": "mailto:you@example.com",
