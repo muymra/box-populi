@@ -4,7 +4,7 @@
 import { generateCode } from './codes.ts';
 import { bumpCatalogForGroup } from './catalog.ts';
 import { cleanGroupName } from './groups.ts';
-import { all, one, stmt, type DB } from './db.ts';
+import { all, deleteGroupStatements, one, stmt, type DB } from './db.ts';
 import { can, type GroupAction } from './permissions.ts';
 import type { Role } from '#lib/catalog/types.ts';
 import { isThemeId } from '#lib/themes.ts';
@@ -99,7 +99,7 @@ export async function deleteGroup(db: DB, groupId: string, actor: Actor, typedNa
 	if (typed.toLocaleLowerCase() !== group.name.toLocaleLowerCase()) {
 		return { ok: false, error: 'Type the group’s name exactly as it’s shown to delete it.' };
 	}
-	await db.batch([stmt(db, 'DELETE FROM groups WHERE id = ?1', groupId)]);
+	await db.batch(deleteGroupStatements(db, groupId));
 	return { ok: true };
 }
 

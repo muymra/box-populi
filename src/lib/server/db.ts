@@ -28,3 +28,31 @@ export function jsonArray<T>(raw: unknown): T[] {
 		return [];
 	}
 }
+
+/**
+ * Deleting a group, with everything that belongs only to it. D1 and node:sqlite would cascade,
+ * but Turso doesn't enforce foreign keys over HTTP, so the rows go explicitly, children first.
+ */
+export function deleteGroupStatements(db: DB, groupId: string): D1PreparedStatement[] {
+	return [
+		stmt(db, 'DELETE FROM game_links WHERE group_id = ?1', groupId),
+		stmt(db, 'DELETE FROM memberships WHERE group_id = ?1', groupId),
+		stmt(db, 'DELETE FROM groups WHERE id = ?1', groupId)
+	];
+}
+
+/** Deleting a person and their data (the privacy page's promise), explicitly, for the same reason. */
+export function deletePersonStatements(db: DB, userId: string): D1PreparedStatement[] {
+	return [
+		stmt(db, 'DELETE FROM sessions WHERE user_id = ?1', userId),
+		stmt(db, 'DELETE FROM personal_links WHERE user_id = ?1', userId),
+		stmt(db, 'DELETE FROM memberships WHERE user_id = ?1', userId),
+		stmt(db, 'DELETE FROM copies WHERE user_id = ?1', userId),
+		stmt(db, 'DELETE FROM wishlist WHERE user_id = ?1', userId),
+		stmt(db, 'UPDATE copies SET lent_to_user_id = NULL WHERE lent_to_user_id = ?1', userId),
+		stmt(db, 'UPDATE games SET created_by = NULL WHERE created_by = ?1', userId),
+		stmt(db, 'UPDATE games SET edited_by = NULL WHERE edited_by = ?1', userId),
+		stmt(db, 'UPDATE game_links SET added_by = NULL WHERE added_by = ?1', userId),
+		stmt(db, 'DELETE FROM users WHERE id = ?1', userId)
+	];
+}

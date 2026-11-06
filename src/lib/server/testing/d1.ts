@@ -1,79 +1,27 @@
-// A D1-shaped wrapper around node:sqlite for tests (TECH.md "Testing"). It runs the real
-// migrations, so SQL tests exercise the same schema production uses. Test-only; never imported
-// by app code.
-import { readdirSync, readFileSync } from 'node:fs';
-import { DatabaseSync, type StatementSync } from 'node:sqlite';
+// Test databases (TECH.md "Testing"): in memory, with every migration applied, behind the same
+// D1-shaped wrapper production uses. TEST_DB=libsql runs the suite on the libSQL wrapper instead
+// (`pnpm test:libsql`), which is what Vercel and Netlify instances use against Turso.
+import { DatabaseSync } from 'node:sqlite';
+import { createClient } from '@libsql/client';
+import { applyMigrations, applyMigrationsSync } from '../migrations.ts';
+import { sqliteD1 } from '../sqlite-d1.ts';
+import { libsqlD1 } from '../libsql-d1.ts';
 
-type Row = Record<string, unknown>;
-
-class TestStatement {
-	constructor(
-		private db: DatabaseSync,
-		private sql: string,
-		private params: unknown[] = []
-	) {}
-
-	bind(...params: unknown[]) {
-		return new TestStatement(this.db, this.sql, params);
+export function createTestDb(): D1Database {
+	if (process.env.TEST_DB === 'libsql') {
+		// Foreign keys stay off, as on Turso over HTTP, so the suite proves the app's explicit deletes.
+		const client = createClient({ url: ':memory:' });
+		const ready = client
+			.execute('PRAGMA foreign_keys = OFF') // embedded libSQL defaults to on; Turso over HTTP doesn't enforce them
+			.then(() => applyMigrations(
+			(sql) => client.executeMultiple(sql),
+				async (sql) => (await client.execute(sql)).rows as unknown as Array<{ name: string }>
+			))
+			.then(() => undefined);
+		return libsqlD1(client, ready);
 	}
-
-	private prepared(): StatementSync {
-		return this.db.prepare(this.sql);
-	}
-
-	private args() {
-		// node:sqlite takes booleans as errors; D1 stores them as 0/1.
-		return this.params.map((p) => (typeof p === 'boolean' ? Number(p) : p === undefined ? null : p)) as never[];
-	}
-
-	async first<T = Row>(column?: string): Promise<T | null> {
-		const row = this.prepared().get(...this.args()) as Row | undefined;
-		if (!row) return null;
-		return (column ? row[column] : row) as T;
-	}
-
-	async all<T = Row>() {
-		return { results: this.prepared().all(...this.args()) as T[], success: true, meta: {} };
-	}
-
-	async run() {
-		const info = this.prepared().run(...this.args());
-		return { success: true, results: [], meta: { changes: Number(info.changes), last_row_id: Number(info.lastInsertRowid) } };
-	}
-
-	/** Used by batch(): statements with RETURNING need all(), others run(). */
-	async execute() {
-		return /\breturning\b/i.test(this.sql) ? this.all() : this.run();
-	}
-}
-
-export function createTestDb(): D1Database & { raw: DatabaseSync } {
 	const raw = new DatabaseSync(':memory:');
 	raw.exec('PRAGMA foreign_keys = ON;'); // D1 enforces foreign keys by default
-	const dir = new URL('../../../../migrations/', import.meta.url);
-	for (const file of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
-		raw.exec(readFileSync(new URL(file, dir), 'utf8'));
-	}
-
-	const db = {
-		raw,
-		prepare: (sql: string) => new TestStatement(raw, sql),
-		async batch(statements: TestStatement[]) {
-			raw.exec('BEGIN');
-			try {
-				const results = [];
-				for (const s of statements) results.push(await s.execute());
-				raw.exec('COMMIT');
-				return results;
-			} catch (error) {
-				raw.exec('ROLLBACK');
-				throw error;
-			}
-		},
-		async exec(sql: string) {
-			raw.exec(sql);
-			return { count: 0, duration: 0 };
-		}
-	};
-	return db as unknown as D1Database & { raw: DatabaseSync };
+	applyMigrationsSync(raw);
+	return sqliteD1(raw);
 }

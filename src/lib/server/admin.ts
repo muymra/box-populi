@@ -2,7 +2,7 @@
 // ADMIN_KEY. These queries select only the columns TECH.md lists: never member names, join codes,
 // collections, links or wishlists. Adding one needs a DECISIONS.md entry approved by Carlo.
 import { sha256Hex } from './identity.ts';
-import { all, one, stmt, type DB } from './db.ts';
+import { all, deleteGroupStatements, one, stmt, type DB } from './db.ts';
 
 export const ADMIN_COOKIE = 'bp_admin';
 export const ADMIN_HOURS = 12;
@@ -164,6 +164,6 @@ export async function adminDeleteGroup(db: DB, groupId: string, typedName: unkno
 	if (typed.toLocaleLowerCase() !== group.name.toLocaleLowerCase()) {
 		return { ok: false, error: 'Type the group’s name exactly as it’s shown to delete it.' };
 	}
-	await db.batch([logStatement(db, 'delete_group', groupId, group.name, reason, now), stmt(db, 'DELETE FROM groups WHERE id = ?1', groupId)]);
+	await db.batch([logStatement(db, 'delete_group', groupId, group.name, reason, now), ...deleteGroupStatements(db, groupId)]);
 	return { ok: true };
 }

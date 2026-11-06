@@ -1,6 +1,6 @@
 // People, device sessions and personal links (DECISIONS D25, TECH.md "Identity and sessions").
 // Only SHA-256 digests of tokens are stored, so a leaked database holds nothing usable.
-import { all, one, run, stmt, type DB } from './db.ts';
+import { all, type DB, deleteGroupStatements, deletePersonStatements, one, run, stmt } from './db.ts';
 import { bumpCatalogForUser } from './catalog.ts';
 import { can } from './permissions.ts';
 import type { Role } from '#lib/catalog/types.ts';
@@ -149,8 +149,8 @@ export async function deletePerson(db: DB, userId: string): Promise<DeleteResult
 	if (blocking.length) return { ok: false, blockingGroups: blocking.map((g) => g.name) };
 	await db.batch([
 		bumpCatalogForUser(db, userId),
-		...owned.map((g) => stmt(db, 'DELETE FROM groups WHERE id = ?1', g.id)),
-		stmt(db, 'DELETE FROM users WHERE id = ?1', userId)
+		...owned.flatMap((g) => deleteGroupStatements(db, g.id)),
+		...deletePersonStatements(db, userId)
 	]);
 	return { ok: true };
 }
@@ -169,7 +169,7 @@ export async function leaveGroup(db: DB, userId: string, groupId: string): Promi
 	if (!can(row.role, 'leave', { otherMembers: row.others })) return { ok: false, reason: 'owner_with_members' };
 	await db.batch(
 		row.others === 0
-			? [stmt(db, 'DELETE FROM groups WHERE id = ?1', groupId)]
+			? deleteGroupStatements(db, groupId)
 			: [
 					stmt(db, 'UPDATE groups SET catalog_version = catalog_version + 1 WHERE id = ?1', groupId),
 					stmt(db, 'DELETE FROM memberships WHERE group_id = ?1 AND user_id = ?2', groupId, userId)

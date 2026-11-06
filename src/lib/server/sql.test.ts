@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
-import { all, one, run, stmt } from './db.ts';
+import { all, deletePersonStatements, one, run, stmt } from './db.ts';
 import { bumpCatalogForUser, catalogVersion, loadCatalog } from './catalog.ts';
 import { backOff, BACKOFF_MS, reserveSlot } from './bgg/pace.ts';
 
@@ -60,12 +60,13 @@ describe('schema', () => {
 		expect(ann?.role).toBe('owner');
 	});
 
-	it('cascades account deletion but keeps links, unattributed', async () => {
+	it('deletes an account’s data but keeps links, unattributed, without relying on cascades', async () => {
 		const gid = await gameRow('Linked');
 		await copyRow('cat', gid);
 		await run(db, `INSERT INTO game_links (group_id, game_id, kind, url, added_by, added_at) VALUES ('g1', ?1, 'rules', 'https://example.org', 'cat', 0)`, gid);
-		await run(db, `DELETE FROM users WHERE id = 'cat'`);
+		await db.batch(deletePersonStatements(db, 'cat'));
 		expect(await all(db, `SELECT * FROM copies WHERE user_id = 'cat'`)).toEqual([]);
+		expect(await all(db, `SELECT * FROM memberships WHERE user_id = 'cat'`)).toEqual([]);
 		expect(await one<{ added_by: string | null }>(db, 'SELECT added_by FROM game_links')).toEqual({ added_by: null });
 	});
 

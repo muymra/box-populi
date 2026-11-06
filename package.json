@@ -14,12 +14,13 @@
 	"scripts": {
 		"prepare": "node scripts/ensure-local-config.ts && (svelte-kit sync || echo '')",
 		"dev": "vite dev",
-		"build": "pnpm gen --check && vite build",
+		"build": "vite build",
 		"preview": "wrangler pages dev .svelte-kit/cloudflare --port 4173",
 		"check": "pnpm gen --check && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"gen": "wrangler types --strict-vars=false",
 		"gen:themes": "node scripts/gen-themes.ts",
 		"test": "vitest --run",
+		"test:libsql": "TEST_DB=libsql vitest --run",
 		"test:watch": "vitest",
 		"db:migrate": "wrangler d1 migrations apply box-populi --local",
 		"db:seed": "node scripts/seed-demo.ts && wrangler d1 execute box-populi --local --file seed/demo.sql",
@@ -31,7 +32,11 @@
 		"fast-xml-parser": "^5.3.0"
 	},
 	"devDependencies": {
+		"@libsql/client": "^0.18.0",
 		"@sveltejs/adapter-cloudflare": "^8.0.0",
+		"@sveltejs/adapter-netlify": "^7.0.1",
+		"@sveltejs/adapter-node": "^6.0.1",
+		"@sveltejs/adapter-vercel": "^7.0.2",
 		"@sveltejs/kit": "^3.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.2.0",
 		"@types/node": "^26.6.6",

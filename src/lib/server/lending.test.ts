@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
-import { one, run } from './db.ts';
+import { deletePersonStatements, one, run } from './db.ts';
 import { lendCopy, myLoans, returnCopy } from './lending.ts';
 import { loadCatalog } from './catalog.ts';
 
@@ -60,7 +60,7 @@ describe('lending', () => {
 
 	it('clears the loan when the borrower deletes their account', async () => {
 		await lendCopy(db, 'g1', 'ada', 1, { toUserId: 'bo' });
-		await run(db, `DELETE FROM users WHERE id = 'bo'`);
+		await db.batch(deletePersonStatements(db, 'bo'));
 		expect(await loan()).toEqual({ lent_to_user_id: null, lent_to_text: null });
 	});
 });
