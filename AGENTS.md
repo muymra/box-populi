@@ -11,6 +11,7 @@ This file applies to any coding agent or LLM working here. `CLAUDE.md` imports i
 3. [TECH.md](./TECH.md): how it's built, including schema, endpoints, BGG parsing rules and tests.
 4. [DECISIONS.md](./DECISIONS.md): choices already made. Don't reopen them without Carlo.
 5. [SELF_HOSTING.md](./SELF_HOSTING.md): what a hoster does. Keep it true when config or deploy steps change.
+6. [PRODUCT.md](./PRODUCT.md): users, positioning, voice and product principles, the starting point for any UI or copy work.
 
 ## Which document owns what
 

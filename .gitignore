@@ -27,3 +27,8 @@ backup-*.sql
 Thumbs.db
 .vscode/
 .idea/
+
+# Impeccable design tool: keep the config, ignore session state
+.impeccable/live/*
+!.impeccable/live/config.json
+.impeccable/config.local.json
