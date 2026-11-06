@@ -17,7 +17,7 @@ Not secret. Secrets never go in this file.
 | Cloudflare Pages projects | `box-populi`, the public demo. A second, private project serves Carlo's groups and is deliberately not named here. Both are classic Pages projects (`--force`, see SELF_HOSTING.md). |
 | Production URL | `https://box-populi.pages.dev` (demo) |
 | D1 database name and id | `box-populi`, `082d8def-1901-4a9c-bd64-5dfb85b5cf4f`, region APAC (the demo's) |
-| Production migrations | `0001_init.sql`, `0002_game_sources.sql` and `0003_group_theme.sql`, all applied 2026-11-06 to both instances; `0004_instance_settings.sql` waits for the next deploy. Applied migrations are never edited. |
+| Production migrations | `0001_init.sql` to `0004_instance_settings.sql`, all applied 2026-11-06 to both instances. Applied migrations are never edited. |
 | BGG application | submitted 2026-11-06, awaiting review. If declined, follow TECH.md "If BGG declines the application." |
 | BGG username for the demo seed | unknown; Carlo to supply |
 
