@@ -132,6 +132,11 @@
 				<form method="POST" action={data.mine ? '?/remove' : '?/add'}>
 					<button class="btn">{data.mine ? 'Remove from my games' : data.owners.length ? 'I own this too' : 'I own this'}</button>
 				</form>
+				{#if data.mine && data.myLoan}
+					<form method="POST" action="?/returned" use:enhance>
+						<button class="btn">Mark as returned</button>
+					</form>
+				{/if}
 				{#if !data.mine}
 					<form method="POST" action="?/want" use:enhance>
 						<input type="hidden" name="on" value={data.wanted ? '0' : '1'} />
@@ -142,6 +147,29 @@
 					</form>
 				{/if}
 			</div>
+			{#if data.mine && !data.myLoan}
+				<details class="lend" open={!!form?.lendError}>
+					<summary class="link-button">Lend your copy…</summary>
+					<form method="POST" action="?/lend" class="lend-form" use:enhance>
+						{#if data.lendTo.length}
+							<label>
+								Someone in {data.group.name}
+								<select class="field" name="toUser">
+									<option value="">Pick a member</option>
+									{#each data.lendTo as m (m.id)}<option value={m.id}>{m.name}</option>{/each}
+								</select>
+							</label>
+						{/if}
+						<label>
+							<span>Or someone outside the group</span>
+							<input class="field" name="toText" maxlength="40" autocomplete="off" placeholder="e.g. my sister" />
+						</label>
+						<p class="hint">Lent to a member, it still counts as available here. Lent outside, it’s hidden when people look for available games.</p>
+						{#if form?.lendError}<p class="banner error" role="alert">{form.lendError}</p>{/if}
+						<button class="btn primary small">Mark as lent</button>
+					</form>
+				</details>
+			{/if}
 		{/if}
 	</section>
 
@@ -375,6 +403,36 @@
 	}
 	.want[aria-pressed='true'] {
 		border-color: var(--ink);
+	}
+	.lend {
+		margin-top: var(--s-3);
+	}
+	.lend summary {
+		display: inline-block;
+		min-height: 44px;
+		line-height: 44px;
+		font-weight: 650;
+		list-style: none;
+	}
+	.lend summary::-webkit-details-marker {
+		display: none;
+	}
+	.lend-form {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--s-3);
+		max-width: 26rem;
+	}
+	.lend-form label {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		align-self: stretch;
+		font-weight: 650;
+	}
+	.lend-form .hint {
+		margin: 0;
 	}
 	.links {
 		list-style: none;

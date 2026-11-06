@@ -278,6 +278,7 @@ Notes on the choices:
 - **Roles live on `memberships`.** No owner column on `groups` to drift out of sync. The partial unique index makes a second owner impossible.
 - **Ownership transfer** is one `db.batch([...])`: demote the old owner to `admin`, then promote the new one. D1 batches run as a transaction. The order matters because the index rejects two owners at once.
 - **Account deletion guard.** The cascade would delete an owner's membership and leave the group ownerless. The delete action first finds groups where the user is owner and other members remain, and refuses with a message to transfer or delete them. Groups where the user is the only member are deleted with them.
+- **Lending** lives in `src/lib/server/lending.ts`: the game page's `lend` and `returned` actions for the owner's own copy, and `returned` on `/me`. A borrower must be a member of the group the owner is lending from; anyone else is typed as a name (1 to 40 characters, the display-name rule). Every change bumps the owner's groups' `catalog_version`.
 - **Lending to a member** uses `lent_to_user_id`. That copy stays available in the group if the borrower is a member of it. `lent_to_text` means lent outside, which the availability filter hides.
 - **Games are never deleted.** They're a cache shared by every group. Stubs (`fetched_at IS NULL`) are valid rows that show name and cover.
 - **Suspension** is a timestamp rather than a status enum, so "when" comes for free and NULL means normal.
@@ -652,7 +653,7 @@ URL params: `n`, `t`, `w`, `present` (comma-separated user ids), `seen` (ids alr
 | `/g/[groupId]/pick` | Picker. | `requireRead` |
 | `/g/[groupId]/wanted` | The Wanted tab: games members want that nobody in the group owns, with who wants each and a "Me too" toggle. Wishes are set by the `want` action here, on the game page and on the add page (`on=0` removes). | `requireRead`; `want` needs `requireRole(member)` |
 | `/g/[groupId]/group` | The Group tab: invite code, members list, and the settings actions (`rename`, `newCode`, `promote`, `demote`, `transfer`, `remove`, `delete`). Members see the code and the list; co-admins and the owner see the controls their role allows. | `requireRead`; each action `requireRole(admin)` or `requireRole(owner)` |
-| `/me` | Display name, groups, new personal link, sign out of this device or everywhere, account deletion. Later: my games, loans and wishlist. | `requireUser` |
+| `/me` | Display name, groups, loans (what you lent, with "Mark as returned", and what you borrowed), new personal link, sign out of this device or everywhere, account deletion. Later: my games and wishlist. | `requireUser` |
 | `GET /api/g/[groupId]/catalog` | Catalog payload with ETag. | `requireRead` |
 | `GET /api/bgg/search` | BGG search proxy. | `requireUser` |
 | `POST /api/bgg/import`, `/api/bgg/import/confirm`, `/api/bgg/hydrate` | Import flow. | `requireUser` |

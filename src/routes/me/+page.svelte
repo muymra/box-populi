@@ -39,6 +39,24 @@
 	{/if}
 	{#if form?.leaveError}<p class="banner error" role="alert">{form.leaveError}</p>{/if}
 
+	{#if data.loans.lent.length || data.loans.borrowed.length}
+		<h2>Loans</h2>
+		<ul class="loans">
+			{#each data.loans.lent as l (l.gameId)}
+				<li>
+					<span><strong>{l.game}</strong> <span class="muted">is with {l.who}</span></span>
+					<form method="POST" action="?/returned">
+						<input type="hidden" name="gameId" value={l.gameId} />
+						<button class="link-button">Mark as returned</button>
+					</form>
+				</li>
+			{/each}
+			{#each data.loans.borrowed as l (l.gameId + l.who)}
+				<li><span><strong>{l.game}</strong> <span class="muted">borrowed from {l.who}</span></span></li>
+			{/each}
+		</ul>
+	{/if}
+
 	<h2 id="personal-link">Personal link</h2>
 	{#if data.newLink}
 		<PersonalLink link={data.newLink} />
@@ -104,5 +122,23 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--s-2);
+	}
+	.loans {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--s-2);
+	}
+	.loans li {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--s-1) var(--s-3);
+	}
+	.loans .link-button {
+		min-height: 44px;
 	}
 </style>

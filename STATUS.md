@@ -2,7 +2,7 @@
 
 Last updated 2026-11-06 (Friday night). Redesigned as the cube shelf (DECISIONS D26, DESIGN.md). Runs locally: create a group, join with a code, personal links across devices, the account page, adding games (BGG search on test data, or by hand), removing your copy, and the catalog, game pages and picker. 106 tests pass. Nothing is deployed, and no Cloudflare or BGG credentials exist yet.
 
-**Next up:** lending (Sunday 18), then polish (20). The demo group on production (16) and the self-hosting dry run (21) need Carlo's Cloudflare login. The live BGG client is written and tested against a fake server, but has never talked to BGG: that waits for the token.
+**Next up:** polish (Sunday 20): empty states, `/privacy` from instance settings, README screenshots. The demo group on production (16) and the self-hosting dry run (21) need Carlo's Cloudflare login. The live BGG client is written and tested against a fake server, but has never talked to BGG: that waits for the token.
 
 Agents: tick items as they're done, add a line to the session log at the bottom, and move assumptions to "Verified" with a date and source when you confirm them.
 
@@ -53,7 +53,7 @@ Checkpoint: the app answers "who has X" and "what fits 5 players in under an hou
 15. [x] `/admin`: key sign-in, totals, groups table, suspend, delete, log (`admin.ts`, `/admin/login`, `/admin`). TECH: "Instance administration."
 16. [ ] Demo group live on production at `/demo`.
 17. [x] Wishlist and the Wanted view (`wishlist.ts`, the Wanted tab, `want` actions on the game page, add page and Wanted page).
-18. [ ] Lending.
+18. [x] Lending (`lending.ts`, lend and return on the game page, a loans list on `/me`).
 19. [x] Account page: display name, new personal link, sign out of this device or everywhere, leave a group, account deletion with the owner guard.
 20. [ ] Polish: empty states, `/privacy` from instance settings, README screenshots.
 21. [ ] Follow SELF_HOSTING.md from scratch into a second Cloudflare Pages project and fix every step that's wrong.
@@ -119,3 +119,4 @@ From memory when the docs were written. Check each before relying on it, then mo
 - 2026-11-06 (night): Wishlist and the Wanted tab. Members want a game from its page ("I want this"), from a search result (gift button) or on Wanted ("Me too"). Wanted lists games nobody in the group owns, most wanted first, with the wanters' colour chips. Wanted is a fifth tab; from 760 to 1099px the top bar drops tab icons so five fit (DESIGN.md updated). Hand-entered games can't be wished for by id unless the group can already see them. 3 new tests. Checked over HTTP (search, game page, Wanted page, refused hand-entered id, owned games kept off Wanted, removing a wish) and visually: Wanted and the game page on a phone in light mode, search results on a phone in dark mode, the top bar at 760 and 1100px.
 - 2026-11-06 (night): Closed an id-guessing hole in adding copies: the add page and game page accepted any game id, so a hand-entered game from another group could be put on your shelf and its name shown in your group. Both add paths and wishes now share `gameUsableInGroup` (BGG games, your own entries, or games the group can already see). 1 new test; checked over HTTP that both add paths refuse a demo game's id and still accept a BGG id.
 - 2026-11-06 (night): BGG is off until a token exists (D28): `BGG_MODE` unset means `live` with `BGG_TOKEN`, `off` without (fixtures in dev), so a new instance deploys without a BGG application. `wrangler.example.jsonc` keeps `BGG_MODE` as an empty string so a fresh clone's `pnpm gen --check` still matches the committed types. SELF_HOSTING and TECH's config table updated. Recorded more hosting targets as stretch (D29): Docker and Workers, later Vercel and Netlify. 1 new test.
+- 2026-11-06 (night): Lending. On a game page the owner lends their copy to a member of that group (picked from a list) or to someone outside (typed name), and marks it returned. `/me` lists what you lent, with "Mark as returned", and what you borrowed. A borrower who deletes their account clears the loan. 5 new tests. Checked over HTTP (lend to a member and outside, refusals, catalog `lentToUserId`/`lentOut`, both `/me` lists, return from `/me`) and visually at phone width.

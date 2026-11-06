@@ -3,6 +3,7 @@ import { requireRead, requireRole } from '#lib/server/authz.ts';
 import { addCopy, gameUsableInGroup, removeCopy } from '#lib/server/games.ts';
 import { addLink, canDeleteLink, deleteLink, parseLink } from '#lib/server/links.ts';
 import { addWish, removeWish } from '#lib/server/wishlist.ts';
+import { lendCopy, returnCopy } from '#lib/server/lending.ts';
 import { linkHost } from '#lib/link-kinds.ts';
 import { loadMembers } from '#lib/server/catalog.ts';
 import { all, jsonArray, one } from '#lib/server/db.ts';
@@ -114,12 +115,23 @@ export const load: PageServerLoad = async (event) => {
 	const me = event.locals.user;
 	const canEdit = access.role != null && !access.readonly;
 	const actor = me && access.role ? { id: me.id, role: access.role } : null;
-	const mine = me ? (await one(db, 'SELECT 1 AS x FROM copies WHERE user_id = ?1 AND game_id = ?2', me.id, gameId)) != null : false;
+	const myCopy = me
+		? await one<{ lent_to_user_id: string | null; lent_to_text: string | null }>(
+				db,
+				'SELECT lent_to_user_id, lent_to_text FROM copies WHERE user_id = ?1 AND game_id = ?2',
+				me.id,
+				gameId
+			)
+		: null;
+	const mine = myCopy != null;
 	const wanted = me ? wishers.some((w) => w.id === me.id) : false;
 
 	return {
 		mine,
 		wanted,
+		myLoan: myCopy && (myCopy.lent_to_user_id || myCopy.lent_to_text) ? { toUserId: myCopy.lent_to_user_id, toText: myCopy.lent_to_text } : null,
+		// Borrowers to pick from: this group's other members, most recently active first.
+		lendTo: me ? members.filter((m) => m.id !== me.id).map((m) => ({ id: m.id, name: m.name })) : [],
 		canEdit,
 		game: {
 			id: game.id,
@@ -144,6 +156,7 @@ export const load: PageServerLoad = async (event) => {
 		},
 		owners: owners.map((o) => ({
 			name: o.name,
+			isMe: o.user_id === me?.id,
 			colorIndex: colorOf.get(o.user_id) ?? 0,
 			note: o.note,
 			status: o.lent_to_text
@@ -193,6 +206,25 @@ export const actions: Actions = {
 		await removeCopy(db, event.locals.user!.id, gameIdParam(event.params.gameId));
 		// If nobody else in the group owns it, the game page would now 404, so go back to the catalog.
 		redirect(303, `/g/${event.params.groupId}`);
+	},
+
+	lend: async (event) => {
+		const db = getDb();
+		const { groupId } = event.params;
+		await requireRole(event, db, groupId, 'member');
+		const form = await event.request.formData();
+		const result = await lendCopy(db, groupId, event.locals.user!.id, gameIdParam(event.params.gameId), {
+			toUserId: String(form.get('toUser') ?? '') || null,
+			toText: form.get('toText')
+		});
+		return result.ok ? { lent: true } : fail(400, { lendError: result.error });
+	},
+
+	returned: async (event) => {
+		const db = getDb();
+		await requireRole(event, db, event.params.groupId, 'member');
+		await returnCopy(db, event.locals.user!.id, gameIdParam(event.params.gameId));
+		return { returned: true };
 	},
 
 	want: async (event) => {

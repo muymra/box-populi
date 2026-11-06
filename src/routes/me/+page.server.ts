@@ -13,6 +13,7 @@ import {
 	signOutEverywhere
 } from '#lib/server/identity.ts';
 import { clearSessionCookie, SECRET_PAGE_HEADERS, setNewLinkCookie, takeNewLink } from '#lib/server/cookies.ts';
+import { myLoans, returnCopy } from '#lib/server/lending.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
@@ -22,11 +23,19 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		name: user.name,
 		groups: await listMyGroups(getDb(), user.id),
+		loans: await myLoans(getDb(), user.id),
 		newLink: token ? `${event.url.origin}/key/${token}` : null
 	};
 };
 
 export const actions: Actions = {
+	returned: async (event) => {
+		const user = requireUser(event);
+		const gameId = Number((await event.request.formData()).get('gameId'));
+		if (Number.isInteger(gameId) && gameId > 0) await returnCopy(getDb(), user.id, gameId);
+		return { returned: true };
+	},
+
 	rename: async (event) => {
 		const user = requireUser(event);
 		const raw = String((await event.request.formData()).get('displayName') ?? '');
