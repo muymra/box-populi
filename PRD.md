@@ -98,6 +98,7 @@ Never cut: import, the picker, the demo group, the phone layout, and the instanc
 - **Passkeys** as an optional second way to sign in on a new device, for people who'd rather not keep a link.
 - **CSV export** of the group catalog: game name, year, BGG link and owners. No BGG descriptions or statistics, so the export can't work as a copy of BGG's data.
 - **Installable PWA** so it sits on a phone home screen.
+- **Themes and branding.** Preset colour themes beside the default cube shelf, each with its light and dark variant: Catppuccin (Latte and Mocha), Tokyo Night (Day and Night) and Gruvbox (light and dark). A custom theme where the hoster sets the colour tokens, and an instance logo in place of the cube mark. Every theme keeps the eight player colours distinguishable and readable on its surfaces, maps marigold's job (state only) to its own accent, and never recolours the BGG logo or credit. Who picks starts as: the hoster sets the instance default and logo, and each person can switch preset on their device. About 3 hours for the presets, 2 more for the custom theme and logo.
 - **Public-sources mode** for hosters who don't want to apply to BGG: titles, years and player counts from Wikidata, members fill in the rest by hand. The same plan as TECH.md "If BGG declines the application", offered as a setting (D27). About a day.
 
 ### Not doing
