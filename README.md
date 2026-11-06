@@ -4,7 +4,19 @@ A shared board game library for your group. Create a group, share its five-chara
 
 Open source and self-hosted: run your own instance on a free Cloudflare account. See [SELF_HOSTING.md](./SELF_HOSTING.md).
 
-**Status:** planned, not built yet. Progress is in [STATUS.md](./STATUS.md).
+**Status:** in progress. The read-only side runs locally (demo catalog, game pages, picker); sign-in and adding games are next. Progress is in [STATUS.md](./STATUS.md).
+
+## Run it locally
+
+Needs Node 22.17+ and pnpm.
+
+```sh
+pnpm install      # also creates wrangler.jsonc and .dev.vars from the examples
+pnpm db:migrate   # local D1 database
+pnpm db:seed      # demo group with invented games
+pnpm dev          # open http://localhost:5173/demo
+pnpm test
+```
 
 ## Planned features
 

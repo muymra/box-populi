@@ -17,7 +17,9 @@ The code goes on GitHub. Each hoster deploys to their own Cloudflare account wit
 **Why:** free tier, no server, and Carlo asked for pages.dev.
 **Revisit if:** cron jobs or the rate limiting binding become necessary. Cloudflare pushes Workers with static assets; moving means swapping the adapter and config file.
 
-## D04. SvelteKit 2, Svelte 5, raw SQL (2026-11-06)
+## D04. SvelteKit, Svelte 5, raw SQL (2026-11-06)
+
+Planned on SvelteKit 2; built on SvelteKit 3, which `sv create` scaffolded because it had been out for a month (D24).
 
 **Why:** form actions and server routes in one project, small bundles for phones, about ten tables that don't justify an ORM.
 
@@ -55,9 +57,11 @@ Mechanics, categories, alternate names and expansion links are columns on `games
 Plus a generated YouTube search link per game.
 **Why:** BGG's XML API exposes neither files nor videos.
 
-## D12. BGG images are hotlinked (2026-11-06)
+## D12. BGG images are linked, never copied (2026-11-06)
 
-**Why:** no storage, no re-hosting question.
+Thumbnails in lists, full image only on the game page, lazy-loaded, with a placeholder when an image fails. Details in TECH.md under "Images."
+**Why:** no BGG guidance on outside display was found either way. Uploaders keep the rights to their images, so copying them is the riskier choice, and linking lets BGG refuse. Load is small: a few groups, CDN-served thumbnails, cached by browsers. The BGG application discloses it.
+**Revisit if:** BGG objects or publishes guidance. Then images go behind a setting, off by default.
 
 ## D13. Import creates stubs, the client drives hydration (2026-11-06)
 
@@ -101,3 +105,27 @@ Committed fixtures are hand-written with invented games; real responses and seed
 
 Public repository at `https://github.com/muymra/box-populi`.
 **Why:** simplest terms for a portfolio project others may self-host. AGPL was the alternative, which would require anyone running a modified public instance to publish their changes. The code license doesn't change BGG's data terms; BGG data stays non-commercial on every instance.
+
+## D23. Built to BGG's terms (2026-11-06)
+
+A review against BGG's API terms, commercial-use page and API wiki produced these rules:
+- Requests are spaced at least two seconds apart across the instance through a D1-backed pacer, and the whole instance backs off on 429, 500 or 503.
+- Player-count data comes from BGG's own poll summary.
+- Weight is shown at BGG's precision.
+- A footer on every page credits BGG and disclaims affiliation.
+- There is no public API.
+- The CSV export carries no BGG statistics.
+- No ads, payments or donation links.
+
+TECH.md "Access and terms" maps each rule to the plan.
+**Why:** an application that breaks BGG's terms risks the token, and every hoster inherits the code's behavior.
+**Revisit if:** BGG publishes concrete rate limits or attribution specs.
+
+## D24. Toolchain as built: SvelteKit 3, pnpm, wrangler.jsonc, node:sqlite (2026-11-06)
+
+- **SvelteKit 3.1 and adapter-cloudflare 8**, the current versions when the project was scaffolded. Staying on 2.x would have meant starting a new project on the previous major.
+- **pnpm.** On Carlo's WSL machine, `npm` resolves to the Windows install and fails on Linux paths; the Linux pnpm works.
+- **`wrangler.jsonc`** rather than TOML, because that's what the scaffold and Cloudflare's current docs use. Gitignored, copied from `wrangler.example.jsonc` on install.
+- **`node:sqlite` for SQL tests** instead of `better-sqlite3`. It's built into Node, so there's no native module to compile.
+- **Node type stripping for scripts** instead of `tsx`.
+**Revisit if:** a contributor's Node lacks `node:sqlite` (it needs 22.13+), or SvelteKit 3 turns out to have gaps for Cloudflare Pages.

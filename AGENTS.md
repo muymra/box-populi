@@ -26,34 +26,42 @@ When code and TECH.md disagree, fix one of them in the same change and say which
 
 ## Commands
 
-Planned; update this section when the scaffold exists and the commands are confirmed.
+Confirmed working on 2026-11-06. Use pnpm, not npm (see the WSL trap below).
 
 ```sh
-npm install
-cp .dev.vars.example .dev.vars              # local secrets; BGG_MODE=fake until a token exists
-cp wrangler.example.toml wrangler.toml      # fill in database_id
-npx wrangler d1 migrations apply box-populi --local
-npm run dev                                 # http://localhost:5173
-npm test                                    # Vitest
-npm run check                               # svelte-check
-npx wrangler d1 migrations create box-populi <name>   # new migration file
-npx tsx scripts/seed-demo.ts --bgg-user <name>        # writes seed/demo.sql
-npx wrangler d1 execute box-populi --local --file seed/demo.sql
-npm run build && npx wrangler pages deploy
+pnpm install          # also creates wrangler.jsonc and .dev.vars from the examples if missing
+pnpm db:migrate       # apply migrations to the local D1 database (.wrangler/)
+pnpm db:seed          # generate seed/demo.sql (invented games) and load it locally
+pnpm dev              # http://localhost:5173; the demo group is at /demo
+pnpm test             # Vitest, once
+pnpm check            # wrangler types check + svelte-check
+pnpm gen              # regenerate worker-configuration.d.ts after changing wrangler config keys
+pnpm exec wrangler d1 migrations create box-populi <name>   # new migration file
+pnpm deploy           # build and `wrangler pages deploy` (needs a Cloudflare login)
 ```
+
+Restart `pnpm dev` after editing `.dev.vars` or `wrangler.jsonc`; the instance config is read once per process.
 
 ## Rules
 
 - **Scope.** Build in the order STATUS.md lists. Nothing from the PRD's stretch list before every Sunday item is done or cut. When time runs short, cut in the PRD's cut order and mark the items "cut" in STATUS.md.
 - **Authorization.** Every group load function, action and endpoint calls `requireRead` or `requireRole` from `src/lib/server/authz.ts`. Role rules go through `can()` in `permissions.ts`, with the target's role read from the database. Instance admin status grants nothing inside groups.
 - **Privacy in `/admin`.** Admin queries never select member lists, emails, join codes, collections, links or wishlists. Changing that needs a DECISIONS.md entry approved by Carlo.
-- **BGG.** Call BGG only from server code, through `getBggClient()`. Respect `BGG_MODE=off` everywhere. Never commit a token. Never commit real BGG responses or generated seed data: real fixtures go in `src/lib/server/bgg/fixtures/local/`, which is gitignored. Never send BGG data to an LLM or any AI service; BGG's terms prohibit AI training on it. Never let users edit a BGG-sourced game.
+- **BGG.** Call BGG only from server code, through `getBggClient()`. Respect `BGG_MODE=off` everywhere. Never commit a token. Never commit real BGG responses or generated seed data: real fixtures go in `src/lib/server/bgg/fixtures/local/`, which is gitignored. Keep real BGG data out of anything that could become AI training data (the public repo, issues, prompts to services that train on inputs); BGG's terms prohibit AI training on it. Never let users edit a BGG-sourced game.
+- **BGG terms in code.** These are the BGG rules code can break; TECH.md "Access and terms" has the full list.
+  - Every BGG request goes through the client's instance-wide pacer.
+  - Every page renders the `BggCredit` footer.
+  - Weight and player counts are shown as BGG gives them.
+  - No ads, payments, donation or sponsor links anywhere in the app.
+  - No endpoint meant for other programs, and no CORS headers on anything that returns BGG data.
+  - Breaking any of these needs Carlo's approval and a DECISIONS.md entry.
 - **Self-hosting.** No value specific to Carlo's deployment in code or committed config: no project names, ids, URLs or emails. Everything instance-specific comes from the variables in TECH.md's config table.
 - **Migrations.** Never edit a migration that has been applied anywhere. Add a new one.
 - **SQL.** Bind every value. D1 binds by position (`?1` or `?`), not by name.
 - **HTML.** No `{@html}` anywhere.
-- **Dependencies.** The approved list is in TECH.md's decisions table plus `better-sqlite3` and `tsx` for tests and scripts. Adding anything else needs a one-line DECISIONS.md entry saying why.
-- **Secrets.** `.dev.vars` and `wrangler.toml` are gitignored. Never write secret values into any file, log or doc.
+- **Dependencies.** What's in `package.json` plus `arctic` (for sign-in, not yet added). Adding anything else needs a one-line DECISIONS.md entry saying why. Scripts run on Node's type stripping (`node scripts/x.ts`), so they don't need `tsx`; tests use `node:sqlite`, so they don't need `better-sqlite3`.
+- **Runtime access.** Only `src/lib/server/platform.ts` imports `cloudflare:workers`. Load functions call `getDb()` and pass `db` down; library code takes `db` and `config` as arguments.
+- **Secrets.** `.dev.vars` and `wrangler.jsonc` are gitignored. Never write secret values into any file, log or doc.
 - **Open questions.** If the PRD lists an open question with a starting default, build the default. Don't block on it, and don't settle it yourself.
 
 ## Traps from outdated training data
@@ -61,17 +69,28 @@ npm run build && npx wrangler pages deploy
 Many models learned older versions of these tools. Check yourself against this list.
 
 - **Svelte 5 runes.** Use `$state`, `$derived`, `$effect` and `let { x } = $props()`. Event handlers are attributes (`onclick`), not `on:click`. No `export let`.
-- **SvelteKit 2.** `redirect()` and `error()` throw by themselves; don't write `throw redirect(...)`. Read bindings and secrets from `event.platform.env`, not `process.env`.
+- **SvelteKit 3 (released 2026-10-01), not 2.** Most models know only 2. The differences that matter here:
+  - No `svelte.config.js`; kit options go in the `sveltekit()` plugin in `vite.config.ts`.
+  - `$lib` is gone. Import from `#lib/...` (package.json `imports`) and include the file extension: `#lib/server/db.ts`, `#lib/components/GameCard.svelte`.
+  - `$app/environment` became `$app/env`. `$app/stores` is gone; use `$app/state` (`page.url`, no `$`).
+  - Bindings come from `cloudflare:workers`, not `event.platform`.
+  - `error(status, 'message')` takes a string. `redirect()` and `error()` throw by themselves; don't write `throw`. Use `Response.json()`, not `json()`.
+  - Hook types come from `@sveltejs/kit/hooks`. `goto` options are `replace` and `reset: false` (formerly `replaceState`, `keepFocus`, `noScroll`).
+  - Any directory named `server` is server-only.
+  - `+page.server.ts` may only export SvelteKit's own names (`load`, `actions`, ...). Put helpers in `#lib`.
+  - The migration guide: https://svelte.dev/docs/kit/migrating-to-sveltekit-3
+- **WSL on Carlo's machine.** `npm` and `npx` on the PATH are the Windows ones under `/mnt/c` and fail on Linux paths. Use `/usr/bin/pnpm` (`pnpm exec`, `pnpm dlx`). The Linux headless Chrome lacks system libraries; for screenshots use `/mnt/c/Program Files/Google/Chrome/Application/chrome.exe --headless=new --screenshot='C:\Users\Public\x.png' http://localhost:5173/...`, which reaches WSL's localhost.
 - **Lucia is deprecated.** Don't install it. Sessions are hand-written per TECH.md, with `arctic` for OAuth.
 - **Workers runtime.** No file system (fixtures load through `import.meta.glob(..., { query: '?raw' })`), no `DOMParser` (use `fast-xml-parser`). Avoid Node built-ins.
-- **D1.** No `BEGIN`/`COMMIT`; `db.batch()` is the transaction. At most 100 bound parameters per statement. Foreign keys are enforced by default; the `better-sqlite3` test adapter must run `PRAGMA foreign_keys = ON` to match.
+- **D1.** No `BEGIN`/`COMMIT`; `db.batch()` is the transaction. At most 100 bound parameters per statement. Foreign keys are enforced by default; the test adapter in `src/lib/server/testing/d1.ts` turns them on to match. `INSERT OR IGNORE` silently skips NOT NULL violations, so don't use it to paper over errors.
 - **Pages Functions.** No cron triggers, so all cleanup is lazy. 50 subrequests per request on the free plan. Preview deployments can't complete Google sign-in.
-- **BGG XML API.** Requires a bearer token. Search results have no images. `thing` takes up to 20 ids. The collection endpoint answers 202 while it's building. Zero means unknown. Descriptions are double-encoded. Player polls have "N+" rows. The parsing rules are in TECH.md.
+- **BGG XML API.** Requires a bearer token. Throttling can show up as 500 or 503, not only 429. Search results have no images. `thing` takes up to 20 ids. The collection endpoint answers 202 while it's building. Zero means unknown. Descriptions are double-encoded. Player polls have "N+" rows. The parsing rules are in TECH.md.
 - **JavaScript bit shifts are 32-bit.** The player masks cap at 12 for that reason.
 
 ## Done means
 
-- `npm test` and `npm run check` pass.
+- `pnpm test` and `pnpm check` pass.
+- For UI changes, the page was opened in `pnpm dev` and looked at, not only type-checked.
 - New pure logic has tests. Permission changes update the `permissions.ts` table test.
 - Docs match the code: the PRD if behavior changed, TECH.md if the implementation differs, DECISIONS.md if a choice was made, SELF_HOSTING.md if config or deploy steps changed.
 - STATUS.md has the checklist item ticked and one line in the session log: date, what changed, anything left half-done.

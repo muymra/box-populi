@@ -96,12 +96,12 @@ Never cut: import, the picker, the demo group, the phone layout, and the instanc
 - **Game night.** The owner picks a date; members say yes or no; each member marks which copies they'll bring. The picker's "who's here" covers the evening itself, so this is about planning ahead.
 - **Play log.** Date, game, players, winner. Feeds a "not played in a while" filter.
 - **Discord sign-in.** A natural fit for this audience. The auth tables already allow a second provider.
-- **CSV export** of the group catalog.
+- **CSV export** of the group catalog: game name, year, BGG link and owners. No BGG descriptions or statistics, so the export can't work as a copy of BGG's data.
 - **Installable PWA** so it sits on a phone home screen.
 
 ### Not doing
 
-Ratings and reviews, a trading marketplace, chat, notifications, a native app, cross-group discovery, hosting rulebooks or images ourselves, and anything that needs payment. Rules content is linked, never copied. No hosted service: Carlo's instance serves his own circle and the demo, not the public. No links between instances, no one-click deploy button, no hosting targets besides Cloudflare.
+Ratings and reviews, a trading marketplace, chat, notifications, a native app, cross-group discovery, hosting rulebooks or images ourselves, and anything that needs payment. Rules content is linked, never copied. No hosted service: Carlo's instance serves his own circle and the demo, not the public. No links between instances, no one-click deploy button, no hosting targets besides Cloudflare. No public API, ads, donations or sponsorship links: BGG's terms prohibit services that hand its data to other applications, and count any payment or ad as commercial use.
 
 ## Feature detail
 
@@ -172,13 +172,13 @@ Rules that follow from the table:
 | Availability | Hide games that are lent outside the group. On by default. A copy lent to a group member counts as available. |
 | Expansions | Hidden by default. |
 
-Games with unknown data (hand-entered, or details still loading) are never filtered out by a field they lack. They show with an "incomplete info" marker instead.
+Games with unknown data (hand-entered, or details still loading) are never filtered out by a field they lack. They show with an "incomplete info" marker instead. The one exception is the "best at N" toggle, which by definition only matches games that have BGG vote data.
 
 On a phone, the players and time controls sit above the results; everything else is behind a "More filters" sheet. Sorting: title, weight, play time, recently added, most owned. Each result shows cover, title, player range, time range, weight bucket, and up to three owner avatars with "+N" for the rest. Results render in pages of about 60 as you scroll, and the result count is always shown, so 1,500 games don't freeze a phone. Filter state lives in the URL, so a filtered view can be shared in chat. Filtering happens on the device once the catalog has loaded, so changing a filter is instant.
 
 ### Game page
 
-Cover image, title and year, description (collapsed past a few lines), player range with best-at and recommended counts, play time range, weight, mechanics and themes as chips, owners with their notes and loan status, wishlisters, the links section, and a "Powered by BGG" attribution linking to the BGG page.
+Cover image, title and year, description (collapsed past a few lines), player range with BGG voters' best and recommended counts, play time range, BGG weight as BGG shows it (for example "2.31 / 5") with the light/medium/heavy label beside it, mechanics and themes as chips, owners with their notes and loan status, wishlisters, the links section, and a "View on BoardGameGeek" link. BGG's terms forbid modifying its data, so BGG fields always appear as BGG gives them.
 
 A base game's page lists the expansions owned in the group. An expansion's page links to its base game.
 
@@ -214,6 +214,7 @@ On Carlo's instance, `/demo` shows a read-only group seeded from his BGG collect
 
 - The repository holds everything needed to run an instance: code, migrations, example config, and SELF_HOSTING.md.
 - A hoster needs a free Cloudflare account, a Google Cloud project for sign-in, and optionally their own BGG application for search and import. No instance depends on Carlo's, and no secrets or ids from Carlo's deployment are in the repo.
+- BGG's terms make an instance commercial if it takes any payment or donation, shows ads, or supports a business or event such as a game store, café or convention, even a non-profit one. Those hosters need BGG's commercial license, or must run with BGG switched off.
 - Instance settings: name, contact address, admin emails, whether anyone or only admins can create groups, and limits on groups per user and members per group.
 - Upgrading is pull, apply migrations, deploy. SELF_HOSTING.md has the commands.
 - The privacy page is generated from the instance settings, so it names the hoster's instance and contact, not Carlo's.
@@ -247,6 +248,8 @@ Hosters need to deal with abuse and keep the instance within its free tier witho
 - A catalog of 1,500 games loads in under two seconds on a phone over 4G, and filters without a visible delay after that.
 - BGG being slow or down never breaks browsing. Everything shown comes from the app's own database.
 - Empty states say what to do next, for example "No games yet. Import your BGG collection."
+- Every page credits BoardGameGeek in the footer with the "Powered by BGG" logo and says Box Populi isn't affiliated with BGG.
+- The app is gentle with BGG: requests are spaced at least two seconds apart across the instance, so a big import takes a few minutes rather than seconds, and the progress bar says so.
 
 ## Open questions
 
