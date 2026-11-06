@@ -114,6 +114,7 @@ CREATE TABLE rate_events (
   at       INTEGER NOT NULL
 );
 CREATE INDEX rate_events_lookup ON rate_events(subject, kind, at);
+CREATE INDEX rate_events_at ON rate_events(at);
 
 -- instance-wide BGG request pacing (exactly one row)
 CREATE TABLE bgg_pace (

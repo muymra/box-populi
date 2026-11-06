@@ -2,7 +2,7 @@
 
 Last updated 2026-11-06 (Friday night). Redesigned as the cube shelf (DECISIONS D26, DESIGN.md). Runs locally: create a group, join with a code, personal links across devices, the account page, adding games (BGG search on test data, or by hand), removing your copy, and the catalog, game pages and picker. 106 tests pass. Nothing is deployed, and no Cloudflare or BGG credentials exist yet.
 
-**Next up:** polish (Sunday 20): empty states, `/privacy` from instance settings, README screenshots. The demo group on production (16) and the self-hosting dry run (21) need Carlo's Cloudflare login. The live BGG client is written and tested against a fake server, but has never talked to BGG: that waits for the token.
+**Next up:** the two items that need Carlo's Cloudflare login: the demo group on production (Sunday 16) and following SELF_HOSTING.md from scratch into a second project (21). Every other weekend item is done. After that, the PRD's stretch list. The live BGG client is written and tested against a fake server, but has never talked to BGG: that waits for the token.
 
 Agents: tick items as they're done, add a line to the session log at the bottom, and move assumptions to "Verified" with a date and source when you confirm them.
 
@@ -55,7 +55,7 @@ Checkpoint: the app answers "who has X" and "what fits 5 players in under an hou
 17. [x] Wishlist and the Wanted view (`wishlist.ts`, the Wanted tab, `want` actions on the game page, add page and Wanted page).
 18. [x] Lending (`lending.ts`, lend and return on the game page, a loans list on `/me`).
 19. [x] Account page: display name, new personal link, sign out of this device or everywhere, leave a group, account deletion with the owner guard.
-20. [ ] Polish: empty states, `/privacy` from instance settings, README screenshots.
+20. [x] Polish: empty states, `/privacy` from instance settings, README screenshots (`docs/screenshots/`).
 21. [ ] Follow SELF_HOSTING.md from scratch into a second Cloudflare Pages project and fix every step that's wrong.
 
 If time runs out, cut in the PRD's cut order and mark items "cut" here.
@@ -120,3 +120,4 @@ From memory when the docs were written. Check each before relying on it, then mo
 - 2026-11-06 (night): Closed an id-guessing hole in adding copies: the add page and game page accepted any game id, so a hand-entered game from another group could be put on your shelf and its name shown in your group. Both add paths and wishes now share `gameUsableInGroup` (BGG games, your own entries, or games the group can already see). 1 new test; checked over HTTP that both add paths refuse a demo game's id and still accept a BGG id.
 - 2026-11-06 (night): BGG is off until a token exists (D28): `BGG_MODE` unset means `live` with `BGG_TOKEN`, `off` without (fixtures in dev), so a new instance deploys without a BGG application. `wrangler.example.jsonc` keeps `BGG_MODE` as an empty string so a fresh clone's `pnpm gen --check` still matches the committed types. SELF_HOSTING and TECH's config table updated. Recorded more hosting targets as stretch (D29): Docker and Workers, later Vercel and Netlify. 1 new test.
 - 2026-11-06 (night): Lending. On a game page the owner lends their copy to a member of that group (picked from a list) or to someone outside (typed name), and marks it returned. `/me` lists what you lent, with "Mark as returned", and what you borrowed. A borrower who deletes their account clears the loan. 5 new tests. Checked over HTTP (lend to a member and outside, refusals, catalog `lentToUserId`/`lentOut`, both `/me` lists, return from `/me`) and visually at phone width.
+- 2026-11-06 (night): Polish. The privacy page claimed rate-limit addresses were kept at most a day, but old rows were only deleted when the same address hit the same limit again; every write now also deletes rows older than the longest window (24 hours), with a new `rate_events(at)` index in `0001_init.sql`. The page no longer mentions member pictures (there are none), lists loans and wishlists among what members see, and drops the BGG paragraphs when BGG is off. The picker explains an empty shelf and a no-match setup. The demo seed made fractional play times ("45–67.5 min"); it rounds to 5 minutes now. README: four screenshots of the demo group in `docs/screenshots/`, a features list instead of a plan, and BGG described as optional. 1 new test.

@@ -63,7 +63,7 @@ while (games.length < total) {
 	const best = sample(range, Math.min(range.length, rand(1, 2)));
 	const rec = [...new Set([...best, ...sample(range, Math.min(range.length, rand(1, 3)))])];
 	const minPlaytime = choice([15, 20, 30, 30, 45, 60, 60, 90, 120]);
-	const maxPlaytime = minPlaytime * choice([1, 1, 1.5, 2]);
+	const maxPlaytime = Math.round((minPlaytime * choice([1, 1, 1.5, 2])) / 5) * 5; // BGG play times are whole minutes
 	const weight = Math.round((1 + rng() ** 1.4 * 3.6) * 10000) / 10000;
 
 	const base = {

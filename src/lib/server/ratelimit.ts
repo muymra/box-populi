@@ -15,6 +15,9 @@ export const LIMITS = {
 
 export const ipSubject = (ip: string) => `ip:${ip}`;
 
+/** The longest window above. Rows older than this are deleted on every write, whoever they belong to. */
+export const KEEP_MS = Math.max(...Object.values(LIMITS).map((l) => l.windowMs));
+
 export async function isLimited(db: DB, subject: string, limit: Limit, now: number): Promise<boolean> {
 	const row = await one<{ n: number }>(
 		db,
@@ -29,6 +32,8 @@ export async function isLimited(db: DB, subject: string, limit: Limit, now: numb
 export async function recordEvent(db: DB, subject: string, limit: Limit, now: number): Promise<void> {
 	await db.batch([
 		stmt(db, 'DELETE FROM rate_events WHERE subject = ?1 AND kind = ?2 AND at <= ?3', subject, limit.kind, now - limit.windowMs),
+		// Keeps the privacy page's "about a day" true for addresses that never come back.
+		stmt(db, 'DELETE FROM rate_events WHERE at <= ?1', now - KEEP_MS),
 		stmt(db, 'INSERT INTO rate_events (subject, kind, at) VALUES (?1, ?2, ?3)', subject, limit.kind, now)
 	]);
 }

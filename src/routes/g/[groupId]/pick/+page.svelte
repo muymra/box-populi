@@ -132,6 +132,11 @@
 					<Dices size={20} aria-hidden="true" /> Pull three games
 				</button>
 				<p class="muted num">{candidates.length} {candidates.length === 1 ? 'game fits' : 'games fit'}</p>
+				{#if payload.games.length === 0}
+					<p class="hint">The shelf is empty, so there’s nothing to pull yet.{#if data.role && !data.readonly}{' '}<a href="/g/{data.group.id}/add">Add your games</a>{/if}</p>
+				{:else if candidates.length === 0}
+					<p class="hint">Nothing fits. Allow more time, raise the complexity, or change who’s here.</p>
+				{/if}
 			</div>
 		</section>
 

@@ -16,7 +16,7 @@ import {
 	signOutEverywhere
 } from './identity.ts';
 import { createGroup, findGroupByCode, joinGroup, joinRefusal, ownedGroupCount, touchLastSeen } from './groups.ts';
-import { isLimited, LIMITS, recordEvent } from './ratelimit.ts';
+import { isLimited, KEEP_MS, LIMITS, recordEvent } from './ratelimit.ts';
 
 let db: ReturnType<typeof createTestDb>;
 const NOW = 1_800_000_000_000;
@@ -179,5 +179,12 @@ describe('rate limits', () => {
 		expect(await isLimited(db, 'ip:1.2.3.4', limit, later)).toBe(false);
 		await recordEvent(db, 'ip:1.2.3.4', limit, later);
 		expect(await all(db, 'SELECT * FROM rate_events')).toHaveLength(1);
+	});
+
+	it('deletes rows older than a day for addresses that never come back', async () => {
+		await recordEvent(db, 'ip:1.2.3.4', LIMITS.groupCreate, NOW);
+		await recordEvent(db, 'person:ada', LIMITS.bggSearch, NOW + KEEP_MS - 1);
+		await recordEvent(db, 'ip:9.9.9.9', LIMITS.joinFail, NOW + KEEP_MS + 1);
+		expect((await all<{ subject: string }>(db, 'SELECT subject FROM rate_events ORDER BY at')).map((r) => r.subject)).toEqual(['person:ada', 'ip:9.9.9.9']);
 	});
 });

@@ -89,8 +89,16 @@ box-populi/
         codes.ts                join code generation
         catalog.ts              payload query, catalog_version bumps
         return-to.ts            safe return paths after sign-in
-        auth.ts                 planned: arctic client, sessions
-        ratelimit.ts            planned: rate_events helpers
+        identity.ts             people, device sessions, personal links, account deletion (D25)
+        cookies.ts              session, new-link and admin cookie settings
+        groups.ts               creating and joining groups
+        group-admin.ts          group settings: rename, code, roles, remove, hand over, delete
+        games.ts                BGG search, copies, manual entry, gameUsableInGroup
+        importer.ts             BGG collection import and the hydrate step
+        links.ts                rules and tutorial links
+        wishlist.ts             wishes and the Wanted query
+        lending.ts              lending, returns, and the account page's loans
+        ratelimit.ts            rate_events: limits, and cleanup of rows older than a day
         admin.ts                instance admin: key check, signed cookie, totals, groups table, actions
         testing/d1.ts           D1-shaped wrapper over node:sqlite for tests
         bgg/
@@ -99,7 +107,8 @@ box-populi/
           poll.ts               player-count summary and votes → bitmasks (pure)
           pace.ts               instance-wide request pacing over bgg_pace
           fake.ts               fixture-backed client for BGG_MODE=fake
-          client.ts             planned: live client
+          client.ts             live client: bearer token, pacing, backoff, User-Agent
+          http.ts               JSON error responses for BGG failures
           fixtures/*.xml        hand-written BGG-shaped fixtures with invented games, committed
           fixtures/local/       real BGG responses, gitignored
     routes/                     see "Routes and endpoints"
@@ -251,6 +260,7 @@ CREATE TABLE rate_events (
   at       INTEGER NOT NULL
 );
 CREATE INDEX rate_events_lookup ON rate_events(subject, kind, at);
+CREATE INDEX rate_events_at ON rate_events(at);   -- every write deletes rows older than the longest window
 
 -- instance-wide BGG request pacing (exactly one row)
 CREATE TABLE bgg_pace (
