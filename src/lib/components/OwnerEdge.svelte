@@ -35,11 +35,11 @@
 	}
 	.edge span {
 		flex: 1;
-		border-radius: 1px;
+		border-radius: var(--r-cube);
 	}
 	.more {
 		flex: none;
-		font-size: 0.6875rem;
+		font-size: 0.75rem;
 		font-weight: 800;
 		line-height: 6px;
 		color: var(--ink-2);

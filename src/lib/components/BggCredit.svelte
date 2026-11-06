@@ -22,7 +22,7 @@
 		margin-top: var(--s-7);
 		border-top: 1px solid var(--rule);
 		padding: var(--s-5) 0 var(--s-6);
-		font-size: 0.875rem;
+		font-size: var(--t-small);
 		color: var(--ink-2);
 	}
 	.inner {

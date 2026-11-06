@@ -85,7 +85,7 @@
 		gap: var(--s-2);
 		align-items: center;
 		min-height: 36px;
-		font-size: 0.9375rem;
+		font-size: var(--t-body);
 	}
 	input[type='checkbox'] {
 		accent-color: var(--ink);

@@ -269,7 +269,7 @@
 		border: 1.5px solid var(--label-line);
 		background: transparent;
 		color: var(--label-ink);
-		font-size: 0.875rem;
+		font-size: var(--t-small);
 		font-weight: 650;
 		padding: 0 12px;
 		cursor: pointer;
@@ -369,7 +369,7 @@
 		border: 1.5px solid var(--rule);
 		background: var(--cube) var(--chevron) no-repeat right 10px center;
 		padding: 0 30px 0 10px;
-		font-size: 0.875rem;
+		font-size: var(--t-small);
 		font-weight: 600;
 	}
 	.result-bar {

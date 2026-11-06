@@ -55,7 +55,7 @@
 	}
 	h2 {
 		margin-top: 1.75rem;
-		font-size: 1.2rem;
+		font-size: var(--t-lead);
 	}
 	li {
 		margin: 0.35rem 0;

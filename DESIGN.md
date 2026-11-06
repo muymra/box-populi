@@ -19,7 +19,7 @@ colors:
   danger: "#a8321f"
   danger-soft: "#f6e1dc"
   note: "#fbf1d9"
-  focus: "#2f62b0"
+  focus: "#2b2a28"
   laminate-dark: "#1c1916"
   cube-dark: "#26221e"
   shelf-gap-dark: "#36312b"
@@ -34,7 +34,7 @@ colors:
   danger-dark: "#f08a75"
   danger-soft-dark: "#3a1f19"
   note-dark: "#33291a"
-  focus-dark: "#8ab4ff"
+  focus-dark: "#f1ede6"
   player-red: "#c8402e"
   player-blue: "#2f62b0"
   player-pink: "#b23f78"
@@ -260,7 +260,7 @@ A cardboard-and-laminate neutral field with two kinds of colour on top: player c
 - **Shelf Ink** (ink, ink-2, ink-3): text in three steps; ink-3 is the quietest that still passes 5:1 on laminate, used for placeholders and hover borders.
 - **Shelf Label** (label, label-ink, label-ink-2, label-line, label-field): the dark strip holding search and filters, with its own ink, outline and inset field colours.
 - **Note Paper** (note) and **Danger** (danger, danger-soft): banners pinned to the shelf (demo, suspended, errors).
-- **Focus Blue** (focus): the 2px focus outline everywhere outside the label strip.
+- **Focus Ink** (focus): the 2px focus outline everywhere outside the label strip. It uses the ink (light text in dark mode), never a player colour, so a focused control is never mistaken for someone's colour.
 - Dark mode: every neutral has a `-dark` counterpart in the tokens above. The label strip in dark mode is a step lighter than the laminate so it stays visible. Marigold and the player and print colours do not change between modes.
 
 ### Named Rules
@@ -329,7 +329,7 @@ Ink-filled and plain, so marigold stays free for state.
 - **Shape:** 8px corners, 44px tall, 650 weight.
 - **Primary:** ink fill with laminate text; hover mixes 12% laminate into the ink. Used for the main action of a view (Add your games, Pull three games).
 - **Secondary:** cube fill, 1.5px rule border, ink text; hover darkens the border to ink-3.
-- **Hover / Focus:** 0.15s colour transitions; pressed buttons drop 1px; focus is a 2px focus-blue outline at 2px offset. Disabled is 50% opacity.
+- **Hover / Focus:** 0.15s colour transitions; pressed buttons drop 1px; focus is a 2px ink outline at 2px offset. Disabled is 50% opacity.
 - **Small and big:** 36px small at the label size; the picker's main action is 52px at the lead size.
 - **Link button:** text with a 1px underline at 0.2em offset.
 
@@ -379,6 +379,7 @@ A footer on every page, above the bottom tab bar's clearance on phones: "Game da
 - **Do** put every grid of games on the shelf-gap ground with 6px gaps (8px from 760px) and close each cube with the owner edge.
 - **Do** take player colours from `playerColor()` by join order and box prints from `boxColor()` by name; both live in `src/lib/catalog/colors.ts`.
 - **Do** keep marigold for state: active filters, the current tab, selected people, text selection and focused label-strip fields.
+- **Don't** use marigold for facts. The picker's "Best at N" tag is a neutral cube-white tag with a rule outline, and the cube mark's second box is kraft cardboard, not marigold.
 - **Do** set box and spine titles at 800 and 78 to 80% width, and interface headings at 780 and 88%.
 - **Do** hotlink BGG box art and fall back to the printed front when it is missing or fails to load.
 - **Do** render the BGG credit footer on every page, including new routes outside the root layout.

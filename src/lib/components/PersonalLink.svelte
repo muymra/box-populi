@@ -36,7 +36,7 @@
 	}
 	input {
 		width: 100%;
-		font-size: 0.875rem;
+		font-size: var(--t-small);
 		min-height: 42px;
 		padding: 0 var(--s-3);
 		border: 1.5px solid var(--rule);
@@ -53,7 +53,7 @@
 	ul {
 		margin: 0;
 		padding-left: 1.1rem;
-		font-size: 0.9375rem;
+		font-size: var(--t-body);
 		color: var(--ink-2);
 	}
 	li + li {

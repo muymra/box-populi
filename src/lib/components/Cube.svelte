@@ -80,7 +80,7 @@
 		border-radius: 999px;
 		background: var(--cube);
 		color: var(--ink);
-		font-size: 0.6875rem;
+		font-size: 0.75rem;
 		font-weight: 700;
 		white-space: nowrap;
 		box-shadow: 0 0 0 1px var(--rule);

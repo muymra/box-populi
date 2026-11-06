@@ -19,13 +19,13 @@
 	--danger: #a8321f;
 	--danger-soft: #f6e1dc;
 	--note: #fbf1d9;
-	--focus: #2f62b0;
+	--focus: #2b2a28; /* ink: a focus ring must never read as a player colour */
 	--chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%232b2a28' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 	--chevron-label: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23f4f4f2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 	--chevron-mark: var(--chevron);
 
 	--font: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif;
-	--r-cube: 3px;
+	--r-cube: 2px; /* box fronts, spines, pulled boxes */
 	--r-ctl: 8px;
 	--shadow-lift: 0 1px 1px rgb(43 42 40 / 0.06), 0 6px 14px -6px rgb(43 42 40 / 0.18);
 	--ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -66,7 +66,7 @@
 		--danger: #f08a75;
 		--danger-soft: #3a1f19;
 		--note: #33291a;
-		--focus: #8ab4ff;
+		--focus: #f1ede6;
 		--chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23f1ede6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 		--chevron-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%232b2a28' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 		--shadow-lift: 0 1px 1px rgb(0 0 0 / 0.3), 0 8px 18px -8px rgb(0 0 0 / 0.6);

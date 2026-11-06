@@ -56,7 +56,7 @@
 		background: var(--spine-bg);
 		color: var(--spine-ink);
 		text-decoration: none;
-		border-radius: 2px;
+		border-radius: var(--r-cube);
 		box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08);
 		transition: transform 0.18s var(--ease-out);
 	}
@@ -88,10 +88,10 @@
 	}
 	.flag {
 		padding: 0 6px;
-		border-radius: 3px;
+		border-radius: 4px;
 		background: var(--cube);
 		color: var(--ink);
-		font-size: 0.6875rem;
+		font-size: 0.75rem;
 		font-weight: 700;
 	}
 	/* the spine's end, painted in the owners' colours */

@@ -49,7 +49,7 @@
 		padding-top: var(--s-3);
 	}
 	.code {
-		font-size: 2.5rem;
+		font-size: clamp(2rem, 6vw, 3.25rem);
 		font-weight: 800;
 		letter-spacing: 0.22em;
 		margin: var(--s-2) 0 var(--s-1);

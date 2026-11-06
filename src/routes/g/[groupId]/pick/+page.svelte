@@ -178,7 +178,7 @@
 		padding: var(--s-5);
 		background: var(--cube);
 		border: 1px solid var(--rule);
-		border-radius: 12px;
+		border-radius: 10px;
 	}
 	.who h2 {
 		margin-bottom: var(--s-3);
@@ -207,7 +207,7 @@
 	.person .dot {
 		width: 14px;
 		height: 14px;
-		border-radius: 3px;
+		border-radius: 4px;
 	}
 	.person[aria-pressed='true'] {
 		background: var(--mark);
@@ -281,7 +281,7 @@
 		display: block;
 		aspect-ratio: 1 / 1.04;
 		box-shadow: var(--shadow-lift);
-		border-radius: 2px;
+		border-radius: var(--r-cube);
 	}
 	.facts {
 		display: flex;
@@ -292,10 +292,12 @@
 		font-size: var(--t-lead);
 		line-height: 1.2;
 	}
+	/* a fact about the game, not a choice, so it stays neutral (Marigold Means Chosen) */
 	.tag.best {
 		align-self: flex-start;
-		background: var(--mark);
-		color: var(--mark-ink);
+		background: var(--cube);
+		color: var(--ink);
+		box-shadow: inset 0 0 0 1px var(--rule);
 		margin-top: 4px;
 	}
 	.again {

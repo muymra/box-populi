@@ -172,7 +172,7 @@
 		grid-area: box;
 		aspect-ratio: 1 / 1.04;
 		box-shadow: var(--shadow-lift);
-		border-radius: 2px;
+		border-radius: var(--r-cube);
 		transform: rotate(-1.5deg);
 	}
 	.intro {
@@ -244,7 +244,7 @@
 		display: grid;
 		place-items: center;
 		font-weight: 800;
-		font-size: 0.875rem;
+		font-size: var(--t-small);
 	}
 	.wanted {
 		margin-top: var(--s-3);

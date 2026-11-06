@@ -30,7 +30,7 @@
 		position: relative;
 		width: 100%;
 		height: 100%;
-		border-radius: 2px;
+		border-radius: var(--r-cube);
 		background: var(--box-bg);
 		color: var(--box-ink);
 		overflow: hidden;

@@ -75,7 +75,7 @@
 		flex: 1;
 		min-width: 0;
 		margin: 0;
-		font-size: 1.25rem;
+		font-size: var(--t-lead);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -162,7 +162,7 @@
 			gap: 8px;
 			padding: 0 14px;
 			min-height: 42px;
-			font-size: 0.9375rem;
+			font-size: var(--t-body);
 		}
 		.tabbar a[aria-current='page'] {
 			background: var(--mark);
