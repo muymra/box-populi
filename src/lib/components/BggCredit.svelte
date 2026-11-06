@@ -8,17 +8,20 @@
 	import { SOURCE_URL } from '#lib/project.ts';
 	import ThemePicker from './ThemePicker.svelte';
 
-	let { theme }: { theme: string } = $props();
+	/** `bgg`: whether this instance shows BGG data and so must credit it (D30). */
+	let { theme, bgg }: { theme: string; bgg: boolean } = $props();
 </script>
 
 <footer class="credit">
 	<div class="container inner">
-		<p>
-			Game data from <a href="https://boardgamegeek.com" rel="noopener">BoardGameGeek</a>
-			<a class="badge" href="https://boardgamegeek.com" rel="noopener">Powered by BGG</a>
-		</p>
+		{#if bgg}
+			<p>
+				Game data from <a href="https://boardgamegeek.com" rel="noopener">BoardGameGeek</a>
+				<a class="badge" href="https://boardgamegeek.com" rel="noopener">Powered by BGG</a>
+			</p>
+		{/if}
 		<p class="small">
-			Box Populi is not affiliated with or endorsed by BoardGameGeek.
+			{#if bgg}Box Populi is not affiliated with or endorsed by BoardGameGeek.{/if}
 			<a href="/privacy">Privacy</a> · <a href={SOURCE_URL} rel="noopener">Source</a>
 		</p>
 		<div class="theme"><ThemePicker current={theme} /></div>

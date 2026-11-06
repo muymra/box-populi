@@ -44,5 +44,10 @@ export function setThemeCookie(cookies: Cookies, url: URL, theme: string): void 
 	cookies.set(THEME_COOKIE, theme, { ...base(url), maxAge: SESSION_DAYS * 86_400 });
 }
 
-/** For pages that show or carry a personal link: never cached, never sent as a referrer. */
-export const SECRET_PAGE_HEADERS = { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' };
+/**
+ * For pages that show or carry a personal link: never cached, and never sent as a referrer to
+ * another site. `same-origin`, not `no-referrer`: with `no-referrer` the browser sends
+ * `Origin: null` on every form post from that tab, including pages reached afterwards by
+ * client-side navigation, and SvelteKit's production CSRF check rejects them all.
+ */
+export const SECRET_PAGE_HEADERS = { 'cache-control': 'no-store', 'referrer-policy': 'same-origin' };

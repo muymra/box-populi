@@ -17,6 +17,7 @@ import {
 } from './identity.ts';
 import { createGroup, findGroupByCode, joinGroup, joinRefusal, ownedGroupCount, touchLastSeen } from './groups.ts';
 import { isLimited, KEEP_MS, LIMITS, recordEvent } from './ratelimit.ts';
+import { SECRET_PAGE_HEADERS } from './cookies.ts';
 
 let db: ReturnType<typeof createTestDb>;
 const NOW = 1_800_000_000_000;
@@ -186,5 +187,12 @@ describe('rate limits', () => {
 		await recordEvent(db, 'person:ada', LIMITS.bggSearch, NOW + KEEP_MS - 1);
 		await recordEvent(db, 'ip:9.9.9.9', LIMITS.joinFail, NOW + KEEP_MS + 1);
 		expect((await all<{ subject: string }>(db, 'SELECT subject FROM rate_events ORDER BY at')).map((r) => r.subject)).toEqual(['person:ada', 'ip:9.9.9.9']);
+	});
+});
+
+describe('personal-link pages', () => {
+	it('keep the link from other sites without breaking our own form posts', () => {
+		// no-referrer makes browsers send Origin: null on later posts, which SvelteKit refuses in production.
+		expect(SECRET_PAGE_HEADERS['referrer-policy']).toBe('same-origin');
 	});
 });

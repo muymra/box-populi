@@ -53,7 +53,7 @@ Restart `pnpm dev` after editing `.dev.vars` or `wrangler.jsonc`; the instance c
 - **BGG.** Call BGG only from server code, through `getBggClient()`. Respect `BGG_MODE=off` everywhere. Never commit a token. Never commit real BGG responses or generated seed data: real fixtures go in `src/lib/server/bgg/fixtures/local/`, which is gitignored. Keep real BGG data out of anything that could become AI training data (the public repo, issues, prompts to services that train on inputs); BGG's terms prohibit AI training on it. Never let users edit a BGG-sourced game.
 - **BGG terms in code.** These are the BGG rules code can break; TECH.md "Access and terms" has the full list.
   - Every BGG request goes through the client's instance-wide pacer.
-  - Every page renders the `BggCredit` footer.
+  - Every page renders the `BggCredit` footer, which credits BGG whenever `needsBggCredit()` says the instance shows BGG data (BGG on, or BGG-sourced games still cached). Don't show BGG data anywhere that bypasses it (D30).
   - Weight and player counts are shown as BGG gives them.
   - No ads, payments, donation or sponsor links anywhere in the app.
   - No endpoint meant for other programs, and no CORS headers on anything that returns BGG data.
@@ -85,6 +85,7 @@ Many models learned older versions of these tools. Check yourself against this l
 - **WSL on Carlo's machine.** `npm` and `npx` on the PATH are the Windows ones under `/mnt/c` and fail on Linux paths. Use `/usr/bin/pnpm` (`pnpm exec`, `pnpm dlx`). The Linux headless Chrome lacks system libraries; for screenshots use `/mnt/c/Program Files/Google/Chrome/Application/chrome.exe --headless=new --screenshot='C:\Users\Public\x.png' http://localhost:5173/...`, which reaches WSL's localhost.
 - **No sign-in provider.** No OAuth, no Lucia, no Auth.js. People are display names with device sessions and personal links (D25, TECH.md "Identity and sessions").
 - **Workers runtime.** No file system (fixtures load through `import.meta.glob(..., { query: '?raw' })`), no `DOMParser` (use `fast-xml-parser`). Avoid Node built-ins.
+- **SvelteKit's CSRF check runs only in production builds.** It refuses form posts whose `Origin` doesn't match the site, and `pnpm dev` skips it, so a post that works locally can fail live. Never send `Referrer-Policy: no-referrer` (browsers then send `Origin: null` on later posts from that tab); use `same-origin`.
 - **D1.** No `BEGIN`/`COMMIT`; `db.batch()` is the transaction. At most 100 bound parameters per statement. Foreign keys are enforced by default; the test adapter in `src/lib/server/testing/d1.ts` turns them on to match. `INSERT OR IGNORE` silently skips NOT NULL violations, so don't use it to paper over errors.
 - **Pages Functions.** No cron triggers, so all cleanup is lazy. 50 subrequests per request on the free plan. 
 - **BGG XML API.** Requires a bearer token. Throttling can show up as 500 or 503, not only 429. Search results have no images. `thing` takes up to 20 ids. The collection endpoint answers 202 while it's building. Zero means unknown. Descriptions are double-encoded. Player polls have "N+" rows. The parsing rules are in TECH.md.

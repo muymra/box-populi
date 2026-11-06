@@ -595,7 +595,7 @@ Links live in `src/lib/server/links.ts` and are the game page's `addLink` and `d
 
 ### Attribution and public surface
 
-- Every page has a footer reading "Game data from BoardGameGeek," with the "Powered by BGG" logo linked to `https://boardgamegeek.com`. It also says "Box Populi is not affiliated with or endorsed by BoardGameGeek." The footer is one component, `BggCredit.svelte`, in the root layout, so no page can drop it.
+- Every page has a footer reading "Game data from BoardGameGeek," with the "Powered by BGG" logo linked to `https://boardgamegeek.com`. It also says "Box Populi is not affiliated with or endorsed by BoardGameGeek." The footer is one component, `BggCredit.svelte`, in the root layout, so no page can drop it. The credit and the non-affiliation line show whenever the instance shows BGG data: always with `BGG_MODE` `live` or `fake`, and with `off` only while games fetched from BGG remain in the cache (`needsBggCredit` in `src/lib/server/bgg-credit.ts`, checked once per isolate). An instance that never had BGG on doesn't claim BGG data it doesn't show (D30).
 - The logo is a file BGG provides for this purpose, shown large enough to read on a phone. Don't redraw or recolor it. Where BGG publishes the files is unconfirmed; record it in STATUS.md when found.
 - Each game page links to its BGG page with "View on BoardGameGeek." Hand-entered games are marked as such and carry no BGG link.
 - No public API (see "No services for other applications"). The stretch CSV export holds only game name, year, BGG link and owners: no descriptions or statistics.

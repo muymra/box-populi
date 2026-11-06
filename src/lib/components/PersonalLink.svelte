@@ -1,4 +1,4 @@
-<!-- Shows a freshly made personal link once (DECISIONS D25). The page around it sends no-store and no-referrer. -->
+<!-- Shows a freshly made personal link once (DECISIONS D25). The page around it sends no-store and a same-origin referrer policy. -->
 <script lang="ts">
 	import CopyButton from './CopyButton.svelte';
 

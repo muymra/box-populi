@@ -166,3 +166,9 @@ The Wikidata fallback planned for a BGG refusal (TECH.md "If BGG declines the ap
 Docker (Node with a SQLite file) and Cloudflare Workers are planned stretch items; Vercel and Netlify come later. This replaces "no hosting targets besides Cloudflare" in the PRD's "Not doing".
 **Why:** Carlo asked which self-hosting options are cheap to support. The Cloudflare runtime is confined to `platform.ts`, and the data layer already runs on `node:sqlite` in tests.
 **Trade-offs accepted:** a second build to test before each release, and Docker hosters own their backups. Behind a reverse proxy they must set `ORIGIN` and `ADDRESS_HEADER`, or cookies lose `Secure` and rate limits see one IP.
+
+## D30. The BGG credit shows only where BGG data does (2026-11-06)
+
+The footer credits BoardGameGeek, with the "Powered by BGG" badge and the non-affiliation line, whenever the instance shows BGG data: with BGG on, and with BGG off for as long as BGG-sourced games stay cached. An instance that has never had BGG on, such as the public demo or a new instance waiting for its token, shows no BGG credit.
+**Why:** Carlo pointed out that an instance with BGG off was claiming its game data came from BGG. BGG's terms require the credit where its data is used; claiming it elsewhere is simply untrue.
+**Trade-offs accepted:** a database check once per isolate on instances with BGG off.

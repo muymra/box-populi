@@ -392,7 +392,7 @@ The cube shelf above is the default and the reference design. Twelve presets rec
 - **Don't** use marigold for facts. The picker's "Best at N" tag is a neutral cube-white tag with a rule outline, and the cube mark's second box is kraft cardboard, not marigold.
 - **Do** set box and spine titles at 800 and 78 to 80% width, and interface headings at 780 and 88%.
 - **Do** hotlink BGG box art and fall back to the printed front when it is missing or fails to load.
-- **Do** render the BGG credit footer on every page, including new routes outside the root layout.
+- **Do** render the footer on every page, including new routes outside the root layout. It carries the BGG credit whenever the instance shows BGG data; an instance that has never had BGG on shows only Privacy, Source and the theme select.
 - **Do** give any new motion a reduced-motion state with no animation and no tilt.
 
 ### Don't:

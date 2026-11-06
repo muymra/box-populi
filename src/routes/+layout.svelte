@@ -40,7 +40,7 @@
 	{@render children()}
 </main>
 
-<BggCredit theme={data.theme} />
+<BggCredit theme={data.theme} bgg={data.bggCredit} />
 
 <style>
 	.top {
