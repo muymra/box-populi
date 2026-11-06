@@ -81,7 +81,12 @@ box-populi/
         testing.ts              builders for tests
       components/               BoxFront, Cube, OwnerEdge, ListRow (Spines view), CubeMark, CheckList, BggCredit, PersonalLink, CopyButton
       server/                   server-only (SvelteKit 3 treats any `server` directory so)
-        platform.ts             the only importer of `cloudflare:workers`: getDb(), getConfig(), afterResponse()
+        platform.ts             Cloudflare (Pages and Workers), the only importer of `cloudflare:workers`: getDb(), getConfig(), afterResponse()
+        platform.node.ts        the same three for Node and Docker: a SQLite file (BOX_TARGET=node)
+        platform.libsql.ts      the same three for Vercel and Netlify: Turso (BOX_TARGET=vercel or netlify)
+        sqlite-d1.ts            D1-shaped wrapper over node:sqlite (Node platform and tests)
+        libsql-d1.ts            D1-shaped wrapper over @libsql/client (Turso)
+        migrations.ts           bundled migrations and the runner for platforms without wrangler
         db.ts                   D1 helpers
         instance.ts             instance config from env, validated
         authz.ts                requireUser, requireRead, requireRole
@@ -113,6 +118,23 @@ box-populi/
           fixtures/local/       real BGG responses, gitignored
     routes/                     see "Routes and endpoints"
 ```
+
+## Hosting targets
+
+Built 2026-11-06 (D32). One codebase, five places to run it; `BOX_TARGET` at build time picks the SvelteKit adapter and swaps `#lib/server/platform.ts` (a Vite alias in `vite.config.ts`). Nothing else in the app knows where it runs.
+
+| `BOX_TARGET` | Adapter | Platform module | Database | Migrations |
+|---|---|---|---|---|
+| `cloudflare` (default) | `adapter-cloudflare`, for Pages or Workers by what `wrangler.jsonc` contains | `platform.ts` | D1 | `wrangler d1 migrations apply DB` |
+| `node` | `adapter-node` | `platform.node.ts` | SQLite file at `DATABASE_PATH` through `node:sqlite` | applied at startup |
+| `vercel`, `netlify` | `adapter-vercel`, `adapter-netlify` | `platform.libsql.ts` | Turso at `DATABASE_URL` with `DATABASE_AUTH_TOKEN` | applied on a cold start's first query |
+
+- **One SQL dialect.** All three databases are SQLite, so the migrations and every query are shared. `migrations.ts` bundles `migrations/*.sql` with `import.meta.glob` and records what it applied in `d1_migrations`, the table wrangler uses.
+- **Same wrapper shape.** `sqlite-d1.ts` and `libsql-d1.ts` present the D1 API the app uses (`prepare`, `bind`, `first`, `all`, `run`, `batch` as a transaction, `exec`). The tests run on the first; `pnpm test:libsql` runs the whole suite on the second.
+- **Foreign keys.** D1 and the Node platform enforce them. Turso doesn't over HTTP (a `PRAGMA` doesn't outlive a request and is a no-op inside a transaction), so `deleteGroupStatements` and `deletePersonStatements` in `db.ts` delete and clear dependent rows explicitly; the cascades in the schema remain for the platforms that run them. The libSQL test run keeps foreign keys off to prove it.
+- **Origin on Node.** SvelteKit 3's `adapter-node` has no `ORIGIN` setting; it takes the protocol from `PROTOCOL_HEADER` or assumes https. The Docker setup puts Caddy in front for HTTPS, and plain http doesn't work anyway because session cookies are Secure.
+- **Builds.** `pnpm build` is just `vite build`; the wrangler types check moved to `pnpm check` only, because it failed hosters' builds whenever a version added a setting.
+- **What's been run:** Pages in production; the Node build with a real SQLite file (group, game, catalog); Workers under `wrangler dev`; Vercel and Netlify only as far as a successful build. STATUS.md lists the gaps.
 
 ## Configuration and secrets
 

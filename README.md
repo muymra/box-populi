@@ -2,7 +2,7 @@
 
 A shared board game library for your group. Create a group, share its five-character code, and everyone adds the games they own, usually by importing their BoardGameGeek collection. Then search the combined catalog by player count, play time, complexity, mechanics and theme, see who owns what, and let the picker suggest three games for the people who showed up tonight.
 
-Open source and self-hosted: run your own instance on a free Cloudflare account. BoardGameGeek is optional: an instance starts with games entered by hand, and adding your own BGG application token turns on search, collection import and full game details. See [SELF_HOSTING.md](./SELF_HOSTING.md).
+Open source and self-hosted: run your own instance on a free Cloudflare account (Pages or Workers), in Docker on your own server, or on Vercel or Netlify with a Turso database. BoardGameGeek is optional: an instance starts with games entered by hand, and adding your own BGG application token turns on search, collection import and full game details. See [SELF_HOSTING.md](./SELF_HOSTING.md).
 
 **Status:** the weekend build is nearly done. Everything below under "Features" runs locally; the first production deploy and a from-scratch run of SELF_HOSTING.md are next. Progress is in [STATUS.md](./STATUS.md).
 

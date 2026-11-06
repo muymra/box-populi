@@ -179,3 +179,9 @@ Built from D27's plan. With BGG off, `GAME_SOURCE` defaults to `wikidata`: membe
 **Why:** Carlo asked to build the plan now: his instance runs without BGG until his application is approved, and typed-in games had no way to get real data or be corrected.
 **Trade-offs accepted:** searched titles leave the instance for Wikidata (the privacy page says so). Wikidata knows about 4,800 games, with no weight, play time or "best at" counts; groups fill those in. Wikidata games carry BGG ids, so they upgrade to BGG data once BGG is on.
 **Revisit if:** Wikidata's coverage or availability disappoints in use, or another open source appears.
+
+## D32. Hosting targets: Docker, Workers, Vercel and Netlify (2026-11-06)
+
+Built from D29. `BOX_TARGET` picks the adapter and the platform module at build time. Docker runs on Node with a SQLite file through `node:sqlite`; Vercel and Netlify use Turso, the only SQLite-compatible database they can reach without a disk; Workers is the existing Cloudflare build with another config file. New dev dependencies: `@sveltejs/adapter-node`, `@sveltejs/adapter-vercel`, `@sveltejs/adapter-netlify` and `@libsql/client`, each needed by exactly one target and bundled into its build.
+**Why:** Carlo asked for all three after D29 planned them. The data layer only had to swap the D1 binding for a wrapper of the same shape, since every database involved speaks SQLite.
+**Trade-offs accepted:** the app deletes dependent rows itself (Turso doesn't run cascades over HTTP); two more wrappers to keep in step with the D1 API, guarded by `pnpm test:libsql`; Docker hosters own their backups and HTTPS (Caddy in the compose file). Vercel, Netlify and the Docker image are built but haven't run against real accounts yet.

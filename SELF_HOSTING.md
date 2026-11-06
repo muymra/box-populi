@@ -1,6 +1,15 @@
 # Running your own Box Populi
 
-This guide sets up an instance on your own Cloudflare account. It was written before the code existed. STATUS.md records whether it has been followed end to end; until then, expect a step or two to need fixing.
+This guide sets up an instance on your own Cloudflare account, which is the main path and the one followed end to end (STATUS.md, 2026-11-06). The same code also runs on Cloudflare Workers, in Docker on any server, and on Vercel or Netlify; those have their own sections near the end.
+
+## Where to host it
+
+| Host | Database | Cost and effort | Notes |
+|---|---|---|---|
+| Cloudflare Pages (steps 1 to 7) | Cloudflare D1 | Free plan; about 30 minutes | The reference setup. |
+| [Cloudflare Workers](#cloudflare-workers) | Cloudflare D1 | Free plan; same steps, another config file | Cloudflare's newer product; Pages is being folded into it. |
+| [Docker](#docker) | A SQLite file on your machine | Any server with Docker and a domain | You run the machine and the backups. HTTPS comes from Caddy in `compose.yaml`. |
+| [Vercel or Netlify](#vercel-and-netlify) | Turso (hosted SQLite) | Free tiers of both; two accounts | Migrations run themselves. Checked only as far as building; see STATUS.md. |
 
 ## What you take on
 
@@ -100,6 +109,62 @@ For an instance that exists only to show the demo, also set `INSTANCE_MODE` to `
 
 This seeds about 440 invented games, which needs no BGG token. Seeding from a real BGG collection (`--bgg-user <name>`) arrives with the live BGG client; that version contains BGG data, so `seed/demo.sql` is gitignored either way. The landing page links to `/demo` once it exists.
 
+## Cloudflare Workers
+
+The same as steps 1 to 7, with three differences:
+
+1. Copy `wrangler.workers.example.jsonc` over `wrangler.jsonc` before step 3, and fill it in the same way (`name`, `database_name`, `database_id`, settings).
+2. Skip `pages project create`; a Worker is created on the first deploy.
+3. Secrets and deploys use the Worker commands:
+
+```sh
+pnpm exec wrangler secret put ADMIN_KEY
+pnpm exec wrangler d1 migrations apply DB --remote
+pnpm build
+pnpm exec wrangler deploy
+```
+
+Your site is at `https://<name>.<your-subdomain>.workers.dev`, or a custom domain added in the dashboard.
+
+## Docker
+
+For a server you run, with Docker and a domain name pointing at it. The app stores everything in one SQLite file on a Docker volume and applies database migrations itself when it starts.
+
+```sh
+git clone https://github.com/muymra/box-populi.git
+cd box-populi
+cp docker.env.example .env      # then fill it in: DOMAIN, INSTANCE_CONTACT, ADMIN_KEY (openssl rand -base64 32)
+docker compose up -d --build
+```
+
+Caddy, the second service in `compose.yaml`, gets an HTTPS certificate for `DOMAIN` and forwards to the app. HTTPS isn't optional: sign-in cookies are marked Secure, and the app takes requests as https unless a proxy says otherwise. If you already run a reverse proxy, drop the `caddy` service, publish the app's port 3000, and have your proxy send `X-Forwarded-For` (the app reads it for rate limits).
+
+- **Upgrading:** `git pull && docker compose up -d --build`. New migrations run when the app starts.
+- **Backups:** copy a consistent snapshot of the database out of the volume:
+  ```sh
+  docker compose exec app node -e "new (require('node:sqlite').DatabaseSync)('/data/box-populi.db').exec(\"VACUUM INTO '/data/backup.db'\")"
+  docker compose cp app:/data/backup.db ./backup-$(date +%F).db
+  ```
+- **The demo group** isn't available on Docker yet; its seed script writes SQL for D1.
+
+Without Docker: `BOX_TARGET=node pnpm build`, then run `node build` with the same environment variables plus `DATABASE_PATH` (default `data/box-populi.db`) and `PORT`.
+
+## Vercel and Netlify
+
+These run the app as serverless functions with no disk of their own, so the database is [Turso](https://turso.tech), hosted SQLite with a free tier. The repository's `vercel.json` and `netlify.toml` already set the build command.
+
+1. Create the database and a token with the Turso CLI:
+   ```sh
+   turso db create box-populi
+   turso db show --url box-populi          # DATABASE_URL, starts with libsql://
+   turso db tokens create box-populi       # DATABASE_AUTH_TOKEN
+   ```
+2. Import your fork of the repository in Vercel or Netlify.
+3. In the project's environment variables, set `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `INSTANCE_CONTACT`, `ADMIN_KEY` and any of the settings from step 4. Settings are plain environment variables here, not a `wrangler.jsonc`.
+4. Deploy. The first request applies the database migrations; later deploys apply new ones the same way.
+
+Turso doesn't enforce foreign keys over HTTP, so the app deletes a group's or a person's rows itself rather than relying on the database; `pnpm test:libsql` runs the test suite that way. Backups: `turso db shell box-populi .dump > backup.sql`.
+
 ## Upgrading
 
 ```sh
@@ -110,7 +175,7 @@ pnpm build
 pnpm exec wrangler pages deploy
 ```
 
-If a new version adds a required setting, the site names it on every page until you set it. If `pnpm build` stops with "Types at worker-configuration.d.ts are out of date", the new version added a setting: copy the new keys from `wrangler.example.jsonc` into your `wrangler.jsonc`, then build again.
+If a new version adds a required setting, the site names it on every page until you set it; the new keys are in `wrangler.example.jsonc`.
 
 ## Backups
 

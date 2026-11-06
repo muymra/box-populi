@@ -36,11 +36,13 @@ pnpm db:migrate       # apply migrations to the local D1 database (.wrangler/)
 pnpm db:seed          # generate seed/demo.sql (invented games) and load it locally
 pnpm dev              # http://localhost:5173; the demo group is at /demo
 pnpm test             # Vitest, once
+pnpm test:libsql      # the same suite on the libSQL (Turso) wrapper, foreign keys off
 pnpm check            # wrangler types check + svelte-check
 pnpm gen              # regenerate worker-configuration.d.ts after changing wrangler config keys
 pnpm gen:themes       # rewrite src/lib/themes.css after editing a palette in src/lib/themes.ts
 pnpm exec wrangler d1 migrations create box-populi <name>   # new migration file
 pnpm deploy           # build and `wrangler pages deploy` (needs a Cloudflare login)
+BOX_TARGET=node pnpm build     # also vercel, netlify; see TECH.md "Hosting targets"
 ```
 
 Restart `pnpm dev` after editing `.dev.vars` or `wrangler.jsonc`; the instance config is read once per process.
@@ -63,7 +65,7 @@ Restart `pnpm dev` after editing `.dev.vars` or `wrangler.jsonc`; the instance c
 - **SQL.** Bind every value. D1 binds by position (`?1` or `?`), not by name.
 - **HTML.** No `{@html}` anywhere.
 - **Dependencies.** What's in `package.json`. There's no auth library; identity is hand-written (D25). Adding anything else needs a one-line DECISIONS.md entry saying why. Scripts run on Node's type stripping (`node scripts/x.ts`), so they don't need `tsx`; tests use `node:sqlite`, so they don't need `better-sqlite3`.
-- **Runtime access.** Only `src/lib/server/platform.ts` imports `cloudflare:workers`. Load functions call `getDb()` and pass `db` down; library code takes `db` and `config` as arguments.
+- **Runtime access.** Only the platform modules (`platform.ts` for Cloudflare, `platform.node.ts`, `platform.libsql.ts`) know where the app runs, and only `platform.ts` imports `cloudflare:workers`. Load functions call `getDb()` and pass `db` down; library code takes `db` and `config` as arguments. Deleting a group or a person goes through `deleteGroupStatements` / `deletePersonStatements`, never a bare `DELETE` that relies on cascades (Turso doesn't run them).
 - **Secrets.** `.dev.vars` and `wrangler.jsonc` are gitignored. Never write secret values into any file, log or doc.
 - **Open questions.** If the PRD lists an open question with a starting default, build the default. Don't block on it, and don't settle it yourself.
 
