@@ -9,10 +9,10 @@ import type { Role } from '#lib/catalog/types.ts';
 
 export type EditableSource = 'manual' | 'wikidata';
 
-type GameRow = { source: string; is_manual: number; name: string; image_url: string | null };
+type GameRow = { source: string; is_manual: number; name: string; image_url: string | null; search_text: string };
 
 async function editableSource(db: DB, gameId: number): Promise<{ row: GameRow; source: EditableSource } | null> {
-	const row = await one<GameRow>(db, 'SELECT source, is_manual, name, image_url FROM games WHERE id = ?1', gameId);
+	const row = await one<GameRow>(db, 'SELECT source, is_manual, name, image_url, search_text FROM games WHERE id = ?1', gameId);
 	if (!row) return null;
 	if (row.is_manual === 1 || row.source === 'manual') return { row, source: 'manual' };
 	if (row.source === 'wikidata') return { row, source: 'wikidata' };
@@ -31,8 +31,8 @@ export async function canEditGame(db: DB, groupId: string, actor: { id: string; 
 }
 
 export type GameEdit = {
-	name: string | null; // manual games only
-	imageUrl: string | null; // manual games only
+	name: string;
+	imageUrl: string | null;
 	minPlayers: number | null;
 	maxPlayers: number | null;
 	minPlaytime: number | null;
@@ -42,15 +42,12 @@ export type GameEdit = {
 
 export type EditParse = { ok: true; value: GameEdit } | { ok: false; error: string };
 
-/** The same rules as manual entry, plus a whole-number complexity from 1 to 5. */
-export function parseGameEdit(form: FormData, source: EditableSource, currentName: string): EditParse {
-	const withName = new FormData();
-	for (const [k, v] of form.entries()) withName.set(k, v);
-	if (source === 'wikidata') {
-		withName.set('name', currentName);
-		withName.set('imageUrl', '');
-	}
-	const base = parseManualGame(withName);
+/**
+ * The same rules as manual entry, plus a whole-number complexity from 1 to 5. Hand-entered and
+ * Wikidata games edit alike: members can rename them and give them an image.
+ */
+export function parseGameEdit(form: FormData): EditParse {
+	const base = parseManualGame(form);
 	if (!base.ok) return base;
 	const rawComplexity = String(form.get('complexity') ?? '').trim();
 	const complexity = rawComplexity === '' ? null : Number(rawComplexity);
@@ -60,8 +57,8 @@ export function parseGameEdit(form: FormData, source: EditableSource, currentNam
 	return {
 		ok: true,
 		value: {
-			name: source === 'manual' ? base.value.name : null,
-			imageUrl: source === 'manual' ? base.value.imageUrl : null,
+			name: base.value.name,
+			imageUrl: base.value.imageUrl,
 			minPlayers: base.value.minPlayers,
 			maxPlayers: base.value.maxPlayers,
 			minPlaytime: base.value.minPlaytime,
@@ -83,10 +80,11 @@ export async function editGame(
 ): Promise<EditResult> {
 	const found = await editableSource(db, gameId);
 	if (!found || !(await canEditGame(db, groupId, actor, gameId))) return { ok: false, error: 'You can’t edit this game’s details.' };
-	const parsed = parseGameEdit(form, found.source, found.row.name);
+	const parsed = parseGameEdit(form);
 	if (!parsed.ok) return parsed;
 	const v = parsed.value;
-	const name = v.name ?? found.row.name;
+	// A renamed game keeps its earlier titles (and a Wikidata game its aliases) for searching and list matching.
+	const searchText = v.name !== found.row.name ? buildSearchText(v.name, found.row.search_text.split('|')) : null;
 	await db.batch([
 		stmt(
 			db,
@@ -94,9 +92,9 @@ export async function editGame(
 			   image_url = ?3, thumb_url = ?3, min_players = ?4, max_players = ?5, min_playtime = ?6, max_playtime = ?7,
 			   weight = ?8, edited_by = ?9, edited_at = ?10
 			 WHERE id = ?11`,
-			name,
-			v.name != null && v.name !== found.row.name ? buildSearchText(v.name) : null,
-			found.source === 'manual' ? v.imageUrl : found.row.image_url,
+			v.name,
+			searchText,
+			v.imageUrl,
 			v.minPlayers,
 			v.maxPlayers,
 			v.minPlaytime,

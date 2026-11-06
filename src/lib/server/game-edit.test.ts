@@ -45,7 +45,7 @@ describe('editing', () => {
 		expect(result).toEqual({ ok: true });
 		expect(await one(db, 'SELECT name, search_text, min_players, max_players, max_playtime, weight, edited_by, edited_at FROM games WHERE id = 1')).toEqual({
 			name: 'Kitchen Table Classic',
-			search_text: 'kitchen table classic',
+			search_text: 'kitchen table classic|kitchen table game',
 			min_players: 2,
 			max_players: 6,
 			max_playtime: 45,
@@ -56,10 +56,21 @@ describe('editing', () => {
 		expect((await one<{ v: number }>(db, `SELECT catalog_version AS v FROM groups WHERE id = 'g1'`))!.v).toBe(before + 1);
 	});
 
-	it('keeps a Wikidata game’s title but lets members fill in the rest', async () => {
-		await editGame(db, 'g1', owner, 2, form({ name: 'Renamed', minPlayers: '2', maxPlayers: '5', minPlaytime: '30', maxPlaytime: '45', complexity: '3' }), NOW);
-		expect(await one(db, 'SELECT name, max_players, min_playtime, weight, source FROM games WHERE id = 2')).toEqual({
-			name: 'Lantern Harbour',
+	it('edits a Wikidata game like a hand-entered one, keeping its old title for searches', async () => {
+		await run(db, `UPDATE games SET search_text = 'lantern harbour|lantaarnhaven' WHERE id = 2`);
+		const result = await editGame(
+			db,
+			'g1',
+			owner,
+			2,
+			form({ name: 'Lantern Harbour (2nd edition)', minPlayers: '2', maxPlayers: '5', minPlaytime: '30', maxPlaytime: '45', complexity: '3', imageUrl: 'https://example.com/box.jpg' }),
+			NOW
+		);
+		expect(result).toEqual({ ok: true });
+		expect(await one(db, 'SELECT name, search_text, image_url, max_players, min_playtime, weight, source FROM games WHERE id = 2')).toEqual({
+			name: 'Lantern Harbour (2nd edition)',
+			search_text: 'lantern harbour (2nd edition)|lantern harbour|lantaarnhaven',
+			image_url: 'https://example.com/box.jpg',
 			max_players: 5,
 			min_playtime: 30,
 			weight: 3,

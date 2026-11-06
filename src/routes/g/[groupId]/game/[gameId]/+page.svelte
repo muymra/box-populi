@@ -28,6 +28,17 @@
 	const time = $derived(formatPlaytime(g.minPlaytime, g.maxPlaytime));
 	// BGG games show BGG's weight; anything else shows the complexity a member set, as a whole number.
 	const groupRated = $derived(g.source !== 'bgg');
+	// What a hand-entered or Wikidata game still lacks, so members know what to fill in.
+	const missing = $derived(
+		g.source === 'bgg'
+			? []
+			: [
+					g.minPlayers == null && g.maxPlayers == null && 'players',
+					g.minPlaytime == null && g.maxPlaytime == null && 'play time',
+					g.weight == null && 'complexity',
+					!g.imageUrl && 'a box image'
+				].filter((x): x is string => typeof x === 'string')
+	);
 	const weight = $derived(g.weight == null ? null : groupRated ? `${Math.round(g.weight)} / 5` : formatWeight(g.weight));
 	const bucket = $derived(weightBucket(g.weight));
 	const pollLabel = $derived(g.pollSource === 'votes' ? 'computed from BGG poll votes' : 'BGG voters');
@@ -125,12 +136,11 @@
 		<section class="details-edit" aria-label="Game details">
 			{#if data.editedByName}<p class="muted small">Details last edited by {data.editedByName}.</p>{/if}
 			{#if data.canEditDetails}
+				{#if missing.length}<p class="muted small">Missing: {missing.join(', ')}.</p>{/if}
 				<details class="lend" open={!!form?.editError}>
-					<summary class="link-button">{g.isManual ? 'Edit details…' : 'Fill in or correct details…'}</summary>
+					<summary class="link-button">{missing.length ? 'Fill in the details…' : 'Edit details…'}</summary>
 					<form method="POST" action="?/editDetails" class="lend-form edit-form" use:enhance={() => async ({ update }) => update({ reset: false })}>
-						{#if g.isManual}
-							<label>Name <input class="field" name="name" required maxlength="120" value={g.name} /></label>
-						{/if}
+						<label>Name <input class="field" name="name" required maxlength="120" value={g.name} /></label>
 						<div class="pair">
 							<label>Fewest players <input class="field num" name="minPlayers" inputmode="numeric" pattern="[0-9]*" value={g.minPlayers ?? ''} /></label>
 							<label>Most players <input class="field num" name="maxPlayers" inputmode="numeric" pattern="[0-9]*" value={g.maxPlayers ?? ''} /></label>
@@ -151,12 +161,10 @@
 								<option value="5">5, very heavy</option>
 							</select>
 						</label>
-						{#if g.isManual}
-							<label>
-								<span>Image address <span class="hint">(optional, https://)</span></span>
-								<input class="field" name="imageUrl" type="url" value={g.imageUrlRaw ?? ''} />
-							</label>
-						{/if}
+						<label>
+							<span>Image address <span class="hint">(optional, https://)</span></span>
+							<input class="field" name="imageUrl" type="url" value={g.imageUrlRaw ?? ''} />
+						</label>
 						<p class="hint">Changes show in every group that has this game.</p>
 						{#if form?.editError}<p class="banner error" role="alert">{form.editError}</p>{/if}
 						<button class="btn primary small">Save details</button>
