@@ -76,18 +76,26 @@ const toMatched = (r: GameRow): MatchedGame => ({
 
 /**
  * Stored games whose title or an alternate title is exactly one of `titles` (normalized), keyed by
- * that title. One query for the whole chunk. It matches whole "|"-separated segments of
+ * that title, with this group's corrections (D35): a game the group renamed matches its new name
+ * too, and shows it. One query for the whole chunk. It matches whole "|"-separated segments of
  * search_text with instr(), not LIKE: D1 refuses LIKE patterns over 50 bytes, and a substring
  * match with a LIMIT can miss the exact row for a short title.
  */
-async function exactCandidates(db: DB, titles: string[]): Promise<Map<string, GameRow[]>> {
+async function exactCandidates(db: DB, groupId: string, titles: string[]): Promise<Map<string, GameRow[]>> {
 	const wanted = [...new Set(titles.map(normalize).filter(Boolean))];
 	const byTitle = new Map(wanted.map((q) => [q, [] as GameRow[]]));
 	if (wanted.length === 0) return byTitle;
-	const where = wanted.map((_, i) => `instr('|' || search_text || '|', ?${i + 1}) > 0`).join(' OR ');
+	// BGG games are never corrected, so their columns come straight from the row.
+	const corrected = (column: string) => `CASE WHEN g.source <> 'bgg' AND c.${column} IS NOT NULL THEN c.${column} ELSE g.${column} END`;
+	const text = `g.search_text || CASE WHEN g.source <> 'bgg' AND c.search_text IS NOT NULL THEN '|' || c.search_text ELSE '' END`;
+	const where = wanted.map((_, i) => `instr('|' || ${text} || '|', ?${i + 2}) > 0`).join(' OR ');
 	const rows = await all<GameRow>(
 		db,
-		`SELECT id, name, year, min_players, max_players, search_text, source, is_manual FROM games WHERE ${where}`,
+		`SELECT g.id, ${corrected('name')} AS name, g.year, ${corrected('min_players')} AS min_players, ${corrected('max_players')} AS max_players,
+			${text} AS search_text, g.source, g.is_manual
+		 FROM games g LEFT JOIN game_corrections c ON c.game_id = g.id AND c.group_id = ?1
+		 WHERE ${where}`,
+		groupId,
 		...wanted.map((q) => `|${q}|`)
 	);
 	for (const row of rows) {
@@ -119,6 +127,7 @@ export async function matchLines(
 	const parsedLines = lines.slice(0, MATCH_CHUNK).map((line) => ({ line, parsed: parseListLine(line) }));
 	const stored = await exactCandidates(
 		db,
+		groupId,
 		parsedLines.flatMap(({ parsed }) => ('error' in parsed ? [] : [parsed.title]))
 	);
 

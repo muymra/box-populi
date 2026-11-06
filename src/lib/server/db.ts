@@ -36,6 +36,7 @@ export function jsonArray<T>(raw: unknown): T[] {
 export function deleteGroupStatements(db: DB, groupId: string): D1PreparedStatement[] {
 	return [
 		stmt(db, 'DELETE FROM game_links WHERE group_id = ?1', groupId),
+		stmt(db, 'DELETE FROM game_corrections WHERE group_id = ?1', groupId),
 		stmt(db, 'DELETE FROM memberships WHERE group_id = ?1', groupId),
 		stmt(db, 'DELETE FROM groups WHERE id = ?1', groupId)
 	];
@@ -59,10 +60,12 @@ export function deletePersonStatements(db: DB, userId: string): D1PreparedStatem
 		// Games they typed in go too, with their links, unless someone else still has one on a shelf
 		// or wishlist; those stay, without their name.
 		stmt(db, `DELETE FROM game_links WHERE game_id IN (${ORPHANED_OWN_GAMES})`, userId),
+		stmt(db, `DELETE FROM game_corrections WHERE game_id IN (${ORPHANED_OWN_GAMES})`, userId),
 		stmt(db, `DELETE FROM games WHERE id IN (${ORPHANED_OWN_GAMES})`, userId),
 		stmt(db, 'UPDATE games SET created_by = NULL WHERE created_by = ?1', userId),
 		stmt(db, 'UPDATE games SET edited_by = NULL WHERE edited_by = ?1', userId),
 		stmt(db, 'UPDATE game_links SET added_by = NULL WHERE added_by = ?1', userId),
+		stmt(db, 'UPDATE game_corrections SET edited_by = NULL WHERE edited_by = ?1', userId),
 		stmt(db, 'DELETE FROM users WHERE id = ?1', userId)
 	];
 }

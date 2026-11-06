@@ -18,7 +18,7 @@ ON CONFLICT(bgg_id) DO UPDATE SET
 	weight = excluded.weight, users_rated = excluded.users_rated,
 	mechanics = excluded.mechanics, categories = excluded.categories, base_bgg_ids = excluded.base_bgg_ids,
 	is_expansion = excluded.is_expansion, fetched_at = excluded.fetched_at,
-	source = 'bgg', is_manual = 0`;
+	source = 'bgg', is_manual = 0, edited_by = NULL, edited_at = NULL`; // BGG data has no editor
 
 export function upsertThingStatement(db: DB, t: BggThing, now: number): D1PreparedStatement {
 	return stmt(

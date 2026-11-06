@@ -196,3 +196,10 @@ Besides 5 misses per network address per 10 minutes, a whole instance allows 100
 **Why:** the 2026-11-06 audit found that a per-address limit alone can be shared out: IPv6 hands one connection a /64 of addresses, and many machines can guess together. Five-character codes are 28.6 million; the ceiling keeps a lucky guess about 600 days away with 20 groups.
 **Trade-offs accepted:** anyone can block joining on an instance for an hour by sending 100 wrong codes. Joining is rare and the page says to try later; a guessed code would expose a group's names, collections and loans.
 **Revisit if:** a busy instance hits the ceiling with honest typos.
+
+## D35. Corrections to shared games belong to each group (2026-11-06)
+
+Replaces D31's shared edits. A hand-entered or Wikidata game is still one `games` row, but a group's corrections (name, picture, players, play time, complexity) go in `game_corrections` and only that group sees them. Chosen by Carlo after the 2026-11-06 audit, over locking games that other groups also have.
+**Why:** with shared edits, anyone in one group could rename a game or point its picture at their own server for every group that has it, and other groups saw their name.
+**Trade-offs accepted:** a person in two groups who fixes a typo fixes it in one; the other group keeps the shared row's version. A group can't blank a detail the shared row has, only replace it. One more table that every group and person deletion has to clear. Edits made to shared rows before this stay on the row.
+**Revisit if:** people in several groups find themselves correcting the same game twice.

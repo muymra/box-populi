@@ -1,6 +1,7 @@
 // Wishlists and the group's Wanted view (PRD "Wishlist and the Wanted view"). A wish belongs to the
 // person, so it shows in every group they're in, like their games.
 import { all, run, type DB } from './db.ts';
+import { applyCorrection, groupCorrections } from './corrections.ts';
 import { gameUsableInGroup } from './games.ts';
 
 /** Adds a game to the person's wishlist, under the same rule as adding a copy (`gameUsableInGroup`). */
@@ -39,10 +40,12 @@ export async function wantedGames(db: DB, groupId: string): Promise<WantedGame[]
 		year: number | null;
 		thumb_url: string | null;
 		is_expansion: number;
+		source: string;
+		is_manual: number;
 		wanted_by: string;
 	}>(
 		db,
-		`SELECT g.id, g.bgg_id, g.name, g.year, g.thumb_url, g.is_expansion, json_group_array(w.user_id) AS wanted_by
+		`SELECT g.id, g.bgg_id, g.name, g.year, g.thumb_url, g.is_expansion, g.source, g.is_manual, json_group_array(w.user_id) AS wanted_by
 		 FROM wishlist w
 		 JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1
 		 JOIN games g ON g.id = w.game_id
@@ -54,13 +57,18 @@ export async function wantedGames(db: DB, groupId: string): Promise<WantedGame[]
 		 ORDER BY COUNT(*) DESC, g.name`,
 		groupId
 	);
-	return rows.map((r) => ({
-		id: r.id,
-		bggId: r.bgg_id,
-		name: r.name,
-		year: r.year,
-		thumbUrl: r.thumb_url,
-		isExpansion: r.is_expansion === 1,
-		wantedBy: JSON.parse(r.wanted_by) as string[]
-	}));
+	// With the group's own names and pictures for games it has corrected (D35).
+	const corrections = await groupCorrections(db, groupId);
+	return rows
+		.map((row) => applyCorrection(row, corrections.get(row.id)))
+		.map((r) => ({
+			id: r.id,
+			bggId: r.bgg_id,
+			name: r.name,
+			year: r.year,
+			thumbUrl: r.thumb_url,
+			isExpansion: r.is_expansion === 1,
+			wantedBy: JSON.parse(r.wanted_by) as string[]
+		}))
+		.sort((a, b) => b.wantedBy.length - a.wantedBy.length || a.name.localeCompare(b.name));
 }

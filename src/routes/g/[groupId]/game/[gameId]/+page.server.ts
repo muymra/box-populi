@@ -5,6 +5,7 @@ import { addLink, canDeleteLink, deleteLink, parseLink } from '#lib/server/links
 import { addWish, removeWish } from '#lib/server/wishlist.ts';
 import { lendCopy, returnCopy } from '#lib/server/lending.ts';
 import { canEditGame, editGame } from '#lib/server/game-edit.ts';
+import { applyCorrection, groupCorrections } from '#lib/server/corrections.ts';
 import { linkHost } from '#lib/link-kinds.ts';
 import { loadMembers } from '#lib/server/catalog.ts';
 import { all, jsonArray, one } from '#lib/server/db.ts';
@@ -50,7 +51,7 @@ export const load: PageServerLoad = async (event) => {
 
 	// Only games this group owns or wants are visible here: the cache is shared across groups, and
 	// hand-entered titles from other groups shouldn't be readable by guessing ids.
-	const game = await one<GameDetail>(
+	const shared = await one<GameDetail>(
 		db,
 		`SELECT g.* FROM games g WHERE g.id = ?2 AND (
 			EXISTS (SELECT 1 FROM copies c JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1 WHERE c.game_id = g.id)
@@ -58,7 +59,10 @@ export const load: PageServerLoad = async (event) => {
 		groupId,
 		gameId
 	);
-	if (!game) error(404, 'Game not found');
+	if (!shared) error(404, 'Game not found');
+	// The game as this group sees it, with its own corrections (D35).
+	const correction = (await groupCorrections(db, groupId, [gameId])).get(gameId);
+	const game = applyCorrection(shared, correction);
 
 	const [owners, wishers, links, expansions, bases, members] = await Promise.all([
 		all<{ user_id: string; name: string; lent_to_name: string | null; lent_to_text: string | null; lent_in_group: number }>(
@@ -130,14 +134,19 @@ export const load: PageServerLoad = async (event) => {
 		: null;
 	const mine = myCopy != null;
 	const canEditDetails = canEdit && actor != null && (await canEditGame(db, groupId, actor, gameId));
-	// A game is one row shared by every group, so its editor may be in another group. Their name
-	// shows only to groups they're in (the privacy page: only your groups see your name).
-	const editedByName =
-		game.edited_at == null
-			? null
-			: game.edited_by == null
-				? 'a former member'
-				: (members.find((m) => m.id === game.edited_by)?.name ?? 'someone outside this group');
+	// Who last corrected it for this group. Edits made to the shared row before D35 may come from
+	// another group, whose members' names stay there (the privacy page: only your groups see your name).
+	const nameOf = (id: string | null) => (id == null ? null : (members.find((m) => m.id === id)?.name ?? null));
+	const isBgg = game.source === 'bgg' && game.is_manual !== 1;
+	const editedByName = isBgg
+		? null
+		: correction
+			? (nameOf(correction.edited_by) ?? 'a former member')
+			: game.edited_at == null
+				? null
+				: game.edited_by == null
+					? 'a former member'
+					: (nameOf(game.edited_by) ?? 'someone outside this group');
 	const wanted = me ? wishers.some((w) => w.id === me.id) : false;
 
 	return {

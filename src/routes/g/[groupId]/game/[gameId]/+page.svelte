@@ -165,7 +165,7 @@
 							<span>Image address <span class="hint">(optional, https://)</span></span>
 							<input class="field" name="imageUrl" type="url" value={g.imageUrlRaw ?? ''} />
 						</label>
-						<p class="hint">Changes show in every group that has this game.</p>
+						<p class="hint">Changes show only in this group. Other groups with this game keep their own details.</p>
 						{#if form?.editError}<p class="banner error" role="alert">{form.editError}</p>{/if}
 						<button class="btn primary small">Save details</button>
 					</form>

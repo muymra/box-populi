@@ -1,6 +1,7 @@
 // Server side of the catalog: builds the payload the browser filters (TECH.md "Catalog delivery")
 // and keeps `groups.catalog_version` current so the ETag changes when the payload does.
 import { all, jsonArray, one, stmt, type DB } from './db.ts';
+import { applyCorrection, groupCorrections } from './corrections.ts';
 import { colorIndexesByJoinOrder } from '#lib/catalog/colors.ts';
 import type { CatalogGame, CatalogMember, CatalogPayload, PollSource, Role } from '#lib/catalog/types.ts';
 
@@ -78,8 +79,9 @@ export async function loadMembers(db: DB, groupId: string): Promise<CatalogMembe
 }
 
 export async function loadCatalog(db: DB, groupId: string, version: number): Promise<CatalogPayload> {
-	const [members, rows] = await Promise.all([
+	const [members, corrections, rows] = await Promise.all([
 		loadMembers(db, groupId),
+		groupCorrections(db, groupId),
 		all<GameRow & { owner_id: string; lent_to_user_id: string | null; lent_to_text: string | null; added_at: number }>(
 			db,
 			`SELECT ${GAME_COLUMNS}, c.user_id AS owner_id, c.lent_to_user_id, c.lent_to_text, c.added_at
@@ -95,7 +97,7 @@ export async function loadCatalog(db: DB, groupId: string, version: number): Pro
 	for (const row of rows) {
 		let game = games.get(row.id);
 		if (!game) {
-			game = { ...toCatalogGame(row), copies: [] };
+			game = { ...toCatalogGame(applyCorrection(row, corrections.get(row.id))), copies: [] };
 			games.set(row.id, game);
 		}
 		game.copies.push({
