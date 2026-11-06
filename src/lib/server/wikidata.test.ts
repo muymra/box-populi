@@ -88,11 +88,28 @@ describe('the live client', () => {
 		expect(seen[1].searchParams.get('maxlag')).toBeNull();
 	});
 
-	it('reports busy on 429, server errors and maxlag', async () => {
-		for (const reply of [respond({}, 429), respond({}, 503), respond({ error: { code: 'maxlag' } })]) {
-			const client = new LiveWikidataClient('ua', (async () => reply) as typeof fetch);
-			await expect(client.search('x')).rejects.toBeInstanceOf(WikidataBusyError);
+	it('says what went wrong: status, API error or network failure', async () => {
+		const cases: Array<[() => Promise<Response>, RegExp]> = [
+			[async () => new Response('Too many requests', { status: 429, headers: { 'retry-after': '30' } }), /HTTP 429, retry-after 30: Too many requests/],
+			[async () => new Response('<html>blocked</html>', { status: 403 }), /HTTP 403/],
+			[async () => respond({ error: { code: 'maxlag', info: 'Waiting for a server' } }), /API error maxlag: Waiting/],
+			[async () => new Response('not json', { status: 200 }), /wasn't JSON/],
+			[async () => Promise.reject(new TypeError('network down')), /request failed \(TypeError: network down\)/]
+		];
+		const errors: string[] = [];
+		const original = console.error;
+		console.error = (m: string) => errors.push(m);
+		try {
+			for (const [reply, detail] of cases) {
+				const client = new LiveWikidataClient('ua', reply as unknown as typeof fetch);
+				const failure = await client.search('x').catch((e: unknown) => e);
+				expect(failure).toBeInstanceOf(WikidataBusyError);
+				expect((failure as WikidataBusyError).detail).toMatch(detail);
+			}
+		} finally {
+			console.error = original;
 		}
+		expect(errors).toHaveLength(cases.length);
 	});
 });
 

@@ -27,7 +27,9 @@ export const GET: RequestHandler = async (event) => {
 	try {
 		return Response.json({ results: await searchWikidata(db, client, query, user.id, now) }, { headers: { 'cache-control': 'no-store' } });
 	} catch (e) {
-		if (e instanceof WikidataBusyError) return error(503, 'Wikidata isn’t answering right now. Try again in a moment, or add the game by hand.');
+		if (e instanceof WikidataBusyError) {
+			return error(503, `Wikidata isn’t answering right now (${e.detail.slice(0, 60)}). Try again in a moment, or add the game by hand.`);
+		}
 		throw e;
 	}
 };

@@ -21,9 +21,10 @@ export interface WikidataClient {
 	search(query: string): Promise<WikidataGame[]>;
 }
 
+/** Wikidata didn't give a usable answer. `detail` says what happened, for logs and the error text. */
 export class WikidataBusyError extends Error {
-	constructor() {
-		super('Wikidata is busy');
+	constructor(readonly detail = 'no answer') {
+		super(`Wikidata unavailable: ${detail}`);
 	}
 }
 
@@ -119,16 +120,31 @@ export class LiveWikidataClient implements WikidataClient {
 		// No maxlag: it's for background bots, and Wikidata's lag is often over the usual 5 seconds,
 		// which would refuse searches people are waiting on. 429 and 5xx still count as busy.
 		for (const [k, v] of Object.entries({ ...params, format: 'json' })) url.searchParams.set(k, v);
+		const fail = (detail: string): never => {
+			// Shows in `wrangler pages deployment tail` and the Cloudflare dashboard's logs.
+			console.error(`wikidata: ${params.action} failed: ${detail}`);
+			throw new WikidataBusyError(detail);
+		};
 		let response: Response;
 		try {
-			response = await this.fetcher(url, { headers: { 'user-agent': this.userAgent, accept: 'application/json' }, signal: AbortSignal.timeout(8000) });
-		} catch {
-			throw new WikidataBusyError();
+			response = await this.fetcher(url, {
+				headers: { 'user-agent': this.userAgent, 'api-user-agent': this.userAgent, accept: 'application/json' },
+				signal: AbortSignal.timeout(8000)
+			});
+		} catch (e) {
+			return fail(`request failed (${(e as Error).name}: ${(e as Error).message})`);
 		}
-		if (response.status === 429 || response.status >= 500) throw new WikidataBusyError();
-		const body = (await response.json()) as { error?: { code?: string } };
-		if (body.error?.code === 'maxlag') throw new WikidataBusyError();
-		if (body.error) throw new Error(`Wikidata API error: ${body.error.code}`);
+		if (!response.ok) {
+			const text = (await response.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 160);
+			return fail(`HTTP ${response.status}${response.headers.get('retry-after') ? `, retry-after ${response.headers.get('retry-after')}` : ''}${text ? `: ${text}` : ''}`);
+		}
+		let body: { error?: { code?: string; info?: string } };
+		try {
+			body = await response.json();
+		} catch {
+			return fail(`HTTP ${response.status} but the answer wasn't JSON`);
+		}
+		if (body.error) return fail(`API error ${body.error.code}${body.error.info ? `: ${body.error.info.slice(0, 120)}` : ''}`);
 		return body;
 	}
 
