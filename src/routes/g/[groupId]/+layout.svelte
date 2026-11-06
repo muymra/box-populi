@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import CopyButton from '#lib/components/CopyButton.svelte';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
 	const base = $derived(`/g/${data.group.id}`);
 	const current = $derived(page.url.pathname);
+	const inviteLink = $derived(data.code ? `${page.url.origin}/join/${data.code}` : null);
 </script>
 
 <svelte:head><title>{data.group.name} · {data.instanceName}</title></svelte:head>
@@ -16,6 +18,14 @@
 		<a href="{base}/pick" aria-current={current === `${base}/pick` ? 'page' : undefined}>What should we play?</a>
 	</nav>
 </div>
+
+{#if data.code && inviteLink}
+	<details class="invite">
+		<summary>Invite people · code <strong class="code">{data.code}</strong></summary>
+		<p>Share the code, or this link: <span class="link">{inviteLink}</span></p>
+		<CopyButton text={inviteLink} label="Copy invite link" />
+	</details>
+{/if}
 
 {#if data.group.isDemo}
 	<p class="banner">
@@ -52,6 +62,23 @@
 		color: var(--muted);
 		padding: 0.25rem 0;
 		border-bottom: 2px solid transparent;
+	}
+	.invite {
+		margin-top: 0.6rem;
+	}
+	.invite summary {
+		cursor: pointer;
+		color: var(--muted);
+	}
+	.code {
+		font-family: ui-monospace, monospace;
+		letter-spacing: 0.08em;
+		color: var(--text);
+	}
+	.link {
+		font-family: ui-monospace, monospace;
+		font-size: 0.88rem;
+		overflow-wrap: anywhere;
 	}
 	nav a[aria-current='page'] {
 		color: var(--text);

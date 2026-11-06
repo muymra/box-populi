@@ -8,7 +8,6 @@ export type PollSource = 'summary' | 'votes' | null;
 export type CatalogMember = {
 	id: string;
 	name: string;
-	avatarUrl: string | null;
 	role: Role;
 	lastSeenAt: number;
 };

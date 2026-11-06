@@ -5,7 +5,7 @@ How it's built: [TECH.md](./TECH.md). Settled decisions: [DECISIONS.md](./DECISI
 
 ## Summary
 
-Box Populi is a shared board game library for a friend group. Someone creates a group and gets a five-character code. Friends sign in with Google, join with the code, and add the games they own, usually by importing their BoardGameGeek collection. Anyone in the group can then search the combined catalog by player count, play time, complexity, mechanics and theme, see who owns a copy, and ask the app to suggest what to play with the people who showed up.
+Box Populi is a shared board game library for a friend group. Someone creates a group and gets a five-character code. Friends join with the code and a display name (no accounts, no passwords) and add the games they own, usually by importing their BoardGameGeek collection. Anyone in the group can then search the combined catalog by player count, play time, complexity, mechanics and theme, see who owns a copy, and ask the app to suggest what to play with the people who showed up.
 
 Game data (cover image, player counts, weight, mechanics, the community's "best at N players" votes) comes from BoardGameGeek (BGG). Rules and tutorial links are added by group members and sit next to the game.
 
@@ -57,7 +57,7 @@ A copy belongs to the user, not the group. When someone is in two groups, their 
 
 ### Saturday: the core
 
-1. Google sign-in.
+1. Identity without accounts: a display name, a device that stays signed in, and a personal link for other devices.
 2. Create a group; get a code. Join a group by code or by `/join/<code>` link.
 3. Add a game by searching BGG. Add a game by hand when BGG has no match or is unreachable.
 4. Group catalog with search and filters.
@@ -73,7 +73,7 @@ At the end of Saturday the app answers "who has X" and "what fits 5 players in u
 9. **"What should we play?" picker,** including "who's here tonight."
 10. **User-added links** for rules and videos, plus two generated links per game.
 11. **Roles and group admin.** Promote and demote co-admins, rename, regenerate the code, remove members, transfer ownership, delete the group.
-12. **Instance admin page.** Totals, a groups table without contents, user lookup by exact email, suspend and delete groups, ban and delete users, an action log.
+12. **Instance admin page.** Key sign-in, totals, a groups table without contents, suspend and delete groups, an action log.
 13. **Public demo group** for portfolio visitors.
 14. **Wishlist and the Wanted view.**
 15. **Lending.**
@@ -95,7 +95,7 @@ Never cut: import, the picker, the demo group, the phone layout, and the instanc
 
 - **Game night.** The owner picks a date; members say yes or no; each member marks which copies they'll bring. The picker's "who's here" covers the evening itself, so this is about planning ahead.
 - **Play log.** Date, game, players, winner. Feeds a "not played in a while" filter.
-- **Discord sign-in.** A natural fit for this audience. The auth tables already allow a second provider.
+- **Passkeys** as an optional second way to sign in on a new device, for people who'd rather not keep a link.
 - **CSV export** of the group catalog: game name, year, BGG link and owners. No BGG descriptions or statistics, so the export can't work as a copy of BGG's data.
 - **Installable PWA** so it sits on a phone home screen.
 
@@ -108,8 +108,8 @@ Ratings and reviews, a trading marketplace, chat, notifications, a native app, c
 ### Groups and codes
 
 - The code is five characters from an alphabet without lookalikes (no 0/O, 1/I/L), shown uppercase and matched case-insensitively. Example: `K7M4P`.
-- Join flow: sign in, enter the code, land on the catalog. A signed-out user who opens `/join/K7M4P` goes through Google sign-in and comes back to the join page with the code still filled in.
-- The code is a shared secret, so joining needs a login and failed join attempts are rate-limited.
+- Join flow: open `/join/K7M4P` (or type the code), type a display name, land on the catalog. A device that's already in another group skips the name step.
+- The code is a shared secret, so failed join attempts are rate-limited per device and IP address.
 - The owner or a co-admin can regenerate the code, which invalidates the old one. Existing members are unaffected.
 
 ### Roles and permissions
@@ -213,9 +213,9 @@ On Carlo's instance, `/demo` shows a read-only group seeded from his BGG collect
 ### Self-hosting
 
 - The repository holds everything needed to run an instance: code, migrations, example config, and SELF_HOSTING.md.
-- A hoster needs a free Cloudflare account, a Google Cloud project for sign-in, and optionally their own BGG application for search and import. No instance depends on Carlo's, and no secrets or ids from Carlo's deployment are in the repo.
+- A hoster needs a free Cloudflare account, and optionally their own BGG application for search and import. There's no sign-in provider to set up. No instance depends on Carlo's, and no secrets or ids from Carlo's deployment are in the repo.
 - BGG's terms make an instance commercial if it takes any payment or donation, shows ads, or supports a business or event such as a game store, café or convention, even a non-profit one. Those hosters need BGG's commercial license, or must run with BGG switched off.
-- Instance settings: name, contact address, admin emails, whether anyone or only admins can create groups, and limits on groups per user and members per group.
+- Instance settings: name, contact address, admin key, whether anyone or only the hoster can create groups, and limits on groups per person and members per group.
 - Upgrading is pull, apply migrations, deploy. SELF_HOSTING.md has the commands.
 - The privacy page is generated from the instance settings, so it names the hoster's instance and contact, not Carlo's.
 
@@ -224,22 +224,23 @@ On Carlo's instance, `/demo` shows a read-only group seeded from his BGG collect
 Hosters need to deal with abuse and keep the instance within its free tier without reading people's groups.
 
 - **What the admin page shows:** totals (users, groups, games, copies), and a table of groups with name, created date, member count, copy count, last activity and status.
-- **What it never shows:** member names, emails, join codes, collections, links or wishlists. Without join codes, an admin can't enter a group uninvited. Being an instance admin grants nothing inside groups.
-- **User lookup:** by exact email only, for example from an abuse report or a deletion request. Shows whether the account exists, its age, how many groups it's in, and whether it's banned. Users can't be listed or browsed.
-- **Actions:** suspend a group (members see it read-only with the reason and the hoster's contact), unsuspend, delete a group, ban a user (can't sign in), unban, delete a user. Each needs a written reason and is recorded in a log every admin can see.
+- **What it never shows:** member names, join codes, collections, links or wishlists. Without join codes, the admin can't enter a group uninvited. Being the instance admin grants nothing inside groups.
+- **Actions:** suspend a group (members see it read-only with the reason and the hoster's contact), unsuspend, delete a group. Each needs a written reason and goes in the action log. There are no user-level actions, since the app knows nothing about people beyond a display name.
 - **Honesty about limits:** the hoster runs the database and could read it directly. The privacy page says so. What the app promises is that its admin screens don't expose group contents and that admin actions are logged.
 
 ### Account
 
-- The display name starts as the Google profile name and can be changed on the account page. Sign-ins never overwrite it.
+- People choose a display name when they create or join a group and can change it on the account page.
+- **Personal link.** Shown once after creating or joining, with a copy button and "keep this like a password." Opening it on another device and confirming signs in there. The account page makes a new one, which kills the old one, and has "sign out everywhere."
+- **Losing every device** without the link means rejoining with the group code as a new person and re-importing from BGG; a group admin removes the old entry. Nobody, including admins, can sign in as someone else.
 - A user can delete their account, which removes their copies, wishlist entries, memberships and sessions. Links they added stay, attributed to "former member." An owner of a group with other members must transfer ownership or delete the group first.
 
 ## Access and privacy
 
 - Group data is visible to its members only. The demo group is the exception and contains no real users.
-- Other members see a display name and avatar. Email addresses are never shown.
+- Other members see a display name. The app stores no email addresses or other contact details.
 - BGG usernames entered for import are used for the fetch and not stored.
-- A short `/privacy` page states who runs the instance and how to reach them, what's stored (name, avatar URL, email, games, group memberships), why, how to delete it, what the instance admin can and can't see in the app, and that the hoster has direct database access. Google's sign-in setup asks for this link.
+- A short `/privacy` page states who runs the instance and how to reach them, what's stored (display name, games, group memberships, a sign-in cookie), why, how to delete it, what the instance admin can and can't see in the app, and that the hoster has direct database access. 
 - Each hoster is responsible for their own instance's data and for following BGG's terms. SELF_HOSTING.md says so up front.
 
 ## Quality bar

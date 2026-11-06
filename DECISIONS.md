@@ -23,7 +23,7 @@ Planned on SvelteKit 2; built on SvelteKit 3, which `sv create` scaffolded becau
 
 **Why:** form actions and server routes in one project, small bundles for phones, about ten tables that don't justify an ORM.
 
-## D05. Google sign-in through arctic, own sessions in D1 (2026-11-06)
+## D05. Google sign-in through arctic, own sessions in D1 (2026-11-06). Superseded by D25.
 
 Not Lucia (deprecated), not an auth vendor. `oauth_accounts` is keyed by provider so Discord can be added.
 **Why:** no third-party service per hoster beyond Google itself.
@@ -91,12 +91,12 @@ No token in the repo, no instance proxying BGG for another. `BGG_MODE=off` lets 
 Committed fixtures are hand-written with invented games; real responses and seed output are gitignored.
 **Why:** BGG's terms license the data for non-commercial use and prohibit AI training on it. A public repo is both a redistribution and a crawler target.
 
-## D20. Instance admins manage without reading (2026-11-06)
+## D20. Instance admins manage without reading (2026-11-06). Narrowed by D25: no emails, so no user lookup or bans.
 
 `/admin` shows totals and per-group counts. It never shows members, emails, codes, collections, links or wishlists. User lookup takes an exact email only. Every action needs a reason and is logged.
 **Why:** hosters need abuse and capacity controls; members of a group shouldn't have to trust the hoster's curiosity. The privacy page says the hoster can still read the database directly.
 
-## D21. Instance admins come from a secret, not the database (2026-11-06)
+## D21. Instance admins come from a secret, not the database (2026-11-06). Superseded by D25: now an `ADMIN_KEY` secret.
 
 `INSTANCE_ADMINS` lists verified Google emails.
 **Why:** no bootstrap problem (who makes the first admin?), and revoking is a redeploy.
@@ -129,3 +129,16 @@ TECH.md "Access and terms" maps each rule to the plan.
 - **`node:sqlite` for SQL tests** instead of `better-sqlite3`. It's built into Node, so there's no native module to compile.
 - **Node type stripping for scripts** instead of `tsx`.
 **Revisit if:** a contributor's Node lacks `node:sqlite` (it needs 22.13+), or SvelteKit 3 turns out to have gaps for Cloudflare Pages.
+
+## D25. No accounts: join with a code and a name, the device remembers you (2026-11-06)
+
+Replaces Google sign-in (D05) and email-based instance admins (D21), and narrows D20.
+- Creating or joining a group asks only for a display name. That creates a person and a long-lived session cookie on this device.
+- Each person has a **personal link**, a reusable secret URL that signs them in on another device. It's shown when they join and can be regenerated from their account page, which kills the old one. Only its hash is stored.
+- Nobody can issue a sign-in link for someone else, admins included. A person who loses every device rejoins with the group code as a new person and re-imports their games. An admin removes the old entry.
+- The instance admin signs in to `/admin` with the `ADMIN_KEY` secret. The admin isn't a user and has no access inside groups.
+- No emails are stored. The admin page has no user lookup and no user bans; admins act on groups (suspend, delete).
+- Rate limits key on IP address where there's no person yet (joining, creating groups).
+**Why:** Google sign-in meant a 15-minute Google Cloud setup for every hoster and a login wall for every friend, which is too much friction for friend groups. With no accounts there's no third party, no email, and sign-in works on preview deploys.
+**Trade-offs accepted:** whoever holds a personal link acts as that person, so it should be kept like a password; regenerating it revokes the leak. Lost-device recovery means rejoining.
+**Revisit if:** groups want recovery without rejoining. Passkeys were the runner-up.

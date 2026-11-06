@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CODE_ALPHABET, generateCode, normalizeCode } from './codes.ts';
 import { can, type GroupAction } from './permissions.ts';
-import { isInstanceAdmin, parseInstanceConfig } from './instance.ts';
+import { parseInstanceConfig } from './instance.ts';
 import type { Role } from '#lib/catalog/types.ts';
 
 describe('join codes', () => {
@@ -64,8 +64,7 @@ describe('permissions', () => {
 describe('instance config', () => {
 	const base = {
 		INSTANCE_CONTACT: 'mailto:host@example.org',
-		GOOGLE_CLIENT_ID: 'id',
-		GOOGLE_CLIENT_SECRET: 'secret',
+		ADMIN_KEY: 'a-long-enough-admin-key-0123456789',
 		BGG_MODE: 'off'
 	};
 
@@ -78,8 +77,7 @@ describe('instance config', () => {
 			groupCreation: 'anyone',
 			maxGroupsPerUser: 5,
 			maxMembersPerGroup: 100,
-			bggMinIntervalMs: 2000,
-			instanceAdmins: []
+			bggMinIntervalMs: 2000
 		});
 	});
 
@@ -91,24 +89,24 @@ describe('instance config', () => {
 		expect(result.ok).toBe(false);
 		if (result.ok) return;
 		const text = result.errors.join('\n');
-		for (const key of ['INSTANCE_CONTACT', 'GROUP_CREATION', 'MAX_GROUPS_PER_USER', 'BGG_TOKEN', 'BGG_MIN_INTERVAL_MS', 'GOOGLE_CLIENT_ID']) {
+		for (const key of ['INSTANCE_CONTACT', 'GROUP_CREATION', 'MAX_GROUPS_PER_USER', 'BGG_TOKEN', 'BGG_MIN_INTERVAL_MS', 'ADMIN_KEY']) {
 			expect(text).toContain(key);
 		}
 	});
 
-	it('allows fake BGG and missing Google only in dev', () => {
+	it('allows fake BGG and a missing admin key only in dev', () => {
 		const env = { INSTANCE_CONTACT: 'mailto:you@example.com', BGG_MODE: 'fake' };
 		expect(parseInstanceConfig(env, { dev: true }).ok).toBe(true);
 		const prod = parseInstanceConfig(env, { dev: false });
 		expect(prod.ok).toBe(false);
-		if (!prod.ok) expect(prod.errors.join('\n')).toMatch(/fake|example value|GOOGLE/);
+		if (!prod.ok) {
+			const text = prod.errors.join('\n');
+			for (const part of ['fake', 'example value', 'ADMIN_KEY']) expect(text).toContain(part);
+		}
 	});
 
-	it('matches admins case-insensitively and never without a verified email', () => {
-		const result = parseInstanceConfig({ ...base, INSTANCE_ADMINS: ' Host@Example.org , other@x.org' }, { dev: false });
-		if (!result.ok) throw new Error(result.errors.join());
-		expect(isInstanceAdmin(result.config, 'host@example.org')).toBe(true);
-		expect(isInstanceAdmin(result.config, null)).toBe(false);
-		expect(isInstanceAdmin(result.config, 'nobody@x.org')).toBe(false);
+	it('rejects a short admin key even in dev', () => {
+		const result = parseInstanceConfig({ ...base, ADMIN_KEY: 'short' }, { dev: true });
+		expect(result.ok).toBe(false);
 	});
 });

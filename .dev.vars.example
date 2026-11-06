@@ -1,6 +1,5 @@
 # Copy to .dev.vars (gitignored) for local development. `pnpm install` does the copy when it's missing.
 # Production values are set with `wrangler pages secret put <NAME>`; see SELF_HOSTING.md.
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
+# Signs you in to /admin. At least 24 characters: openssl rand -base64 32
+ADMIN_KEY=
 BGG_TOKEN=
-INSTANCE_ADMINS=

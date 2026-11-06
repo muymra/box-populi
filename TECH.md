@@ -15,7 +15,7 @@ Facts about third-party services below (BGG API terms, Cloudflare limits, librar
 | Database | Cloudflare D1 (SQLite), binding `DB` | Native to Pages Functions, no external service. |
 | Queries | Raw SQL through a thin helper in `src/lib/server/db.ts` | About ten tables; an ORM adds more than it saves over a weekend. |
 | Catalog filtering | In the browser, over a cached JSON payload | See "Catalog delivery." Driven by the 1,500-game scale and D1's daily limits. |
-| Auth | Google OAuth through `arctic` (v3), own sessions in D1 | No auth vendor. Lucia is deprecated as a library; don't install it. |
+| Identity | No accounts: a display name per person, a long-lived device session, and a reusable personal link for other devices (D25) | No third party, no email, nothing for hosters to set up. |
 | XML parsing | `fast-xml-parser` | Workers have no `DOMParser`. |
 | Images | Link to BGG's image CDN, thumbnails only in lists; see "Images" under the BGG section | Copying images would reproduce files whose rights sit with their uploaders and publishers. Disclosed on Carlo's BGG application. |
 | IDs | `crypto.randomUUID()` for users and groups; integer keys for games and copies | No dependency. |
@@ -113,15 +113,13 @@ The repo commits `wrangler.example.jsonc`. `pnpm install` copies it to `wrangler
 | Name | Kind | Default | Purpose |
 |---|---|---|---|
 | `DB` | D1 binding | required | The database. |
-| `GOOGLE_CLIENT_ID` | secret | required | The hoster's own OAuth client. |
-| `GOOGLE_CLIENT_SECRET` | secret | required | The hoster's own OAuth client. |
+| `ADMIN_KEY` | secret | required in production | Signs the hoster in to `/admin`. At least 24 characters; generate one with `openssl rand -base64 32`. |
 | `BGG_TOKEN` | secret | required when `BGG_MODE=live` | The hoster's own BGG application token. BGG registers applications, not people. |
-| `INSTANCE_ADMINS` | secret | empty | Comma-separated Google emails of the instance admins. A secret so the addresses stay out of config files. |
 | `BGG_MODE` | var | `live` | `live`, `off` or `fake`. `off` runs without a token: manual entry only, BGG search and import hidden. `fake` serves test fixtures and is for development only. |
 | `BGG_MIN_INTERVAL_MS` | var | `2000` | Minimum spacing between BGG requests across the whole instance. Values under 2000 are rejected, so the code can't be configured into hammering BGG. |
 | `INSTANCE_NAME` | var | `Box Populi` | Header, page titles, privacy page. |
-| `INSTANCE_CONTACT` | var | required | A `mailto:` or `https:` URL for reaching the hoster. Shown on the privacy page, on suspension notices and to banned users. |
-| `GROUP_CREATION` | var | `anyone` | `anyone` or `admins`. With `admins`, only instance admins create groups; anyone signed in can still join with a code. |
+| `INSTANCE_CONTACT` | var | required | A `mailto:` or `https:` URL for reaching the hoster. Shown on the privacy page and on suspension notices. |
+| `GROUP_CREATION` | var | `anyone` | `anyone` or `admins`. With `admins`, only the hoster (signed in to `/admin`) creates groups; anyone can still join with a code. |
 | `MAX_GROUPS_PER_USER` | var | `5` | Groups one user can own. |
 | `MAX_MEMBERS_PER_GROUP` | var | `100` | Joins are refused past this. |
 
@@ -129,7 +127,7 @@ The repo commits `wrangler.example.jsonc`. `pnpm install` copies it to `wrangler
 
 Local values go in `.dev.vars` (copied from `.dev.vars.example`), with `BGG_MODE=fake` until a token arrives. Production secrets: `pnpm exec wrangler pages secret put <NAME> --project-name <project>`. Secrets never go in the repo, in STATUS.md, or in client bundles. Nothing under `src/lib/catalog/` and no `+page.svelte` may import from `#lib/server`.
 
-Bindings and variables come from `import { env } from 'cloudflare:workers'` (SvelteKit 3 no longer passes them through `event.platform`). Only `src/lib/server/platform.ts` imports that module; everything else receives `db` or `config` as arguments, which keeps it testable in plain Node. `src/app.d.ts` types `App.Locals` as `{ config: InstanceConfig; user: { id; name; avatarUrl; isInstanceAdmin } | null }`.
+Bindings and variables come from `import { env } from 'cloudflare:workers'` (SvelteKit 3 no longer passes them through `event.platform`). Only `src/lib/server/platform.ts` imports that module; everything else receives `db` or `config` as arguments, which keeps it testable in plain Node. `src/app.d.ts` types `App.Locals` as `{ config: InstanceConfig; user: { id; name } | null; isAdmin: boolean }`.
 
 ## Data model
 
@@ -137,21 +135,19 @@ Bindings and variables come from `import { env } from 'cloudflare:workers'` (Sve
 
 ```sql
 -- identity
+-- A person: a display name and nothing else (D25). No email, no third-party account.
 CREATE TABLE users (
   id          TEXT PRIMARY KEY,
-  name        TEXT NOT NULL,      -- display name: from Google on first sign-in, then user-editable
-  avatar_url  TEXT,               -- refreshed from Google on each sign-in
-  email       TEXT,               -- verified emails only; never sent to other users
-  banned_at   INTEGER,            -- set by an instance admin; blocks sign-in
+  name        TEXT NOT NULL,      -- chosen when creating or joining a group; editable
   created_at  INTEGER NOT NULL
 );
-CREATE INDEX users_email ON users(email);
 
-CREATE TABLE oauth_accounts (
-  provider          TEXT NOT NULL,      -- 'google'; 'discord' later
-  provider_user_id  TEXT NOT NULL,
-  user_id           TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  PRIMARY KEY (provider, provider_user_id)
+-- The reusable personal link that signs a person in on another device. One per person;
+-- regenerating replaces it. Only the hash is stored.
+CREATE TABLE personal_links (
+  user_id     TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  token_hash  TEXT NOT NULL UNIQUE,
+  created_at  INTEGER NOT NULL
 );
 
 CREATE TABLE sessions (
@@ -247,13 +243,13 @@ CREATE TABLE game_links (
 );
 CREATE INDEX game_links_lookup ON game_links(group_id, game_id);
 
--- rate limiting (join attempts, BGG proxy calls)
+-- rate limiting: subject is a user id, or 'ip:<address>' before a person exists
 CREATE TABLE rate_events (
-  user_id  TEXT NOT NULL,
-  kind     TEXT NOT NULL,     -- 'join_fail', 'bgg_search', 'bgg_import'
+  subject  TEXT NOT NULL,
+  kind     TEXT NOT NULL,     -- 'join_fail', 'group_create', 'link_fail', 'bgg_search', 'bgg_import'
   at       INTEGER NOT NULL
 );
-CREATE INDEX rate_events_lookup ON rate_events(user_id, kind, at);
+CREATE INDEX rate_events_lookup ON rate_events(subject, kind, at);
 
 -- instance-wide BGG request pacing (exactly one row)
 CREATE TABLE bgg_pace (
@@ -264,16 +260,12 @@ INSERT INTO bgg_pace (id, next_at) VALUES (1, 0);
 
 -- instance administration log
 CREATE TABLE admin_actions (
-  id             INTEGER PRIMARY KEY,
-  admin_user_id  TEXT NOT NULL,   -- no foreign key: the log outlives accounts
-  action         TEXT NOT NULL CHECK (action IN (
-                   'suspend_group','unsuspend_group','delete_group',
-                   'ban_user','unban_user','delete_user')),
-  target_id      TEXT NOT NULL,
-  target_label   TEXT NOT NULL,   -- group name, or "user created 2026-11-07"; never an email
-  reason         TEXT NOT NULL,
-  detail         TEXT,            -- e.g. "ownership of <group> passed to <user id>"
-  at             INTEGER NOT NULL
+  id            INTEGER PRIMARY KEY,
+  action        TEXT NOT NULL CHECK (action IN ('suspend_group','unsuspend_group','delete_group')),
+  target_id     TEXT NOT NULL,
+  target_label  TEXT NOT NULL,   -- the group's name at the time
+  reason        TEXT NOT NULL,
+  at            INTEGER NOT NULL
 );
 ```
 
@@ -287,9 +279,9 @@ Notes on the choices:
 - **Account deletion guard.** The cascade would delete an owner's membership and leave the group ownerless. The delete action first finds groups where the user is owner and other members remain, and refuses with a message to transfer or delete them. Groups where the user is the only member are deleted with them.
 - **Lending to a member** uses `lent_to_user_id`. That copy stays available in the group if the borrower is a member of it. `lent_to_text` means lent outside, which the availability filter hides.
 - **Games are never deleted.** They're a cache shared by every group. Stubs (`fetched_at IS NULL`) are valid rows that show name and cover.
-- **Suspension and bans** are timestamps rather than status enums, so "when" comes for free and NULL means normal.
-- **`admin_actions`** stores ids and labels, not emails, so the log doesn't keep personal data after an account is deleted.
-- **`catalog_version`** is bumped by `bumpCatalogForUser(userId)` in the same batch as any change that alters a group's catalog payload: adding, editing or removing a copy, loans, joining, leaving or removal of a member, a display name or avatar change, and each hydrate step. It bumps every group the user belongs to. Background refreshes of stale games don't bump it; that staleness is accepted.
+- **Suspension** is a timestamp rather than a status enum, so "when" comes for free and NULL means normal.
+- **No personal data beyond a display name.** There are no emails to protect, look up or leak.
+- **`catalog_version`** is bumped by `bumpCatalogForUser(userId)` in the same batch as any change that alters a group's catalog payload: adding, editing or removing a copy, loans, joining, leaving or removal of a member, a display name change, and each hydrate step. It bumps every group the user belongs to. Background refreshes of stale games don't bump it; that staleness is accepted.
 
 ## Catalog delivery
 
@@ -305,7 +297,7 @@ Notes on the choices:
 export type Role = 'owner' | 'admin' | 'member';
 
 export type CatalogMember = {
-  id: string; name: string; avatarUrl: string | null; role: Role; lastSeenAt: number;
+  id: string; name: string; role: Role; lastSeenAt: number;
 };
 
 export type CatalogCopy = {
@@ -341,22 +333,23 @@ Filtering, sorting and the picker run in the browser through pure functions in `
 
 Rendering: show the count, render the first 60 results, and append 60 more when a sentinel element scrolls into view (`IntersectionObserver`). Thumbnails use `loading="lazy"` with fixed width and height to avoid layout shift.
 
-## Authentication
+## Identity and sessions
 
-1. `GET /auth/google?returnTo=/join/K7M4P` generates `state` and a PKCE verifier with arctic, stores them and `returnTo` in short-lived HttpOnly cookies (10 minutes), and redirects to Google with scopes `openid profile email`.
-2. `GET /auth/google/callback` checks `state` against its cookie, exchanges the code, and decodes the ID token for `sub`, `name`, `picture`, `email`, `email_verified`. An unverified email is stored as NULL, so it can never match `INSTANCE_ADMINS` or an admin's lookup.
-3. Look up `oauth_accounts` by `('google', sub)`. New user: create `users` with `name` from Google and the account row. Existing user: update `avatar_url` and `email` only. Never overwrite `name`. If `banned_at` is set, stop and show "This account is disabled on this instance," with `INSTANCE_CONTACT`.
-4. Delete that user's expired sessions, then create one: 32 random bytes as the cookie value (base64url), hex sha256 of it as `sessions.id`, expiry 30 days. When a request finds a session with under 15 days left, extend it to 30.
-5. Cookie `session`: `HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`. In local dev over http, drop `Secure`.
-6. Redirect to `returnTo` only if it starts with `/` and not `//` or `/\`. Anything else goes to `/`. This prevents an open redirect.
-7. `hooks.server.ts` resolves the cookie on every request into `event.locals.user`. An expired session row is deleted when found. `isInstanceAdmin` is computed on each request by comparing the user's verified email, case-insensitively, with `INSTANCE_ADMINS`, so removing an address and redeploying revokes access at once.
-8. `POST /auth/logout` deletes the session row and the cookie.
+No accounts (D25). A person is a display name; a device proves who it is with a session cookie.
 
-The redirect URI is `${url.origin}/auth/google/callback`. Each hoster registers `http://localhost:5173/auth/google/callback` and `https://<their host>/auth/google/callback` in their own Google Cloud project. Pages preview deployments get random subdomains that can't be registered, so sign-in doesn't work on previews. Test auth locally and on production.
+**Creating or joining.** `/groups/new` and `/join/[code]` ask for a display name when the device has no session. The action creates the `users` row, the membership, a session and a personal link in one batch. The next page shows the personal link once, with a copy button and the advice to keep it like a password.
 
-The Google consent screen must be set to "In production." In Testing, only listed test users can sign in. The requested scopes are non-sensitive, so publishing doesn't need Google's verification review. The consent screen links to `/privacy`.
+**Sessions.** 32 random bytes, base64url, in the cookie `bp_session` (`HttpOnly; Secure; SameSite=Lax; Path=/`, `Max-Age` 400 days, the browser maximum). `sessions.id` holds its hex SHA-256, so a leaked database holds no usable sessions. Expiry is 400 days and slides: a request finding under 200 days left extends it. `hooks.server.ts` resolves the cookie into `event.locals.user = { id, name }` and deletes the row when it finds it expired. In local dev over http, the cookie drops `Secure`.
 
-Only the token's hash is stored, so a leaked database doesn't leak usable sessions.
+**Personal link.** `/key/<token>`, with 32 random bytes as the token and its SHA-256 in `personal_links`, one row per person.
+- `GET /key/<token>` shows "Sign in as Ada on this device?" and changes nothing, so chat apps that preview links can't sign anyone in. The button POSTs to the same URL, which creates a new session for that person and redirects to `/`.
+- The account page regenerates it, which replaces the row, so the old link stops working at once. The same page offers "Sign out everywhere", which deletes all the person's sessions and regenerates the link.
+- Failed redemptions record `link_fail` rate events by IP: 10 per hour.
+- Nobody can create a link for someone else, admins included. Recovery after losing every device is rejoining as a new person (D25).
+
+**Signed-out visitors** to a non-demo group page land on `/signin`. It explains that they're not signed in on this device, and offers "open your personal link" or "join with a code". `returnTo` is carried through join and link redemption, and accepted only when it starts with `/` and not `//` or `/\` (`return-to.ts`).
+
+**Instance admin.** `/admin/login` takes `ADMIN_KEY`. It compares SHA-256 digests in constant time, and on success sets `bp_admin` (`HttpOnly; Secure; SameSite=Strict; Path=/admin`, 12 hours). The cookie value is an HMAC of its expiry time keyed with `ADMIN_KEY`, so changing the key signs every admin out. Failures are rate-limited by IP: 5 per 15 minutes. `locals.isAdmin` reflects a valid cookie. Admin status grants nothing inside groups.
 
 ## Authorization
 
@@ -364,12 +357,12 @@ Helpers in `src/lib/server/authz.ts`, used by every load function, action and en
 
 | Helper | Allows | Use for |
 |---|---|---|
-| `requireUser(event)` | any signed-in user; otherwise redirect to `/auth/google?returnTo=<current path>` | `/me`, creating and joining groups |
+| `requireUser(event)` | a device with a session; otherwise redirect to `/signin?returnTo=<current path>` | `/me` |
 | `requireRead(event, groupId)` | members of the group, or anyone when `is_demo = 1` | every group page load and the catalog endpoint |
 | `requireRole(event, groupId, minRole)` | members with role at least `minRole` (`member` < `admin` < `owner`); always refuses demo groups; refuses suspended groups except for leaving and for the owner deleting the group | every mutation |
-| `requireInstanceAdmin(event)` | users with `isInstanceAdmin`; everyone else gets 404 | `/admin` and its actions |
+| `requireAdmin(event)` | a valid `bp_admin` cookie; otherwise redirect to `/admin/login` | `/admin` and its actions |
 
-Each group helper returns the group row and the caller's role. A missing group and a non-member get the same 404, so group IDs can't be probed. Being an instance admin grants nothing inside groups: `requireRead` and `requireRole` ignore `isInstanceAdmin`.
+Each group helper returns the group row and the caller's role. A missing group and a non-member get the same 404, so group IDs can't be probed. Being the instance admin grants nothing inside groups: `requireRead` and `requireRole` ignore `isAdmin`.
 
 The role table from the PRD lives in `src/lib/server/permissions.ts` as a pure function, `can(actorRole, action, targetRole?)`, tested against every combination. Actions call `requireRole` and then `can()` with the target's role read fresh from the database. Never trust a role sent by the client, and never rely on a hidden button.
 
@@ -383,21 +376,19 @@ The role table from the PRD lives in `src/lib/server/permissions.ts` as a pure f
 
 `hooks.server.ts` touches `memberships.last_seen_at` on group routes when the stored value is more than an hour old. That's one write per member per hour at most.
 
-Instance limits apply in the actions: creating a group checks `GROUP_CREATION` and the caller's owned-group count against `MAX_GROUPS_PER_USER`. Joining checks `MAX_MEMBERS_PER_GROUP` and refuses suspended and demo groups.
+Instance limits apply in the actions: creating a group checks `GROUP_CREATION`, the caller's owned-group count against `MAX_GROUPS_PER_USER`, and 5 `group_create` events per IP per day. Joining checks `MAX_MEMBERS_PER_GROUP` and refuses suspended and demo groups.
 
 ## Instance administration
 
-Instance admins are the accounts whose verified email is in `INSTANCE_ADMINS`. `/admin` is built to let them run the instance without reading what's in it.
+The instance admin is whoever holds `ADMIN_KEY` (see "Identity and sessions"). `/admin` is built to let them run the instance without reading what's in it.
 
 The admin page shows:
 
-- Totals: users, groups, cached games, copies, sessions and `rate_events` rows, for spotting runaway growth against the free tier.
+- Totals: people, groups, cached games, copies, sessions and `rate_events` rows, for spotting runaway growth against the free tier.
 - A groups table: name, created date, member count, copy count, last activity (the latest `last_seen_at` among members), and status. Sortable by each column.
 - The admin log, newest first.
 
-It never shows member names or lists, emails, join codes, collections, links or wishlists. Without codes, an admin can't join a group they haven't been invited to.
-
-User lookup takes an exact email address, typically from an abuse report or a deletion request. It returns whether an account exists, its creation date, how many groups it belongs to and owns, and whether it's banned. There is no list or partial search of users, so addresses can't be browsed. Lookups aren't logged; actions are.
+It never shows member names or lists, join codes, collections, links or wishlists. Without codes, an admin can't join a group they haven't been invited to. There are no emails anywhere, so there's no user lookup and no user bans; abuse is handled per group.
 
 Actions. Each requires a written reason and writes a row to `admin_actions`.
 
@@ -406,9 +397,6 @@ Actions. Each requires a written reason and writes a row to `admin_actions`.
 | Suspend group | Members can still open it read-only, with a banner showing the reason and `INSTANCE_CONTACT`. Joins and all other changes are refused. Members can leave, and the owner can delete the group. |
 | Unsuspend group | Back to normal. |
 | Delete group | Requires typing the group name. Same cascade as an owner deleting it. Members' copies stay on their accounts. |
-| Ban user | Sets `banned_at` and deletes their sessions. They can't sign in. Their copies and memberships stay until deleted, and group admins can remove them. |
-| Unban user | Clears `banned_at`. |
-| Delete user | Same cascade as deleting one's own account. Groups they own with other members pass to the longest-standing co-admin, else the longest-standing member; each handover goes in `detail`. Groups where they're the only member are deleted. |
 
 The hoster operates the database and can read all of it with `wrangler d1 execute`. The app can't prevent that, and the privacy page says so plainly. What the app guarantees is that its admin screens don't expose group contents and that every admin action is logged.
 
@@ -417,7 +405,7 @@ The hoster operates the database and can read all of it with `wrangler d1 execut
 - Alphabet `ABCDEFGHJKMNPQRSTUVWXYZ23456789`: 31 characters with no 0, O, 1, I or L. Five characters give about 28.6 million codes.
 - Generate with `crypto.getRandomValues` and rejection sampling (discard bytes ≥ 248 so each character is uniform). Retry on a unique-constraint collision.
 - Normalize input with trim and uppercase. Lookalike characters never appear in a code, so no substitution is needed.
-- Joining records a `join_fail` rate event on a miss. Five misses in 10 minutes blocks further attempts for that user until the window passes. Old `rate_events` rows for the user and kind are deleted whenever a new one is written, since Pages has no cron.
+- Joining records a `join_fail` rate event on a miss, keyed on the IP address (and the person, when signed in). Five misses in 10 minutes block further attempts until the window passes. Old `rate_events` rows for the subject and kind are deleted whenever a new one is written, since Pages has no cron.
 - The demo group's code is `DEMO0`. The `0` keeps it out of the generator's alphabet, and the join action refuses demo groups anyway.
 
 ## BoardGameGeek integration
@@ -644,20 +632,22 @@ URL params: `n`, `t`, `w`, `present` (comma-separated user ids), `seen` (ids alr
 
 | Route | Purpose | Guard |
 |---|---|---|
-| `/` | Signed out: landing with "See a demo group." Signed in: group list, or redirect when there's one group. | none |
+| `/` | Landing with "Create a group", "Join with a code" and "See a demo group"; a device with a session also sees its groups. | none |
 | `/privacy` | What's stored, why, how to delete it. | none |
 | `/demo` | Redirect to `/g/demo`. | none |
-| `/join` and `/join/[code]` | Join form, code prefilled from the URL. | `requireUser` |
-| `/groups/new` | Create a group. | `requireUser`, plus `GROUP_CREATION` and `MAX_GROUPS_PER_USER` |
-| `/admin` | Instance totals, groups table, user lookup, admin log, and the actions above. | `requireInstanceAdmin` |
+| `/join` and `/join/[code]` | Join form, code prefilled from the URL. Asks for a display name when the device has no session. | none; rate-limited by IP |
+| `/groups/new` | Create a group. Asks for a display name when the device has no session. | `GROUP_CREATION`, `MAX_GROUPS_PER_USER`, rate limit by IP |
+| `/welcome` | Shown once after creating or joining: the personal link with a copy button. | `requireUser` |
+| `/signin` | "You're not signed in on this device": open your personal link, or join with a code. | none |
+| `/key/[token]` | GET confirms "Sign in as <name> on this device?"; POST signs in. | rate-limited by IP |
+| `/admin/login`, `/admin` | Key sign-in; then totals, groups table, admin log and the group actions. | `requireAdmin` (except the login form) |
 | `/g/[groupId]` | Catalog. | `requireRead` |
 | `/g/[groupId]/game/[gameId]` | Game page: details, owners, links, wishlisters, expansions. | `requireRead` |
 | `/g/[groupId]/add` | BGG search, manual entry, import. | `requireRole(member)` |
 | `/g/[groupId]/pick` | Picker. | `requireRead` |
 | `/g/[groupId]/wanted` | Games members want that nobody in the group owns. | `requireRead` |
 | `/g/[groupId]/settings` | Members and roles, rename, code, delete. Members see the list; admins and the owner see their controls. | `requireRole(member)` |
-| `/me` | My games and loans, wishlist, display name, account deletion. | `requireUser` |
-| `/auth/google`, `/auth/google/callback`, `POST /auth/logout` | Sign-in and out. | none |
+| `/me` | Display name, groups, new personal link, sign out of this device or everywhere, account deletion. Later: my games, loans and wishlist. | `requireUser` |
 | `GET /api/g/[groupId]/catalog` | Catalog payload with ETag. | `requireRead` |
 | `GET /api/bgg/search` | BGG search proxy. | `requireUser` |
 | `POST /api/bgg/import`, `/api/bgg/import/confirm`, `/api/bgg/hydrate` | Import flow. | `requireUser` |
@@ -686,12 +676,13 @@ D1 binds parameters by position (`?1`, `?2` or `?`). Named parameters like `:gro
 - Bind every value; never interpolate into SQL.
 - Link URLs: parse with `new URL()`, accept only `http:` and `https:`, store the normalized string, and render with `rel="noopener noreferrer nofollow"` and `target="_blank"`.
 - BGG descriptions are stored as plain text. Never use `{@html}` anywhere in the app.
-- `returnTo` is validated as described under "Authentication."
-- Join attempts and BGG proxy calls are rate-limited per user through `rate_events`.
-- Email is selected only in queries that serve the user themselves.
+- `returnTo` is validated as described under "Identity and sessions."
+- Join attempts, group creation, personal-link redemption and admin sign-in are rate-limited by IP; BGG proxy calls per person. All through `rate_events`.
+- Session tokens, personal-link tokens and the admin key are compared as SHA-256 digests; only digests are stored.
+- The personal-link GET never changes state, so link previews in chat apps can't sign anyone in.
 - The demo group is read-only on the server, not only in the UI.
 - Manual image URLs must be `https:`.
-- `/admin` returns 404, not 403, to non-admins, and its queries select only the columns listed under "Instance administration." Adding a column to an admin query that exposes group contents or emails needs a DECISIONS.md entry.
+- `/admin` returns 404, not 403, to non-admins, and its queries select only the columns listed under "Instance administration." Adding a column to an admin query that exposes group contents or member names needs a DECISIONS.md entry.
 
 ## Testing
 
@@ -705,7 +696,8 @@ Run with `pnpm test` (Vitest). Tests sit next to their code as `*.test.ts`.
 | `codes.ts` | Alphabet only, length 5. |
 | BGG pacer | SQL test: ten concurrent reservations get distinct slots at least `BGG_MIN_INTERVAL_MS` apart; a 503 pushes `next_at` out by 30 seconds. |
 | `instance.ts` | Defaults applied, required values reported by name, bad values (`GROUP_CREATION=maybe`, non-numeric limits, `BGG_MIN_INTERVAL_MS` under 2000) rejected. |
-| Instance admin | SQL tests: a banned user's sessions are gone and sign-in is refused; a suspended group refuses changes but allows leaving; deleting a user hands groups to the right member; every action writes `admin_actions`; the lookup matches only an exact verified email. |
+| Identity | SQL tests: creating and joining make a person, membership, session and personal link; a regenerated link kills the old one; "sign out everywhere" deletes every session; expired sessions are refused and deleted. |
+| Instance admin | The admin cookie verifies and expires; a changed `ADMIN_KEY` invalidates it; a suspended group refuses changes but allows leaving; every action writes `admin_actions`. |
 | SQL | `src/lib/server/testing/d1.ts` applies `migrations/*.sql` to an in-memory `node:sqlite` database with `PRAGMA foreign_keys = ON` (D1 enforces foreign keys by default; plain SQLite doesn't) and gives it D1's `prepare().bind().first()/all()/run()` and `batch()` shape. Cover ownership transfer order, the second-owner rejection, the account deletion guard, the catalog payload query, and the Wanted query. |
 
 `pnpm check` (svelte-check) must pass as well. For pages, run `pnpm dev` and look: headless screenshots work through Windows Chrome on this machine (the Linux headless shell lacks system libraries), but it can't go below about 500 px wide, so check phone widths on a real phone. Playwright is optional and comes last.
@@ -721,6 +713,7 @@ Run with `pnpm test` (Vitest). Tests sit next to their code as `*.test.ts`.
 | Player-poll parsing misreads edge cases | Fixtures for the odd cases; no-data fallback. |
 | Catalog payload too large on slow phones | Measure at 1,500 games. Trim alternate names first, then send tag ids with a dictionary. |
 | A large group's import day nears the D1 write limit | One row per game keeps it near 20,000 writes. Workers Paid is the fallback. |
-| Preview deploys can't sign in | Test auth locally and on production. |
+| A personal link leaks (pasted in the wrong chat) | Regenerating it from the account page revokes it at once; "sign out everywhere" also ends existing sessions. |
+| Someone loses every device without saving their link | Rejoin with the group code and re-import; a group admin removes the old entry. Accepted trade-off (D25). |
 | A hoster misconfigures their instance | `instance.ts` names the missing variable on every page. SELF_HOSTING.md lists every step, and each is checked by doing it once on a fresh Cloudflare account. |
 | Scope creep | The PRD's cut order and stretch list are fixed. Nothing joins the stretch list before Sunday's items ship. |

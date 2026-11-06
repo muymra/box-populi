@@ -9,16 +9,17 @@ export type InstanceConfig = {
 	groupCreation: 'anyone' | 'admins';
 	maxGroupsPerUser: number;
 	maxMembersPerGroup: number;
-	instanceAdmins: string[];
+	/** null in dev when unset, which leaves /admin disabled. Required in production. */
+	adminKey: string | null;
 	bggMode: BggMode;
 	bggToken: string | null;
 	bggMinIntervalMs: number;
-	google: { clientId: string; clientSecret: string } | null;
 };
 
 export type ConfigResult = { ok: true; config: InstanceConfig } | { ok: false; errors: string[] };
 
 export const MIN_BGG_INTERVAL_MS = 2000;
+export const MIN_ADMIN_KEY_LENGTH = 24;
 const EXAMPLE_CONTACT = 'mailto:you@example.com';
 
 function str(env: Record<string, unknown>, key: string): string {
@@ -68,11 +69,11 @@ export function parseInstanceConfig(env: Record<string, unknown>, opts: { dev: b
 		errors.push('BGG_MODE is "live" but BGG_TOKEN is not set. Add the token, or set BGG_MODE to "off".');
 	}
 
-	const clientId = str(env, 'GOOGLE_CLIENT_ID');
-	const clientSecret = str(env, 'GOOGLE_CLIENT_SECRET');
-	const google = clientId && clientSecret ? { clientId, clientSecret } : null;
-	if (!google && !opts.dev) {
-		errors.push('GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required for sign-in.');
+	const adminKey = str(env, 'ADMIN_KEY') || null;
+	if (adminKey && adminKey.length < MIN_ADMIN_KEY_LENGTH) {
+		errors.push(`ADMIN_KEY must be at least ${MIN_ADMIN_KEY_LENGTH} characters. Generate one with: openssl rand -base64 32`);
+	} else if (!adminKey && !opts.dev) {
+		errors.push('ADMIN_KEY is required: it signs you in to /admin. Generate one with: openssl rand -base64 32');
 	}
 
 	const config: InstanceConfig = {
@@ -81,19 +82,11 @@ export function parseInstanceConfig(env: Record<string, unknown>, opts: { dev: b
 		groupCreation: groupCreationRaw === 'admins' ? 'admins' : 'anyone',
 		maxGroupsPerUser: int('MAX_GROUPS_PER_USER', 5, 1),
 		maxMembersPerGroup: int('MAX_MEMBERS_PER_GROUP', 100, 2),
-		instanceAdmins: str(env, 'INSTANCE_ADMINS')
-			.split(',')
-			.map((e) => e.trim().toLowerCase())
-			.filter(Boolean),
+		adminKey,
 		bggMode,
 		bggToken,
-		bggMinIntervalMs: int('BGG_MIN_INTERVAL_MS', MIN_BGG_INTERVAL_MS, MIN_BGG_INTERVAL_MS),
-		google
+		bggMinIntervalMs: int('BGG_MIN_INTERVAL_MS', MIN_BGG_INTERVAL_MS, MIN_BGG_INTERVAL_MS)
 	};
 
 	return errors.length ? { ok: false, errors } : { ok: true, config };
-}
-
-export function isInstanceAdmin(config: InstanceConfig, verifiedEmail: string | null): boolean {
-	return verifiedEmail != null && config.instanceAdmins.includes(verifiedEmail.toLowerCase());
 }

@@ -4,6 +4,7 @@
 import { error, redirect, type RequestEvent } from '@sveltejs/kit';
 import { one, type DB } from './db.ts';
 import { atLeast } from './permissions.ts';
+import { touchLastSeen } from './groups.ts';
 import type { Role } from '#lib/catalog/types.ts';
 
 export type GroupInfo = {
@@ -67,6 +68,7 @@ export async function requireRead(event: RequestEvent, db: DB, groupId: string):
 	const user = requireUser(event);
 	const role = await memberRole(db, groupId, user.id);
 	if (!role) error(404, 'Group not found');
+	await touchLastSeen(db, groupId, user.id, Date.now());
 	return { group, role, readonly: group.suspended };
 }
 

@@ -4,7 +4,7 @@ A shared board game library for your group. Create a group, share its five-chara
 
 Open source and self-hosted: run your own instance on a free Cloudflare account. See [SELF_HOSTING.md](./SELF_HOSTING.md).
 
-**Status:** in progress. The read-only side runs locally (demo catalog, game pages, picker); sign-in and adding games are next. Progress is in [STATUS.md](./STATUS.md).
+**Status:** in progress. The read-only side runs locally (demo catalog, game pages, picker); joining, groups and adding games are next. Progress is in [STATUS.md](./STATUS.md).
 
 ## Run it locally
 
@@ -20,7 +20,7 @@ pnpm test
 
 ## Planned features
 
-- Google sign-in; join groups by code or link.
+- No accounts: join a group with its code and a display name; a personal link signs you in on other devices.
 - Catalog filters: players (including BGG's "best at N" votes), time, complexity, mechanics, themes, owner, availability.
 - BGG collection import, with manual entry as a fallback.
 - "What should we play?" picker that knows who's present.

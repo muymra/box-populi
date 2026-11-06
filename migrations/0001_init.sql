@@ -2,22 +2,18 @@
 -- Timestamps are Unix milliseconds. JSON columns hold arrays of strings or numbers.
 -- Never edit this file once applied anywhere; add a new migration instead.
 
--- identity
+-- identity: a person is a display name; no accounts, no emails (DECISIONS D25)
 CREATE TABLE users (
   id          TEXT PRIMARY KEY,
-  name        TEXT NOT NULL,      -- display name: from Google on first sign-in, then user-editable
-  avatar_url  TEXT,               -- refreshed from Google on each sign-in
-  email       TEXT,               -- verified emails only; never sent to other users
-  banned_at   INTEGER,            -- set by an instance admin; blocks sign-in
+  name        TEXT NOT NULL,
   created_at  INTEGER NOT NULL
 );
-CREATE INDEX users_email ON users(email);
 
-CREATE TABLE oauth_accounts (
-  provider          TEXT NOT NULL,
-  provider_user_id  TEXT NOT NULL,
-  user_id           TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  PRIMARY KEY (provider, provider_user_id)
+-- the reusable personal link for signing in on another device; one per person, hash only
+CREATE TABLE personal_links (
+  user_id     TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  token_hash  TEXT NOT NULL UNIQUE,
+  created_at  INTEGER NOT NULL
 );
 
 CREATE TABLE sessions (
@@ -111,13 +107,13 @@ CREATE TABLE game_links (
 );
 CREATE INDEX game_links_lookup ON game_links(group_id, game_id);
 
--- rate limiting
+-- rate limiting; subject is a user id or 'ip:<address>'
 CREATE TABLE rate_events (
-  user_id  TEXT NOT NULL,
+  subject  TEXT NOT NULL,
   kind     TEXT NOT NULL,
   at       INTEGER NOT NULL
 );
-CREATE INDEX rate_events_lookup ON rate_events(user_id, kind, at);
+CREATE INDEX rate_events_lookup ON rate_events(subject, kind, at);
 
 -- instance-wide BGG request pacing (exactly one row)
 CREATE TABLE bgg_pace (
@@ -128,14 +124,10 @@ INSERT INTO bgg_pace (id, next_at) VALUES (1, 0);
 
 -- instance administration log
 CREATE TABLE admin_actions (
-  id             INTEGER PRIMARY KEY,
-  admin_user_id  TEXT NOT NULL,
-  action         TEXT NOT NULL CHECK (action IN (
-                   'suspend_group','unsuspend_group','delete_group',
-                   'ban_user','unban_user','delete_user')),
-  target_id      TEXT NOT NULL,
-  target_label   TEXT NOT NULL,
-  reason         TEXT NOT NULL,
-  detail         TEXT,
-  at             INTEGER NOT NULL
+  id            INTEGER PRIMARY KEY,
+  action        TEXT NOT NULL CHECK (action IN ('suspend_group','unsuspend_group','delete_group')),
+  target_id     TEXT NOT NULL,
+  target_label  TEXT NOT NULL,
+  reason        TEXT NOT NULL,
+  at            INTEGER NOT NULL
 );

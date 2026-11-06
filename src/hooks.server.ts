@@ -1,5 +1,7 @@
 import type { Handle } from '@sveltejs/kit/hooks';
-import { getConfig } from '#lib/server/platform.ts';
+import { getConfig, getDb } from '#lib/server/platform.ts';
+import { resolveSession, SESSION_COOKIE } from '#lib/server/identity.ts';
+import { clearSessionCookie, setSessionCookie } from '#lib/server/cookies.ts';
 
 const escapeHtml = (s: string) =>
 	s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -18,11 +20,17 @@ function configErrorPage(errors: string[]): Response {
 export const handle: Handle = async ({ event, resolve }) => {
 	const config = getConfig();
 	if (!config.ok) return configErrorPage(config.errors);
-
 	event.locals.config = config.config;
-	// Sessions arrive with Google sign-in (STATUS.md Saturday step 3). Until then nobody is signed in,
-	// which still allows the demo group, the landing page and the privacy page.
-	event.locals.user = null;
+
+	// Who is this device? (DECISIONS D25)
+	const token = event.cookies.get(SESSION_COOKIE);
+	const session = token ? await resolveSession(getDb(), token, Date.now()) : null;
+	if (token && !session) clearSessionCookie(event.cookies, event.url);
+	if (token && session?.extended) setSessionCookie(event.cookies, event.url, token);
+	event.locals.user = session?.person ?? null;
+
+	// The /admin sign-in arrives with STATUS.md Sunday item 15.
+	event.locals.isAdmin = false;
 
 	return resolve(event);
 };

@@ -17,9 +17,9 @@
 		<a class="brand" href="/">{data.instanceName}</a>
 		<nav>
 			{#if data.user}
-				<span class="muted">{data.user.name}</span>
+				<a href="/me" class="me">{data.user.name}</a>
 			{:else}
-				<a href="/signin">Sign in</a>
+				<a href="/join">Join a group</a>
 			{/if}
 		</nav>
 	</div>
@@ -41,6 +41,9 @@
 		align-items: center;
 		justify-content: space-between;
 		min-height: 3.25rem;
+	}
+	.me {
+		color: var(--text);
 	}
 	.brand {
 		font-weight: 700;

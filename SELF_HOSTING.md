@@ -4,7 +4,7 @@ This guide sets up an instance on your own Cloudflare account. It was written be
 
 ## What you take on
 
-- **The data.** Your instance stores your users' names, avatar URLs, emails, collections and group memberships. You're responsible for it, including deletion requests. The built-in privacy page names you and your contact address.
+- **The data.** Your instance stores display names, collections and group memberships. No emails or other contact details. You're responsible for it, including deletion requests. The built-in privacy page names you and your contact address.
 - **BoardGameGeek's terms.** If you connect BGG, you need your own BGG application. Its data is licensed for non-commercial use only. Read the [XML API Terms of Use](https://boardgamegeek.com/wiki/page/XML_API_Terms_of_Use) and [Commercial Use](https://boardgamegeek.com/wiki/page/BGG_XML_API_Commercial_Use) pages. BGG counts all of the following as commercial, and they need its commercial license or `BGG_MODE = "off"`:
   - taking payments or donations;
   - showing ads;
@@ -17,7 +17,6 @@ This guide sets up an instance on your own Cloudflare account. It was written be
 ## What you need
 
 - A Cloudflare account (free plan is enough).
-- A Google account to create the sign-in client.
 - Optional: a BoardGameGeek account to register an application. Apply first, because approval can take a week or more. The instance runs without it, with manual game entry only.
 - Node 22.17 or newer, pnpm (`corepack enable pnpm`, or install it with your package manager), and git.
 
@@ -57,27 +56,15 @@ In `wrangler.jsonc` under `"vars"`:
 | `BGG_MODE` | `live` once you have a token, `off` until then. The example file says `fake`, which only works in development; a deployed instance with `fake` shows a setup error. |
 | `BGG_MIN_INTERVAL_MS` | Default `2000`, the minimum. Raise it if BGG asks you to. |
 
-## 5. Set up Google sign-in
-
-1. In the [Google Cloud console](https://console.cloud.google.com/), create a project.
-2. Configure the OAuth consent screen: user type External, scopes `openid`, `profile`, `email`. Add `https://<your host>/privacy` as the privacy policy link.
-3. Set the publishing status to **In production**. In Testing, only accounts you list by hand can sign in.
-4. Create an OAuth client of type "Web application" with these authorized redirect URIs:
-   - `https://<your host>/auth/google/callback`
-   - `http://localhost:5173/auth/google/callback` if you'll develop locally.
-
-Pages preview deployments get random addresses that Google won't accept, so sign-in only works on your production address and locally.
-
-## 6. Store the secrets
+## 5. Store the admin key
 
 ```sh
-pnpm exec wrangler pages secret put GOOGLE_CLIENT_ID     --project-name <your-project-name>
-pnpm exec wrangler pages secret put GOOGLE_CLIENT_SECRET --project-name <your-project-name>
-pnpm exec wrangler pages secret put INSTANCE_ADMINS      --project-name <your-project-name>   # your Google email; comma-separate several
-pnpm exec wrangler pages secret put BGG_TOKEN            --project-name <your-project-name>   # skip while BGG_MODE is off
+openssl rand -base64 32    # copy the output; this is your admin key
+pnpm exec wrangler pages secret put ADMIN_KEY --project-name <your-project-name>
+pnpm exec wrangler pages secret put BGG_TOKEN --project-name <your-project-name>   # skip while BGG_MODE is off
 ```
 
-## 7. Create the tables and deploy
+## 6. Create the tables and deploy
 
 ```sh
 pnpm exec wrangler d1 migrations apply box-populi --remote
@@ -85,13 +72,12 @@ pnpm build
 pnpm exec wrangler pages deploy
 ```
 
-## 8. Check it
+## 7. Check it
 
 1. Open your site. If a setting is missing, the page names it.
-2. Sign in with the email you put in `INSTANCE_ADMINS`.
-3. Open `/admin`. It should show zero groups.
-4. Create a group, add a game, and open the catalog.
-5. Open `/privacy` and check that it shows your instance name and contact.
+2. Open `/admin/login` and enter your admin key. The admin page should show zero groups.
+3. Create a group with your name, save the personal link it shows you, add a game, and open the catalog.
+4. Open `/privacy` and check that it shows your instance name and contact.
 
 ## Optional: a demo group
 
@@ -132,6 +118,6 @@ On the free plan an instance comfortably serves a few groups of up to 50 members
 
 ## Handling requests
 
-- **"Delete my account":** users can do it themselves from their account page. If they can't, look them up by email on `/admin` and delete them there.
+- **"Delete my account":** people do it themselves from their account page. You hold no email or other way to identify them, so point them there.
 - **Abuse in a group:** suspend it with a reason. Members see the reason and your contact address. Delete it if needed.
-- **A troublesome user:** ban them. Group admins can then remove them from their groups.
+- **A troublesome person inside a group:** that group's owner or co-admins remove them. The admin page acts on groups, not people.

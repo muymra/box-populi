@@ -61,15 +61,15 @@ export async function catalogVersion(db: DB, groupId: string): Promise<number | 
 }
 
 export async function loadMembers(db: DB, groupId: string): Promise<CatalogMember[]> {
-	const rows = await all<{ id: string; name: string; avatar_url: string | null; role: Role; last_seen_at: number }>(
+	const rows = await all<{ id: string; name: string; role: Role; last_seen_at: number }>(
 		db,
-		`SELECT u.id, u.name, u.avatar_url, m.role, m.last_seen_at
+		`SELECT u.id, u.name, m.role, m.last_seen_at
 		 FROM memberships m JOIN users u ON u.id = m.user_id
 		 WHERE m.group_id = ?1
 		 ORDER BY m.last_seen_at DESC, u.name`,
 		groupId
 	);
-	return rows.map((r) => ({ id: r.id, name: r.name, avatarUrl: r.avatar_url, role: r.role, lastSeenAt: r.last_seen_at }));
+	return rows.map((r) => ({ id: r.id, name: r.name, role: r.role, lastSeenAt: r.last_seen_at }));
 }
 
 export async function loadCatalog(db: DB, groupId: string, version: number): Promise<CatalogPayload> {
@@ -105,7 +105,7 @@ export async function loadCatalog(db: DB, groupId: string, version: number): Pro
 
 /**
  * Bumps the catalog version of every group the user belongs to. Run it in the same batch as any
- * change to the user's copies, loans, name, avatar or memberships.
+ * change to the user's copies, loans, name or memberships.
  */
 export function bumpCatalogForUser(db: DB, userId: string): D1PreparedStatement {
 	return stmt(
