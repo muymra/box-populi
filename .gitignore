@@ -35,3 +35,9 @@ Thumbs.db
 .impeccable/hook.cache.json
 .impeccable/review/
 .impeccable/mocks/
+
+# Other hosting targets (TECH.md "Hosting targets")
+/build
+/.vercel
+/.netlify
+/data

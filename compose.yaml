@@ -1,0 +1,31 @@
+# Box Populi with automatic HTTPS (SELF_HOSTING.md "Docker"). Copy docker.env.example to .env,
+# fill it in, point your domain's DNS at this machine, then: docker compose up -d
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Caddy adds the visitor's address; rate limits key on it.
+      ADDRESS_HEADER: X-Forwarded-For
+      XFF_DEPTH: "1"
+    volumes:
+      - data:/data
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  data:
+  caddy_data:
+  caddy_config:

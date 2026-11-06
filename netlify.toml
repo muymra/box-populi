@@ -1,0 +1,4 @@
+# Netlify build (SELF_HOSTING.md "Vercel and Netlify"). Settings go in the site's environment variables.
+[build]
+  command = "BOX_TARGET=netlify pnpm build"
+  publish = "build"

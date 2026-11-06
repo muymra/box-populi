@@ -1,0 +1,32 @@
+// Cloudflare Workers instead of Pages (SELF_HOSTING.md "Cloudflare Workers"). Copy this over
+// wrangler.jsonc. Same build, same database; `main` and `assets` tell the adapter to build for
+// Workers. Deploy with `pnpm exec wrangler deploy`, secrets with `wrangler secret put`.
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "box-populi",
+	"main": ".svelte-kit/cloudflare/_worker.js",
+	"compatibility_date": "2026-11-06",
+	"compatibility_flags": ["nodejs_als"],
+	"assets": { "binding": "ASSETS", "directory": ".svelte-kit/cloudflare" },
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "box-populi",
+			"database_id": "00000000-0000-0000-0000-000000000000",
+			"migrations_dir": "migrations"
+		}
+	],
+	"vars": {
+		"BGG_MODE": "",
+		"BGG_MIN_INTERVAL_MS": "2000",
+		"INSTANCE_NAME": "Box Populi",
+		"INSTANCE_CONTACT": "mailto:you@example.com",
+		"GROUP_CREATION": "anyone",
+		"INSTANCE_MODE": "standard",
+		"SEARCH_ENGINES": "allow",
+		"THEME": "cube",
+		"GAME_SOURCE": "wikidata",
+		"MAX_GROUPS_PER_USER": "5",
+		"MAX_MEMBERS_PER_GROUP": "100"
+	}
+}

@@ -1,0 +1,4 @@
+# Caddy gets and renews the HTTPS certificate for DOMAIN and forwards to the app.
+{$DOMAIN} {
+	reverse_proxy app:3000
+}
