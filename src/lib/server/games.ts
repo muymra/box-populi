@@ -1,7 +1,7 @@
 // Writing games and copies. BGG fields are stored exactly as parsed; nothing edits them later
 // (TECH.md "No modification"). Every change to a person's copies bumps their groups' catalogs.
 import { all, one, stmt, type DB } from './db.ts';
-import { bumpCatalogForUser } from './catalog.ts';
+import { bumpCatalogForGames, bumpCatalogForUser } from './catalog.ts';
 import { buildSearchText, normalize } from '#lib/catalog/normalize.ts';
 import type { BggClient, BggSearchHit, BggThing } from './bgg/types.ts';
 
@@ -104,15 +104,18 @@ export async function searchBgg(db: DB, client: BggClient, query: string, userId
 	const ids = top.map((h) => h.bggId);
 	const placeholders = ids.map((_, i) => `?${i + 1}`).join(', ');
 
-	const cached = await all<{ bgg_id: number }>(db, `SELECT bgg_id FROM games WHERE fetched_at IS NOT NULL AND bgg_id IN (${placeholders})`, ...ids);
-	const cachedIds = new Set(cached.map((r) => r.bgg_id));
+	const known = await all<{ id: number; bgg_id: number; fetched_at: number | null }>(db, `SELECT id, bgg_id, fetched_at FROM games WHERE bgg_id IN (${placeholders})`, ...ids);
+	const cachedIds = new Set(known.filter((r) => r.fetched_at != null).map((r) => r.bgg_id));
+	// Import stubs among the hits get their details now, so groups with copies of them need a fresh catalog.
+	const stubIds = known.filter((r) => r.fetched_at == null).map((r) => r.id);
 	const missing = top.filter((h) => !cachedIds.has(h.bggId));
 	if (missing.length) {
 		const things = await client.things(missing.map((h) => h.bggId));
 		const fetched = new Set(things.map((t) => t.bggId));
 		await db.batch([
 			...things.map((t) => upsertThingStatement(db, t, now)),
-			...missing.filter((h) => !fetched.has(h.bggId)).map((h) => stubStatement(db, { ...h, isExpansion: h.type === 'boardgameexpansion' }))
+			...missing.filter((h) => !fetched.has(h.bggId)).map((h) => stubStatement(db, { ...h, isExpansion: h.type === 'boardgameexpansion' })),
+			...(stubIds.length ? [bumpCatalogForGames(db, stubIds)] : [])
 		]);
 	}
 

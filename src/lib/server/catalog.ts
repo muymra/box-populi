@@ -123,6 +123,21 @@ export function bumpCatalogForUser(db: DB, userId: string): D1PreparedStatement 
 	);
 }
 
+/**
+ * Bumps the catalog of every group where any member has a copy of one of these games. Games are
+ * shared by every group, so a change to one reaches groups the caller isn't in. The ids are bound
+ * as one JSON array, so the count never runs into D1's 100-parameter cap.
+ */
+export function bumpCatalogForGames(db: DB, gameIds: number[]): D1PreparedStatement {
+	return stmt(
+		db,
+		`UPDATE groups SET catalog_version = catalog_version + 1
+		 WHERE id IN (SELECT m.group_id FROM copies c JOIN memberships m ON m.user_id = c.user_id
+		              WHERE c.game_id IN (SELECT value FROM json_each(?1)))`,
+		JSON.stringify(gameIds)
+	);
+}
+
 export function bumpCatalogForGroup(db: DB, groupId: string): D1PreparedStatement {
 	return stmt(db, 'UPDATE groups SET catalog_version = catalog_version + 1 WHERE id = ?1', groupId);
 }

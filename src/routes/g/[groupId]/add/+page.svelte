@@ -61,7 +61,8 @@
 		message = null;
 		try {
 			const endpoint = data.source === 'bgg' ? '/api/bgg/search' : '/api/wikidata/search';
-			const response = await fetch(`${endpoint}?q=${encodeURIComponent(q)}`, { signal: controller.signal });
+			// The group lets the server refuse a suspended group's searches (TECH.md "Authorization").
+			const response = await fetch(`${endpoint}?q=${encodeURIComponent(q)}&groupId=${encodeURIComponent(data.group.id)}`, { signal: controller.signal });
 			const body = (await response.json()) as { results?: Result[]; error?: string };
 			if (!response.ok) {
 				status = 'error';

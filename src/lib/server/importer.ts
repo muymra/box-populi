@@ -2,7 +2,7 @@
 // preview (nothing stored), confirm (stubs and copies at once), hydrate (20 games' details per call).
 // The BGG username is used for the requests and never stored.
 import { all, one, stmt, type DB } from './db.ts';
-import { bumpCatalogForUser } from './catalog.ts';
+import { bumpCatalogForGames, bumpCatalogForUser } from './catalog.ts';
 import { stubStatement, upsertThingStatement } from './games.ts';
 import { THINGS_PER_REQUEST, type BggClient, type BggCollectionItem } from './bgg/types.ts';
 
@@ -107,22 +107,6 @@ export async function pendingDetails(db: DB, userId: string): Promise<number> {
 		userId
 	);
 	return row?.n ?? 0;
-}
-
-/**
- * Bumps the catalog of every group where any member has a copy of one of these games. Games are
- * shared by every group, so a change to one reaches groups the caller isn't in. The ids are bound
- * as one JSON array, so the count never runs into D1's 100-parameter cap.
- * Belongs next to `bumpCatalogForUser` in catalog.ts.
- */
-export function bumpCatalogForGames(db: DB, gameIds: number[]): D1PreparedStatement {
-	return stmt(
-		db,
-		`UPDATE groups SET catalog_version = catalog_version + 1
-		 WHERE id IN (SELECT m.group_id FROM copies c JOIN memberships m ON m.user_id = c.user_id
-		              WHERE c.game_id IN (SELECT value FROM json_each(?1)))`,
-		JSON.stringify(gameIds)
-	);
 }
 
 /**

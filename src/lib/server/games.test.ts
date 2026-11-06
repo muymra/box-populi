@@ -37,6 +37,18 @@ describe('searchBgg with the fake client', () => {
 		expect(results.every((r) => !r.owned)).toBe(true);
 	});
 
+	it('refreshes the catalog of other groups that own an import stub it fills in', async () => {
+		await run(db, `INSERT INTO users (id, name, created_at) VALUES ('bea', 'Bea', 0)`);
+		await run(db, `INSERT INTO groups (id, name, code, created_at) VALUES ('g2', 'H', 'BBBBB', 0)`);
+		await run(db, `INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES ('g2', 'bea', 'owner', 0, 0)`);
+		await run(db, `INSERT INTO games (id, bgg_id, name, search_text) VALUES (50, 900001, 'Stub', 'stub')`);
+		await run(db, `INSERT INTO copies (user_id, game_id, added_at) VALUES ('bea', 50, 0)`);
+		const before = (await one<{ v: number }>(db, `SELECT catalog_version AS v FROM groups WHERE id = 'g2'`))!.v;
+		await searchBgg(db, new FakeBggClient(), 'Test Game Alpha', 'ada', NOW);
+		expect((await one<{ v: number }>(db, `SELECT catalog_version AS v FROM groups WHERE id = 'g2'`))!.v).toBe(before + 1);
+		expect((await loadCatalog(db, 'g2', 1)).games[0]).toMatchObject({ name: 'Test Game Alpha', incomplete: false });
+	});
+
 	it('marks games the person owns', async () => {
 		const first = await searchBgg(db, new FakeBggClient(), 'Test Game Alpha', 'ada', NOW);
 		await addCopy(db, 'ada', first[0].gameId, NOW);
