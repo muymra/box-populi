@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hand-written in the shape of BGG's `search?query=…` response. Invented games. -->
+<items total="5" termsofuse="https://boardgamegeek.com/xmlapi/termsofuse">
+	<item type="boardgame" id="900005">
+		<name type="primary" value="Test Game Alpha Card Game" />
+		<yearpublished value="2022" />
+	</item>
+	<item type="boardgame" id="900001">
+		<name type="primary" value="Test Game Alpha" />
+		<yearpublished value="2019" />
+	</item>
+	<item type="boardgameexpansion" id="900002">
+		<name type="primary" value="Test Game Alpha: Beta Expansion" />
+		<yearpublished value="2021" />
+	</item>
+	<item type="boardgame" id="900002">
+		<name type="primary" value="Test Game Alpha: Beta Expansion" />
+		<yearpublished value="2021" />
+	</item>
+	<item type="boardgame" id="900006">
+		<name type="alternate" value="My Test Game Alpha Tribute" />
+	</item>
+</items>

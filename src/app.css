@@ -1,0 +1,149 @@
+:root {
+	--bg: #f7f5f0;
+	--surface: #ffffff;
+	--surface-2: #efece4;
+	--text: #1d1b16;
+	--muted: #6b6559;
+	--border: #ddd8cc;
+	--accent: #b4441f;
+	--accent-text: #ffffff;
+	--accent-soft: #f6e3da;
+	--warn-soft: #fbefcd;
+	--focus: #2c6fd6;
+	--radius: 10px;
+	--shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 2px 8px rgb(0 0 0 / 0.04);
+	--font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #16150f;
+		--surface: #201e17;
+		--surface-2: #2a2820;
+		--text: #eeeae0;
+		--muted: #a59f92;
+		--border: #3a372d;
+		--accent: #ef8a5f;
+		--accent-text: #1a0f0a;
+		--accent-soft: #3c2419;
+		--warn-soft: #3b321a;
+		--focus: #7fb0ff;
+		--shadow: none;
+		color-scheme: dark;
+	}
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--font);
+	font-size: 16px;
+	line-height: 1.5;
+}
+
+a {
+	color: var(--accent);
+}
+
+h1,
+h2,
+h3 {
+	line-height: 1.2;
+	margin: 0 0 0.5rem;
+}
+
+button,
+input,
+select {
+	font: inherit;
+	color: inherit;
+}
+
+:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+}
+
+.container {
+	max-width: 72rem;
+	margin: 0 auto;
+	padding: 0 16px;
+}
+
+.muted {
+	color: var(--muted);
+}
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.5rem 0.9rem;
+	border-radius: var(--radius);
+	border: 1px solid var(--border);
+	background: var(--surface);
+	cursor: pointer;
+	text-decoration: none;
+	color: var(--text);
+	min-height: 2.5rem;
+}
+
+.btn.primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--accent-text);
+}
+
+.chip {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.25rem 0.7rem;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: var(--surface);
+	font-size: 0.9rem;
+	cursor: pointer;
+	min-height: 2.25rem;
+}
+
+.chip[aria-pressed='true'] {
+	background: var(--accent-soft);
+	border-color: var(--accent);
+}
+
+.tag {
+	display: inline-block;
+	padding: 0.1rem 0.5rem;
+	border-radius: 999px;
+	background: var(--surface-2);
+	font-size: 0.8rem;
+	color: var(--muted);
+}
+
+.banner {
+	padding: 0.6rem 0.9rem;
+	border-radius: var(--radius);
+	background: var(--warn-soft);
+	margin: 0.75rem 0;
+}
+
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}

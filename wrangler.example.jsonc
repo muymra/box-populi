@@ -1,0 +1,28 @@
+// Copy to wrangler.jsonc (gitignored) and fill in your own values. `pnpm install` does the copy
+// for you when wrangler.jsonc is missing. See SELF_HOSTING.md for what each value means.
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "box-populi",
+	"compatibility_date": "2026-11-06",
+	"compatibility_flags": ["nodejs_als"],
+	"pages_build_output_dir": ".svelte-kit/cloudflare",
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "box-populi",
+			// From `wrangler d1 create box-populi`. Any value works for local development.
+			"database_id": "00000000-0000-0000-0000-000000000000",
+			"migrations_dir": "migrations"
+		}
+	],
+	"vars": {
+		// "live" with a BGG token, "off" without one. "fake" serves test data and only works in dev.
+		"BGG_MODE": "fake",
+		"BGG_MIN_INTERVAL_MS": "2000",
+		"INSTANCE_NAME": "Box Populi",
+		"INSTANCE_CONTACT": "mailto:you@example.com",
+		"GROUP_CREATION": "anyone",
+		"MAX_GROUPS_PER_USER": "5",
+		"MAX_MEMBERS_PER_GROUP": "100"
+	}
+}

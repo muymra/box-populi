@@ -1,0 +1,42 @@
+{
+	"name": "box-populi",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"engines": {
+		"node": ">=22.17"
+	},
+	"imports": {
+		"#lib": "./src/lib/index.js",
+		"#lib/*": "./src/lib/*"
+	},
+	"scripts": {
+		"prepare": "node scripts/ensure-local-config.ts && (svelte-kit sync || echo '')",
+		"dev": "vite dev",
+		"build": "pnpm gen --check && vite build",
+		"preview": "wrangler pages dev .svelte-kit/cloudflare --port 4173",
+		"check": "pnpm gen --check && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"gen": "wrangler types --strict-vars=false",
+		"test": "vitest --run",
+		"test:watch": "vitest",
+		"db:migrate": "wrangler d1 migrations apply box-populi --local",
+		"db:seed": "node scripts/seed-demo.ts && wrangler d1 execute box-populi --local --file seed/demo.sql",
+		"deploy": "pnpm build && wrangler pages deploy"
+	},
+	"dependencies": {
+		"fast-xml-parser": "^5.3.0"
+	},
+	"devDependencies": {
+		"@sveltejs/adapter-cloudflare": "^8.0.0",
+		"@sveltejs/kit": "^3.0.0",
+		"@sveltejs/vite-plugin-svelte": "^7.2.0",
+		"@types/node": "^26.6.6",
+		"svelte": "^5.57.2",
+		"svelte-check": "^4.6.0",
+		"typescript": "^6.0.3",
+		"vite": "^8.3.0",
+		"vitest": "^4.1.8",
+		"wrangler": "^4.97.0"
+	}
+}
