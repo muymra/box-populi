@@ -1,7 +1,8 @@
 // BGG title search for the add page (TECH.md "Search"). For this app's own pages only: needs a
-// session, sends no CORS headers, and is rate-limited per person.
+// session and an active group (`?groupId=`, or any of the person's), sends no CORS headers, and is
+// rate-limited per person.
 import { getBggClient } from '#lib/server/bgg/client.ts';
-import { bggFailure } from '#lib/server/bgg/http.ts';
+import { bggFailure, refuseInactive } from '#lib/server/bgg/http.ts';
 import { searchBgg } from '#lib/server/games.ts';
 import { getDb } from '#lib/server/platform.ts';
 import { LIMITS, take } from '#lib/server/ratelimit.ts';
@@ -18,6 +19,8 @@ export const GET: RequestHandler = async (event) => {
 	if (query.length < 3) return Response.json({ results: [] });
 
 	const db = getDb();
+	const refused = await refuseInactive(event, db, event.url.searchParams.get('groupId'));
+	if (refused) return refused;
 	const client = getBggClient(event.locals.config, db, event.url.origin);
 	if (!client) return error(503, 'BoardGameGeek search isn’t set up on this site. Add the game by hand below.');
 

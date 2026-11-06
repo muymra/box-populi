@@ -138,9 +138,17 @@ describe('catalog payload', () => {
 });
 
 describe('BGG pacer', () => {
+	const NO_LIMIT = Number.MAX_SAFE_INTEGER;
+	const slotAt = async (now: number, maxWaitMs = NO_LIMIT) => {
+		const r = await reserveSlot(db, now, 2000, maxWaitMs);
+		if (!r.ok) throw new Error(`refused, wait ${r.waitMs}`);
+		return r.slotAt;
+	};
+	const nextAt = async () => (await one<{ next_at: number }>(db, 'SELECT next_at FROM bgg_pace WHERE id = 1'))!.next_at;
+
 	it('hands out distinct slots at least the interval apart', async () => {
 		const now = 1_000_000;
-		const slots = await Promise.all(Array.from({ length: 10 }, () => reserveSlot(db, now, 2000)));
+		const slots = await Promise.all(Array.from({ length: 10 }, () => slotAt(now)));
 		const sorted = [...slots].sort((a, b) => a - b);
 		expect(new Set(sorted).size).toBe(10);
 		for (let i = 1; i < sorted.length; i++) expect(sorted[i] - sorted[i - 1]).toBeGreaterThanOrEqual(2000);
@@ -148,13 +156,31 @@ describe('BGG pacer', () => {
 	});
 
 	it('starts from now after an idle period', async () => {
-		await reserveSlot(db, 1000, 2000);
-		expect(await reserveSlot(db, 999_999, 2000)).toBe(999_999);
+		await slotAt(1000);
+		expect(await slotAt(999_999)).toBe(999_999);
 	});
 
 	it('backs the whole instance off', async () => {
 		const now = 5_000_000;
 		await backOff(db, now + BACKOFF_MS);
-		expect(await reserveSlot(db, now, 2000)).toBe(now + BACKOFF_MS);
+		expect(await slotAt(now)).toBe(now + BACKOFF_MS);
+	});
+
+	it('refuses a slot past the longest wait without moving the queue', async () => {
+		const now = 7_000_000;
+		await backOff(db, now + BACKOFF_MS);
+		const before = await nextAt();
+		const refusals = await Promise.all(Array.from({ length: 20 }, () => reserveSlot(db, now, 2000, 15_000)));
+		expect(refusals.every((r) => !r.ok && r.waitMs === BACKOFF_MS)).toBe(true);
+		expect(await nextAt()).toBe(before);
+		// Once the back-off has passed, the next caller gets the slot right away.
+		expect(await slotAt(now + BACKOFF_MS, 15_000)).toBe(now + BACKOFF_MS);
+	});
+
+	it('still grants a slot exactly at the longest wait', async () => {
+		const now = 9_000_000;
+		await backOff(db, now + 15_000);
+		expect(await slotAt(now, 15_000)).toBe(now + 15_000);
+		expect((await reserveSlot(db, now, 2000, 15_000)).ok).toBe(false);
 	});
 });

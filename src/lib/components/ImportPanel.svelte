@@ -3,10 +3,13 @@
 	The username is sent for the lookup and never stored (TECH.md "Import and hydrate").
 -->
 <script lang="ts">
+	import { page } from '$app/state';
 	import BoxFront from './BoxFront.svelte';
 	import HydrateProgress from './HydrateProgress.svelte';
 
 	let { shelfHref }: { shelfHref: string } = $props();
+	// The group whose add page this is: the server refuses the import for a suspended group.
+	const groupId = page.params.groupId;
 
 	type Item = { bggId: number; name: string; year: number | null; thumbUrl: string | null; owned: boolean };
 	type Reply = { status?: string; items?: Item[]; error?: string; added?: number; pending?: number };
@@ -37,7 +40,7 @@
 			attempts += 1;
 			let response: Response;
 			try {
-				response = await post('/api/bgg/import', { username });
+				response = await post('/api/bgg/import', { username, groupId });
 			} catch {
 				status = 'idle';
 				error = 'Couldn’t reach this site. Check your connection and try again.';
@@ -72,7 +75,7 @@
 	async function addChosen() {
 		status = 'adding';
 		error = null;
-		const response = await post('/api/bgg/import/confirm', { username, bggIds: [...chosen] }).catch(() => null);
+		const response = await post('/api/bgg/import/confirm', { username, bggIds: [...chosen], groupId }).catch(() => null);
 		const body = (response ? await response.json().catch(() => ({})) : {}) as Reply;
 		if (!response || !response.ok || body.status !== 'added') {
 			status = 'preview';

@@ -89,3 +89,25 @@ export async function requireRole(
 	if (!access.role || !atLeast(access.role, minRole)) error(403, 'You do not have permission to do that');
 	return { ...access, role: access.role };
 }
+
+/**
+ * For the per-person endpoints the add page calls (search, BGG import and hydrate), which change
+ * the caller's own shelf or the shared games cache rather than one group. With the group the page
+ * belongs to, it's `requireRole(member)` on that group. Without one, the caller needs a membership
+ * in at least one group that's neither suspended nor the demo. A shelf shows in every group its
+ * owner is in, suspended ones included (TECH.md "Authorization").
+ */
+export async function requireActiveMember(event: RequestEvent, db: DB, groupId: string | null): Promise<void> {
+	if (groupId) {
+		await requireRole(event, db, groupId, 'member');
+		return;
+	}
+	const user = requireUser(event);
+	const row = await one(
+		db,
+		`SELECT 1 AS x FROM memberships m JOIN groups g ON g.id = m.group_id
+		 WHERE m.user_id = ?1 AND g.suspended_at IS NULL AND g.is_demo = 0 LIMIT 1`,
+		user.id
+	);
+	if (!row) error(403, 'Only members of a group that isn’t suspended can do that.');
+}

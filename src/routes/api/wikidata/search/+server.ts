@@ -1,6 +1,8 @@
 // Wikidata title search for the add page while BGG is off (TECH.md "Public-sources mode").
-// Same contract as /api/bgg/search: needs a session, no CORS headers, rate-limited per person.
+// Same contract as /api/bgg/search: needs a session and an active group, no CORS headers,
+// rate-limited per person.
 import { userAgent } from '#lib/server/bgg/client.ts';
+import { refuseInactive } from '#lib/server/bgg/http.ts';
 import { getDb } from '#lib/server/platform.ts';
 import { LIMITS, take } from '#lib/server/ratelimit.ts';
 import { getWikidataClient, searchWikidata, WikidataBusyError } from '#lib/server/wikidata.ts';
@@ -16,10 +18,12 @@ export const GET: RequestHandler = async (event) => {
 	const query = (event.url.searchParams.get('q') ?? '').trim().slice(0, 100);
 	if (query.length < 3) return Response.json({ results: [] });
 
+	const db = getDb();
+	const refused = await refuseInactive(event, db, event.url.searchParams.get('groupId'));
+	if (refused) return refused;
 	const client = getWikidataClient(event.locals.config, userAgent(event.url.origin));
 	if (!client) return error(503, 'Wikidata search isn’t used on this site. Add the game by hand below.');
 
-	const db = getDb();
 	const now = Date.now();
 	if (!(await take(db, now, [user.id, LIMITS.wikidataSearch])).ok) return error(429, 'That’s a lot of searches. Wait a minute.');
 

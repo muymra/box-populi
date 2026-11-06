@@ -110,13 +110,29 @@ export async function pendingDetails(db: DB, userId: string): Promise<number> {
 }
 
 /**
+ * Bumps the catalog of every group where any member has a copy of one of these games. Games are
+ * shared by every group, so a change to one reaches groups the caller isn't in. The ids are bound
+ * as one JSON array, so the count never runs into D1's 100-parameter cap.
+ * Belongs next to `bumpCatalogForUser` in catalog.ts.
+ */
+export function bumpCatalogForGames(db: DB, gameIds: number[]): D1PreparedStatement {
+	return stmt(
+		db,
+		`UPDATE groups SET catalog_version = catalog_version + 1
+		 WHERE id IN (SELECT m.group_id FROM copies c JOIN memberships m ON m.user_id = c.user_id
+		              WHERE c.game_id IN (SELECT value FROM json_each(?1)))`,
+		JSON.stringify(gameIds)
+	);
+}
+
+/**
  * Fetches details for up to 20 of the person's games that are still stubs. Games BGG doesn't
  * return are marked fetched as they are, so the loop always ends.
  */
 export async function hydrateStep(db: DB, client: BggClient, userId: string, now: number): Promise<{ updated: number; remaining: number }> {
-	const rows = await all<{ bgg_id: number }>(
+	const rows = await all<{ id: number; bgg_id: number }>(
 		db,
-		`SELECT DISTINCT g.bgg_id FROM copies c JOIN games g ON g.id = c.game_id
+		`SELECT DISTINCT g.id, g.bgg_id FROM copies c JOIN games g ON g.id = c.game_id
 		 WHERE c.user_id = ?1 AND ${NEEDS_BGG_DETAILS}
 		 ORDER BY g.bgg_id LIMIT ?2`,
 		userId,
@@ -137,7 +153,8 @@ export async function hydrateStep(db: DB, client: BggClient, userId: string, now
 				stmt(db, "UPDATE games SET fetched_at = ?1 WHERE bgg_id = ?2 AND source != 'wikidata'", now, id),
 				stmt(db, "UPDATE games SET bgg_id = NULL WHERE bgg_id = ?1 AND source = 'wikidata'", id)
 			]),
-		bumpCatalogForUser(db, userId)
+		// Every group with a copy of these games, which includes all of the caller's groups.
+		bumpCatalogForGames(db, rows.map((r) => r.id))
 	]);
 	return { updated: ids.length, remaining: await pendingDetails(db, userId) };
 }

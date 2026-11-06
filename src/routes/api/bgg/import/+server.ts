@@ -1,6 +1,6 @@
 // Step 1 of the import: preview a BGG collection. Stores nothing; the username is not kept.
 import { getBggClient } from '#lib/server/bgg/client.ts';
-import { bggFailure, jsonError, OFF_MESSAGE } from '#lib/server/bgg/http.ts';
+import { bggFailure, jsonError, OFF_MESSAGE, refuseInactive } from '#lib/server/bgg/http.ts';
 import { cleanBggUsername, fetchCollection, previewItems } from '#lib/server/importer.ts';
 import { getDb } from '#lib/server/platform.ts';
 import { LIMITS, take } from '#lib/server/ratelimit.ts';
@@ -9,11 +9,13 @@ import type { RequestHandler } from './$types';
 export const POST: RequestHandler = async (event) => {
 	const user = event.locals.user;
 	if (!user) return jsonError(401, 'Sign in on this device first.');
-	const body = await event.request.json().catch(() => ({}));
-	const username = cleanBggUsername((body as { username?: unknown }).username);
+	const body = (await event.request.json().catch(() => ({}))) as { username?: unknown; groupId?: unknown };
+	const username = cleanBggUsername(body.username);
 	if (!username) return jsonError(400, 'That doesn’t look like a BoardGameGeek username.');
 
 	const db = getDb();
+	const refused = await refuseInactive(event, db, body.groupId);
+	if (refused) return refused;
 	const client = getBggClient(event.locals.config, db, event.url.origin);
 	if (!client) return jsonError(503, OFF_MESSAGE);
 
