@@ -2,7 +2,7 @@
 // logo, both set on /admin. Read on every request, so cached per isolate for a minute; a save
 // clears this isolate's copy, and others catch up within the minute.
 import { one, run, type DB } from './db.ts';
-import { CUSTOM_DEFAULTS, isHex, type CustomColors } from '#lib/themes.ts';
+import { CUSTOM_DEFAULTS, isHex, normalizeHex, type CustomColors } from '#lib/themes.ts';
 
 export type Appearance = {
 	colors: CustomColors | null;
@@ -49,8 +49,8 @@ export async function saveAppearance(db: DB, form: FormData, now: number): Promi
 	const remove = form.get('remove') === '1';
 	let colors: CustomColors | null = null;
 	if (!remove) {
-		const picked = Object.fromEntries((Object.keys(CUSTOM_DEFAULTS) as Array<keyof CustomColors>).map((k) => [k, String(form.get(k) ?? '')]));
-		if (!Object.values(picked).every(isHex)) return { ok: false, error: 'Each colour must be a hex value like #2b2a28.' };
+		const picked = Object.fromEntries((Object.keys(CUSTOM_DEFAULTS) as Array<keyof CustomColors>).map((k) => [k, normalizeHex(form.get(k)) ?? '']));
+		if (!Object.values(picked).every(isHex)) return { ok: false, error: 'Each colour must be a hex code like #2b2a28 (or #2ba).' };
 		colors = picked as CustomColors;
 	}
 	const rawLogo = String(form.get('logoUrl') ?? '').trim();

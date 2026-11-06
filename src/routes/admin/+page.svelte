@@ -3,9 +3,34 @@
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Search from '@lucide/svelte/icons/search';
 	import { lastActive } from '#lib/time.ts';
+	import { normalizeHex } from '#lib/themes.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
+
+	// Each colour has a picker and a hex box kept in step; the hex box is what the form sends, so
+	// typing a code works without JavaScript too. A half-typed code leaves the picker where it was.
+	type ColorKey = keyof typeof data.look.colors;
+	const COLOR_FIELDS: Array<[ColorKey, string]> = [
+		['page', 'Page'],
+		['surface', 'Cards and fields'],
+		['ink', 'Text'],
+		['strip', 'Filter strip'],
+		['accent', 'Accent (chosen things)']
+	];
+	// svelte-ignore state_referenced_locally (seeded from the saved colours; the fields own them after)
+	let colors = $state({ ...data.look.colors });
+	// svelte-ignore state_referenced_locally
+	let hexes = $state<Record<ColorKey, string>>({ ...data.look.colors });
+	function typed(key: ColorKey, value: string) {
+		hexes[key] = value;
+		const hex = normalizeHex(value);
+		if (hex) colors[key] = hex;
+	}
+	function picked(key: ColorKey, value: string) {
+		colors[key] = value;
+		hexes[key] = value;
+	}
 
 	const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 	const ACTION_LABELS: Record<string, string> = { suspend_group: 'Suspended', unsuspend_group: 'Unsuspended', delete_group: 'Deleted' };
@@ -68,11 +93,26 @@
 		</p>
 		<form method="POST" action="?/look" class="look" use:enhance={() => async ({ update }) => update({ reset: false })}>
 			<div class="swatches">
-				{#each [['page', 'Page'], ['surface', 'Cards and fields'], ['ink', 'Text'], ['strip', 'Filter strip'], ['accent', 'Accent (chosen things)']] as [key, label] (key)}
-					<label class="swatch">
-						<input type="color" name={key} value={data.look.colors[key as keyof typeof data.look.colors]} />
-						<span>{label}</span>
-					</label>
+				{#each COLOR_FIELDS as [key, label] (key)}
+					<div class="swatch">
+						<label for="hex-{key}">{label}</label>
+						<div class="swatch-inputs">
+							<input type="color" value={colors[key]} oninput={(e) => picked(key, e.currentTarget.value)} aria-label="{label}: pick a colour" />
+							<input
+								id="hex-{key}"
+								class="field hex num"
+								name={key}
+								value={hexes[key]}
+								oninput={(e) => typed(key, e.currentTarget.value)}
+								required
+								spellcheck="false"
+								autocomplete="off"
+								maxlength="7"
+								pattern={'#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})'}
+								aria-invalid={normalizeHex(hexes[key]) == null}
+							/>
+						</div>
+					</div>
 				{/each}
 			</div>
 			<label class="check">
@@ -87,7 +127,7 @@
 			{#if form?.lookSaved}<p class="muted" role="status">Saved. Other pages pick it up within a minute.</p>{/if}
 			<div class="inline">
 				<button class="btn primary small">{data.look.hasCustom ? 'Save' : 'Create the custom theme'}</button>
-				{#if data.look.hasCustom}<button class="btn small" name="remove" value="1">Remove the custom theme</button>{/if}
+				{#if data.look.hasCustom}<button class="btn small" name="remove" value="1" formnovalidate>Remove the custom theme</button>{/if}
 			</div>
 		</form>
 	</section>
@@ -225,12 +265,27 @@
 	}
 	.swatch {
 		display: flex;
-		align-items: center;
-		gap: var(--s-2);
+		flex-direction: column;
+		gap: 6px;
 		font-weight: 650;
 		font-size: var(--t-small);
 	}
-	.swatch input {
+	.swatch-inputs {
+		display: flex;
+		align-items: center;
+		gap: var(--s-2);
+	}
+	.hex {
+		width: 7.5rem;
+		min-height: 44px;
+		font-size: var(--t-small);
+		text-transform: lowercase;
+	}
+	.hex[aria-invalid='true'] {
+		border-color: var(--danger);
+	}
+	.swatch input[type='color'] {
+		flex: none;
 		width: 44px;
 		height: 44px;
 		padding: 2px;

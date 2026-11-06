@@ -590,6 +590,15 @@ export function isHex(value: unknown): value is string {
 	return typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value);
 }
 
+/** "#2B2A28", "2b2a28" and "#2ba" all become "#2b2a28" (or "#22bbaa"); anything else is null. */
+export function normalizeHex(value: unknown): string | null {
+	if (typeof value !== 'string') return null;
+	const hex = value.trim().replace(/^#/, '').toLowerCase();
+	if (/^[0-9a-f]{6}$/.test(hex)) return `#${hex}`;
+	if (/^[0-9a-f]{3}$/.test(hex)) return `#${[...hex].map((c) => c + c).join('')}`;
+	return null;
+}
+
 /**
  * A full palette from five colours. Light or dark follows the page colour; the shades between are
  * mixed from them, and resolve() then pulls any text under 4.5:1 toward black or white.

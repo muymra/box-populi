@@ -26,6 +26,11 @@ describe('the instance look', () => {
 		expect(await getAppearance(db, NOW + 3)).toMatchObject({ colors: null, customDefault: false, logoUrl: 'https://example.com/logo.svg' });
 	});
 
+	it('takes hex codes with or without #, in either case, and the short form', async () => {
+		expect(await saveAppearance(db, form({ ...colors, page: '101820', ink: '#E8E3D3', accent: 'f2a' }), NOW)).toEqual({ ok: true });
+		expect((await getAppearance(db, NOW + 1)).colors).toEqual({ ...colors, accent: '#ff22aa' });
+	});
+
 	it('refuses bad colours and logos that aren’t https', async () => {
 		expect((await saveAppearance(db, form({ ...colors, ink: 'red' }), NOW)).ok).toBe(false);
 		expect((await saveAppearance(db, form({ ...colors, logoUrl: 'http://example.com/logo.png' }), NOW)).ok).toBe(false);
