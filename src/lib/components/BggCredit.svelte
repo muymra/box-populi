@@ -5,36 +5,57 @@
 	is confirmed (STATUS.md, unverified assumptions). Don't redraw the logo.
 -->
 <footer class="credit">
-	<div class="container">
+	<div class="container inner">
 		<p>
-			Game data from <a href="https://boardgamegeek.com" rel="noopener">BoardGameGeek</a>.
+			Game data from <a href="https://boardgamegeek.com" rel="noopener">BoardGameGeek</a>
 			<a class="badge" href="https://boardgamegeek.com" rel="noopener">Powered by BGG</a>
 		</p>
-		<p class="muted">
+		<p class="small">
 			Box Populi is not affiliated with or endorsed by BoardGameGeek.
-			<a href="/privacy">Privacy</a> ·
-			<a href="https://github.com/muymra/box-populi" rel="noopener">Source</a>
+			<a href="/privacy">Privacy</a> · <a href="https://github.com/muymra/box-populi" rel="noopener">Source</a>
 		</p>
 	</div>
 </footer>
 
 <style>
 	.credit {
-		margin-top: 3rem;
-		padding: 1.25rem 0 2rem;
-		border-top: 1px solid var(--border);
-		font-size: 0.9rem;
+		margin-top: var(--s-7);
+		border-top: 1px solid var(--rule);
+		padding: var(--s-5) 0 var(--s-6);
+		font-size: 0.875rem;
+		color: var(--ink-2);
+	}
+	.inner {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
 	}
 	p {
-		margin: 0.25rem 0;
+		margin: 0;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 4px 8px;
+	}
+	.small {
+		font-size: var(--t-small);
 	}
 	.badge {
 		display: inline-block;
-		margin-left: 0.4rem;
-		padding: 0.1rem 0.5rem;
-		border: 1px solid var(--border);
-		border-radius: 6px;
-		font-weight: 600;
+		padding: 1px 8px;
+		border: 1.5px solid currentColor;
+		border-radius: 4px;
+		font-weight: 700;
 		text-decoration: none;
+		color: var(--ink);
+	}
+	/* Group pages carry a bottom tab bar on phones; keep the credit clear of it. */
+	:global(body:has(.tabbar)) .credit {
+		padding-bottom: calc(var(--s-6) + 72px + env(safe-area-inset-bottom));
+	}
+	@media (min-width: 760px) {
+		:global(body:has(.tabbar)) .credit {
+			padding-bottom: var(--s-6);
+		}
 	}
 </style>

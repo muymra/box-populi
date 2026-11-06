@@ -10,6 +10,8 @@ export type CatalogMember = {
 	name: string;
 	role: Role;
 	lastSeenAt: number;
+	/** Index into PLAYER_COLORS, assigned by join order so it never changes. */
+	colorIndex: number;
 };
 
 export type CatalogCopy = {

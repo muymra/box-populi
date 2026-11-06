@@ -1,6 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import { requireRead, requireRole } from '#lib/server/authz.ts';
 import { addCopy, removeCopy } from '#lib/server/games.ts';
+import { loadMembers } from '#lib/server/catalog.ts';
 import { all, jsonArray, one } from '#lib/server/db.ts';
 import { getDb } from '#lib/server/platform.ts';
 import type { PollSource } from '#lib/catalog/types.ts';
@@ -50,7 +51,7 @@ export const load: PageServerLoad = async (event) => {
 	);
 	if (!game) error(404, 'Game not found');
 
-	const [owners, wishers, links, expansions, bases] = await Promise.all([
+	const [owners, wishers, links, expansions, bases, members] = await Promise.all([
 		all<{ user_id: string; name: string; note: string | null; lent_to_name: string | null; lent_to_text: string | null; lent_in_group: number }>(
 			db,
 			`SELECT c.user_id, u.name, c.note, lu.name AS lent_to_name, c.lent_to_text,
@@ -64,9 +65,9 @@ export const load: PageServerLoad = async (event) => {
 			groupId,
 			gameId
 		),
-		all<{ name: string }>(
+		all<{ id: string; name: string }>(
 			db,
-			`SELECT u.name FROM wishlist w
+			`SELECT u.id, u.name FROM wishlist w
 			 JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1
 			 JOIN users u ON u.id = w.user_id
 			 WHERE w.game_id = ?2 ORDER BY u.name`,
@@ -100,8 +101,10 @@ export const load: PageServerLoad = async (event) => {
 					'SELECT id, name, bgg_id FROM games WHERE bgg_id IN (SELECT value FROM json_each(?1))',
 					game.base_bgg_ids
 				)
-			: Promise.resolve([])
+			: Promise.resolve([]),
+		loadMembers(db, groupId)
 	]);
+	const colorOf = new Map(members.map((m) => [m.id, m.colorIndex]));
 
 	const me = event.locals.user;
 	const mine = me ? (await one(db, 'SELECT 1 AS x FROM copies WHERE user_id = ?1 AND game_id = ?2', me.id, gameId)) != null : false;
@@ -132,6 +135,7 @@ export const load: PageServerLoad = async (event) => {
 		},
 		owners: owners.map((o) => ({
 			name: o.name,
+			colorIndex: colorOf.get(o.user_id) ?? 0,
 			note: o.note,
 			status: o.lent_to_text
 				? `Lent to ${o.lent_to_text}`
@@ -141,7 +145,7 @@ export const load: PageServerLoad = async (event) => {
 						: `Lent to ${o.lent_to_name}`
 					: null
 		})),
-		wishers: wishers.map((w) => w.name),
+		wishers: wishers.map((w) => ({ name: w.name, colorIndex: colorOf.get(w.id) ?? 0 })),
 		links,
 		expansions,
 		bases: bases.map((b) => ({ id: b.id, name: b.name }))

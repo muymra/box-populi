@@ -26,7 +26,7 @@
 </script>
 
 <fieldset>
-	<legend>{label}{#if selected.length}<span class="muted"> · {selected.length} selected</span>{/if}</legend>
+	<legend>{label}{#if selected.length}<span class="muted">{' · '}{selected.length} selected</span>{/if}</legend>
 	{#if options.length > visible}
 		<input type="search" placeholder="Search {label.toLowerCase()}" bind:value={query} aria-label="Search {label}" />
 	{/if}
@@ -56,42 +56,53 @@
 
 <style>
 	fieldset {
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		padding: 0.6rem 0.8rem;
+		border: 0;
+		padding: 0;
 		margin: 0;
 		min-width: 0;
 	}
 	legend {
-		font-weight: 600;
-		padding: 0 0.25rem;
+		font-weight: 700;
+		padding: 0;
+		margin-bottom: var(--s-2);
 	}
 	input[type='search'] {
 		width: 100%;
-		padding: 0.4rem 0.6rem;
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		background: var(--bg);
-		margin-bottom: 0.4rem;
+		min-height: 40px;
+		padding: 0 var(--s-3);
+		border: 1.5px solid var(--rule);
+		border-radius: var(--r-ctl);
+		background: var(--laminate);
+		margin-bottom: var(--s-2);
 	}
 	.items {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
-		gap: 0.1rem 0.75rem;
+		gap: 0 var(--s-4);
 	}
 	label {
 		display: flex;
-		gap: 0.5rem;
+		gap: var(--s-2);
 		align-items: center;
-		min-height: 2rem;
-		font-size: 0.92rem;
+		min-height: 36px;
+		font-size: 0.9375rem;
+	}
+	input[type='checkbox'] {
+		accent-color: var(--ink);
+		width: 18px;
+		height: 18px;
+		flex: none;
 	}
 	.link {
 		background: none;
 		border: none;
-		color: var(--accent);
-		padding: 0.25rem 0;
-		margin-right: 0.75rem;
+		color: var(--ink);
+		text-decoration: underline;
+		text-underline-offset: 0.2em;
+		padding: var(--s-1) 0;
+		margin-right: var(--s-4);
 		cursor: pointer;
+		font-size: var(--t-small);
+		font-weight: 600;
 	}
 </style>

@@ -1,7 +1,9 @@
 <script lang="ts">
+	import '@fontsource-variable/archivo/standard.css';
 	import '../app.css';
 	import favicon from '#lib/assets/favicon.svg';
 	import BggCredit from '#lib/components/BggCredit.svelte';
+	import CubeMark from '#lib/components/CubeMark.svelte';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
@@ -14,12 +16,12 @@
 
 <header class="top">
 	<div class="container bar">
-		<a class="brand" href="/">{data.instanceName}</a>
-		<nav>
+		<a class="brand" href="/"><CubeMark size={24} /><span>{data.instanceName}</span></a>
+		<nav aria-label="Account">
 			{#if data.user}
 				<a href="/me" class="me">{data.user.name}</a>
 			{:else}
-				<a href="/join">Join a group</a>
+				<a href="/join" class="me">Join a group</a>
 			{/if}
 		</nav>
 	</div>
@@ -33,21 +35,32 @@
 
 <style>
 	.top {
-		border-bottom: 1px solid var(--border);
-		background: var(--surface);
+		background: var(--laminate);
+		border-bottom: 1px solid var(--rule);
 	}
 	.bar {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		min-height: 3.25rem;
-	}
-	.me {
-		color: var(--text);
+		min-height: 56px;
 	}
 	.brand {
-		font-weight: 700;
-		color: var(--text);
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		color: var(--ink);
 		text-decoration: none;
+		font-weight: 800;
+		font-stretch: 85%;
+		font-size: 1.125rem;
+		letter-spacing: -0.01em;
+	}
+	.me {
+		font-weight: 600;
+		text-decoration: none;
+		padding: 8px 2px;
+	}
+	.me:hover {
+		text-decoration: underline;
 	}
 </style>

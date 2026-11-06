@@ -1,6 +1,7 @@
 // Server side of the catalog: builds the payload the browser filters (TECH.md "Catalog delivery")
 // and keeps `groups.catalog_version` current so the ETag changes when the payload does.
 import { all, jsonArray, one, stmt, type DB } from './db.ts';
+import { colorIndexesByJoinOrder } from '#lib/catalog/colors.ts';
 import type { CatalogGame, CatalogMember, CatalogPayload, PollSource, Role } from '#lib/catalog/types.ts';
 
 type GameRow = {
@@ -61,15 +62,16 @@ export async function catalogVersion(db: DB, groupId: string): Promise<number | 
 }
 
 export async function loadMembers(db: DB, groupId: string): Promise<CatalogMember[]> {
-	const rows = await all<{ id: string; name: string; role: Role; last_seen_at: number }>(
+	const rows = await all<{ id: string; name: string; role: Role; last_seen_at: number; joined_at: number }>(
 		db,
-		`SELECT u.id, u.name, m.role, m.last_seen_at
+		`SELECT u.id, u.name, m.role, m.last_seen_at, m.joined_at
 		 FROM memberships m JOIN users u ON u.id = m.user_id
 		 WHERE m.group_id = ?1
 		 ORDER BY m.last_seen_at DESC, u.name`,
 		groupId
 	);
-	return rows.map((r) => ({ id: r.id, name: r.name, role: r.role, lastSeenAt: r.last_seen_at }));
+	const colors = colorIndexesByJoinOrder(rows.map((r) => ({ id: r.id, joinedAt: r.joined_at })));
+	return rows.map((r) => ({ id: r.id, name: r.name, role: r.role, lastSeenAt: r.last_seen_at, colorIndex: colors.get(r.id) ?? 0 }));
 }
 
 export async function loadCatalog(db: DB, groupId: string, version: number): Promise<CatalogPayload> {

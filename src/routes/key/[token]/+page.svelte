@@ -28,7 +28,7 @@
 			<p>This device will remember you after this.</p>
 		{/if}
 		<form method="POST">
-			{#if form?.error}<p class="banner" role="alert">{form.error}</p>{/if}
+			{#if form?.error}<p class="banner error" role="alert">{form.error}</p>{/if}
 			<button class="btn primary">Sign in as {data.name} on this device</button>
 		</form>
 	{/if}

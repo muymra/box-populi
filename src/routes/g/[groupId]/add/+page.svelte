@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import GameCover from '#lib/components/GameCover.svelte';
+	import Search from '@lucide/svelte/icons/search';
+	import Check from '@lucide/svelte/icons/check';
+	import BoxFront from '#lib/components/BoxFront.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -59,26 +61,29 @@
 	<p class="muted">Games you add are yours: they show up in every group you're in. <a href={myGamesHref}>Your games ({data.myGameCount + added})</a></p>
 
 	{#if bggOn}
-		<label class="search">
-			<span class="visually-hidden">Search BoardGameGeek</span>
-			<input type="search" placeholder="Search BoardGameGeek by title" bind:value={query} oninput={onInput} autocomplete="off" />
-		</label>
+		<div class="strip">
+			<label class="search">
+				<Search size={18} aria-hidden="true" />
+				<span class="visually-hidden">Search BoardGameGeek</span>
+				<input type="search" placeholder="Search BoardGameGeek by title" bind:value={query} oninput={onInput} autocomplete="off" />
+			</label>
+		</div>
 		<p class="status muted" aria-live="polite">
 			{#if status === 'searching'}Searching BoardGameGeek…{:else if status === 'done' && results.length === 0}No matches on BoardGameGeek. Try another spelling, or add it by hand below.{:else if query.trim().length > 0 && query.trim().length < 3}Keep typing…{/if}
 		</p>
-		{#if message}<p class="banner" role="alert">{message}</p>{/if}
-		{#if form?.addError}<p class="banner" role="alert">{form.addError}</p>{/if}
+		{#if message}<p class="banner error" role="alert">{message}</p>{/if}
+		{#if form?.addError}<p class="banner error" role="alert">{form.addError}</p>{/if}
 
 		<ul class="results">
 			{#each results as r (r.gameId)}
 				<li>
-					<GameCover src={r.thumbUrl} name={r.name} size={56} />
+					<span class="mini"><BoxFront name={r.name} src={r.thumbUrl} size="mini" /></span>
 					<div class="info">
 						<span class="name">{r.name}</span>
 						<span class="muted">{r.year ?? 'Year unknown'}{#if r.isExpansion} · Expansion{/if}</span>
 					</div>
 					{#if r.owned}
-						<span class="owned">In your games</span>
+						<span class="owned"><Check size={16} aria-hidden="true" /> On your shelf</span>
 					{:else}
 						<form
 							method="POST"
@@ -107,21 +112,21 @@
 		<form method="POST" action="?/manual" class="stack">
 			<label>
 				Name
-				<input name="name" required maxlength="120" value={form?.manual?.name ?? ''} />
+				<input class="field" name="name" required maxlength="120" value={form?.manual?.name ?? ''} />
 			</label>
 			<div class="pair">
-				<label>Fewest players <input name="minPlayers" inputmode="numeric" pattern="[0-9]*" value={form?.manual?.minPlayers ?? ''} /></label>
-				<label>Most players <input name="maxPlayers" inputmode="numeric" pattern="[0-9]*" value={form?.manual?.maxPlayers ?? ''} /></label>
+				<label>Fewest players <input class="field" name="minPlayers" inputmode="numeric" pattern="[0-9]*" value={form?.manual?.minPlayers ?? ''} /></label>
+				<label>Most players <input class="field" name="maxPlayers" inputmode="numeric" pattern="[0-9]*" value={form?.manual?.maxPlayers ?? ''} /></label>
 			</div>
 			<div class="pair">
-				<label>Shortest play (min) <input name="minPlaytime" inputmode="numeric" pattern="[0-9]*" value={form?.manual?.minPlaytime ?? ''} /></label>
-				<label>Longest play (min) <input name="maxPlaytime" inputmode="numeric" pattern="[0-9]*" value={form?.manual?.maxPlaytime ?? ''} /></label>
+				<label>Shortest play (min) <input class="field" name="minPlaytime" inputmode="numeric" pattern="[0-9]*" value={form?.manual?.minPlaytime ?? ''} /></label>
+				<label>Longest play (min) <input class="field" name="maxPlaytime" inputmode="numeric" pattern="[0-9]*" value={form?.manual?.maxPlaytime ?? ''} /></label>
 			</div>
 			<label>
 				Image address <span class="hint">optional, must start with https://</span>
-				<input name="imageUrl" type="url" value={form?.manual?.imageUrl ?? ''} />
+				<input class="field" name="imageUrl" type="url" value={form?.manual?.imageUrl ?? ''} />
 			</label>
-			{#if form?.manualError}<p class="banner" role="alert">{form.manualError}</p>{/if}
+			{#if form?.manualError}<p class="banner error" role="alert">{form.manualError}</p>{/if}
 			<p class="hint">Hand-entered games have no mechanics, themes or complexity, so some filters won't narrow them down.</p>
 			<button class="btn">Add game</button>
 		</form>
@@ -130,21 +135,44 @@
 
 <style>
 	.add {
-		margin-top: 1rem;
-		max-width: 44rem;
+		padding-top: var(--s-3);
+		max-width: 46rem;
+	}
+	.strip {
+		background: var(--label);
+		border-radius: 10px;
+		padding: var(--s-3);
+		margin-bottom: var(--s-2);
+	}
+	.search {
+		display: flex;
+		align-items: center;
+		gap: var(--s-2);
+		padding: 0 var(--s-3);
+		background: var(--label-field);
+		border-radius: var(--r-ctl);
+		color: var(--label-ink-2);
+	}
+	.search:focus-within {
+		outline: 2px solid var(--mark);
+		outline-offset: 1px;
 	}
 	.search input {
-		width: 100%;
-		padding: 0.7rem 0.85rem;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		background: var(--surface);
-		font-size: 1.05rem;
-		min-height: 3rem;
+		flex: 1;
+		min-width: 0;
+		min-height: 48px;
+		border: 0;
+		background: none;
+		color: var(--label-ink);
+		font-size: 1.0625rem;
+		outline: none;
+	}
+	.search input::placeholder {
+		color: var(--label-ink-2);
 	}
 	.status {
 		min-height: 1.5rem;
-		margin: 0.4rem 0;
+		margin: var(--s-2) 0;
 	}
 	.results {
 		list-style: none;
@@ -152,16 +180,25 @@
 		margin: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: 2px;
+		background: var(--gap);
+		border-radius: var(--r-ctl);
+		overflow: hidden;
+	}
+	.results:empty {
+		display: none;
 	}
 	.results li {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 0.5rem 0.6rem;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
+		gap: var(--s-3);
+		padding: var(--s-2) var(--s-3);
+		background: var(--cube);
+	}
+	.mini {
+		flex: none;
+		width: 40px;
+		height: 42px;
 	}
 	.info {
 		flex: 1;
@@ -170,24 +207,35 @@
 		flex-direction: column;
 	}
 	.name {
-		font-weight: 600;
+		font-weight: 700;
 		overflow-wrap: anywhere;
 	}
+	.info .muted {
+		font-size: var(--t-small);
+	}
 	.owned {
-		color: var(--muted);
-		font-size: 0.9rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		color: var(--ink-2);
+		font-size: var(--t-small);
+		font-weight: 650;
 		white-space: nowrap;
 	}
 	.manual {
-		margin-top: 1.75rem;
+		margin-top: var(--s-6);
+		padding: var(--s-4);
+		background: var(--cube);
+		border: 1px solid var(--rule);
+		border-radius: 10px;
 	}
 	.manual summary {
 		cursor: pointer;
-		color: var(--accent);
+		font-weight: 700;
 	}
 	.pair {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 0.75rem;
+		gap: var(--s-3);
 	}
 </style>

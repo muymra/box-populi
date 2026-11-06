@@ -12,9 +12,9 @@
 	<form method="POST" class="stack">
 		<label>
 			Group code
-			<input name="code" required maxlength="9" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K7M4P" class="code-input" value={form?.code ?? ''} />
+			<input class="field code-input" name="code" required maxlength="9" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K7M4P" value={form?.code ?? ''} />
 		</label>
-		{#if form?.error}<p class="banner" role="alert">{form.error}</p>{/if}
+		{#if form?.error}<p class="banner error" role="alert">{form.error}</p>{/if}
 		<button class="btn primary">Continue</button>
 	</form>
 </section>

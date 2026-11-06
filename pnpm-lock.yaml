@@ -8,6 +8,12 @@ importers:
 
   .:
     dependencies:
+      '@fontsource-variable/archivo':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@lucide/svelte':
+        specifier: ^1.68.0
+        version: 1.68.0(svelte@5.57.3)
       fast-xml-parser:
         specifier: ^5.3.0
         version: 5.12.0
@@ -254,6 +260,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@fontsource-variable/archivo@5.3.0':
+    resolution: {integrity: sha512-HogK8FJelrD1o7TlZlkIVtHgc20bO5PZRWE7mUeUTdMN055alznQV6/00J00IBeu8FQAH4s3zW9UJNvKExXf+g==}
+
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
     engines: {node: '>=18'}
@@ -434,6 +443,11 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.9':
     resolution: {integrity: sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ==}
+
+  '@lucide/svelte@1.68.0':
+    resolution: {integrity: sha512-5iOupZmuGCJD89emoHsTlwkwMHzuNTBUwt/IbH3YVnmphBNqKqz4CKepzsOBXpf+c17DXlTOeV8nhzV0pU+5qw==}
+    peerDependencies:
+      svelte: ^5
 
   '@nodable/entities@3.1.0':
     resolution: {integrity: sha512-LsS/DjHr+uDM647Gru/cA8+J3a3HfhttwCKLyuoyN7yXTFCxKBtSgMQBvrW9yNPa2/zDRUNuGPaH5QUFoa4arQ==}
@@ -1234,6 +1248,8 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
+  '@fontsource-variable/archivo@5.3.0': {}
+
   '@img/colour@1.1.0': {}
 
   '@img/sharp-darwin-arm64@0.35.5':
@@ -1363,6 +1379,10 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
+
+  '@lucide/svelte@1.68.0(svelte@5.57.3)':
+    dependencies:
+      svelte: 5.57.3
 
   '@nodable/entities@3.1.0': {}
 

@@ -24,11 +24,11 @@
 			{#if data.needsName}
 				<label>
 					Your name
-					<input name="displayName" required maxlength="40" autocomplete="nickname" placeholder="How the group knows you" value={form?.displayName ?? ''} />
+					<input class="field" name="displayName" required maxlength="40" autocomplete="nickname" placeholder="How the group knows you" value={form?.displayName ?? ''} />
 					<span class="hint">No account or email needed. This device will remember you.</span>
 				</label>
 			{/if}
-			{#if form?.error}<p class="banner" role="alert">{form.error}</p>{/if}
+			{#if form?.error}<p class="banner error" role="alert">{form.error}</p>{/if}
 			<button class="btn primary">Join group</button>
 		</form>
 	{/if}

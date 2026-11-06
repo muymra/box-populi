@@ -1,91 +1,135 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import CopyButton from '#lib/components/CopyButton.svelte';
+	import LayoutGrid from '@lucide/svelte/icons/layout-grid';
+	import Dices from '@lucide/svelte/icons/dices';
+	import Plus from '@lucide/svelte/icons/plus';
+	import Users from '@lucide/svelte/icons/users';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
 	const base = $derived(`/g/${data.group.id}`);
 	const current = $derived(page.url.pathname);
-	const inviteLink = $derived(data.code ? `${page.url.origin}/join/${data.code}` : null);
+	const tabs = $derived(
+		[
+			{ href: base, label: 'Shelf', icon: LayoutGrid, show: true },
+			{ href: `${base}/pick`, label: 'Play tonight', icon: Dices, show: true },
+			{ href: `${base}/add`, label: 'Add games', icon: Plus, show: !!data.role && !data.readonly },
+			{ href: `${base}/group`, label: 'Group', icon: Users, show: true }
+		].filter((t) => t.show)
+	);
+	const isCurrent = (href: string) =>
+		href === base ? current === base || current.startsWith(`${base}/game/`) : current.startsWith(href);
 </script>
 
 <svelte:head><title>{data.group.name} · {data.instanceName}</title></svelte:head>
 
 <div class="group-head">
 	<h1>{data.group.name}</h1>
-	<nav aria-label="Group">
-		<a href={base} aria-current={current === base ? 'page' : undefined}>Catalog</a>
-		<a href="{base}/pick" aria-current={current === `${base}/pick` ? 'page' : undefined}>What should we play?</a>
-		{#if data.role && !data.readonly}
-			<a href="{base}/add" aria-current={current === `${base}/add` ? 'page' : undefined}>Add games</a>
-		{/if}
+	<nav class="tabbar" aria-label="Group">
+		{#each tabs as t (t.href)}
+			<a href={t.href} aria-current={isCurrent(t.href) ? 'page' : undefined}>
+				<t.icon size={20} strokeWidth={2} aria-hidden="true" />
+				<span>{t.label}</span>
+			</a>
+		{/each}
 	</nav>
 </div>
 
-{#if data.code && inviteLink}
-	<details class="invite">
-		<summary>Invite people · code <strong class="code">{data.code}</strong></summary>
-		<p>Share the code, or this link: <span class="link">{inviteLink}</span></p>
-		<CopyButton text={inviteLink} label="Copy invite link" />
-	</details>
-{/if}
-
 {#if data.group.isDemo}
-	<p class="banner">
-		This is a demo group with invented games and people. Look around; nothing here can be changed.
-	</p>
+	<p class="banner">A demo shelf: the games and people are invented, and nothing here can be changed.</p>
 {:else if data.group.suspended}
 	<p class="banner">
-		This group has been suspended by the host{data.group.suspendedReason ? `: ${data.group.suspendedReason}` : ''}.
-		It's read-only. Questions go to <a href={data.contact}>{data.contact.replace(/^mailto:/, '')}</a>.
+		The host has suspended this group{data.group.suspendedReason ? `: ${data.group.suspendedReason}` : ''}. It's read-only.
+		Questions go to <a href={data.contact}>{data.contact.replace(/^mailto:/, '')}</a>.
 	</p>
 {/if}
 
-{@render children()}
+<div class="group-body">
+	{@render children()}
+</div>
 
 <style>
 	.group-head {
 		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
+		align-items: center;
 		justify-content: space-between;
-		gap: 0.5rem 1.5rem;
-		padding-top: 1.25rem;
+		gap: var(--s-4);
+		padding: var(--s-5) 0 var(--s-3);
 	}
 	h1 {
-		font-size: 1.5rem;
 		margin: 0;
-	}
-	nav {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.25rem 1rem;
-	}
-	nav a {
-		text-decoration: none;
-		color: var(--muted);
-		padding: 0.25rem 0;
-		border-bottom: 2px solid transparent;
-	}
-	.invite {
-		margin-top: 0.6rem;
-	}
-	.invite summary {
-		cursor: pointer;
-		color: var(--muted);
-	}
-	.code {
-		font-family: ui-monospace, monospace;
-		letter-spacing: 0.08em;
-		color: var(--text);
-	}
-	.link {
-		font-family: ui-monospace, monospace;
-		font-size: 0.88rem;
+		min-width: 0;
 		overflow-wrap: anywhere;
 	}
-	nav a[aria-current='page'] {
-		color: var(--text);
-		border-bottom-color: var(--accent);
+	/* Phones: a bottom tab bar within thumb reach. */
+	.tabbar {
+		position: fixed;
+		z-index: 20;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		display: flex;
+		justify-content: space-around;
+		background: var(--laminate);
+		border-top: 1px solid var(--rule);
+		padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+	}
+	.tabbar a {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 3px;
+		padding: 6px 2px;
+		border-radius: var(--r-ctl);
+		color: var(--ink-2);
+		text-decoration: none;
+		font-size: 0.75rem;
+		font-weight: 650;
+		min-height: 52px;
+	}
+	.tabbar a[aria-current='page'] {
+		color: var(--ink);
+	}
+	.tabbar a[aria-current='page'] :global(svg) {
+		color: var(--mark-ink);
+		background: var(--mark);
+		border-radius: 6px;
+		padding: 2px 10px;
+		box-sizing: content-box;
+	}
+	.group-body {
+		padding-bottom: var(--s-4);
+	}
+	/* Wider screens: the same tabs sit in the group header. */
+	@media (min-width: 760px) {
+		.tabbar {
+			position: static;
+			background: none;
+			border: 0;
+			padding: 0;
+			gap: 4px;
+		}
+		.tabbar a {
+			flex: none;
+			flex-direction: row;
+			gap: 8px;
+			padding: 0 14px;
+			min-height: 42px;
+			font-size: 0.9375rem;
+		}
+		.tabbar a[aria-current='page'] {
+			background: var(--mark);
+			color: var(--mark-ink);
+		}
+		.tabbar a[aria-current='page'] :global(svg) {
+			background: none;
+			padding: 0;
+		}
+		.tabbar a:not([aria-current='page']):hover {
+			background: var(--gap);
+			color: var(--ink);
+		}
 	}
 </style>

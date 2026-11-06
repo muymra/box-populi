@@ -1,7 +1,13 @@
 <script lang="ts">
-	import GameCover from '#lib/components/GameCover.svelte';
+	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
+	import UsersRound from '@lucide/svelte/icons/users-round';
+	import Clock from '@lucide/svelte/icons/clock';
+	import Weight from '@lucide/svelte/icons/weight';
+	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import BoxFront from '#lib/components/BoxFront.svelte';
 	import { BUCKET_LABELS, formatPlaytime, formatWeight, weightBucket } from '#lib/catalog/buckets.ts';
 	import { countsFromMask, formatCounts, formatPlayerRange } from '#lib/catalog/players.ts';
+	import { playerColor } from '#lib/catalog/colors.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -23,51 +29,62 @@
 
 <svelte:head><title>{g.name} · {data.group.name}</title></svelte:head>
 
-<p class="back"><a href={base}>← Back to the catalog</a></p>
+<a class="back" href={base}><ArrowLeft size={18} aria-hidden="true" /> Shelf</a>
 
 <article class="game">
 	<header class="head">
-		<GameCover src={g.imageUrl} name={g.name} size={160} />
-		<div>
-			<h2>{g.name} {#if g.year}<span class="muted year">({g.year})</span>{/if}</h2>
-			<div class="tags">
-				{#if g.isExpansion}<span class="tag">Expansion</span>{/if}
-				{#if g.isManual}<span class="tag">Hand-entered</span>{/if}
-				{#if g.detailsPending}<span class="tag">Details still loading from BGG</span>{/if}
-			</div>
+		<div class="hero-box"><BoxFront name={g.name} src={g.imageUrl} size="hero" /></div>
+		<div class="intro">
+			<h2 class="title">{g.name} {#if g.year}<span class="year num">{g.year}</span>{/if}</h2>
+			{#if g.isExpansion || g.isManual || g.detailsPending}
+				<p class="tags">
+					{#if g.isExpansion}<span class="tag">Expansion</span>{/if}
+					{#if g.isManual}<span class="tag">Hand-entered</span>{/if}
+					{#if g.detailsPending}<span class="tag">Details still loading from BGG</span>{/if}
+				</p>
+			{/if}
 			{#if data.bases.length}
 				<p>Expansion for {#each data.bases as b, i (b.id)}{i ? ', ' : ''}<a href="{base}/game/{b.id}">{b.name}</a>{/each}</p>
 			{/if}
-			<dl class="facts">
-				{#if players}<div><dt>Players</dt><dd>{players}</dd></div>{/if}
-				{#if best}<div><dt>Best with</dt><dd>{best} <span class="muted">({pollLabel})</span></dd></div>{/if}
-				{#if recommended}<div><dt>Recommended with</dt><dd>{recommended}</dd></div>{/if}
-				{#if time}<div><dt>Play time</dt><dd>{time}</dd></div>{/if}
-				{#if weight}<div><dt>Weight (BGG)</dt><dd>{weight} {#if bucket}<span class="muted">· {BUCKET_LABELS[bucket]} on Box Populi's scale</span>{/if}</dd></div>{/if}
-			</dl>
-			{#if g.bggId}
-				<a class="btn" href="https://boardgamegeek.com/boardgame/{g.bggId}" rel="noopener" target="_blank">View on BoardGameGeek</a>
-			{/if}
 		</div>
+		<ul class="facts">
+			{#if players}
+				<li>
+					<UsersRound size={20} aria-hidden="true" />
+					<span><strong class="num">{players}</strong> players
+						{#if best}<span class="muted">{' · '}best with <span class="num">{best}</span> ({pollLabel})</span>{/if}
+						{#if recommended && recommended !== best}<span class="muted">{' · '}recommended <span class="num">{recommended}</span></span>{/if}
+					</span>
+				</li>
+			{/if}
+			{#if time}
+				<li><Clock size={20} aria-hidden="true" /><span><strong class="num">{time}</strong></span></li>
+			{/if}
+			{#if weight}
+				<li>
+					<Weight size={20} aria-hidden="true" />
+					<span><strong class="num">{weight}</strong> <span class="muted">BGG weight{#if bucket}{' · '}{BUCKET_LABELS[bucket].toLowerCase()} on Box Populi's scale{/if}</span></span>
+				</li>
+			{/if}
+			{#if g.bggId}
+				<li class="bgg">
+					<a class="btn small" href="https://boardgamegeek.com/boardgame/{g.bggId}" rel="noopener" target="_blank">
+						View on BoardGameGeek <ExternalLink size={14} aria-hidden="true" />
+					</a>
+				</li>
+			{/if}
+		</ul>
 	</header>
 
-	{#if g.mechanics.length || g.categories.length}
-		<section>
-			<div class="tags">
-				{#each g.mechanics as m (m)}<span class="tag">{m}</span>{/each}
-				{#each g.categories as c (c)}<span class="tag">{c}</span>{/each}
-			</div>
-		</section>
-	{/if}
-
-	<section>
-		<h3>Who has it</h3>
+	<section aria-labelledby="owners-h">
+		<h3 id="owners-h">On whose shelf</h3>
 		{#if data.owners.length}
-			<ul class="plain">
+			<ul class="people">
 				{#each data.owners as o, i (i)}
+					{@const c = playerColor(o.colorIndex)}
 					<li>
-						<strong>{o.name}</strong>
-						{#if o.note}<span class="muted"> · {o.note}</span>{/if}
+						<span class="chip" style:background={c.bg} style:color={c.ink} aria-hidden="true">{o.name.slice(0, 1).toUpperCase()}</span>
+						<span class="who"><strong>{o.name}</strong>{#if o.note}<span class="muted">{' · '}{o.note}</span>{/if}</span>
 						{#if o.status}<span class="tag">{o.status}</span>{/if}
 					</li>
 				{/each}
@@ -76,50 +93,44 @@
 			<p class="muted">Nobody in the group owns this yet.</p>
 		{/if}
 		{#if data.wishers.length}
-			<p class="muted">Wanted by {data.wishers.join(', ')}</p>
+			<p class="muted wanted">Wanted by {data.wishers.map((w) => w.name).join(', ')}</p>
 		{/if}
 		{#if data.canEdit}
-			{#if data.mine}
-				<form method="POST" action="?/remove" class="copy-action">
-					<button class="btn">Remove from my games</button>
-				</form>
-			{:else}
-				<form method="POST" action="?/add" class="copy-action">
-					<button class="btn">I own this too</button>
-				</form>
-			{/if}
+			<form method="POST" action={data.mine ? '?/remove' : '?/add'} class="copy-action">
+				<button class="btn">{data.mine ? 'Remove from my games' : 'I own this too'}</button>
+			</form>
 		{/if}
 	</section>
 
 	{#if data.expansions.length}
-		<section>
-			<h3>Expansions in the group</h3>
+		<section aria-labelledby="exp-h">
+			<h3 id="exp-h">Expansions in the group</h3>
 			<ul class="plain">
 				{#each data.expansions as e (e.id)}<li><a href="{base}/game/{e.id}">{e.name}</a></li>{/each}
 			</ul>
 		</section>
 	{/if}
 
-	<section>
-		<h3>Rules and tutorials</h3>
+	<section aria-labelledby="links-h">
+		<h3 id="links-h">Rules and tutorials</h3>
 		<ul class="plain">
 			{#each data.links as link (link.id)}
 				<li>
 					<span class="tag">{link.kind}</span>
 					<a href={link.url} rel="noopener noreferrer nofollow" target="_blank">{link.title || link.url}</a>
-					<span class="muted"> · added by {link.added_by_name ?? 'former member'}</span>
+					<span class="muted">{' · '}added by {link.added_by_name ?? 'former member'}</span>
 				</li>
 			{/each}
-			<li><a href={youtube} rel="noopener noreferrer" target="_blank">Search YouTube for "how to play {g.name}"</a></li>
+			<li><a href={youtube} rel="noopener noreferrer" target="_blank">Search YouTube for “how to play {g.name}”</a></li>
 		</ul>
 	</section>
 
 	{#if g.description}
-		<section>
-			<h3>About</h3>
+		<section aria-labelledby="about-h">
+			<h3 id="about-h">About</h3>
 			<p class="description" class:clamped={longDescription && !expanded}>{g.description}</p>
 			{#if longDescription}
-				<button type="button" class="btn" onclick={() => (expanded = !expanded)}>{expanded ? 'Show less' : 'Show more'}</button>
+				<button type="button" class="link-button" onclick={() => (expanded = !expanded)}>{expanded ? 'Show less' : 'Read more'}</button>
 			{/if}
 		</section>
 	{/if}
@@ -127,46 +138,120 @@
 
 <style>
 	.back {
-		margin: 1rem 0 0.5rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		margin: var(--s-2) 0 var(--s-4);
+		font-weight: 650;
+		text-decoration: none;
+		color: var(--ink-2);
+	}
+	.back:hover {
+		color: var(--ink);
+	}
+	.game {
+		display: grid;
+		gap: var(--s-6);
+		max-width: 56rem;
 	}
 	.head {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 1.25rem;
-		align-items: flex-start;
+		display: grid;
+		grid-template-columns: 9.5rem minmax(0, 1fr);
+		grid-template-areas: 'box intro' 'facts facts';
+		gap: var(--s-4) var(--s-5);
+		align-items: start;
 	}
-	h2 {
-		font-size: 1.6rem;
+	@media (min-width: 640px) {
+		.head {
+			grid-template-columns: 15rem minmax(0, 1fr);
+			grid-template-areas: 'box intro' 'box facts';
+			grid-template-rows: auto 1fr;
+		}
+	}
+	.hero-box {
+		grid-area: box;
+		aspect-ratio: 1 / 1.04;
+		box-shadow: var(--shadow-lift);
+		border-radius: 2px;
+		transform: rotate(-1.5deg);
+	}
+	.intro {
+		grid-area: intro;
+		min-width: 0;
+	}
+	.title {
+		font-size: var(--t-h1);
+		overflow-wrap: anywhere;
 	}
 	.year {
-		font-weight: 400;
-		font-size: 1.1rem;
+		font-weight: 500;
+		font-size: 0.55em;
+		color: var(--ink-2);
+		margin-left: 4px;
 	}
 	.tags {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.35rem;
+		gap: 6px;
 	}
 	.facts {
-		display: grid;
-		grid-template-columns: auto 1fr;
-		gap: 0.25rem 1rem;
-		margin: 0.75rem 0 1rem;
-	}
-	.facts div {
-		display: contents;
-	}
-	dt {
-		color: var(--muted);
-	}
-	dd {
+		grid-area: facts;
+		list-style: none;
 		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--s-2);
 	}
-	section {
-		margin-top: 1.5rem;
+	.facts li {
+		display: flex;
+		gap: var(--s-2);
+		align-items: flex-start;
+	}
+	.facts :global(svg) {
+		flex: none;
+		margin-top: 1px;
+		color: var(--ink-2);
+	}
+	.facts .bgg {
+		margin-top: var(--s-2);
+	}
+	.facts .bgg :global(svg) {
+		margin: 0;
+		color: currentColor;
 	}
 	h3 {
-		font-size: 1.1rem;
+		margin-bottom: var(--s-3);
+	}
+	.people {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--s-2);
+	}
+	.people li {
+		display: flex;
+		align-items: center;
+		gap: var(--s-3);
+		flex-wrap: wrap;
+	}
+	.chip {
+		width: 30px;
+		height: 30px;
+		border-radius: 4px;
+		display: grid;
+		place-items: center;
+		font-weight: 800;
+		font-size: 0.875rem;
+		box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.18);
+	}
+	.wanted {
+		margin-top: var(--s-3);
+	}
+	.copy-action {
+		margin-top: var(--s-4);
 	}
 	.plain {
 		list-style: none;
@@ -174,18 +259,14 @@
 		margin: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
-	}
-	.copy-action {
-		margin-top: 0.75rem;
+		gap: var(--s-2);
 	}
 	.description {
 		white-space: pre-line;
-		max-width: 46rem;
 	}
 	.clamped {
-		max-height: 9rem;
+		max-height: 9.5rem;
 		overflow: hidden;
-		mask-image: linear-gradient(to bottom, black 60%, transparent);
+		mask-image: linear-gradient(to bottom, black 55%, transparent);
 	}
 </style>

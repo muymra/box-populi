@@ -15,7 +15,7 @@
 			<button type="button" class="btn" onclick={() => navigator.share({ title: 'My Box Populi link', url: link }).catch(() => {})}>Share to myself</button>
 		{/if}
 	</div>
-	<ul class="muted">
+	<ul >
 		<li>Save it in your password manager or notes, or send it to yourself.</li>
 		<li>Anyone with it can act as you. Don't post it in the group chat.</li>
 		<li>This is the only time it's shown. You can make a new one from your account page, which stops this one working.</li>
@@ -24,34 +24,39 @@
 
 <style>
 	.personal-link {
-		border: 1px solid var(--border);
-		background: var(--surface);
-		border-radius: var(--radius);
-		padding: 0.9rem 1rem;
-		margin: 1rem 0 1.25rem;
+		border: 1px solid var(--rule);
+		background: var(--cube);
+		border-radius: 10px;
+		padding: var(--s-4);
+		margin: var(--s-4) 0 var(--s-5);
 	}
 	.label {
-		font-weight: 600;
-		margin: 0 0 0.4rem;
+		font-weight: 700;
+		margin: 0 0 var(--s-2);
 	}
 	input {
 		width: 100%;
-		font-family: ui-monospace, monospace;
-		font-size: 0.85rem;
-		padding: 0.5rem 0.6rem;
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		background: var(--bg);
+		font-size: 0.875rem;
+		min-height: 42px;
+		padding: 0 var(--s-3);
+		border: 1.5px solid var(--rule);
+		border-radius: var(--r-ctl);
+		background: var(--laminate);
+		font-variant-numeric: tabular-nums;
 	}
 	.actions {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.5rem;
-		margin: 0.6rem 0;
+		gap: var(--s-2);
+		margin: var(--s-3) 0;
 	}
 	ul {
-		margin: 0.25rem 0 0;
+		margin: 0;
 		padding-left: 1.1rem;
-		font-size: 0.92rem;
+		font-size: 0.9375rem;
+		color: var(--ink-2);
+	}
+	li + li {
+		margin-top: 4px;
 	}
 </style>

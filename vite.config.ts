@@ -13,6 +13,8 @@ export default defineConfig({
 			adapter: adapter()
 		})
 	],
+	// Lucide ships .svelte sources; bundle them for server rendering instead of handing them to Node.
+	ssr: { noExternal: ['@lucide/svelte'] },
 	test: {
 		expect: { requireAssertions: true },
 		projects: [

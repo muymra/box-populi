@@ -142,3 +142,8 @@ Replaces Google sign-in (D05) and email-based instance admins (D21), and narrows
 **Why:** Google sign-in meant a 15-minute Google Cloud setup for every hoster and a login wall for every friend, which is too much friction for friend groups. With no accounts there's no third party, no email, and sign-in works on preview deploys.
 **Trade-offs accepted:** whoever holds a personal link acts as that person, so it should be kept like a password; regenerating it revokes the leak. Lost-device recovery means rejoining.
 **Revisit if:** groups want recovery without rejoining. Passkeys were the runner-up.
+
+## D26. Cube shelf visual world (2026-11-06)
+
+Chosen on the Impeccable decision page over the rolled rulebook direction and the category standard. The catalog is the group's cube shelf: games as boxes in square cubes, owner colours along each cube's front edge, a dark label strip for filters, marigold only for active filters and selection. Archivo (self-hosted through `@fontsource-variable/archivo`) and Lucide icons (`@lucide/svelte`) are the two dependencies it adds. The direction contract is in `.impeccable/surfaces/`; DESIGN.md records the built system.
+**Why:** Carlo found the first pages utilitarian; the shelf is the product's lead claim made visible.
