@@ -181,7 +181,7 @@
 				<input class="field" name="imageUrl" type="url" value={form?.manual?.imageUrl ?? ''} />
 			</label>
 			{#if form?.manualError}<p class="banner error" role="alert">{form.manualError}</p>{/if}
-			<p class="hint">Hand-entered games have no mechanics, themes or complexity, so some filters won't narrow them down.</p>
+			<p class="hint">Hand-entered games have no mechanics or themes. You can add a complexity, or fix anything, later from the game's page.</p>
 			<button class="btn">Add game</button>
 		</form>
 	</details>

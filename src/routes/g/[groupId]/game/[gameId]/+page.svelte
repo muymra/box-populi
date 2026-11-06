@@ -26,7 +26,9 @@
 	const best = $derived(formatCounts(countsFromMask(g.bestMask)));
 	const recommended = $derived(formatCounts(countsFromMask(g.recMask)));
 	const time = $derived(formatPlaytime(g.minPlaytime, g.maxPlaytime));
-	const weight = $derived(formatWeight(g.weight));
+	// BGG games show BGG's weight; anything else shows the complexity a member set, as a whole number.
+	const groupRated = $derived(g.source !== 'bgg');
+	const weight = $derived(g.weight == null ? null : groupRated ? `${Math.round(g.weight)} / 5` : formatWeight(g.weight));
 	const bucket = $derived(weightBucket(g.weight));
 	const pollLabel = $derived(g.pollSource === 'votes' ? 'computed from BGG poll votes' : 'BGG voters');
 	const youtube = $derived(`https://www.youtube.com/results?search_query=${encodeURIComponent(`how to play ${g.name}`)}`);
@@ -96,7 +98,10 @@
 			{#if weight}
 				<li>
 					<Weight size={20} aria-hidden="true" />
-					<span><strong class="num">{weight}</strong> <span class="muted">BGG weight{#if bucket}{' · '}{BUCKET_LABELS[bucket].toLowerCase()} on Box Populi's scale{/if}</span></span>
+					<span>
+						<strong class="num">{weight}</strong>
+						<span class="muted">{groupRated ? 'complexity, set by the group' : 'BGG weight'}{#if bucket}{' · '}{BUCKET_LABELS[bucket].toLowerCase()} on Box Populi's scale{/if}</span>
+					</span>
 				</li>
 			{/if}
 			{#if g.bggId || g.wikidataId}
@@ -115,6 +120,51 @@
 			{/if}
 		</ul>
 	</header>
+
+	{#if data.canEditDetails || data.editedByName}
+		<section class="details-edit" aria-label="Game details">
+			{#if data.editedByName}<p class="muted small">Details last edited by {data.editedByName}.</p>{/if}
+			{#if data.canEditDetails}
+				<details class="lend" open={!!form?.editError}>
+					<summary class="link-button">{g.isManual ? 'Edit details…' : 'Fill in or correct details…'}</summary>
+					<form method="POST" action="?/editDetails" class="lend-form edit-form" use:enhance={() => async ({ update }) => update({ reset: false })}>
+						{#if g.isManual}
+							<label>Name <input class="field" name="name" required maxlength="120" value={g.name} /></label>
+						{/if}
+						<div class="pair">
+							<label>Fewest players <input class="field num" name="minPlayers" inputmode="numeric" pattern="[0-9]*" value={g.minPlayers ?? ''} /></label>
+							<label>Most players <input class="field num" name="maxPlayers" inputmode="numeric" pattern="[0-9]*" value={g.maxPlayers ?? ''} /></label>
+						</div>
+						<div class="pair">
+							<label>Shortest play (min) <input class="field num" name="minPlaytime" inputmode="numeric" pattern="[0-9]*" value={g.minPlaytime ?? ''} /></label>
+							<label>Longest play (min) <input class="field num" name="maxPlaytime" inputmode="numeric" pattern="[0-9]*" value={g.maxPlaytime ?? ''} /></label>
+						</div>
+						<label>
+							Complexity
+							<select class="field" name="complexity" value={g.weight == null ? '' : String(Math.round(g.weight))}>
+								<option value="">Not set</option>
+								<!-- Labels follow the shelf's complexity filter: light under 2, medium 2 to under 3, heavy 3 and up. -->
+								<option value="1">1, light</option>
+								<option value="2">2, medium</option>
+								<option value="3">3, heavy</option>
+								<option value="4">4, heavy</option>
+								<option value="5">5, very heavy</option>
+							</select>
+						</label>
+						{#if g.isManual}
+							<label>
+								<span>Image address <span class="hint">(optional, https://)</span></span>
+								<input class="field" name="imageUrl" type="url" value={g.imageUrlRaw ?? ''} />
+							</label>
+						{/if}
+						<p class="hint">Changes show in every group that has this game.</p>
+						{#if form?.editError}<p class="banner error" role="alert">{form.editError}</p>{/if}
+						<button class="btn primary small">Save details</button>
+					</form>
+				</details>
+			{/if}
+		</section>
+	{/if}
 
 	<section aria-labelledby="owners-h">
 		<h3 id="owners-h">On whose shelf</h3>
@@ -442,6 +492,25 @@
 	}
 	.lend-form .hint {
 		margin: 0;
+	}
+	.details-edit {
+		margin-top: calc(-1 * var(--s-4));
+	}
+	.details-edit .small {
+		font-size: var(--t-small);
+		margin: 0;
+	}
+	.pair {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--s-3);
+		align-self: stretch;
+	}
+	.pair label {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		font-weight: 650;
 	}
 	.links {
 		list-style: none;

@@ -4,6 +4,7 @@ import { addCopy, gameUsableInGroup, removeCopy } from '#lib/server/games.ts';
 import { addLink, canDeleteLink, deleteLink, parseLink } from '#lib/server/links.ts';
 import { addWish, removeWish } from '#lib/server/wishlist.ts';
 import { lendCopy, returnCopy } from '#lib/server/lending.ts';
+import { canEditGame, editGame } from '#lib/server/game-edit.ts';
 import { linkHost } from '#lib/link-kinds.ts';
 import { loadMembers } from '#lib/server/catalog.ts';
 import { all, jsonArray, one } from '#lib/server/db.ts';
@@ -35,6 +36,8 @@ type GameDetail = {
 	fetched_at: number | null;
 	source: 'bgg' | 'wikidata' | 'manual';
 	wikidata_id: string | null;
+	edited_by: string | null;
+	edited_at: number | null;
 };
 
 export const load: PageServerLoad = async (event) => {
@@ -126,11 +129,15 @@ export const load: PageServerLoad = async (event) => {
 			)
 		: null;
 	const mine = myCopy != null;
+	const canEditDetails = canEdit && actor != null && (await canEditGame(db, groupId, actor, gameId));
+	const editedBy = game.edited_by ? await one<{ name: string }>(db, 'SELECT name FROM users WHERE id = ?1', game.edited_by) : null;
 	const wanted = me ? wishers.some((w) => w.id === me.id) : false;
 
 	return {
 		mine,
 		wanted,
+		canEditDetails,
+		editedByName: game.edited_at != null ? (editedBy?.name ?? 'a former member') : null,
 		myLoan: myCopy && (myCopy.lent_to_user_id || myCopy.lent_to_text) ? { toUserId: myCopy.lent_to_user_id, toText: myCopy.lent_to_text } : null,
 		// Borrowers to pick from: this group's other members, most recently active first.
 		lendTo: me ? members.filter((m) => m.id !== me.id).map((m) => ({ id: m.id, name: m.name })) : [],
@@ -148,6 +155,7 @@ export const load: PageServerLoad = async (event) => {
 			recMask: game.rec_mask,
 			pollSource: game.poll_source,
 			minPlaytime: game.min_playtime,
+			imageUrlRaw: game.image_url,
 			maxPlaytime: game.max_playtime,
 			weight: game.weight,
 			mechanics: jsonArray<string>(game.mechanics),
@@ -229,6 +237,15 @@ export const actions: Actions = {
 		await requireRole(event, db, event.params.groupId, 'member');
 		await returnCopy(db, event.locals.user!.id, gameIdParam(event.params.gameId));
 		return { returned: true };
+	},
+
+	editDetails: async (event) => {
+		const db = getDb();
+		const { groupId } = event.params;
+		const access = await requireRole(event, db, groupId, 'member');
+		const form = await event.request.formData();
+		const result = await editGame(db, groupId, { id: event.locals.user!.id, role: access.role }, gameIdParam(event.params.gameId), form, Date.now());
+		return result.ok ? { detailsSaved: true } : fail(400, { editError: result.error });
 	},
 
 	want: async (event) => {
