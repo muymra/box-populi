@@ -132,6 +132,7 @@ The repo commits `wrangler.example.jsonc`. `pnpm install` copies it to `wrangler
 | `GROUP_CREATION` | var | `anyone` | `anyone` or `admins`. With `admins`, only the hoster (signed in to `/admin`) creates groups; anyone can still join with a code. |
 | `INSTANCE_MODE` | var | `standard` | `standard` or `demo`. `demo` turns the home page into an introduction to the demo group, with links to the GitHub repo and SELF_HOSTING.md instead of joining, and the signed-out header link becomes "Run your own". For an instance that exists to show the demo. |
 | `SEARCH_ENGINES` | var | `allow` | `allow` or `block`. `block` serves a `robots.txt` that disallows everything and adds `X-Robots-Tag: noindex, nofollow` to every response, for an instance only its groups should know about. `allow` still disallows `/admin` and `/key/`. |
+| `THEME` | var | `cube` | The instance's default colour theme: `cube` or a preset id from `src/lib/themes.ts` (`dracula`, `catppuccin`, `solarized`, `gruvbox`, `tokyo-night`, `kanagawa`, `nord`, `everforest`, `rose-pine`, `one`, `github`, `ayu`). Each device can pick another from the footer; the choice lives in the `bp_theme` cookie. |
 | `MAX_GROUPS_PER_USER` | var | `5` | Groups one user can own. |
 | `MAX_MEMBERS_PER_GROUP` | var | `100` | Joins are refused past this. |
 
@@ -669,6 +670,7 @@ URL params: `n`, `t`, `w`, `present` (comma-separated user ids), `seen` (ids alr
 | `GET /api/g/[groupId]/catalog` | Catalog payload with ETag. | `requireRead` |
 | `GET /api/bgg/search` | BGG search proxy. | `requireUser` |
 | `POST /api/bgg/import`, `/api/bgg/import/confirm`, `/api/bgg/hydrate` | Import flow. | `requireUser` |
+| `POST /theme` | Saves this device's theme in `bp_theme`. 204 for `Accept: application/json` (the footer select already switched the page), otherwise a 303 back to the page it came from. | none |
 
 Mutations on pages are SvelteKit form actions. They work without client JavaScript, and SvelteKit's origin check covers CSRF for form posts. The JSON endpoints are reached only with the `SameSite=Lax` session cookie, which browsers don't send on cross-site POSTs.
 

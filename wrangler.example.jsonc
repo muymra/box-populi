@@ -27,6 +27,8 @@
 		"INSTANCE_MODE": "standard",
 		// "block" asks search engines not to index this instance (robots.txt and X-Robots-Tag).
 		"SEARCH_ENGINES": "allow",
+		// The default colour theme: "cube" or a preset id from src/lib/themes.ts. Each device can pick another.
+		"THEME": "cube",
 		"MAX_GROUPS_PER_USER": "5",
 		"MAX_MEMBERS_PER_GROUP": "100"
 	}

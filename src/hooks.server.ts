@@ -1,7 +1,8 @@
 import type { Handle } from '@sveltejs/kit/hooks';
 import { getConfig, getDb } from '#lib/server/platform.ts';
 import { resolveSession, SESSION_COOKIE } from '#lib/server/identity.ts';
-import { clearAdminCookie, clearSessionCookie, setSessionCookie } from '#lib/server/cookies.ts';
+import { clearAdminCookie, clearSessionCookie, setSessionCookie, THEME_COOKIE } from '#lib/server/cookies.ts';
+import { isThemeId } from '#lib/themes.ts';
 import { ADMIN_COOKIE, verifyAdminCookie } from '#lib/server/admin.ts';
 
 const escapeHtml = (s: string) =>
@@ -36,7 +37,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.isAdmin = adminCookie != null && adminKey != null && (await verifyAdminCookie(adminKey, adminCookie, Date.now()));
 	if (adminCookie && !event.locals.isAdmin) clearAdminCookie(event.cookies, event.url);
 
-	const response = await resolve(event);
+	// The theme goes into the HTML before it's sent, so the page never flashes the default colours.
+	const chosen = event.cookies.get(THEME_COOKIE);
+	event.locals.theme = isThemeId(chosen) ? chosen : config.config.theme;
+	const theme = event.locals.theme;
+	const response = await resolve(event, { transformPageChunk: ({ html }) => html.replace('%bp.theme%', theme) });
 	// SEARCH_ENGINES=block: an instance meant only for the people who have its links.
 	if (config.config.searchEngines === 'block') response.headers.set('x-robots-tag', 'noindex, nofollow');
 	return response;

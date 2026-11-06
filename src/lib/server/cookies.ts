@@ -37,5 +37,12 @@ export function clearAdminCookie(cookies: Cookies, url: URL): void {
 	cookies.delete(ADMIN_COOKIE, { ...base(url), sameSite: 'strict' });
 }
 
+export const THEME_COOKIE = 'bp_theme';
+
+/** This device's colour theme, for a year and a bit like the session. */
+export function setThemeCookie(cookies: Cookies, url: URL, theme: string): void {
+	cookies.set(THEME_COOKIE, theme, { ...base(url), maxAge: SESSION_DAYS * 86_400 });
+}
+
 /** For pages that show or carry a personal link: never cached, never sent as a referrer. */
 export const SECRET_PAGE_HEADERS = { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' };

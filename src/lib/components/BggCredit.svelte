@@ -6,6 +6,9 @@
 -->
 <script lang="ts">
 	import { SOURCE_URL } from '#lib/project.ts';
+	import ThemePicker from './ThemePicker.svelte';
+
+	let { theme }: { theme: string } = $props();
 </script>
 
 <footer class="credit">
@@ -18,6 +21,7 @@
 			Box Populi is not affiliated with or endorsed by BoardGameGeek.
 			<a href="/privacy">Privacy</a> · <a href={SOURCE_URL} rel="noopener">Source</a>
 		</p>
+		<div class="theme"><ThemePicker current={theme} /></div>
 	</div>
 </footer>
 
@@ -43,6 +47,9 @@
 	}
 	.small {
 		font-size: var(--t-small);
+	}
+	.theme {
+		margin-top: var(--s-3);
 	}
 	.badge {
 		display: inline-block;

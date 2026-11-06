@@ -373,6 +373,16 @@ The one authored motion. Three suggestions come off the shelf as hero boxes tilt
 ### BGG credit
 A footer on every page, above the bottom tab bar's clearance on phones: "Game data from BoardGameGeek", an outlined "Powered by BGG" text badge, the non-affiliation line, and Privacy and Source links.
 
+## Themes
+
+The cube shelf above is the default and the reference design. Twelve presets recolour it, each with its own light and dark palette that follows the device's light or dark setting: Dracula (Alucard in light), Catppuccin (Latte, Mocha), Solarized, Gruvbox, Tokyo Night (Day, Night), Kanagawa (Lotus, Wave), Nord, Everforest, Rosé Pine (Dawn, Main), One Light and Dark, GitHub and Ayu.
+
+- **Where they live:** `src/lib/themes.ts` holds each palette as hex values taken from the project's own source (named in the file). `node scripts/gen-themes.ts` writes `src/lib/themes.css`, one `:root[data-theme='<id>']` block per theme and mode. Don't edit the CSS by hand; `themes.test.ts` fails when it's out of date.
+- **What a theme sets:** the colour tokens only (laminate, cube, gap, rule, the inks, the label strip, mark, danger and the derived note and danger-soft fills, plus the chevrons). Spacing, type, shapes, motion, box prints and the eight player colours stay the same in every theme.
+- **The accent is always the theme's yellow.** Marigold's job (chosen state only) goes to each palette's yellow or gold, the one hue no player colour uses.
+- **Readability is enforced, not hoped for.** When a palette's text colour falls under 4.5:1 on a surface it's drawn on, the generator moves it toward black (light) or white (dark) until it passes; `themes.test.ts` checks every text and surface pair in all 24 palettes. Solarized's body grey and Tokyo Night Day's blue ink are the most visibly adjusted.
+- **Choosing:** the hoster sets the instance default with `THEME`; each device can pick another from the footer's Theme select, stored in the `bp_theme` cookie. The server writes the theme into `<html data-theme>`, so pages never flash the default.
+
 ## Do's and Don'ts
 
 ### Do:

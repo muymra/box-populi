@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '@fontsource-variable/archivo/standard.css';
 	import '../app.css';
+	import '#lib/themes.css';
 	import { page } from '$app/state';
 	import favicon from '#lib/assets/favicon.svg';
 	import BggCredit from '#lib/components/BggCredit.svelte';
@@ -39,7 +40,7 @@
 	{@render children()}
 </main>
 
-<BggCredit />
+<BggCredit theme={data.theme} />
 
 <style>
 	.top {

@@ -1,6 +1,8 @@
 // Instance settings from environment variables (TECH.md "Configuration and secrets").
 // Pure: takes the env record, returns a typed config or a list of problems to show the hoster.
 
+import { DEFAULT_THEME, isThemeId } from '#lib/themes.ts';
+
 export type BggMode = 'live' | 'off' | 'fake';
 
 export type InstanceConfig = {
@@ -18,6 +20,8 @@ export type InstanceConfig = {
 	instanceMode: 'standard' | 'demo';
 	/** `block`: robots.txt disallows everything and every response carries X-Robots-Tag: noindex. */
 	searchEngines: 'allow' | 'block';
+	/** The instance's default colour theme; each device can pick another. */
+	theme: string;
 };
 
 export type ConfigResult = { ok: true; config: InstanceConfig } | { ok: false; errors: string[] };
@@ -62,6 +66,9 @@ export function parseInstanceConfig(env: Record<string, unknown>, opts: { dev: b
 		errors.push(`SEARCH_ENGINES must be "allow" or "block" (got "${searchEnginesRaw}").`);
 	}
 
+	const themeRaw = str(env, 'THEME') || DEFAULT_THEME;
+	if (!isThemeId(themeRaw)) errors.push(`THEME must be one of the preset ids in src/lib/themes.ts (got "${themeRaw}").`);
+
 	const groupCreationRaw = str(env, 'GROUP_CREATION') || 'anyone';
 	if (groupCreationRaw !== 'anyone' && groupCreationRaw !== 'admins') {
 		errors.push(`GROUP_CREATION must be "anyone" or "admins" (got "${groupCreationRaw}").`);
@@ -102,7 +109,8 @@ export function parseInstanceConfig(env: Record<string, unknown>, opts: { dev: b
 		bggToken,
 		bggMinIntervalMs: int('BGG_MIN_INTERVAL_MS', MIN_BGG_INTERVAL_MS, MIN_BGG_INTERVAL_MS),
 		instanceMode: instanceModeRaw === 'demo' ? 'demo' : 'standard',
-		searchEngines: searchEnginesRaw === 'block' ? 'block' : 'allow'
+		searchEngines: searchEnginesRaw === 'block' ? 'block' : 'allow',
+		theme: isThemeId(themeRaw) ? themeRaw : DEFAULT_THEME
 	};
 
 	return errors.length ? { ok: false, errors } : { ok: true, config };

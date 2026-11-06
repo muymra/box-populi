@@ -18,6 +18,7 @@
 		"preview": "wrangler pages dev .svelte-kit/cloudflare --port 4173",
 		"check": "pnpm gen --check && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"gen": "wrangler types --strict-vars=false",
+		"gen:themes": "node scripts/gen-themes.ts",
 		"test": "vitest --run",
 		"test:watch": "vitest",
 		"db:migrate": "wrangler d1 migrations apply box-populi --local",

@@ -38,6 +38,7 @@ pnpm dev              # http://localhost:5173; the demo group is at /demo
 pnpm test             # Vitest, once
 pnpm check            # wrangler types check + svelte-check
 pnpm gen              # regenerate worker-configuration.d.ts after changing wrangler config keys
+pnpm gen:themes       # rewrite src/lib/themes.css after editing a palette in src/lib/themes.ts
 pnpm exec wrangler d1 migrations create box-populi <name>   # new migration file
 pnpm deploy           # build and `wrangler pages deploy` (needs a Cloudflare login)
 ```
