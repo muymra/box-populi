@@ -91,7 +91,7 @@ box-populi/
         return-to.ts            safe return paths after sign-in
         auth.ts                 planned: arctic client, sessions
         ratelimit.ts            planned: rate_events helpers
-        admin.ts                planned: instance admin queries and actions
+        admin.ts                instance admin: key check, signed cookie, totals, groups table, actions
         testing/d1.ts           D1-shaped wrapper over node:sqlite for tests
         bgg/
           types.ts              BggClient interface, result types, BggBusyError
@@ -350,7 +350,7 @@ No accounts (D25). A person is a display name; a device proves who it is with a 
 
 **Signed-out visitors** to a non-demo group page land on `/signin`. It explains that they're not signed in on this device, and offers "open your personal link" or "join with a code". `returnTo` is carried through join and link redemption, and accepted only when it starts with `/` and not `//` or `/\` (`return-to.ts`).
 
-**Instance admin.** `/admin/login` takes `ADMIN_KEY`. It compares SHA-256 digests in constant time, and on success sets `bp_admin` (`HttpOnly; Secure; SameSite=Strict; Path=/admin`, 12 hours). The cookie value is an HMAC of its expiry time keyed with `ADMIN_KEY`, so changing the key signs every admin out. Failures are rate-limited by IP: 5 per 15 minutes. `locals.isAdmin` reflects a valid cookie. Admin status grants nothing inside groups.
+**Instance admin.** `/admin/login` takes `ADMIN_KEY`. It compares SHA-256 digests in constant time, and on success sets `bp_admin` (`HttpOnly; Secure; SameSite=Strict; Path=/`, 12 hours). The path is `/`, not `/admin`, because `GROUP_CREATION=admins` checks the cookie on `/groups/new`. The cookie value is an HMAC of its expiry time keyed with `ADMIN_KEY`, so changing the key signs every admin out. Failures are rate-limited by IP: 5 per 15 minutes. `locals.isAdmin` reflects a valid cookie. Admin status grants nothing inside groups.
 
 ## Authorization
 
@@ -361,7 +361,7 @@ Helpers in `src/lib/server/authz.ts`, used by every load function, action and en
 | `requireUser(event)` | a device with a session; otherwise redirect to `/signin?returnTo=<current path>` | `/me` |
 | `requireRead(event, groupId)` | members of the group, or anyone when `is_demo = 1` | every group page load and the catalog endpoint |
 | `requireRole(event, groupId, minRole)` | members with role at least `minRole` (`member` < `admin` < `owner`); always refuses demo groups; refuses suspended groups except for leaving and for the owner deleting the group | every mutation |
-| `requireAdmin(event)` | a valid `bp_admin` cookie; otherwise redirect to `/admin/login` | `/admin` and its actions |
+| `requireAdmin(event)` | a valid `bp_admin` cookie; otherwise 404, so the page doesn't announce itself (hosters sign in at `/admin/login`) | `/admin` and its actions |
 
 Each group helper returns the group row and the caller's role. A missing group and a non-member get the same 404, so group IDs can't be probed. Being the instance admin grants nothing inside groups: `requireRead` and `requireRole` ignore `isAdmin`.
 

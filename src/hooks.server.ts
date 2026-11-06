@@ -1,7 +1,8 @@
 import type { Handle } from '@sveltejs/kit/hooks';
 import { getConfig, getDb } from '#lib/server/platform.ts';
 import { resolveSession, SESSION_COOKIE } from '#lib/server/identity.ts';
-import { clearSessionCookie, setSessionCookie } from '#lib/server/cookies.ts';
+import { clearAdminCookie, clearSessionCookie, setSessionCookie } from '#lib/server/cookies.ts';
+import { ADMIN_COOKIE, verifyAdminCookie } from '#lib/server/admin.ts';
 
 const escapeHtml = (s: string) =>
 	s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -29,8 +30,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (token && session?.extended) setSessionCookie(event.cookies, event.url, token);
 	event.locals.user = session?.person ?? null;
 
-	// The /admin sign-in arrives with STATUS.md Sunday item 15.
-	event.locals.isAdmin = false;
+	// The hoster, signed in with ADMIN_KEY. Grants nothing inside groups (TECH.md "Authorization").
+	const adminCookie = event.cookies.get(ADMIN_COOKIE);
+	const adminKey = config.config.adminKey;
+	event.locals.isAdmin = adminCookie != null && adminKey != null && (await verifyAdminCookie(adminKey, adminCookie, Date.now()));
+	if (adminCookie && !event.locals.isAdmin) clearAdminCookie(event.cookies, event.url);
 
 	return resolve(event);
 };

@@ -12,7 +12,7 @@ This guide sets up an instance on your own Cloudflare account. It was written be
   - running the instance for a business or event, such as a game store, café or convention, even a non-profit one.
 
   Don't remove the BGG credit in the footer, and don't build anything that gives other programs access to BGG data through your instance. BGG announces API policy changes in its Geek Tools News forum.
-- **Abuse.** You get an admin page to suspend or delete groups and ban accounts. It deliberately doesn't show group contents.
+- **Abuse.** You get an admin page at `/admin/login` to suspend or delete groups. There are no accounts to ban (people are just display names), and the page deliberately doesn't show who is in a group or what they own.
 
 ## What you need
 
