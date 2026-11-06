@@ -1,6 +1,8 @@
-import { error, redirect } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import { requireRead, requireRole } from '#lib/server/authz.ts';
 import { addCopy, removeCopy } from '#lib/server/games.ts';
+import { addLink, canDeleteLink, deleteLink, parseLink } from '#lib/server/links.ts';
+import { linkHost } from '#lib/link-kinds.ts';
 import { loadMembers } from '#lib/server/catalog.ts';
 import { all, jsonArray, one } from '#lib/server/db.ts';
 import { getDb } from '#lib/server/platform.ts';
@@ -74,9 +76,9 @@ export const load: PageServerLoad = async (event) => {
 			groupId,
 			gameId
 		),
-		all<{ id: number; kind: 'rules' | 'video' | 'other'; title: string | null; url: string; added_by_name: string | null }>(
+		all<{ id: number; kind: 'rules' | 'video' | 'other'; title: string | null; url: string; added_by: string | null; added_by_name: string | null }>(
 			db,
-			`SELECT l.id, l.kind, l.title, l.url, u.name AS added_by_name
+			`SELECT l.id, l.kind, l.title, l.url, l.added_by, u.name AS added_by_name
 			 FROM game_links l LEFT JOIN users u ON u.id = l.added_by
 			 WHERE l.group_id = ?1 AND l.game_id = ?2 ORDER BY l.kind, l.added_at`,
 			groupId,
@@ -107,11 +109,13 @@ export const load: PageServerLoad = async (event) => {
 	const colorOf = new Map(members.map((m) => [m.id, m.colorIndex]));
 
 	const me = event.locals.user;
+	const canEdit = access.role != null && !access.readonly;
+	const actor = me && access.role ? { id: me.id, role: access.role } : null;
 	const mine = me ? (await one(db, 'SELECT 1 AS x FROM copies WHERE user_id = ?1 AND game_id = ?2', me.id, gameId)) != null : false;
 
 	return {
 		mine,
-		canEdit: access.role != null && !access.readonly,
+		canEdit,
 		game: {
 			id: game.id,
 			bggId: game.bgg_id,
@@ -146,7 +150,15 @@ export const load: PageServerLoad = async (event) => {
 					: null
 		})),
 		wishers: wishers.map((w) => ({ name: w.name, colorIndex: colorOf.get(w.id) ?? 0 })),
-		links,
+		links: links.map((l) => ({
+			id: l.id,
+			kind: l.kind,
+			title: l.title,
+			url: l.url,
+			host: linkHost(l.url),
+			addedByName: l.added_by_name,
+			canDelete: canEdit && actor != null && canDeleteLink(actor, l.added_by)
+		})),
 		expansions,
 		bases: bases.map((b) => ({ id: b.id, name: b.name }))
 	};
@@ -172,5 +184,35 @@ export const actions: Actions = {
 		await removeCopy(db, event.locals.user!.id, gameIdParam(event.params.gameId));
 		// If nobody else in the group owns it, the game page would now 404, so go back to the catalog.
 		redirect(303, `/g/${event.params.groupId}`);
+	},
+
+	addLink: async (event) => {
+		const db = getDb();
+		const { groupId } = event.params;
+		await requireRole(event, db, groupId, 'member');
+		const gameId = gameIdParam(event.params.gameId);
+		const form = await event.request.formData();
+		const entered = { url: String(form.get('url') ?? ''), title: String(form.get('title') ?? ''), kind: String(form.get('kind') ?? '') };
+		const parsed = parseLink(form);
+		if (!parsed.ok) return fail(400, { linkError: parsed.error, link: entered });
+		const result = await addLink(db, groupId, gameId, event.locals.user!.id, parsed.value, Date.now());
+		if (!result.ok) {
+			if (result.status === 404) error(404, 'Game not found');
+			return fail(result.status, { linkError: result.error, link: entered });
+		}
+		return { linkAdded: true };
+	},
+
+	deleteLink: async (event) => {
+		const db = getDb();
+		const { groupId } = event.params;
+		const access = await requireRole(event, db, groupId, 'member');
+		const gameId = gameIdParam(event.params.gameId);
+		const linkId = Number((await event.request.formData()).get('id'));
+		const actor = { id: event.locals.user!.id, role: access.role };
+		if (!Number.isInteger(linkId) || !(await deleteLink(db, groupId, gameId, linkId, actor))) {
+			return fail(403, { deleteError: 'That link couldn’t be removed. Reload the page and try again.' });
+		}
+		return { linkRemoved: true };
 	}
 };

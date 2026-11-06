@@ -4,13 +4,20 @@
 	import Clock from '@lucide/svelte/icons/clock';
 	import Weight from '@lucide/svelte/icons/weight';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import BookOpen from '@lucide/svelte/icons/book-open';
+	import Play from '@lucide/svelte/icons/play';
+	import LinkIcon from '@lucide/svelte/icons/link';
+	import Search from '@lucide/svelte/icons/search';
+	import Plus from '@lucide/svelte/icons/plus';
+	import { enhance } from '$app/forms';
+	import { guessKind, KIND_LABELS, LINK_KINDS, type LinkKind } from '#lib/link-kinds.ts';
 	import BoxFront from '#lib/components/BoxFront.svelte';
 	import { BUCKET_LABELS, formatPlaytime, formatWeight, weightBucket } from '#lib/catalog/buckets.ts';
 	import { countsFromMask, formatCounts, formatPlayerRange } from '#lib/catalog/players.ts';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import type { PageProps } from './$types';
 
-	let { data }: PageProps = $props();
+	let { data, form }: PageProps = $props();
 	const g = $derived(data.game);
 	const base = $derived(`/g/${data.group.id}`);
 
@@ -25,6 +32,30 @@
 
 	let expanded = $state(false);
 	const longDescription = $derived((g.description?.length ?? 0) > 500);
+
+	const KIND_ICONS = { rules: BookOpen, video: Play, other: LinkIcon };
+
+	// The add-link form: picks a kind from the address as it's typed, until the person picks one.
+	let adding = $state(false);
+	let kind = $state<LinkKind | ''>('');
+	let kindPicked = $state(false);
+	$effect(() => {
+		if (form?.linkError) {
+			adding = true;
+			kind = (LINK_KINDS as readonly string[]).includes(form.link?.kind ?? '') ? (form.link!.kind as LinkKind) : '';
+		}
+	});
+	function guessFromAddress(raw: string) {
+		if (kindPicked) return;
+		try {
+			const value = raw.trim();
+			const url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}`);
+			const guess = url.hostname.includes('.') ? guessKind(url) : 'other';
+			kind = guess === 'other' ? '' : guess;
+		} catch {
+			kind = '';
+		}
+	}
 </script>
 
 <svelte:head><title>{g.name} · {data.group.name}</title></svelte:head>
@@ -113,16 +144,91 @@
 
 	<section aria-labelledby="links-h">
 		<h3 id="links-h">Rules and tutorials</h3>
-		<ul class="plain">
+		<ul class="links">
 			{#each data.links as link (link.id)}
+				{@const Icon = KIND_ICONS[link.kind]}
 				<li>
-					<span class="tag">{link.kind}</span>
-					<a href={link.url} rel="noopener noreferrer nofollow" target="_blank">{link.title || link.url}</a>
-					<span class="muted">{' · '}added by {link.added_by_name ?? 'former member'}</span>
+					<span class="kind" aria-hidden="true"><Icon size={18} /></span>
+					<span class="link-body">
+						<a href={link.url} rel="noopener noreferrer nofollow" target="_blank">{link.title ?? link.host}</a>
+						<span class="meta">
+							{KIND_LABELS[link.kind]}{#if link.title}{' · '}{link.host}{/if}{' · '}added by {link.addedByName ?? 'a former member'}
+						</span>
+					</span>
+					{#if link.canDelete}
+						<form method="POST" action="?/deleteLink" use:enhance>
+							<input type="hidden" name="id" value={link.id} />
+							<button class="link-button remove" aria-label="Remove {link.title ?? link.host}">Remove</button>
+						</form>
+					{/if}
 				</li>
 			{/each}
-			<li><a href={youtube} rel="noopener noreferrer" target="_blank">Search YouTube for “how to play {g.name}”</a></li>
+			<li>
+				<span class="kind" aria-hidden="true"><Search size={18} /></span>
+				<span class="link-body">
+					<a href={youtube} rel="noopener noreferrer" target="_blank">How to play {g.name}</a>
+					<span class="meta">Video search on YouTube</span>
+				</span>
+			</li>
 		</ul>
+		{#if form?.deleteError}<p class="banner error" role="alert">{form.deleteError}</p>{/if}
+
+		{#if data.canEdit}
+			<details class="add-link" bind:open={adding}>
+				<summary class="btn small"><Plus size={16} aria-hidden="true" /> Add a rulebook or video</summary>
+				<form
+					method="POST"
+					action="?/addLink"
+					class="link-form"
+					use:enhance={() =>
+						async ({ result, update }) => {
+							await update();
+							if (result.type === 'success') {
+								kind = '';
+								kindPicked = false;
+								adding = false;
+							}
+						}}
+				>
+					<label>
+						Address
+						<input
+							class="field"
+							name="url"
+							required
+							inputmode="url"
+							autocomplete="off"
+							autocapitalize="none"
+							spellcheck="false"
+							maxlength="2000"
+							placeholder="https://…"
+							value={form?.link?.url ?? ''}
+							oninput={(e) => guessFromAddress(e.currentTarget.value)}
+						/>
+					</label>
+					<fieldset class="kinds">
+						<legend>Kind</legend>
+						<div class="seg">
+							{#each LINK_KINDS as k (k)}
+								<label>
+									<input type="radio" name="kind" value={k} bind:group={kind} onchange={() => (kindPicked = true)} />
+									<span>{KIND_LABELS[k]}</span>
+								</label>
+							{/each}
+						</div>
+					</fieldset>
+					<label>
+						<span>Title <span class="hint">(optional)</span></span>
+						<input class="field" name="title" maxlength="100" placeholder="e.g. Official rulebook (PDF)" value={form?.link?.title ?? ''} />
+					</label>
+					{#if form?.linkError}<p class="banner error" role="alert">{form.linkError}</p>{/if}
+					<div class="inline">
+						<button class="btn primary small">Add link</button>
+						<button type="button" class="link-button" onclick={() => (adding = false)}>Cancel</button>
+					</div>
+				</form>
+			</details>
+		{/if}
 	</section>
 
 	{#if g.description}
@@ -251,6 +357,122 @@
 	}
 	.copy-action {
 		margin-top: var(--s-4);
+	}
+	.links {
+		list-style: none;
+		max-width: 40rem;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--s-3);
+	}
+	.links li {
+		display: flex;
+		align-items: center;
+		gap: var(--s-3);
+	}
+	.kind {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 36px;
+		height: 36px;
+		border-radius: var(--r-ctl);
+		background: var(--gap);
+		color: var(--ink-2);
+	}
+	.link-body {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+	}
+	.link-body a {
+		font-weight: 650;
+		overflow-wrap: anywhere;
+	}
+	.meta {
+		font-size: var(--t-small);
+		color: var(--ink-2);
+		overflow-wrap: anywhere;
+	}
+	.remove {
+		min-height: 44px;
+		font-size: var(--t-small);
+		color: var(--ink-2);
+	}
+	.add-link {
+		margin-top: var(--s-4);
+	}
+	.add-link summary {
+		list-style: none;
+	}
+	.add-link summary::-webkit-details-marker {
+		display: none;
+	}
+	.add-link[open] summary {
+		display: none;
+	}
+	.link-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--s-4);
+		max-width: 34rem;
+	}
+	.link-form > label {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		font-weight: 650;
+	}
+	.kinds {
+		border: 0;
+		margin: 0;
+		padding: 0;
+	}
+	.kinds legend {
+		font-weight: 650;
+		padding: 0;
+		margin-bottom: 6px;
+	}
+	.seg {
+		display: inline-flex;
+		border: 1.5px solid var(--rule);
+		border-radius: var(--r-ctl);
+		overflow: hidden;
+	}
+	.seg label {
+		position: relative;
+	}
+	.seg input {
+		position: absolute;
+		opacity: 0;
+		inset: 0;
+		margin: 0;
+		cursor: pointer;
+	}
+	.seg span {
+		display: grid;
+		place-items: center;
+		min-width: 76px;
+		height: 40px;
+		padding: 0 var(--s-3);
+		background: var(--cube);
+		color: var(--ink-2);
+		font-weight: 650;
+		font-size: var(--t-small);
+	}
+	.seg label + label span {
+		border-left: 1.5px solid var(--rule);
+	}
+	.seg input:checked + span {
+		background: var(--ink);
+		color: var(--laminate);
+	}
+	.seg input:focus-visible + span {
+		outline: 2px solid var(--focus);
+		outline-offset: -4px;
 	}
 	.plain {
 		list-style: none;

@@ -575,6 +575,8 @@ The game page checks `fetched_at`. Older than 30 days: it renders from the cache
 
 Rules documents and videos. BGG's files and video sections aren't in the XML API. Members add links, and the game page generates a YouTube search link: `https://www.youtube.com/results?search_query=how+to+play+<url-encoded name>`.
 
+Links live in `src/lib/server/links.ts` and are the game page's `addLink` and `deleteLink` actions. An address typed without a scheme gets `https://`. When the form sends no kind, video sites (YouTube, Vimeo, Twitch, Dailymotion) are `video`, PDFs are `rules`, and the rest is `other`; the form preselects the same guess as the address is typed (`src/lib/link-kinds.ts`). Limits: 2,000 characters per address, 100 per title, 25 links per game per group, and the same address can't be added twice to one game. Addresses with a user name or password are refused.
+
 ### Attribution and public surface
 
 - Every page has a footer reading "Game data from BoardGameGeek," with the "Powered by BGG" logo linked to `https://boardgamegeek.com`. It also says "Box Populi is not affiliated with or endorsed by BoardGameGeek." The footer is one component, `BggCredit.svelte`, in the root layout, so no page can drop it.
