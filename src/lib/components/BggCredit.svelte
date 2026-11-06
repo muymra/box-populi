@@ -14,19 +14,21 @@
 
 <footer class="credit">
 	<div class="container inner">
-		{#if bgg}
-			<p>
-				Game data from <a href="https://boardgamegeek.com" rel="noopener">BoardGameGeek</a>
-				<a class="badge" href="https://boardgamegeek.com" rel="noopener">Powered by BGG</a>
+		<div class="text">
+			{#if bgg}
+				<p>
+					Game data from <a href="https://boardgamegeek.com" rel="noopener">BoardGameGeek</a>
+					<a class="badge" href="https://boardgamegeek.com" rel="noopener">Powered by BGG</a>
+				</p>
+			{/if}
+			{#if wikidata}
+				<p><span>Game details from <a href="https://www.wikidata.org" rel="noopener">Wikidata</a>, free to reuse (CC0).</span></p>
+			{/if}
+			<p class="small">
+				{#if bgg}Box Populi is not affiliated with or endorsed by BoardGameGeek.{/if}
+				<a href="/privacy">Privacy</a> · <a href={SOURCE_URL} rel="noopener">Source</a>
 			</p>
-		{/if}
-		{#if wikidata}
-			<p><span>Game details from <a href="https://www.wikidata.org" rel="noopener">Wikidata</a>, free to reuse (CC0).</span></p>
-		{/if}
-		<p class="small">
-			{#if bgg}Box Populi is not affiliated with or endorsed by BoardGameGeek.{/if}
-			<a href="/privacy">Privacy</a> · <a href={SOURCE_URL} rel="noopener">Source</a>
-		</p>
+		</div>
 		<div class="theme"><ThemePicker bind:current={deviceTheme} {custom} /></div>
 	</div>
 </footer>
@@ -39,10 +41,19 @@
 		font-size: var(--t-small);
 		color: var(--ink-2);
 	}
+	/* The credit on the left, the theme picker at the far right; on a narrow screen the picker
+	   wraps under the credit and stays at the right edge. */
 	.inner {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--s-3) var(--s-5);
+	}
+	.text {
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
+		min-width: 0;
 	}
 	p {
 		margin: 0;
@@ -55,7 +66,7 @@
 		font-size: var(--t-small);
 	}
 	.theme {
-		margin-top: var(--s-3);
+		margin-left: auto;
 	}
 	.badge {
 		display: inline-block;

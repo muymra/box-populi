@@ -29,7 +29,7 @@
 		</li>
 	</ul>
 	<p>
-		There are no accounts, emails or passwords.{#if data.bggOn} If you import from BoardGameGeek, your BGG username is used for that
+		There are no accounts, emails or passwords.{#if data.bggOn}{' '}If you import from BoardGameGeek, your BGG username is used for that
 			lookup and not stored.{/if}
 	</p>
 

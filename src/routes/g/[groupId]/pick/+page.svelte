@@ -12,7 +12,7 @@
 	import { formatPlayerRange, maskHas } from '#lib/catalog/players.ts';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { DEFAULT_FILTERS, filterGames } from '#lib/catalog/filter.ts';
-	import { gamesAtHand, pick } from '#lib/catalog/pick.ts';
+	import { FILLER_MAX_MINUTES, fillerWeight, gamesAtHand, isFiller, pick } from '#lib/catalog/pick.ts';
 	import type { CatalogGame, CatalogPayload } from '#lib/catalog/types.ts';
 	import type { PageProps } from './$types';
 
@@ -29,6 +29,12 @@
 	let seen = $state<number[]>([]);
 	let draw = $state(0);
 	let note = $state<string | null>(null);
+	// Fillers (PRD "Picker"): a few short, light games pulled alongside, with their own re-roll.
+	let includeFillers = $state(false);
+	let fillers = $state<CatalogGame[]>([]);
+	let fillerSeen = $state<number[]>([]);
+	let fillerDraw = $state(0);
+	let fillerNote = $state<string | null>(null);
 	let memberQuery = $state('');
 	// True once the setup is read from the address or this device, so syncing doesn't erase it first.
 	let restored = $state(false);
@@ -48,12 +54,24 @@
 		return present.length ? gamesAtHand(filtered, new Set(present)) : filtered;
 	});
 
+	// Fillers ignore the time and complexity limits (they have their own) but fit the same players
+	// and the same table, and never repeat a game in the main pull.
+	const fillerCandidates = $derived.by(() => {
+		if (!payload) return [];
+		const filtered = filterGames(payload.games, { ...DEFAULT_FILTERS, players, availableOnly: present.length === 0 }, memberIds);
+		const atHand = present.length ? gamesAtHand(filtered, new Set(present)) : filtered;
+		const main = new Set(suggestions.map((g) => g.id));
+		return atHand.filter((g) => isFiller(g) && !main.has(g.id));
+	});
+
 	/**
 	 * The setup lives in the address (PRD "Picker"), so it can be shared or bookmarked: `here` (member
-	 * ids), `n` (players), `t` (minutes) and `w` (complexity ceiling). Returns false when there's none.
+	 * ids), `n` (players), `t` (minutes), `w` (complexity ceiling) and `f` (fillers). Returns false
+	 * when there's none.
 	 */
 	function readSetup(params: Pick<URLSearchParams, 'get' | 'has'>): boolean {
-		if (!['here', 'n', 't', 'w'].some((k) => params.has(k))) return false;
+		if (!['here', 'n', 't', 'w', 'f'].some((k) => params.has(k))) return false;
+		includeFillers = params.get('f') === '1';
 		present = (params.get('here') ?? '').split(',').filter((id) => memberIds.has(id));
 		const n = Number(params.get('n'));
 		playersOverride = Number.isInteger(n) && n >= 1 && n <= 12 ? n : null;
@@ -86,6 +104,7 @@
 		if (playersOverride) params.set('n', String(playersOverride));
 		if (minutes) params.set('t', String(minutes));
 		if (ceiling) params.set('w', ceiling);
+		if (includeFillers) params.set('f', '1');
 		const search = params.size ? `?${params}` : '';
 		if (search !== page.url.search) goto(`${page.url.pathname}${search}`, { replace: true, reset: false });
 	});
@@ -100,6 +119,22 @@
 		seen = result.reset || !again ? result.games.map((g) => g.id) : [...seen, ...result.games.map((g) => g.id)];
 		note = result.reset ? "That's every game that fits. Starting over." : null;
 		draw += 1;
+		// A fresh pull brings fresh fillers; "Pull three more" keeps them unless one is now a main pick.
+		if (includeFillers && (!again || fillers.length === 0)) pullFillers(false);
+		else fillers = fillers.filter((f) => !result.games.some((g) => g.id === f.id));
+	}
+
+	function pullFillers(again: boolean) {
+		const result = pick(fillerCandidates, players, Math.random, new Set(again ? fillerSeen : []), 3, fillerWeight);
+		fillers = result.games;
+		fillerSeen = result.reset || !again ? result.games.map((g) => g.id) : [...fillerSeen, ...result.games.map((g) => g.id)];
+		fillerNote = result.reset ? "That's every filler that fits. Starting over." : null;
+		fillerDraw += 1;
+	}
+
+	function toggleFillers() {
+		if (includeFillers && suggestions.length) pullFillers(false);
+		if (!includeFillers) fillers = [];
 	}
 
 	function ownersOf(game: CatalogGame) {
@@ -174,6 +209,16 @@
 				</label>
 			</div>
 
+			<label class="fillers-check">
+				<input type="checkbox" bind:checked={includeFillers} onchange={toggleFillers} />
+				<span>
+					<strong>Add fillers</strong>
+					<span class="muted">Short, light games ({FILLER_MAX_MINUTES} min or less) for while people arrive or between longer ones.
+						<span class="num">{fillerCandidates.length}</span> at the table.</span
+					>
+				</span>
+			</label>
+
 			<div class="go">
 				<button type="button" class="btn primary big" disabled={candidates.length === 0} onclick={() => suggest(false)}>
 					<Dices size={20} aria-hidden="true" /> Pull three games
@@ -214,6 +259,43 @@
 					<button type="button" class="btn" onclick={() => suggest(true)}><RotateCcw size={18} aria-hidden="true" /> Pull three more</button>
 					{#if note}<p class="muted">{note}</p>{/if}
 				</div>
+
+				{#if includeFillers}
+					<section class="fillers" aria-labelledby="fillers-h">
+						<h2 id="fillers-h">Fillers</h2>
+						{#if fillers.length}
+							{#key fillerDraw}
+								<ul class="filler-list">
+									{#each fillers as game, i (game.id)}
+										<li style:--delay="{i * 70}ms">
+											<a href="/g/{data.group.id}/game/{game.id}" class="filler-box">
+												<span class="art small"><BoxFront name={game.name} src={game.thumbUrl} /></span>
+												<OwnerEdge owners={ownersOf(game)} />
+											</a>
+											<div class="facts">
+												<strong>{game.name}</strong>
+												<span class="muted num">
+													{formatPlayerRange(game.minPlayers, game.maxPlayers) ?? '?'} players
+													{#if formatPlaytime(game.minPlaytime, game.maxPlaytime)}· {formatPlaytime(game.minPlaytime, game.maxPlaytime)}{/if}
+												</span>
+												{#if game.weight == null}<span class="tag best">Complexity unknown</span>{/if}
+											</div>
+										</li>
+									{/each}
+								</ul>
+							{/key}
+							<div class="again">
+								<button type="button" class="btn" onclick={() => pullFillers(true)}><RotateCcw size={18} aria-hidden="true" /> Other fillers</button>
+								{#if fillerNote}<p class="muted">{fillerNote}</p>{/if}
+							</div>
+						{:else}
+							<p class="muted">
+								No short, light games at the table{players ? ` for ${players} players` : ''}. Fillers list {FILLER_MAX_MINUTES} minutes or less and
+								are light, or nobody has set how complex they are.
+							</p>
+						{/if}
+					</section>
+				{/if}
 			</section>
 		{/if}
 	{/if}
@@ -222,6 +304,8 @@
 <style>
 	.pick {
 		display: grid;
+		/* One column the width of the screen: without minmax(0, …) the widest result row stretches it. */
+		grid-template-columns: minmax(0, 1fr);
 		gap: var(--s-6);
 		padding-top: var(--s-3);
 	}
@@ -384,6 +468,69 @@
 	.again p {
 		margin: 0;
 	}
+	.fillers-check {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--s-3);
+		max-width: 36rem;
+		cursor: pointer;
+	}
+	.fillers-check input {
+		width: 20px;
+		height: 20px;
+		margin: 2px 0 0;
+		flex: none;
+		accent-color: var(--ink);
+	}
+	.fillers-check > span {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	.fillers-check .muted {
+		font-size: var(--t-small);
+	}
+	/* Fillers: a smaller row under the main pull, straight rather than tilted, since they're the side dish */
+	.fillers {
+		margin-top: var(--s-6);
+		padding-top: var(--s-5);
+		border-top: 1px solid var(--rule);
+	}
+	.fillers h2 {
+		margin: 0;
+	}
+	.filler-list {
+		list-style: none;
+		margin: 0;
+		padding: var(--s-4) 0 0;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 9rem), 1fr));
+		gap: var(--s-5) var(--s-4);
+		max-width: 40rem;
+	}
+	.filler-list li {
+		display: flex;
+		flex-direction: column;
+		gap: var(--s-2);
+		animation: pull 0.55s var(--ease-out) var(--delay) both;
+	}
+	.filler-box {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		text-decoration: none;
+		transition: transform 0.25s var(--ease-out);
+	}
+	.filler-box:hover,
+	.filler-box:focus-visible {
+		transform: translateY(-3px);
+	}
+	.art.small {
+		box-shadow: var(--shadow-lift);
+	}
+	.filler-list .facts strong {
+		font-size: var(--t-body);
+	}
 	@keyframes pull {
 		from {
 			opacity: 0;
@@ -395,7 +542,8 @@
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.pulled li {
+		.pulled li,
+		.filler-list li {
 			animation: none;
 		}
 		.pulled-box {

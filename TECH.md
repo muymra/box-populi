@@ -705,7 +705,9 @@ This is the default for a new instance (D28). With `BGG_MODE=off`, the add page 
 
 The last "who's here" selection is stored in `localStorage` under `bp:present:<groupId>`. Wrap every storage access in try/catch and treat failure as an empty selection.
 
-The setup lives in the address: `here` (comma-separated member ids), `n` (players), `t` (minutes) and `w` (complexity ceiling), kept in step with `goto(..., { replace: true, reset: false })` like the shelf's filters. Opening a link with any of them restores that setup; without them, the page starts from this device's last "who's here" for the group. A "Copy a link to this setup" button copies the address. The three pulled games aren't in the address; they're random each time.
+The setup lives in the address: `here` (comma-separated member ids), `n` (players), `t` (minutes), `w` (complexity ceiling) and `f=1` (add fillers), kept in step with `goto(..., { replace: true, reset: false })` like the shelf's filters. Opening a link with any of them restores that setup; without them, the page starts from this device's last "who's here" for the group. A "Copy a link to this setup" button copies the address. The three pulled games aren't in the address; they're random each time.
+
+Fillers: `isFiller(game)` in `pick.ts` is true when the longest listed play time is at most `FILLER_MAX_MINUTES` (30) and the weight bucket is light or unknown; a game with no play time isn't one. The candidates are the games at the table that fit the players, minus the main picks; the time and complexity limits don't apply. `pick()` takes an optional weight function, and fillers use `fillerWeight`: `pickWeight` doubled for games known to be light, so unrated short games come up half as often. Fillers keep their own `seen` list and re-roll; "Pull three more" keeps them unless one became a main pick.
 
 ## Demo group
 

@@ -1,5 +1,6 @@
 // "What should we play?" (TECH.md "Picker"). Pure: the caller supplies the random source.
 import { maskHas } from './players.ts';
+import { weightBucket } from './buckets.ts';
 import type { CatalogCopy, CatalogGame } from './types.ts';
 
 /** A copy is at the table when its owner is present and it isn't lent, or it's lent to someone present. */
@@ -20,18 +21,39 @@ export function pickWeight(game: CatalogGame, players: number | null): number {
 	return 1;
 }
 
+/** The longest play time a filler may list (PRD "Picker"). */
+export const FILLER_MAX_MINUTES = 30;
+
+/**
+ * A filler: something to play while people arrive or between longer games. It lists
+ * FILLER_MAX_MINUTES or less as its longest play time, and it's light or its complexity is unknown.
+ * A game with no play time isn't one, since nothing says it's short.
+ */
+export function isFiller(game: CatalogGame): boolean {
+	const longest = game.maxPlaytime ?? game.minPlaytime;
+	if (longest == null || longest > FILLER_MAX_MINUTES) return false;
+	const bucket = weightBucket(game.weight);
+	return bucket == null || bucket === 'light';
+}
+
+/** Fillers known to be light come up twice as often as those whose complexity nobody has set. */
+export function fillerWeight(game: CatalogGame, players: number | null): number {
+	return pickWeight(game, players) * (weightBucket(game.weight) === 'light' ? 2 : 1);
+}
+
 export type PickResult = { games: CatalogGame[]; reset: boolean };
 
 /**
- * Draws up to `count` games without replacement, weighted by `pickWeight`, skipping ids in
- * `seen`. When fewer than `count` unseen games remain, it starts over (reset = true).
+ * Draws up to `count` games without replacement, weighted by `weigh` (`pickWeight` unless given),
+ * skipping ids in `seen`. When fewer than `count` unseen games remain, it starts over (reset = true).
  */
 export function pick(
 	candidates: CatalogGame[],
 	players: number | null,
 	rng: () => number,
 	seen: ReadonlySet<number> = new Set(),
-	count = 3
+	count = 3,
+	weigh: (game: CatalogGame, players: number | null) => number = pickWeight
 ): PickResult {
 	let pool = candidates.filter((g) => !seen.has(g.id));
 	let reset = false;
@@ -41,7 +63,7 @@ export function pick(
 	}
 
 	const chosen: CatalogGame[] = [];
-	const weighted = pool.map((g) => ({ g, w: pickWeight(g, players) }));
+	const weighted = pool.map((g) => ({ g, w: weigh(g, players) }));
 	while (chosen.length < count && weighted.length > 0) {
 		const total = weighted.reduce((sum, x) => sum + x.w, 0);
 		let r = rng() * total;

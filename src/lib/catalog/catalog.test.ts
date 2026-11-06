@@ -3,7 +3,7 @@ import { buildSearchText, normalize } from './normalize.ts';
 import { countsFromMask, formatCounts, formatPlayerRange, formatPlayersShort, maskFromCounts, maskHas } from './players.ts';
 import { formatPlaytime, formatWeight, weightBucket } from './buckets.ts';
 import { DEFAULT_FILTERS, filterGames, parseFilters, passedOnUnknown, serializeFilters, type Filters } from './filter.ts';
-import { gamesAtHand, pick, seededRng } from './pick.ts';
+import { fillerWeight, gamesAtHand, isFiller, pick, seededRng } from './pick.ts';
 import { copy, game } from './testing.ts';
 
 const members = new Set(['u1', 'u2', 'u3']);
@@ -159,6 +159,20 @@ describe('filterGames', () => {
 });
 
 describe('picker', () => {
+	it('counts short, light games as fillers, and short ones of unknown complexity at half the odds', () => {
+		const sushi = game({ minPlaytime: 15, maxPlaytime: 15, weight: 1.2 });
+		const typed = game({ minPlaytime: 20, maxPlaytime: 20, weight: null, incomplete: true });
+		expect(isFiller(sushi)).toBe(true);
+		expect(isFiller(typed)).toBe(true);
+		expect(isFiller(game({ minPlaytime: 30, maxPlaytime: 30, weight: 1.9 }))).toBe(true);
+		expect(isFiller(game({ minPlaytime: 30, maxPlaytime: 60, weight: 1.2 }))).toBe(false); // only a filler on a good night
+		expect(isFiller(game({ minPlaytime: 20, maxPlaytime: 20, weight: 2.4 }))).toBe(false); // short but medium
+		expect(isFiller(game({ minPlaytime: null, maxPlaytime: null, weight: 1.1 }))).toBe(false); // nothing says it's short
+		expect(fillerWeight(sushi, 4)).toBe(2 * fillerWeight(typed, 4));
+		const fillers = pick([sushi, typed], 4, seededRng(3), new Set(), 3, fillerWeight).games;
+		expect(new Set(fillers)).toEqual(new Set([sushi, typed]));
+	});
+
 	it('keeps games at hand for the people present', () => {
 		const withSam = game({ copies: [copy('sam')] });
 		const lentToSam = game({ copies: [copy('kim', { lentToUserId: 'sam' })] });
