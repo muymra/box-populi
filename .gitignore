@@ -1,0 +1,23 @@
+# dependencies and build output
+node_modules/
+.svelte-kit/
+build/
+.wrangler/
+
+# instance-specific config and secrets (copy from the *.example files)
+wrangler.toml
+.dev.vars
+.env
+.env.*
+
+# BGG data must not be committed (DECISIONS D19)
+seed/demo.sql
+src/lib/server/bgg/fixtures/local/
+
+# local backups
+backup-*.sql
+
+# editors and OS
+.DS_Store
+.vscode/
+.idea/

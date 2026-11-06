@@ -1,0 +1,645 @@
+# Box Populi: technical plan
+
+Status: draft v2, 2026-11-06. Revised after a review pass, after the expected scale grew to 50 members and 1,500 games per group, and after the decision to publish the code on GitHub for anyone to self-host.
+What and why: [PRD.md](./PRD.md). Settled decisions: [DECISIONS.md](./DECISIONS.md). Build order and progress: [STATUS.md](./STATUS.md). Rules for agents: [AGENTS.md](./AGENTS.md). Running an instance: [SELF_HOSTING.md](./SELF_HOSTING.md).
+
+Facts about third-party services below (BGG API terms, Cloudflare limits, library APIs) were written from memory. STATUS.md lists each one as unverified until someone checks it against current documentation.
+
+## Decisions
+
+| Area | Choice | Reason |
+|---|---|---|
+| Distribution | Open source on GitHub. Each hoster deploys to their own Cloudflare account. | Nobody depends on one person's copy. Carlo's instance at `box-populi.pages.dev` is one deployment and hosts the public demo. |
+| Hosting | Cloudflare Pages on the hoster's account, at `<project>.pages.dev` or a custom domain | Free tier, no server to maintain. |
+| Framework | SvelteKit 2 with Svelte 5 (runes), TypeScript strict, `@sveltejs/adapter-cloudflare` | Server routes and form actions in one project, small bundles for phones. |
+| Database | Cloudflare D1 (SQLite), binding `DB` | Native to Pages Functions, no external service. |
+| Queries | Raw SQL through a thin helper in `src/lib/server/db.ts` | About ten tables; an ORM adds more than it saves over a weekend. |
+| Catalog filtering | In the browser, over a cached JSON payload | See "Catalog delivery." Driven by the 1,500-game scale and D1's daily limits. |
+| Auth | Google OAuth through `arctic` (v3), own sessions in D1 | No auth vendor. Lucia is deprecated as a library; don't install it. |
+| XML parsing | `fast-xml-parser` | Workers have no `DOMParser`. |
+| Images | Hotlink BGG image URLs | No storage cost, no question about re-hosting rights. |
+| IDs | `crypto.randomUUID()` for users and groups; integer keys for games and copies | No dependency. |
+| Package manager | npm, Node 22 or 24 | Whatever is already installed. |
+| Tests | Vitest; SQL tests on `better-sqlite3` with the real migrations | Pure logic is most of the risk; see "Testing." |
+
+Cloudflare is steering new projects toward Workers with static assets over Pages. Pages still works, and Carlo chose pages.dev (DECISIONS D03). Pages Functions lack cron triggers, which this design works around with lazy cleanup. Moving to Workers later means swapping the adapter and the config file.
+
+## Scale and budget
+
+Per group: up to 50 members (5 to 15 regulars), 1,500 distinct games, 4,000 copies. A single import can be 1,000 games. Per instance: a few groups. Each hoster runs on their own Cloudflare account, so each instance has its own free-tier budget. The instance limits under "Configuration and secrets" keep one instance inside it.
+
+Cloudflare free tier, approximately: 100,000 Functions requests per day, 5 million D1 rows read per day, 100,000 D1 rows written per day (index updates count as writes), 50 subrequests per request. The 3-to-12-member version of this plan filtered in SQL and stored tags as rows. At the new scale both would hit the limits:
+
+- **Reads.** A filtered SQL query over 4,000 copies with tag subqueries reads on the order of 10,000 rows. Filtering as you type at a busy game night would spend the daily read budget in a few hundred queries. Loading the catalog once and filtering in the browser costs about 6,000 rows per full load and 3 rows per cached revalidation.
+- **Writes.** With one row per tag, hydrating 1,500 games writes roughly 1,500 × 15 tag rows plus their index entries: 50,000 or more on the day a large group imports, half the daily allowance. Storing tags, alternate names and expansion links as JSON columns on `games` makes each game one row. The same day then costs about 15,000 to 20,000 rows written, copies included.
+
+If the limits bite anyway, the Workers Paid plan ($5 per month) raises them by orders of magnitude. Nothing in the design changes.
+
+## Architecture
+
+```
+Browser
+  ├─ catalog page: fetch /api/g/<id>/catalog (ETag) → filter, sort, pick in JS
+  └─ forms and other pages ──► Pages Functions (SvelteKit server routes)
+                                   ├─► D1: users, groups, games cache, copies, links
+                                   └─► BGG XML API (server only; results cached into D1)
+```
+
+BGG is called only from the server, so the token never reaches the browser and every result lands in D1 before any page shows it. Pages read only from D1. Browsing works with BGG down.
+
+## Project layout
+
+Planned; update this section if the scaffold differs.
+
+```
+box-populi/
+  AGENTS.md  CLAUDE.md  README.md  STATUS.md  DECISIONS.md  PRD.md  TECH.md
+  SELF_HOSTING.md  LICENSE
+  wrangler.example.toml         each hoster copies it to wrangler.toml (gitignored)
+  .dev.vars.example             copied to .dev.vars (gitignored) for local secrets
+  package.json  svelte.config.js  vite.config.ts
+  migrations/0001_init.sql      schema below
+  scripts/seed-demo.ts          writes seed/demo.sql
+  seed/demo.sql                 generated demo data, gitignored (holds BGG data)
+  src/
+    app.d.ts                    App.Locals { user }, App.Platform { env }
+    hooks.server.ts             session → locals.user; last_seen_at touch
+    lib/
+      catalog/                  pure TS, runs in browser, server and tests
+        types.ts                CatalogPayload and friends
+        normalize.ts            text normalization for search
+        filter.ts               Filters, parse/serialize URL params, filterGames()
+        pick.ts                 picker draw
+        buckets.ts              weight buckets, time formatting
+      server/
+        db.ts                   D1 helpers
+        auth.ts                 arctic client, sessions, returnTo cookie
+        authz.ts                requireUser, requireRead, requireRole
+        permissions.ts          role table as a pure function
+        codes.ts                join code generation
+        ratelimit.ts            rate_events helpers
+        catalog.ts              payload query, bumpCatalogForUser()
+        instance.ts             instance config from env, validated
+        admin.ts                instance admin queries and actions
+        bgg/
+          client.ts             BggClient interface, live implementation, pacing
+          fake.ts               fixture-backed implementation
+          parse.ts              XML → typed objects (pure)
+          poll.ts               player-count poll → bitmasks (pure)
+          fixtures/*.xml        hand-written BGG-shaped fixtures with invented games, committed
+          fixtures/local/       real BGG responses, gitignored
+    routes/                     see "Routes and endpoints"
+  tests/                        *.test.ts
+```
+
+## Configuration and secrets
+
+The repo commits `wrangler.example.toml`. Each hoster copies it to `wrangler.toml`, which is gitignored, and fills in their own project name and database id. Keeping instance ids out of the repo means forks don't carry Carlo's settings, and pulling upstream changes doesn't conflict.
+
+```toml
+name = "box-populi"                        # the hoster's Pages project name
+pages_build_output_dir = ".svelte-kit/cloudflare"
+compatibility_date = "2026-11-06"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "box-populi"
+database_id = "<from `npx wrangler d1 create box-populi`>"
+migrations_dir = "migrations"
+
+[vars]
+BGG_MODE = "live"
+INSTANCE_NAME = "Box Populi"
+INSTANCE_CONTACT = "mailto:you@example.com"
+GROUP_CREATION = "anyone"
+MAX_GROUPS_PER_USER = "5"
+MAX_MEMBERS_PER_GROUP = "100"
+```
+
+| Name | Kind | Default | Purpose |
+|---|---|---|---|
+| `DB` | D1 binding | required | The database. |
+| `GOOGLE_CLIENT_ID` | secret | required | The hoster's own OAuth client. |
+| `GOOGLE_CLIENT_SECRET` | secret | required | The hoster's own OAuth client. |
+| `BGG_TOKEN` | secret | required when `BGG_MODE=live` | The hoster's own BGG application token. BGG registers applications, not people. |
+| `INSTANCE_ADMINS` | secret | empty | Comma-separated Google emails of the instance admins. A secret so the addresses stay out of config files. |
+| `BGG_MODE` | var | `live` | `live`, `off` or `fake`. `off` runs without a token: manual entry only, BGG search and import hidden. `fake` serves test fixtures and is for development only. |
+| `INSTANCE_NAME` | var | `Box Populi` | Header, page titles, privacy page. |
+| `INSTANCE_CONTACT` | var | required | A `mailto:` or `https:` URL for reaching the hoster. Shown on the privacy page, on suspension notices and to banned users. |
+| `GROUP_CREATION` | var | `anyone` | `anyone` or `admins`. With `admins`, only instance admins create groups; anyone signed in can still join with a code. |
+| `MAX_GROUPS_PER_USER` | var | `5` | Groups one user can own. |
+| `MAX_MEMBERS_PER_GROUP` | var | `100` | Joins are refused past this. |
+
+`src/lib/server/instance.ts` reads and validates these once per isolate and exports a typed config. When a required value is missing, every request gets a plain error page naming the variable, so a misconfigured deploy is obvious from the first page load.
+
+Local values go in `.dev.vars` (copied from `.dev.vars.example`), with `BGG_MODE=fake` until a token arrives. Production secrets: `npx wrangler pages secret put <NAME> --project-name <project>`. Secrets never go in the repo, in STATUS.md, or in client bundles. Nothing under `src/lib/catalog/` and no `+page.svelte` may import from `$lib/server`.
+
+`src/app.d.ts` types `App.Platform.env` with the names above, and `App.Locals.user` as `{ id: string; name: string; avatarUrl: string | null; isInstanceAdmin: boolean } | null`.
+
+## Data model
+
+`migrations/0001_init.sql`. Timestamps are Unix milliseconds. JSON columns hold arrays and are written and read only through helpers in `db.ts`.
+
+```sql
+-- identity
+CREATE TABLE users (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,      -- display name: from Google on first sign-in, then user-editable
+  avatar_url  TEXT,               -- refreshed from Google on each sign-in
+  email       TEXT,               -- verified emails only; never sent to other users
+  banned_at   INTEGER,            -- set by an instance admin; blocks sign-in
+  created_at  INTEGER NOT NULL
+);
+CREATE INDEX users_email ON users(email);
+
+CREATE TABLE oauth_accounts (
+  provider          TEXT NOT NULL,      -- 'google'; 'discord' later
+  provider_user_id  TEXT NOT NULL,
+  user_id           TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (provider, provider_user_id)
+);
+
+CREATE TABLE sessions (
+  id          TEXT PRIMARY KEY,   -- hex sha256 of the cookie token
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at  INTEGER NOT NULL
+);
+CREATE INDEX sessions_user ON sessions(user_id);
+
+-- groups
+CREATE TABLE groups (
+  id               TEXT PRIMARY KEY,
+  name             TEXT NOT NULL,
+  code             TEXT NOT NULL UNIQUE,      -- 5 chars, uppercase
+  is_demo          INTEGER NOT NULL DEFAULT 0,
+  catalog_version  INTEGER NOT NULL DEFAULT 0, -- ETag for the catalog payload
+  suspended_at     INTEGER,                    -- set by an instance admin
+  suspended_reason TEXT,                       -- shown to members
+  created_at       INTEGER NOT NULL
+);
+
+CREATE TABLE memberships (
+  group_id      TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role          TEXT NOT NULL DEFAULT 'member'
+                CHECK (role IN ('owner','admin','member')),
+  joined_at     INTEGER NOT NULL,
+  last_seen_at  INTEGER NOT NULL,             -- touched at most hourly
+  PRIMARY KEY (group_id, user_id)
+);
+CREATE INDEX memberships_user ON memberships(user_id);
+-- exactly one owner per group
+CREATE UNIQUE INDEX memberships_one_owner ON memberships(group_id) WHERE role = 'owner';
+
+-- shared game cache: one row per game
+CREATE TABLE games (
+  id            INTEGER PRIMARY KEY,
+  bgg_id        INTEGER UNIQUE,          -- NULL for manual entries
+  name          TEXT NOT NULL,
+  search_text   TEXT NOT NULL,           -- normalized primary + Latin-script alternate names, '|'-joined
+  year          INTEGER,
+  description   TEXT,                    -- plain text
+  image_url     TEXT,
+  thumb_url     TEXT,
+  min_players   INTEGER,
+  max_players   INTEGER,
+  best_mask     INTEGER NOT NULL DEFAULT 0,  -- bit n set = voted best at n players (n ≤ 12)
+  rec_mask      INTEGER NOT NULL DEFAULT 0,  -- bit n set = recommended at n
+  min_playtime  INTEGER,                 -- minutes
+  max_playtime  INTEGER,
+  weight        REAL,                    -- BGG 1..5
+  users_rated   INTEGER,                 -- popularity, for search ranking and sorting
+  mechanics     TEXT NOT NULL DEFAULT '[]',   -- JSON array of names
+  categories    TEXT NOT NULL DEFAULT '[]',   -- JSON array of names
+  base_bgg_ids  TEXT NOT NULL DEFAULT '[]',   -- expansions only: JSON array of base game BGG ids
+  is_expansion  INTEGER NOT NULL DEFAULT 0,
+  is_manual     INTEGER NOT NULL DEFAULT 0,
+  created_by    TEXT REFERENCES users(id) ON DELETE SET NULL,  -- manual entries only
+  fetched_at    INTEGER                  -- NULL = stub waiting for details
+);
+
+-- ownership
+CREATE TABLE copies (
+  id               INTEGER PRIMARY KEY,
+  user_id          TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  game_id          INTEGER NOT NULL REFERENCES games(id),
+  note             TEXT,                 -- edition, language
+  lent_to_user_id  TEXT REFERENCES users(id) ON DELETE SET NULL,
+  lent_to_text     TEXT,                 -- lent outside the app
+  added_at         INTEGER NOT NULL,
+  UNIQUE (user_id, game_id),
+  CHECK (lent_to_user_id IS NULL OR lent_to_text IS NULL)
+);
+CREATE INDEX copies_game ON copies(game_id);
+
+CREATE TABLE wishlist (
+  user_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  game_id   INTEGER NOT NULL REFERENCES games(id),
+  added_at  INTEGER NOT NULL,
+  PRIMARY KEY (user_id, game_id)
+);
+
+CREATE TABLE game_links (
+  id        INTEGER PRIMARY KEY,
+  group_id  TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  game_id   INTEGER NOT NULL REFERENCES games(id),
+  kind      TEXT NOT NULL CHECK (kind IN ('rules','video','other')),
+  title     TEXT,
+  url       TEXT NOT NULL,
+  added_by  TEXT REFERENCES users(id) ON DELETE SET NULL,
+  added_at  INTEGER NOT NULL
+);
+CREATE INDEX game_links_lookup ON game_links(group_id, game_id);
+
+-- rate limiting (join attempts, BGG proxy calls)
+CREATE TABLE rate_events (
+  user_id  TEXT NOT NULL,
+  kind     TEXT NOT NULL,     -- 'join_fail', 'bgg_search', 'bgg_import'
+  at       INTEGER NOT NULL
+);
+CREATE INDEX rate_events_lookup ON rate_events(user_id, kind, at);
+
+-- instance administration log
+CREATE TABLE admin_actions (
+  id             INTEGER PRIMARY KEY,
+  admin_user_id  TEXT NOT NULL,   -- no foreign key: the log outlives accounts
+  action         TEXT NOT NULL CHECK (action IN (
+                   'suspend_group','unsuspend_group','delete_group',
+                   'ban_user','unban_user','delete_user')),
+  target_id      TEXT NOT NULL,
+  target_label   TEXT NOT NULL,   -- group name, or "user created 2026-11-07"; never an email
+  reason         TEXT NOT NULL,
+  detail         TEXT,            -- e.g. "ownership of <group> passed to <user id>"
+  at             INTEGER NOT NULL
+);
+```
+
+Notes on the choices:
+
+- **One row per game.** Tags, alternate names and expansion links are JSON columns because the browser does the filtering and nothing queries them in SQL, except the expansions list on a game page (`json_each(base_bgg_ids)`). This keeps hydrate writes to one row per game; see "Scale and budget."
+- **One copy per user per game.** Owning two copies is rare enough for the note field.
+- **Bitmasks for the player poll.** "Best at 4" is `(best_mask >> 4) & 1`. Capped at 12 players so JavaScript's 32-bit `<<` stays safe.
+- **Roles live on `memberships`.** No owner column on `groups` to drift out of sync. The partial unique index makes a second owner impossible.
+- **Ownership transfer** is one `db.batch([...])`: demote the old owner to `admin`, then promote the new one. D1 batches run as a transaction. The order matters because the index rejects two owners at once.
+- **Account deletion guard.** The cascade would delete an owner's membership and leave the group ownerless. The delete action first finds groups where the user is owner and other members remain, and refuses with a message to transfer or delete them. Groups where the user is the only member are deleted with them.
+- **Lending to a member** uses `lent_to_user_id`. That copy stays available in the group if the borrower is a member of it. `lent_to_text` means lent outside, which the availability filter hides.
+- **Games are never deleted.** They're a cache shared by every group. Stubs (`fetched_at IS NULL`) are valid rows that show name and cover.
+- **Suspension and bans** are timestamps rather than status enums, so "when" comes for free and NULL means normal.
+- **`admin_actions`** stores ids and labels, not emails, so the log doesn't keep personal data after an account is deleted.
+- **`catalog_version`** is bumped by `bumpCatalogForUser(userId)` in the same batch as any change that alters a group's catalog payload: adding, editing or removing a copy, loans, joining, leaving or removal of a member, a display name or avatar change, and each hydrate step. It bumps every group the user belongs to. Background refreshes of stale games don't bump it; that staleness is accepted.
+
+## Catalog delivery
+
+`GET /api/g/[groupId]/catalog`:
+
+1. `requireRead(locals, groupId)` (members, or anyone for the demo group).
+2. Read `groups.catalog_version`. ETag is `"<groupId>.<version>"`. If `If-None-Match` matches, return 304.
+3. Otherwise query the group's members, then all copies owned by members joined with their games, and assemble the payload. Description and full-size image are left out; the game page loads those.
+4. Respond with `Cache-Control: private, no-cache` and the ETag. Cloudflare compresses JSON responses.
+
+```ts
+// src/lib/catalog/types.ts
+export type Role = 'owner' | 'admin' | 'member';
+
+export type CatalogMember = {
+  id: string; name: string; avatarUrl: string | null; role: Role; lastSeenAt: number;
+};
+
+export type CatalogCopy = {
+  ownerId: string;
+  lentToUserId: string | null; // lent within the app
+  lentOut: boolean;            // lent outside the app
+  addedAt: number;
+};
+
+export type CatalogGame = {
+  id: number; bggId: number | null; name: string; search: string; year: number | null;
+  thumbUrl: string | null;
+  minPlayers: number | null; maxPlayers: number | null;
+  bestMask: number; recMask: number;
+  minPlaytime: number | null; maxPlaytime: number | null;
+  weight: number | null; usersRated: number | null;
+  mechanics: string[]; categories: string[];
+  isExpansion: boolean; isManual: boolean; incomplete: boolean; // incomplete = stub or manual
+  copies: CatalogCopy[];
+};
+
+export type CatalogPayload = { version: number; members: CatalogMember[]; games: CatalogGame[] };
+```
+
+Expected size at 1,500 games: around 600 KB raw, under 150 KB compressed. Measure with real data and record the number in STATUS.md. If it's much larger, the first thing to trim is alternate names in `search`.
+
+Filtering, sorting and the picker run in the browser through pure functions in `src/lib/catalog/`:
+
+- `parseFilters(URLSearchParams)` and `serializeFilters(filters)` keep filter state in the URL with short keys (`q`, `n`, `best`, `t`, `w`, `mech`, `cat`, `all`, `own`, `avail`, `exp`, `sort`).
+- `filterGames(games, filters, groupMemberIds)` applies the PRD's filter table. A game missing a field passes any filter on that field. A copy counts as available unless `lentOut` is true or it's lent to a user who isn't in `groupMemberIds`. A game is available when any of its copies is.
+- `normalize(s)` lowercases, applies NFD, strips combining marks, and collapses whitespace. The server uses the same function to build `search_text`, and the text filter is `game.search.includes(normalize(q))`.
+- Weight buckets live in `buckets.ts`: light `< 2`, medium `>= 2 && < 3`, heavy `>= 3`.
+
+Rendering: show the count, render the first 60 results, and append 60 more when a sentinel element scrolls into view (`IntersectionObserver`). Thumbnails use `loading="lazy"` with fixed width and height to avoid layout shift.
+
+## Authentication
+
+1. `GET /auth/google?returnTo=/join/K7M4P` generates `state` and a PKCE verifier with arctic, stores them and `returnTo` in short-lived HttpOnly cookies (10 minutes), and redirects to Google with scopes `openid profile email`.
+2. `GET /auth/google/callback` checks `state` against its cookie, exchanges the code, and decodes the ID token for `sub`, `name`, `picture`, `email`, `email_verified`. An unverified email is stored as NULL, so it can never match `INSTANCE_ADMINS` or an admin's lookup.
+3. Look up `oauth_accounts` by `('google', sub)`. New user: create `users` with `name` from Google and the account row. Existing user: update `avatar_url` and `email` only. Never overwrite `name`. If `banned_at` is set, stop and show "This account is disabled on this instance," with `INSTANCE_CONTACT`.
+4. Delete that user's expired sessions, then create one: 32 random bytes as the cookie value (base64url), hex sha256 of it as `sessions.id`, expiry 30 days. When a request finds a session with under 15 days left, extend it to 30.
+5. Cookie `session`: `HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`. In local dev over http, drop `Secure`.
+6. Redirect to `returnTo` only if it starts with `/` and not `//` or `/\`. Anything else goes to `/`. This prevents an open redirect.
+7. `hooks.server.ts` resolves the cookie on every request into `event.locals.user`. An expired session row is deleted when found. `isInstanceAdmin` is computed on each request by comparing the user's verified email, case-insensitively, with `INSTANCE_ADMINS`, so removing an address and redeploying revokes access at once.
+8. `POST /auth/logout` deletes the session row and the cookie.
+
+The redirect URI is `${url.origin}/auth/google/callback`. Each hoster registers `http://localhost:5173/auth/google/callback` and `https://<their host>/auth/google/callback` in their own Google Cloud project. Pages preview deployments get random subdomains that can't be registered, so sign-in doesn't work on previews. Test auth locally and on production.
+
+The Google consent screen must be set to "In production." In Testing, only listed test users can sign in. The requested scopes are non-sensitive, so publishing doesn't need Google's verification review. The consent screen links to `/privacy`.
+
+Only the token's hash is stored, so a leaked database doesn't leak usable sessions.
+
+## Authorization
+
+Helpers in `src/lib/server/authz.ts`, used by every load function, action and endpoint:
+
+| Helper | Allows | Use for |
+|---|---|---|
+| `requireUser(event)` | any signed-in user; otherwise redirect to `/auth/google?returnTo=<current path>` | `/me`, creating and joining groups |
+| `requireRead(event, groupId)` | members of the group, or anyone when `is_demo = 1` | every group page load and the catalog endpoint |
+| `requireRole(event, groupId, minRole)` | members with role at least `minRole` (`member` < `admin` < `owner`); always refuses demo groups; refuses suspended groups except for leaving and for the owner deleting the group | every mutation |
+| `requireInstanceAdmin(event)` | users with `isInstanceAdmin`; everyone else gets 404 | `/admin` and its actions |
+
+Each group helper returns the group row and the caller's role. A missing group and a non-member get the same 404, so group IDs can't be probed. Being an instance admin grants nothing inside groups: `requireRead` and `requireRole` ignore `isInstanceAdmin`.
+
+The role table from the PRD lives in `src/lib/server/permissions.ts` as a pure function, `can(actorRole, action, targetRole?)`, tested against every combination. Actions call `requireRole` and then `can()` with the target's role read fresh from the database. Never trust a role sent by the client, and never rely on a hidden button.
+
+| Action | Rule |
+|---|---|
+| Rename, regenerate code, delete any link | `admin` |
+| Delete own link | the link's author |
+| Remove member | `admin` when the target is `member`; `owner` for any target except self |
+| Promote, demote, transfer ownership, delete group | `owner`; promote and transfer only to a current member other than self |
+| Leave group | any member; refused for the owner while other members remain |
+
+`hooks.server.ts` touches `memberships.last_seen_at` on group routes when the stored value is more than an hour old. That's one write per member per hour at most.
+
+Instance limits apply in the actions: creating a group checks `GROUP_CREATION` and the caller's owned-group count against `MAX_GROUPS_PER_USER`. Joining checks `MAX_MEMBERS_PER_GROUP` and refuses suspended and demo groups.
+
+## Instance administration
+
+Instance admins are the accounts whose verified email is in `INSTANCE_ADMINS`. `/admin` is built to let them run the instance without reading what's in it.
+
+The admin page shows:
+
+- Totals: users, groups, cached games, copies, sessions and `rate_events` rows, for spotting runaway growth against the free tier.
+- A groups table: name, created date, member count, copy count, last activity (the latest `last_seen_at` among members), and status. Sortable by each column.
+- The admin log, newest first.
+
+It never shows member names or lists, emails, join codes, collections, links or wishlists. Without codes, an admin can't join a group they haven't been invited to.
+
+User lookup takes an exact email address, typically from an abuse report or a deletion request. It returns whether an account exists, its creation date, how many groups it belongs to and owns, and whether it's banned. There is no list or partial search of users, so addresses can't be browsed. Lookups aren't logged; actions are.
+
+Actions. Each requires a written reason and writes a row to `admin_actions`.
+
+| Action | Effect |
+|---|---|
+| Suspend group | Members can still open it read-only, with a banner showing the reason and `INSTANCE_CONTACT`. Joins and all other changes are refused. Members can leave, and the owner can delete the group. |
+| Unsuspend group | Back to normal. |
+| Delete group | Requires typing the group name. Same cascade as an owner deleting it. Members' copies stay on their accounts. |
+| Ban user | Sets `banned_at` and deletes their sessions. They can't sign in. Their copies and memberships stay until deleted, and group admins can remove them. |
+| Unban user | Clears `banned_at`. |
+| Delete user | Same cascade as deleting one's own account. Groups they own with other members pass to the longest-standing co-admin, else the longest-standing member; each handover goes in `detail`. Groups where they're the only member are deleted. |
+
+The hoster operates the database and can read all of it with `wrangler d1 execute`. The app can't prevent that, and the privacy page says so plainly. What the app guarantees is that its admin screens don't expose group contents and that every admin action is logged.
+
+## Group codes
+
+- Alphabet `ABCDEFGHJKMNPQRSTUVWXYZ23456789`: 31 characters with no 0, O, 1, I or L. Five characters give about 28.6 million codes.
+- Generate with `crypto.getRandomValues` and rejection sampling (discard bytes ≥ 248 so each character is uniform). Retry on a unique-constraint collision.
+- Normalize input with trim and uppercase. Lookalike characters never appear in a code, so no substitution is needed.
+- Joining records a `join_fail` rate event on a miss. Five misses in 10 minutes blocks further attempts for that user until the window passes. Old `rate_events` rows for the user and kind are deleted whenever a new one is written, since Pages has no cron.
+- The demo group's code is `DEMO0`. The `0` keeps it out of the generator's alphabet, and the join action refuses demo groups anyway.
+
+## BoardGameGeek integration
+
+### Access and terms
+
+Checked 2026-11-06 against BGG's [Using the XML API](https://boardgamegeek.com/using_the_xml_api) page and its [XML API Terms of Use](https://boardgamegeek.com/wiki/page/XML_API_Terms_of_Use), via search summaries; the pages themselves refuse automated fetches. Re-read both before launch.
+
+- Nearly all API use requires a registered application, created at `boardgamegeek.com/applications`. Requests send `Authorization: Bearer <token>`. BGG warns that approval can take a week or more.
+- BGG expects third-party code to let each user supply their own application token. For this project that means every hoster registers their own application. The repo never contains a token, and no instance proxies BGG calls for another.
+- The license is for non-commercial use only. The code's own license doesn't change that; an instance that charges money or runs ads needs BGG's commercial terms.
+- BGG must be credited by name, and public pages show the "Powered by BGG" logo linked to BoardGameGeek.
+- BGG data may not be modified. Box Populi displays BGG fields as given and never lets users edit a BGG game. Derived values (weight buckets, player-count masks, normalized search text) are computed for filtering and never presented as BGG's data. Hand-entered games are not BGG data.
+- Using the API or its data to train an AI system is prohibited. Nothing in the app sends BGG data to an LLM, and real BGG responses stay out of the public repo (see "Fixtures").
+- BGG recommends server-side requests with cached results, which is this design.
+- Carlo's BGG application (submitted around 2026-11-06) commits his instance to the following: BGG requests from the server only; results cached and refreshed at most every 30 days; requests paced one at a time at least a second apart; back off on 429; the User-Agent above; data shown unmodified, with the logo and links; no AI training; no commercial use; no token or BGG data in the repo. Changing any of these on his instance means telling BGG first.
+- Unconfirmed, from memory: `thing` accepts at most 20 ids per request, and rate limits are unpublished with 429 responses when pushed.
+
+### Client
+
+```ts
+// src/lib/server/bgg/client.ts
+export interface BggClient {
+  search(query: string): Promise<BggSearchHit[]>;          // { bggId, name, year, type }
+  things(bggIds: number[]): Promise<BggThing[]>;           // ≤ 20 ids
+  collection(username: string): Promise<
+    | { status: 'ready'; items: BggCollectionItem[] }      // { bggId, name, year, thumbUrl, imageUrl }
+    | { status: 'pending' }                                // BGG answered 202
+    | { status: 'not_found' }
+  >;
+}
+```
+
+`getBggClient(env)` returns the live client for `BGG_MODE=live`, the fake for `fake`, and `null` for `off`. Every caller handles `null` by hiding BGG features. The fake reads fixtures through `import.meta.glob('./fixtures/*.xml', { query: '?raw', import: 'default', eager: true })`, because Workers have no file system. Tests use the same fixtures.
+
+Fixtures: the committed fixtures are hand-written in BGG's XML shape with invented games ("Test Game Alpha"). They cover a base game, an expansion with an inbound base link, a sparse player poll, a poll with an "N+" row, a game with zero weight votes, and a double-encoded description. Real responses are useful for checking the parser, but they're BGG data. They go in `fixtures/local/`, which is gitignored, so the public repo doesn't redistribute BGG data or feed it to AI training crawlers. Tests run on the committed fixtures and also on `fixtures/local/` when present.
+
+The live client sends `User-Agent: BoxPopuli/<package.json version> (+https://github.com/muymra/box-populi)` on every request, so BGG can identify the traffic. It sends calls one at a time within a request, waiting at least one second between them. Isolates share no memory, so this is pacing within a request, not a global limit. On 429 it throws `BggBusyError` with the `Retry-After` value if present. Callers turn that into a "BGG is busy" response.
+
+### Parsing `thing`
+
+Parse with `fast-xml-parser` using `ignoreAttributes: false` and `attributeNamePrefix: ''`, and force arrays for `item`, `name`, `link`, `poll`, `results` and `result` so single elements don't change shape. Relevant parts of a response with `stats=1`:
+
+```xml
+<items>
+  <item type="boardgame" id="13">
+    <thumbnail>https://cf.geekdo-images.com/…</thumbnail>
+    <image>https://cf.geekdo-images.com/…</image>
+    <name type="primary" value="CATAN"/>
+    <name type="alternate" value="De Kolonisten van Catan"/>
+    <description>…&amp;#10;…</description>
+    <yearpublished value="1995"/>
+    <minplayers value="3"/> <maxplayers value="4"/>
+    <poll name="suggested_numplayers" totalvotes="2400">
+      <results numplayers="3">
+        <result value="Best" numvotes="…"/>
+        <result value="Recommended" numvotes="…"/>
+        <result value="Not Recommended" numvotes="…"/>
+      </results>
+      <results numplayers="4+"> … </results>
+    </poll>
+    <playingtime value="120"/> <minplaytime value="60"/> <maxplaytime value="120"/>
+    <link type="boardgamecategory" id="…" value="Negotiation"/>
+    <link type="boardgamemechanic" id="…" value="Dice Rolling"/>
+    <link type="boardgameexpansion" id="…" value="…" inbound="true"/>  <!-- on an expansion: its base game -->
+    <statistics><ratings>
+      <usersrated value="…"/> <average value="…"/> <averageweight value="…"/>
+    </ratings></statistics>
+  </item>
+</items>
+```
+
+Rules:
+
+- `type="boardgameexpansion"` sets `is_expansion`. For expansions, `base_bgg_ids` are the ids of `boardgameexpansion` links with `inbound="true"`. On base games, the non-inbound expansion links are ignored; there can be hundreds.
+- `name` is the `primary` name. `search_text` is the normalized primary name plus alternate names that are entirely Latin script, digits, punctuation or spaces, de-duplicated and joined with `|`.
+- **Zero means unknown.** BGG sends `0` for missing player counts, play times, weight (no votes) and year. Store NULL.
+- Play time: `min_playtime` and `max_playtime`; when one is zero, fall back to `playingtime`.
+- Description: BGG double-encodes entities, so after XML parsing the text still contains `&#10;` and friends. Decode those, strip any tags, and store plain text.
+- Player poll (`poll.ts`): ignore `results` rows whose `numplayers` contains `+` or is above 12. If the poll's `totalvotes` is under 10, both masks are 0 (no data). Otherwise, for each count: it's **best** when Best votes exceed both Recommended and Not Recommended; it's **recommended** when Best plus Recommended exceed Not Recommended. Set bit n in the matching mask.
+
+### Search
+
+`GET /api/bgg/search?q=` (signed in, rate-limited to 30 per minute per user; the client debounces 400 ms and waits for three characters):
+
+1. `search?query=<q>&type=boardgame,boardgameexpansion`. De-duplicate hits by id; BGG can list an item under both types.
+2. Rank hits: exact name match first, then names starting with the query, then the rest, keeping BGG's order within each tier. Keep the first 20.
+3. `things()` on those 20, upsert them into `games` (they're cache, owned or not), then sort by `users_rated` descending with exact matches pinned to the top. Return the top 10 with thumbnails and whether the caller already owns each.
+
+Two BGG calls per search. The ranking is a heuristic; tune it with real queries and note changes in DECISIONS.md.
+
+### Import and hydrate
+
+`POST /api/bgg/import` with `{ username }` (rate-limited to 5 per 10 minutes per user):
+
+1. Call `collection?username=<u>&own=1`. On 202, retry up to 3 times, 2 seconds apart, within the request. Still pending: return `{ status: 'pending' }`; the client posts again every 5 seconds for about a minute, then shows a retry button.
+2. Ready: return the preview list with `alreadyOwned` flags. Store nothing. The username is not stored.
+
+`POST /api/bgg/import/confirm` with `{ username, bggIds }`:
+
+1. Fetch the collection again. BGG has it ready by now, and this avoids trusting names sent by the client. Keep only the requested ids that are in it.
+2. In batches of statements: `INSERT ... ON CONFLICT(bgg_id) DO NOTHING` a stub for each game (name, year, thumbnail, image, `search_text` from the name, `fetched_at` NULL), then `INSERT OR IGNORE` the copies, then bump the catalog version. Each statement binds one row; D1 caps bound parameters at 100 per statement.
+3. Return `{ created, stubs }`.
+
+`POST /api/bgg/hydrate` (no body): select up to 20 games with `fetched_at IS NULL AND bgg_id IS NOT NULL` among the caller's copies, call `things()`, update the rows, bump the catalog version, and return `{ updated, remaining }`. On `BggBusyError`, return `{ status: 'busy', retryAfterMs }`. The client loops until `remaining` is 0, waiting 1.5 seconds between steps and backing off on busy (the given delay, or 5 seconds doubling to 60). A 1,000-game import takes 50 steps, about two to three minutes behind a progress bar.
+
+Hydrate is idempotent and resumable. Any page that sees the caller owns stubs shows "Finish loading game details," which restarts the loop. Two members hydrating the same stub at once is harmless.
+
+### Refresh
+
+The game page checks `fetched_at`. Older than 30 days: it renders from the cache and refreshes in the background with `platform.context.waitUntil()`. No cron is involved.
+
+### What BGG doesn't provide
+
+Rules documents and videos. BGG's files and video sections aren't in the XML API. Members add links, and the game page generates a YouTube search link: `https://www.youtube.com/results?search_query=how+to+play+<url-encoded name>`.
+
+### Failure behavior
+
+Search and import show "BGG isn't responding. Try again, or add the game by hand." Browsing is unaffected.
+
+### Running without a token
+
+With `BGG_MODE=off`, the add page offers manual entry only. A note explains that BGG search and import aren't set up on this instance, and instance admins also see it on `/admin`. Everything else works, minus mechanics, themes, weight and best-at data on hand-entered games. This lets a new hoster launch while their BGG application waits for approval. Switching to `live` later doesn't migrate manual games to BGG ones; a member who wants full data removes the manual copy and adds the BGG game.
+
+## Picker
+
+`pick(candidates, n, rng, exclude)` in `src/lib/catalog/pick.ts`, run in the browser on the loaded catalog:
+
+1. Candidates: the catalog filtered by players `n`, minutes, optional weight ceiling, no expansions, availability on. When members are ticked as present, keep only games with a copy owned by a present member or lent to one.
+2. Weight each candidate: 3 when best at `n`, 2 when recommended at `n`, otherwise 1.
+3. Draw three without replacement, with probability proportional to weight, skipping ids in `exclude`. When fewer than three remain, clear `exclude` and draw again.
+4. `rng` is injected so tests can seed it.
+
+URL params: `n`, `t`, `w`, `present` (comma-separated user ids), `seen` (ids already shown). The last "who's here" selection is stored in `localStorage` under `bp:present:<groupId>`. Wrap every storage access in try/catch and treat failure as an empty selection.
+
+## Demo group
+
+- Group row: `id = 'demo'`, `is_demo = 1`, code `DEMO0`, name "Demo game group."
+- Five made-up members with no `oauth_accounts` rows, so nobody can sign in as them.
+- `scripts/seed-demo.ts` (run with `npx tsx`) takes a BGG username, uses the live client to fetch that collection and its details, spreads the copies across the five members with a fixed random seed (most to one or two members, to match how real groups look), adds a few loans and wishlist entries, and writes `seed/demo.sql`. Without a token, it runs against fixtures for a small demo.
+- Apply it with `npx wrangler d1 execute box-populi --local --file seed/demo.sql`, and with `--remote` for production. The script starts by deleting the existing demo rows, so re-running it replaces the demo.
+- `/demo` redirects to `/g/demo`. `requireRead` lets anyone read it; `requireRole` refuses every mutation on it. Pages hide controls when `group.isDemo` is true, but the server check is the one that counts.
+- The same seed doubles as development data, so catalog work has real volume from Saturday morning.
+- `seed/demo.sql` is gitignored because it holds BGG data (names, descriptions, image URLs). Each hoster generates their own.
+- The demo is optional per instance. The landing page shows "See a demo group" only when a group with id `demo` exists. Hosters who want one run the seed script with their own BGG username.
+
+## Routes and endpoints
+
+| Route | Purpose | Guard |
+|---|---|---|
+| `/` | Signed out: landing with "See a demo group." Signed in: group list, or redirect when there's one group. | none |
+| `/privacy` | What's stored, why, how to delete it. | none |
+| `/demo` | Redirect to `/g/demo`. | none |
+| `/join` and `/join/[code]` | Join form, code prefilled from the URL. | `requireUser` |
+| `/groups/new` | Create a group. | `requireUser`, plus `GROUP_CREATION` and `MAX_GROUPS_PER_USER` |
+| `/admin` | Instance totals, groups table, user lookup, admin log, and the actions above. | `requireInstanceAdmin` |
+| `/g/[groupId]` | Catalog. | `requireRead` |
+| `/g/[groupId]/game/[gameId]` | Game page: details, owners, links, wishlisters, expansions. | `requireRead` |
+| `/g/[groupId]/add` | BGG search, manual entry, import. | `requireRole(member)` |
+| `/g/[groupId]/pick` | Picker. | `requireRead` |
+| `/g/[groupId]/wanted` | Games members want that nobody in the group owns. | `requireRead` |
+| `/g/[groupId]/settings` | Members and roles, rename, code, delete. Members see the list; admins and the owner see their controls. | `requireRole(member)` |
+| `/me` | My games and loans, wishlist, display name, account deletion. | `requireUser` |
+| `/auth/google`, `/auth/google/callback`, `POST /auth/logout` | Sign-in and out. | none |
+| `GET /api/g/[groupId]/catalog` | Catalog payload with ETag. | `requireRead` |
+| `GET /api/bgg/search` | BGG search proxy. | `requireUser` |
+| `POST /api/bgg/import`, `/api/bgg/import/confirm`, `/api/bgg/hydrate` | Import flow. | `requireUser` |
+
+Mutations on pages are SvelteKit form actions. They work without client JavaScript, and SvelteKit's origin check covers CSRF for form posts. The JSON endpoints are reached only with the `SameSite=Lax` session cookie, which browsers don't send on cross-site POSTs.
+
+The Wanted view's query:
+
+```sql
+SELECT g.id, g.name, g.thumb_url, GROUP_CONCAT(w.user_id) AS wanted_by
+FROM wishlist w
+JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1
+JOIN games g       ON g.id = w.game_id
+WHERE NOT EXISTS (
+  SELECT 1 FROM copies c
+  JOIN memberships m2 ON m2.user_id = c.user_id AND m2.group_id = ?1
+  WHERE c.game_id = w.game_id)
+GROUP BY g.id
+ORDER BY COUNT(*) DESC, g.name;
+```
+
+D1 binds parameters by position (`?1`, `?2` or `?`). Named parameters like `:group` aren't supported.
+
+## Security
+
+- Bind every value; never interpolate into SQL.
+- Link URLs: parse with `new URL()`, accept only `http:` and `https:`, store the normalized string, and render with `rel="noopener noreferrer nofollow"` and `target="_blank"`.
+- BGG descriptions are stored as plain text. Never use `{@html}` anywhere in the app.
+- `returnTo` is validated as described under "Authentication."
+- Join attempts and BGG proxy calls are rate-limited per user through `rate_events`.
+- Email is selected only in queries that serve the user themselves.
+- The demo group is read-only on the server, not only in the UI.
+- Manual image URLs must be `https:`.
+- `/admin` returns 404, not 403, to non-admins, and its queries select only the columns listed under "Instance administration." Adding a column to an admin query that exposes group contents or emails needs a DECISIONS.md entry.
+
+## Testing
+
+Run with `npm test` (Vitest).
+
+| Area | How |
+|---|---|
+| `lib/catalog/*` (filter, URL params, normalize, buckets, pick) | Pure unit tests. Filter tests include games with NULL fields, lent copies, and expansions. Picker tests use a seeded rng. |
+| `permissions.ts` | Table test over every role, action and target role. Must fail: admin removes admin, admin promotes self, owner leaves with members, anyone acting on a demo group. |
+| `bgg/parse.ts`, `bgg/poll.ts` | Against the fixtures: zeros become NULL, "N+" rows skipped, low-vote polls give no data, double-encoded descriptions decode, expansions get base ids. |
+| `codes.ts` | Alphabet only, length 5. |
+| `instance.ts` | Defaults applied, required values reported by name, bad values (`GROUP_CREATION=maybe`, non-numeric limits) rejected. |
+| Instance admin | SQL tests: a banned user's sessions are gone and sign-in is refused; a suspended group refuses changes but allows leaving; deleting a user hands groups to the right member; every action writes `admin_actions`; the lookup matches only an exact verified email. |
+| SQL | Apply `migrations/*.sql` to an in-memory `better-sqlite3` database with `PRAGMA foreign_keys = ON` (D1 enforces foreign keys by default; better-sqlite3 doesn't). A small adapter gives it D1's `prepare().bind().first()/all()/run()` and `batch()` shape. Cover ownership transfer order, the second-owner rejection, the account deletion guard, the catalog payload query, and the Wanted query. |
+
+`npm run check` (svelte-check) must pass as well. Playwright is optional and comes last.
+
+## Risks
+
+| Risk | Mitigation |
+|---|---|
+| BGG approval takes a week or more (BGG's own warning) | Apply on Friday. `BGG_MODE=fake` lets every BGG-dependent step be built on fixtures, and `BGG_MODE=off` lets an instance launch with manual entry. |
+| BGG changes its terms, or a hoster breaks them | Terms are summarized under "Access and terms" and linked from SELF_HOSTING.md. Each hoster holds their own application, so a violation affects only their token. |
+| BGG collection endpoint stays on 202 | Client-side polling with visible progress and a retry button. |
+| Player-poll parsing misreads edge cases | Fixtures for the odd cases; no-data fallback. |
+| Catalog payload too large on slow phones | Measure at 1,500 games. Trim alternate names first, then send tag ids with a dictionary. |
+| A large group's import day nears the D1 write limit | One row per game keeps it near 20,000 writes. Workers Paid is the fallback. |
+| Preview deploys can't sign in | Test auth locally and on production. |
+| A hoster misconfigures their instance | `instance.ts` names the missing variable on every page. SELF_HOSTING.md lists every step, and each is checked by doing it once on a fresh Cloudflare account. |
+| Scope creep | The PRD's cut order and stretch list are fixed. Nothing joins the stretch list before Sunday's items ship. |
