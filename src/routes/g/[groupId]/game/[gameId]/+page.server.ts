@@ -1,6 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { requireRead, requireRole } from '#lib/server/authz.ts';
-import { addCopy, gameUsableInGroup, removeCopy } from '#lib/server/games.ts';
+import { addCopy, gameUsableInGroup, gameVisibleInGroup, removeCopy } from '#lib/server/games.ts';
 import { addLink, canDeleteLink, deleteLink, parseLink } from '#lib/server/links.ts';
 import { addWish, removeWish } from '#lib/server/wishlist.ts';
 import { lendCopy, returnCopy } from '#lib/server/lending.ts';
@@ -255,6 +255,8 @@ export const actions: Actions = {
 		const gameId = gameIdParam(event.params.gameId);
 		if ((await event.request.formData()).get('on') === '0') {
 			await removeWish(db, event.locals.user!.id, gameId);
+			// Nobody here owns or wants it any more, so this page would now 404: go to the Wanted tab.
+			if (!(await gameVisibleInGroup(db, groupId, gameId))) redirect(303, `/g/${groupId}/wanted`);
 			return { wishChanged: true };
 		}
 		if (!(await addWish(db, groupId, event.locals.user!.id, gameId, Date.now()))) error(404, 'Game not found');
