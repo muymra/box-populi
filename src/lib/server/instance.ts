@@ -22,6 +22,8 @@ export type InstanceConfig = {
 	searchEngines: 'allow' | 'block';
 	/** The instance's default colour theme; each device can pick another. */
 	theme: string;
+	/** Where game details come from while BGG is off (D31): Wikidata, or only what members type. */
+	gameSource: 'wikidata' | 'manual';
 };
 
 export type ConfigResult = { ok: true; config: InstanceConfig } | { ok: false; errors: string[] };
@@ -64,6 +66,11 @@ export function parseInstanceConfig(env: Record<string, unknown>, opts: { dev: b
 	const searchEnginesRaw = str(env, 'SEARCH_ENGINES') || 'allow';
 	if (searchEnginesRaw !== 'allow' && searchEnginesRaw !== 'block') {
 		errors.push(`SEARCH_ENGINES must be "allow" or "block" (got "${searchEnginesRaw}").`);
+	}
+
+	const gameSourceRaw = str(env, 'GAME_SOURCE') || 'wikidata';
+	if (gameSourceRaw !== 'wikidata' && gameSourceRaw !== 'manual') {
+		errors.push(`GAME_SOURCE must be "wikidata" or "manual" (got "${gameSourceRaw}").`);
 	}
 
 	const themeRaw = str(env, 'THEME') || DEFAULT_THEME;
@@ -110,7 +117,8 @@ export function parseInstanceConfig(env: Record<string, unknown>, opts: { dev: b
 		bggMinIntervalMs: int('BGG_MIN_INTERVAL_MS', MIN_BGG_INTERVAL_MS, MIN_BGG_INTERVAL_MS),
 		instanceMode: instanceModeRaw === 'demo' ? 'demo' : 'standard',
 		searchEngines: searchEnginesRaw === 'block' ? 'block' : 'allow',
-		theme: isThemeId(themeRaw) ? themeRaw : DEFAULT_THEME
+		theme: isThemeId(themeRaw) ? themeRaw : DEFAULT_THEME,
+		gameSource: gameSourceRaw === 'manual' ? 'manual' : 'wikidata'
 	};
 
 	return errors.length ? { ok: false, errors } : { ok: true, config };

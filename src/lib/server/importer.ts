@@ -91,11 +91,17 @@ export async function confirmImport(
 	return { added: after - before };
 }
 
+/**
+ * Games still waiting for BGG details: stubs from an import, and Wikidata games that carry a BGG id,
+ * which get upgraded to full BGG data once BGG is on (only called then).
+ */
+const NEEDS_BGG_DETAILS = `g.bgg_id IS NOT NULL AND (g.fetched_at IS NULL OR g.source = 'wikidata')`;
+
 export async function pendingDetails(db: DB, userId: string): Promise<number> {
 	const row = await one<{ n: number }>(
 		db,
 		`SELECT COUNT(DISTINCT g.id) AS n FROM copies c JOIN games g ON g.id = c.game_id
-		 WHERE c.user_id = ?1 AND g.fetched_at IS NULL AND g.bgg_id IS NOT NULL`,
+		 WHERE c.user_id = ?1 AND ${NEEDS_BGG_DETAILS}`,
 		userId
 	);
 	return row?.n ?? 0;
@@ -109,7 +115,7 @@ export async function hydrateStep(db: DB, client: BggClient, userId: string, now
 	const rows = await all<{ bgg_id: number }>(
 		db,
 		`SELECT DISTINCT g.bgg_id FROM copies c JOIN games g ON g.id = c.game_id
-		 WHERE c.user_id = ?1 AND g.fetched_at IS NULL AND g.bgg_id IS NOT NULL
+		 WHERE c.user_id = ?1 AND ${NEEDS_BGG_DETAILS}
 		 ORDER BY g.bgg_id LIMIT ?2`,
 		userId,
 		THINGS_PER_REQUEST
@@ -121,7 +127,14 @@ export async function hydrateStep(db: DB, client: BggClient, userId: string, now
 	const found = new Set(things.map((t) => t.bggId));
 	await db.batch([
 		...things.map((t) => upsertThingStatement(db, t, now)),
-		...ids.filter((id) => !found.has(id)).map((id) => stmt(db, 'UPDATE games SET fetched_at = ?1 WHERE bgg_id = ?2', now, id)),
+		// Ids BGG doesn't return end the loop too: BGG stubs are marked fetched as they are, and a
+		// Wikidata game loses the BGG id Wikidata gave it but keeps its Wikidata details.
+		...ids
+			.filter((id) => !found.has(id))
+			.flatMap((id) => [
+				stmt(db, "UPDATE games SET fetched_at = ?1 WHERE bgg_id = ?2 AND source != 'wikidata'", now, id),
+				stmt(db, "UPDATE games SET bgg_id = NULL WHERE bgg_id = ?1 AND source = 'wikidata'", id)
+			]),
 		bumpCatalogForUser(db, userId)
 	]);
 	return { updated: ids.length, remaining: await pendingDetails(db, userId) };

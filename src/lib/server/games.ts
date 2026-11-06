@@ -17,7 +17,8 @@ ON CONFLICT(bgg_id) DO UPDATE SET
 	min_playtime = excluded.min_playtime, max_playtime = excluded.max_playtime,
 	weight = excluded.weight, users_rated = excluded.users_rated,
 	mechanics = excluded.mechanics, categories = excluded.categories, base_bgg_ids = excluded.base_bgg_ids,
-	is_expansion = excluded.is_expansion, fetched_at = excluded.fetched_at`;
+	is_expansion = excluded.is_expansion, fetched_at = excluded.fetched_at,
+	source = 'bgg', is_manual = 0`;
 
 export function upsertThingStatement(db: DB, t: BggThing, now: number): D1PreparedStatement {
 	return stmt(
@@ -87,6 +88,8 @@ export type SearchResult = {
 	year: number | null;
 	thumbUrl: string | null;
 	isExpansion: boolean;
+	minPlayers: number | null;
+	maxPlayers: number | null;
 	owned: boolean;
 	wanted: boolean;
 };
@@ -113,9 +116,9 @@ export async function searchBgg(db: DB, client: BggClient, query: string, userId
 		]);
 	}
 
-	const rows = await all<{ id: number; bgg_id: number; name: string; year: number | null; thumb_url: string | null; is_expansion: number; users_rated: number | null; owned: number; wanted: number }>(
+	const rows = await all<{ id: number; bgg_id: number; name: string; year: number | null; thumb_url: string | null; is_expansion: number; users_rated: number | null; min_players: number | null; max_players: number | null; owned: number; wanted: number }>(
 		db,
-		`SELECT g.id, g.bgg_id, g.name, g.year, g.thumb_url, g.is_expansion, g.users_rated,
+		`SELECT g.id, g.bgg_id, g.name, g.year, g.thumb_url, g.is_expansion, g.users_rated, g.min_players, g.max_players,
 			EXISTS (SELECT 1 FROM copies c WHERE c.game_id = g.id AND c.user_id = ?${ids.length + 1}) AS owned,
 			EXISTS (SELECT 1 FROM wishlist w WHERE w.game_id = g.id AND w.user_id = ?${ids.length + 1}) AS wanted
 		 FROM games g WHERE g.bgg_id IN (${placeholders})`,
@@ -132,6 +135,8 @@ export async function searchBgg(db: DB, client: BggClient, query: string, userId
 			year: r.year,
 			thumbUrl: r.thumb_url,
 			isExpansion: r.is_expansion === 1,
+			minPlayers: r.min_players,
+			maxPlayers: r.max_players,
 			owned: r.owned === 1,
 			wanted: r.wanted === 1
 		}));
@@ -151,14 +156,18 @@ export async function gameVisibleInGroup(db: DB, groupId: string, gameId: number
 }
 
 /**
- * Whether this person may put a game on their shelf or wishlist from this group. BGG games come
- * from public search, so any id is fine. A hand-entered game must be their own, or one the group
+ * Whether this person may put a game on their shelf or wishlist from this group. BGG and Wikidata
+ * games come from public search, so any id is fine. A hand-entered game must be their own, or one the group
  * can already see: otherwise guessing ids would reveal other groups' hand-entered titles.
  */
 export async function gameUsableInGroup(db: DB, groupId: string, userId: string, gameId: number): Promise<boolean> {
-	const game = await one<{ bgg_id: number | null; created_by: string | null }>(db, 'SELECT bgg_id, created_by FROM games WHERE id = ?1', gameId);
+	const game = await one<{ source: string; is_manual: number; created_by: string | null }>(
+		db,
+		'SELECT source, is_manual, created_by FROM games WHERE id = ?1',
+		gameId
+	);
 	if (!game) return false;
-	if (game.bgg_id != null || game.created_by === userId) return true;
+	if ((game.source !== 'manual' && game.is_manual !== 1) || game.created_by === userId) return true;
 	return gameVisibleInGroup(db, groupId, gameId);
 }
 
@@ -235,8 +244,8 @@ export function parseManualGame(form: FormData): ManualParse {
 export async function addManualGame(db: DB, userId: string, input: ManualGameInput, now: number): Promise<number> {
 	const row = await one<{ id: number }>(
 		db,
-		`INSERT INTO games (name, search_text, min_players, max_players, min_playtime, max_playtime, image_url, thumb_url, is_manual, created_by, fetched_at)
-		 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, 1, ?8, ?9) RETURNING id`,
+		`INSERT INTO games (name, search_text, min_players, max_players, min_playtime, max_playtime, image_url, thumb_url, is_manual, source, created_by, fetched_at)
+		 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, 1, 'manual', ?8, ?9) RETURNING id`,
 		input.name,
 		buildSearchText(input.name),
 		input.minPlayers,

@@ -10,6 +10,8 @@ export const LIMITS = {
 	linkFail: { kind: 'link_fail', max: 10, windowMs: 60 * 60_000 },
 	adminFail: { kind: 'admin_fail', max: 5, windowMs: 15 * 60_000 },
 	bggSearch: { kind: 'bgg_search', max: 30, windowMs: 60_000 },
+	wikidataSearch: { kind: 'wikidata_search', max: 30, windowMs: 60_000 },
+	listMatch: { kind: 'list_match', max: 40, windowMs: 10 * 60_000 }, // a 200-line list is 20 calls
 	bggImport: { kind: 'bgg_import', max: 20, windowMs: 10 * 60_000 } // one lookup can poll up to 12 times
 } satisfies Record<string, Limit>;
 

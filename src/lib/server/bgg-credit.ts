@@ -5,7 +5,7 @@ import { one, type DB } from './db.ts';
 import type { BggMode } from './instance.ts';
 
 export async function holdsBggData(db: DB): Promise<boolean> {
-	return (await one(db, 'SELECT 1 AS x FROM games WHERE bgg_id IS NOT NULL LIMIT 1')) != null;
+	return (await one(db, "SELECT 1 AS x FROM games WHERE source = 'bgg' AND bgg_id IS NOT NULL AND is_manual = 0 LIMIT 1")) != null;
 }
 
 let cachedHolds: boolean | null = null;
