@@ -41,3 +41,6 @@ Thumbs.db
 /.vercel
 /.netlify
 /data
+
+# Agent worktrees (Claude Code)
+.claude/worktrees/
