@@ -659,7 +659,7 @@ URL params: `n`, `t`, `w`, `present` (comma-separated user ids), `seen` (ids alr
 
 Mutations on pages are SvelteKit form actions. They work without client JavaScript, and SvelteKit's origin check covers CSRF for form posts. The JSON endpoints are reached only with the `SameSite=Lax` session cookie, which browsers don't send on cross-site POSTs.
 
-The Wanted view's query (`wantedGames` in `src/lib/server/wishlist.ts`). A hand-entered game can only be wished for when the group can already see it, so guessing ids can't reveal another group's titles; BGG games can be wished for from search. A person who owns a game isn't listed among its wishers on the game page.
+The Wanted view's query (`wantedGames` in `src/lib/server/wishlist.ts`). Adding a copy and adding a wish share one rule, `gameUsableInGroup` in `games.ts`: any BGG game, the person's own hand-entered games, or a hand-entered game the group can already see. Otherwise guessing ids would reveal other groups' hand-entered titles. A person who owns a game isn't listed among its wishers on the game page.
 
 ```sql
 SELECT g.id, g.name, g.thumb_url, json_group_array(w.user_id) AS wanted_by

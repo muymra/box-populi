@@ -1,7 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { requireRole } from '#lib/server/authz.ts';
 import { one } from '#lib/server/db.ts';
-import { addCopy, addManualGame, parseManualGame } from '#lib/server/games.ts';
+import { addCopy, addManualGame, gameUsableInGroup, parseManualGame } from '#lib/server/games.ts';
 import { pendingDetails } from '#lib/server/importer.ts';
 import { addWish, removeWish } from '#lib/server/wishlist.ts';
 import { getDb } from '#lib/server/platform.ts';
@@ -21,7 +21,13 @@ export const actions: Actions = {
 		const db = getDb();
 		await requireRole(event, db, event.params.groupId, 'member');
 		const gameId = Number((await event.request.formData()).get('gameId'));
-		if (!Number.isInteger(gameId) || gameId <= 0 || !(await addCopy(db, event.locals.user!.id, gameId, Date.now()))) {
+		const userId = event.locals.user!.id;
+		if (
+			!Number.isInteger(gameId) ||
+			gameId <= 0 ||
+			!(await gameUsableInGroup(db, event.params.groupId, userId, gameId)) ||
+			!(await addCopy(db, userId, gameId, Date.now()))
+		) {
 			return fail(400, { addError: 'That game couldn’t be added. Search again and retry.' });
 		}
 		return { added: gameId };

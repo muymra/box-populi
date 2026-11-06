@@ -1,6 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { requireRead, requireRole } from '#lib/server/authz.ts';
-import { addCopy, removeCopy } from '#lib/server/games.ts';
+import { addCopy, gameUsableInGroup, removeCopy } from '#lib/server/games.ts';
 import { addLink, canDeleteLink, deleteLink, parseLink } from '#lib/server/links.ts';
 import { addWish, removeWish } from '#lib/server/wishlist.ts';
 import { linkHost } from '#lib/link-kinds.ts';
@@ -179,7 +179,11 @@ export const actions: Actions = {
 	add: async (event) => {
 		const db = getDb();
 		await requireRole(event, db, event.params.groupId, 'member');
-		if (!(await addCopy(db, event.locals.user!.id, gameIdParam(event.params.gameId), Date.now()))) error(404, 'Game not found');
+		const gameId = gameIdParam(event.params.gameId);
+		const userId = event.locals.user!.id;
+		if (!(await gameUsableInGroup(db, event.params.groupId, userId, gameId)) || !(await addCopy(db, userId, gameId, Date.now()))) {
+			error(404, 'Game not found');
+		}
 		return { copyAdded: true };
 	},
 

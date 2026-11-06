@@ -4,7 +4,7 @@ import { all, one, run } from './db.ts';
 import { FakeBggClient } from './bgg/fake.ts';
 import { LiveBggClient, userAgent, BggAuthError } from './bgg/client.ts';
 import { BggBusyError, type BggSearchHit } from './bgg/types.ts';
-import { addCopy, addManualGame, parseManualGame, rankHits, removeCopy, searchBgg } from './games.ts';
+import { addCopy, addManualGame, gameUsableInGroup, parseManualGame, rankHits, removeCopy, searchBgg } from './games.ts';
 import { loadCatalog } from './catalog.ts';
 
 let db: ReturnType<typeof createTestDb>;
@@ -155,5 +155,25 @@ describe('LiveBggClient', () => {
 		expect(busy.retryAfterMs).toBe(90_000);
 		await run(db, 'UPDATE bgg_pace SET next_at = 0');
 		await expect(live.search('y')).rejects.toBeInstanceOf(BggAuthError);
+	});
+});
+
+describe('gameUsableInGroup', () => {
+	it('allows BGG games and your own entries, and hides other groups’ hand-entered games', async () => {
+		await run(db, `INSERT INTO users (id, name, created_at) VALUES ('bo', 'Bo', 0), ('out', 'Out', 0)`);
+		await run(db, `INSERT INTO groups (id, name, code, created_at) VALUES ('g2', 'H', 'BBBBB', 0)`);
+		await run(db, `INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES ('g1', 'bo', 'member', 1, 0), ('g2', 'out', 'owner', 0, 0)`);
+		await run(
+			db,
+			`INSERT INTO games (id, bgg_id, name, search_text, is_manual, created_by) VALUES
+			 (1, 101, 'From BGG', 'from bgg', 0, NULL), (2, NULL, 'Their Homebrew', 'their homebrew', 1, 'out'), (3, NULL, 'Ada Homebrew', 'ada homebrew', 1, 'ada')`
+		);
+		await run(db, `INSERT INTO copies (user_id, game_id, added_at) VALUES ('out', 2, 0)`);
+		expect(await gameUsableInGroup(db, 'g1', 'ada', 1)).toBe(true);
+		expect(await gameUsableInGroup(db, 'g1', 'ada', 2)).toBe(false);
+		expect(await gameUsableInGroup(db, 'g1', 'ada', 3)).toBe(true);
+		expect(await gameUsableInGroup(db, 'g1', 'ada', 404)).toBe(false);
+		await run(db, `INSERT INTO copies (user_id, game_id, added_at) VALUES ('bo', 2, 0)`);
+		expect(await gameUsableInGroup(db, 'g1', 'ada', 2)).toBe(true);
 	});
 });

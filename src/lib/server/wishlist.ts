@@ -1,16 +1,11 @@
 // Wishlists and the group's Wanted view (PRD "Wishlist and the Wanted view"). A wish belongs to the
 // person, so it shows in every group they're in, like their games.
-import { all, one, run, type DB } from './db.ts';
-import { gameVisibleInGroup } from './links.ts';
+import { all, run, type DB } from './db.ts';
+import { gameUsableInGroup } from './games.ts';
 
-/**
- * Adds a game to the person's wishlist. BGG games can be wanted from search; a hand-entered game
- * only when this group can already see it, so wishing can't reveal other groups' titles by id.
- */
+/** Adds a game to the person's wishlist, under the same rule as adding a copy (`gameUsableInGroup`). */
 export async function addWish(db: DB, groupId: string, userId: string, gameId: number, now: number): Promise<boolean> {
-	const game = await one<{ bgg_id: number | null }>(db, 'SELECT bgg_id FROM games WHERE id = ?1', gameId);
-	if (!game) return false;
-	if (game.bgg_id == null && !(await gameVisibleInGroup(db, groupId, gameId))) return false;
+	if (!(await gameUsableInGroup(db, groupId, userId, gameId))) return false;
 	await run(
 		db,
 		'INSERT INTO wishlist (user_id, game_id, added_at) VALUES (?1, ?2, ?3) ON CONFLICT(user_id, game_id) DO NOTHING',

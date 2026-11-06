@@ -2,6 +2,7 @@
 // Links belong to the group; the member who added one, a co-admin or the owner can delete it.
 import { all, one, run, type DB } from './db.ts';
 import { can } from './permissions.ts';
+import { gameVisibleInGroup } from './games.ts';
 import type { Role } from '#lib/catalog/types.ts';
 import { guessKind, LINK_KINDS, type LinkKind } from '#lib/link-kinds.ts';
 
@@ -40,19 +41,6 @@ export function parseLink(form: FormData): LinkParse {
 	const normalized = url.toString();
 	if (normalized.length > MAX_URL_LENGTH) return { ok: false, error: 'That address is too long.' };
 	return { ok: true, value: { kind, title: title || null, url: normalized } };
-}
-
-/** Same rule as the game page: the game is owned or wanted by someone in the group. */
-export async function gameVisibleInGroup(db: DB, groupId: string, gameId: number): Promise<boolean> {
-	const row = await one(
-		db,
-		`SELECT 1 AS x FROM games g WHERE g.id = ?2 AND (
-			EXISTS (SELECT 1 FROM copies c JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1 WHERE c.game_id = g.id)
-			OR EXISTS (SELECT 1 FROM wishlist w JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1 WHERE w.game_id = g.id))`,
-		groupId,
-		gameId
-	);
-	return row != null;
 }
 
 export type AddLinkResult = { ok: true; id: number } | { ok: false; error: string; status: 400 | 404 | 409 };

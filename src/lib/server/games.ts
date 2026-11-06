@@ -137,6 +137,31 @@ export async function searchBgg(db: DB, client: BggClient, query: string, userId
 		}));
 }
 
+/** Same rule as the game page: the game is owned or wanted by someone in the group. */
+export async function gameVisibleInGroup(db: DB, groupId: string, gameId: number): Promise<boolean> {
+	const row = await one(
+		db,
+		`SELECT 1 AS x FROM games g WHERE g.id = ?2 AND (
+			EXISTS (SELECT 1 FROM copies c JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1 WHERE c.game_id = g.id)
+			OR EXISTS (SELECT 1 FROM wishlist w JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1 WHERE w.game_id = g.id))`,
+		groupId,
+		gameId
+	);
+	return row != null;
+}
+
+/**
+ * Whether this person may put a game on their shelf or wishlist from this group. BGG games come
+ * from public search, so any id is fine. A hand-entered game must be their own, or one the group
+ * can already see: otherwise guessing ids would reveal other groups' hand-entered titles.
+ */
+export async function gameUsableInGroup(db: DB, groupId: string, userId: string, gameId: number): Promise<boolean> {
+	const game = await one<{ bgg_id: number | null; created_by: string | null }>(db, 'SELECT bgg_id, created_by FROM games WHERE id = ?1', gameId);
+	if (!game) return false;
+	if (game.bgg_id != null || game.created_by === userId) return true;
+	return gameVisibleInGroup(db, groupId, gameId);
+}
+
 export async function addCopy(db: DB, userId: string, gameId: number, now: number): Promise<boolean> {
 	const game = await one(db, 'SELECT 1 AS x FROM games WHERE id = ?1', gameId);
 	if (!game) return false;
