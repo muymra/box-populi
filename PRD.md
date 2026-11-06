@@ -89,7 +89,7 @@ If the weekend runs long, drop in this order. Each item can be added back later 
 4. Lending.
 5. Wishlist and the Wanted view, together.
 
-Never cut: import, the picker, the demo group, the phone layout, and the instance admin basics (suspend, delete, ban). The first four decide whether a group uses it and whether it works as a portfolio piece. A public instance without the last one leaves the hoster editing the database by hand when something goes wrong.
+Never cut: import, the picker, the demo group, the phone layout, and the instance admin basics (suspend and delete; there are no bans, D25). The first four decide whether a group uses it and whether it works as a portfolio piece. A public instance without the last one leaves the hoster editing the database by hand when something goes wrong.
 
 ### Stretch, in rough priority
 
@@ -104,7 +104,7 @@ Never cut: import, the picker, the demo group, the phone layout, and the instanc
 
 ### Not doing
 
-Ratings and reviews, a trading marketplace, chat, notifications, a native app, cross-group discovery, hosting rulebooks or images ourselves, and anything that needs payment. Rules content is linked, never copied. No hosted service: Carlo's instance serves his own circle and the demo, not the public. No links between instances, no one-click deploy button. Cloudflare is the only hosting target this weekend; others are on the stretch list (D29). No public API, ads, donations or sponsorship links: BGG's terms prohibit services that hand its data to other applications, and count any payment or ad as commercial use.
+Ratings and reviews, a trading marketplace, chat, notifications, a native app, cross-group discovery, hosting rulebooks or images ourselves, and anything that needs payment. Rules content is linked, never copied. No hosted service: Carlo's instance serves his own circle and the demo, not the public. No links between instances, no one-click deploy button. Cloudflare Pages is the main hosting target; Docker, Workers, Vercel and Netlify builds exist too (D32). No public API, ads, donations or sponsorship links: BGG's terms prohibit services that hand its data to other applications, and count any payment or ad as commercial use.
 
 ## Feature detail
 
@@ -140,6 +140,7 @@ Rules that follow from the table:
 - Removing a member doesn't block them from rejoining with the same code. To lock someone out, remove them and regenerate the code.
 - Transferring ownership asks the owner to pick a current member and confirm. The previous owner becomes a co-admin.
 - The owner can't leave or delete their account while other members remain. They transfer ownership first, or delete the group.
+- Leaving a group you're the only member of deletes it, with its code and links. The account page warns before it happens.
 - Deleting a group asks the owner to type the group name.
 - Role changes take effect on the next request. There is no activity log in the first version.
 
@@ -148,17 +149,25 @@ Rules that follow from the table:
 - The search box queries BGG by title after three characters. Results show cover, title and year, with the most-rated match first, so "Catan" puts the base game above its dozens of spin-offs.
 - Search also matches alternate titles BGG knows about, including Dutch edition names: "Kolonisten van Catan" finds Catan.
 - One tap adds a copy. Games already in the shared cache add instantly.
-- Manual entry covers BGG outages and obscure titles: name, player range, play time, optional image URL. Manual games have no mechanics, weight or best-at data, and the UI marks them as hand-entered.
+- Manual entry covers BGG outages and obscure titles: name, player range, play time, optional image URL. Manual games have no mechanics, themes or best-at data, and the UI marks them as hand-entered. A group can fill in the rest later (see "Correcting games").
 - Expansions are searchable and addable. They're hidden from the catalog by default and listed on their base game's page.
-- An instance can run without a BGG connection, for example while the hoster waits for BGG to approve their application. The add page then offers manual entry only and says why.
+- An instance can run without a BGG connection, for example while the hoster waits for BGG to approve their application. By default (`GAME_SOURCE=wikidata`) the add page then searches Wikidata for titles, years and player counts; with `GAME_SOURCE=manual` it offers manual entry only and says why.
 
 ### BGG collection import
 
 1. The member enters their BGG username. It's used for this import only and not stored.
 2. BGG sometimes needs a while to prepare a collection. The page shows "BGG is preparing your collection" and keeps checking for about a minute before offering a retry.
-3. The preview lists every owned game with checkboxes, all ticked, with games the member already has in Box Populi marked and unticked.
+3. The preview lists every owned game with checkboxes, all ticked. Games the member already has in Box Populi stay ticked but can't be changed, and the count says how many are already on their shelf.
 4. On confirm, copies are created at once and appear in the catalog by name and cover. A progress bar shows details (player counts, weight, mechanics) filling in, about 20 games per step.
 5. If the member closes the page mid-way, the next page they open shows "Finish loading game details" and resumes.
+
+### Pasting a list
+
+For moving a collection over from a spreadsheet or notes app. Members paste one title per line, optionally followed by players and minutes after a `|` or a tab, up to 200 lines. Each line is checked before anything is added: against their own shelf, then the group's games, then games the instance already knows from BGG or Wikidata, then Wikidata itself when the instance uses it. The preview shows what each line matched, offers Wikidata's closest title as a swap for anything unknown, and lets members untick lines. Unmatched lines become hand-entered games. Other groups' hand-entered games never match, so the list can't reveal them. If adding stops part-way, the list stays with what was added marked, and trying again sends only the rest.
+
+### Correcting games
+
+Hand-entered and Wikidata games can be filled in and corrected: name, image, players, play time and a 1 to 5 complexity. Anyone with the game on their shelf can do it, and so can a group's co-admins and owner. Corrections belong to the group that makes them (D35): other groups with the same game keep their own version, so nobody in one group can rename a game or change its picture for another. The game page lists what's still missing and who last edited it. Games from BGG are never editable; BGG's terms forbid changing its data.
 
 ### Catalog search and filters
 
@@ -176,11 +185,11 @@ Rules that follow from the table:
 
 Games with unknown data (hand-entered, from Wikidata, or details still loading) are never filtered out by a field they lack. When an active filter lets a game through only for that reason, it shows an "Info missing" flag. The one exception is the "best at N" toggle, which by definition only matches games that have BGG vote data.
 
-On a phone, the players and time controls sit above the results; everything else is behind a "More filters" sheet. Sorting: title, weight, play time, recently added, most owned. Each result shows cover, title, player range, time range, weight bucket, and up to three owner avatars with "+N" for the rest. Results render in pages of about 60 as you scroll, and the result count is always shown, so 1,500 games don't freeze a phone. Filter state lives in the URL, so a filtered view can be shared in chat. Filtering happens on the device once the catalog has loaded, so changing a filter is instant.
+On a phone, the players and time controls sit above the results; everything else is behind a "More filters" sheet. Sorting: title, weight, play time, recently added, most owned. Each result shows the box, its player range and play time, and its owners as coloured segments on the box's edge (up to four, then "+N"); the denser Spines view adds the weight bucket. DESIGN.md has the details. Results render in pages of about 60 as you scroll, and the result count is always shown, so 1,500 games don't freeze a phone. Filter state lives in the URL, so a filtered view can be shared in chat. Filtering happens on the device once the catalog has loaded, so changing a filter is instant.
 
 ### Game page
 
-Cover image, title and year, description (collapsed past a few lines), player range with BGG voters' best and recommended counts, play time range, BGG weight as BGG shows it (for example "2.31 / 5") with the light/medium/heavy label beside it, mechanics and themes as chips, owners with their notes and loan status, wishlisters, the links section, and a "View on BoardGameGeek" link. BGG's terms forbid modifying its data, so BGG fields always appear as BGG gives them.
+Cover image, title and year, description (collapsed past a few lines), player range with BGG voters' best and recommended counts, play time range, BGG weight as BGG shows it (for example "2.31 / 5") with the light/medium/heavy label beside it, mechanics and themes as chips, owners with their loan status, wishlisters, the links section, and a "View on BoardGameGeek" link. BGG's terms forbid modifying its data, so BGG fields always appear as BGG gives them.
 
 A base game's page lists the expansions owned in the group. An expansion's page links to its base game.
 
@@ -189,7 +198,7 @@ A base game's page lists the expansions owned in the group. An expansion's page 
 Inputs:
 
 - **Who's here.** Tick the members present, from a searchable list with recently active members on top. The selection starts from the last one used on this device for this group, or empty. Only the ticked members' copies are considered, plus copies lent to them. With nobody ticked, the whole catalog is used.
-- **Players.** Defaults to the number ticked; editable for guests without an account. Required when nobody is ticked.
+- **Players.** Defaults to the number ticked; editable for guests without an account. With nobody ticked it can stay "Any", which skips the player filter and the best/recommended weighting.
 - **Minutes available** and an optional **complexity ceiling.**
 
 The result is three games with who owns each. Games voted "best" at the player count are three times as likely to be drawn as games merely in range; "recommended" games twice as likely. "Re-roll" draws three new games, avoiding ones already shown until the candidates run out. The picker state lives in the URL.
@@ -210,14 +219,14 @@ The copy's owner can mark it lent to a group member (picked from a list) or to s
 
 ### Demo group
 
-On Carlo's instance, `/demo` shows a read-only group seeded from his BGG collection, with made-up member names. Visitors can browse the catalog, open game pages, and use the picker. Anything that would change data is hidden, and the server refuses it regardless. The landing page links to it with "See a demo group." Other instances can seed their own demo or skip it; the link appears only when a demo group exists.
+On Carlo's instance, `/demo` shows a read-only group of about 430 invented games and made-up members (`pnpm db:seed`; seeding from a real BGG collection isn't built). Visitors can browse the catalog, open game pages, and use the picker. Anything that would change data is hidden, and the server refuses it regardless. The landing page links to it with "See a demo group." Other instances can seed their own demo or skip it; the link appears only when a demo group exists.
 
 ### Self-hosting
 
 - The repository holds everything needed to run an instance: code, migrations, example config, and SELF_HOSTING.md.
 - A hoster needs a free Cloudflare account, and optionally their own BGG application for search and import. There's no sign-in provider to set up. No instance depends on Carlo's, and no secrets or ids from Carlo's deployment are in the repo.
 - BGG's terms make an instance commercial if it takes any payment or donation, shows ads, or supports a business or event such as a game store, café or convention, even a non-profit one. Those hosters need BGG's commercial license, or must run with BGG switched off.
-- Instance settings: name, contact address, admin key, whether anyone or only the hoster can create groups, and limits on groups per person and members per group.
+- Instance settings: name, contact address, admin key, whether anyone or only the hoster can create groups, limits on groups per person and members per group, BGG on or off, the game source while BGG is off (`GAME_SOURCE`), the default theme (`THEME`), whether search engines may index it (`SEARCH_ENGINES`), and demo mode (`INSTANCE_MODE`). A custom theme and logo are set on `/admin`. TECH.md's config table has the names.
 - Upgrading is pull, apply migrations, deploy. SELF_HOSTING.md has the commands.
 - The privacy page is generated from the instance settings, so it names the hoster's instance and contact, not Carlo's.
 
@@ -251,14 +260,14 @@ Hosters need to deal with abuse and keep the instance within its free tier witho
 - A catalog of 1,500 games loads in under two seconds on a phone over 4G, and filters without a visible delay after that.
 - BGG being slow or down never breaks browsing. Everything shown comes from the app's own database.
 - Empty states say what to do next, for example "No games yet. Import your BGG collection."
-- Every page credits BoardGameGeek in the footer with the "Powered by BGG" logo and says Box Populi isn't affiliated with BGG.
+- Whenever the instance shows BGG data (BGG on, or BGG games still in its cache), every page credits BoardGameGeek in the footer with the "Powered by BGG" logo and says Box Populi isn't affiliated with BGG (D30). An instance with BGG off and no BGG games shows no credit.
 - The app is gentle with BGG: requests are spaced at least two seconds apart across the instance, so a big import takes a few minutes rather than seconds, and the progress bar says so.
 
 ## Open questions
 
 1. Should a copy be visible to all of a user's groups, or chosen per group? Starting with all, and revisiting if someone wants a private collection in a work group.
 2. Should co-admins be able to remove other members' copies, for example to clear out a departed friend's games? Starting with no. Removing the member already hides their copies.
-3. The demo group shows Carlo's real collection under made-up names. Is that fine to have public? Assumed yes; a collection is already public on BGG.
+3. Settled: the demo group uses invented games and people, so nothing real is public.
 
 ## Success
 

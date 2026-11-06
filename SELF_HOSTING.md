@@ -26,7 +26,7 @@ This guide sets up an instance on your own Cloudflare account, which is the main
 ## What you need
 
 - A Cloudflare account (free plan is enough).
-- Optional: a BoardGameGeek account to register an application. Apply first, because approval can take a week or more. The instance runs without it, with manual game entry only.
+- Optional: a BoardGameGeek account to register an application. Apply first, because approval can take a week or more. The instance runs without it: members find games on Wikidata (titles, years, player counts) or type them in, and fill in the rest themselves.
 - Node 22.18 or newer (the setup scripts are TypeScript, which Node runs directly from 22.18), pnpm (`corepack enable pnpm`, or install it with your package manager), and git.
 
 ## 1. Apply for BGG access (optional, do it first)
@@ -107,7 +107,7 @@ pnpm exec wrangler d1 execute DB --remote --file seed/demo.sql
 
 For an instance that exists only to show the demo, also set `INSTANCE_MODE` to `demo` and `GROUP_CREATION` to `admins`.
 
-This seeds about 440 invented games, which needs no BGG token. Seeding from a real BGG collection (`--bgg-user <name>`) arrives with the live BGG client; that version contains BGG data, so `seed/demo.sql` is gitignored either way. The landing page links to `/demo` once it exists.
+This seeds about 440 invented games, which needs no BGG token. Seeding from a real BGG collection (`--bgg-user`) isn't built; it would contain BGG data, which is one reason `seed/demo.sql` is gitignored. The landing page links to `/demo` once it exists.
 
 ## Cloudflare Workers
 
@@ -167,6 +167,8 @@ Turso doesn't enforce foreign keys over HTTP, so the app deletes a group's or a 
 
 ## Upgrading
 
+Cloudflare Pages:
+
 ```sh
 git pull
 pnpm install
@@ -174,6 +176,12 @@ pnpm exec wrangler d1 migrations apply DB --remote
 pnpm build
 pnpm exec wrangler pages deploy
 ```
+
+Apply migrations before deploying: new code can read columns an old database doesn't have.
+
+- **Cloudflare Workers:** the same, with `pnpm exec wrangler deploy` as the last step.
+- **Docker:** `git pull && docker compose up -d --build`. The app applies new migrations when it starts.
+- **Vercel or Netlify:** push the new code to the repository the host builds from (or run its deploy command). The app applies new migrations to Turso when it starts.
 
 If a new version adds a required setting, the site names it on every page until you set it; the new keys are in `wrangler.example.jsonc`.
 
