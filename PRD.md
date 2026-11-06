@@ -98,6 +98,7 @@ Never cut: import, the picker, the demo group, the phone layout, and the instanc
 - **Passkeys** as an optional second way to sign in on a new device, for people who'd rather not keep a link.
 - **CSV export** of the group catalog: game name, year, BGG link and owners. No BGG descriptions or statistics, so the export can't work as a copy of BGG's data.
 - **Installable PWA** so it sits on a phone home screen.
+- **Public-sources mode** for hosters who don't want to apply to BGG: titles, years and player counts from Wikidata, members fill in the rest by hand. The same plan as TECH.md "If BGG declines the application", offered as a setting (D27). About a day.
 
 ### Not doing
 

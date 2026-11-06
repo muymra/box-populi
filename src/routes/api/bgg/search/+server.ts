@@ -1,7 +1,7 @@
 // BGG title search for the add page (TECH.md "Search"). For this app's own pages only: needs a
 // session, sends no CORS headers, and is rate-limited per person.
-import { getBggClient, BggAuthError } from '#lib/server/bgg/client.ts';
-import { BggBusyError } from '#lib/server/bgg/types.ts';
+import { getBggClient } from '#lib/server/bgg/client.ts';
+import { bggFailure } from '#lib/server/bgg/http.ts';
 import { searchBgg } from '#lib/server/games.ts';
 import { getDb } from '#lib/server/platform.ts';
 import { isLimited, LIMITS, recordEvent } from '#lib/server/ratelimit.ts';
@@ -28,12 +28,6 @@ export const GET: RequestHandler = async (event) => {
 	try {
 		return Response.json({ results: await searchBgg(db, client, query, user.id, now) }, { headers: { 'cache-control': 'no-store' } });
 	} catch (e) {
-		if (e instanceof BggBusyError) return error(503, 'BoardGameGeek is busy. Try again in a moment, or add the game by hand.', { retryAfterMs: e.retryAfterMs });
-		if (e instanceof BggAuthError) {
-			console.error(e.message);
-			return error(502, 'This site can’t reach BoardGameGeek right now. Add the game by hand, and let the host know.');
-		}
-		console.error('BGG search failed', e);
-		return error(502, 'BoardGameGeek isn’t responding. Try again, or add the game by hand.');
+		return bggFailure(e);
 	}
 };

@@ -3,6 +3,8 @@
 	import Search from '@lucide/svelte/icons/search';
 	import Check from '@lucide/svelte/icons/check';
 	import BoxFront from '#lib/components/BoxFront.svelte';
+	import ImportPanel from '#lib/components/ImportPanel.svelte';
+	import HydrateProgress from '#lib/components/HydrateProgress.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -60,7 +62,18 @@
 <section class="add">
 	<p class="muted">Games you add are yours: they show up in every group you're in. <a href={myGamesHref}>Your games ({data.myGameCount + added})</a></p>
 
+	{#if bggOn && data.pending > 0}
+		<HydrateProgress pending={data.pending} shelfHref="/g/{data.group.id}" />
+	{/if}
+
 	{#if bggOn}
+		<section class="panel" aria-labelledby="import-h">
+			<h2 id="import-h">Import your BoardGameGeek collection</h2>
+			<p class="muted">The quickest way to stock the shelf: every game you own on BGG, in one go.</p>
+			<ImportPanel shelfHref="/g/{data.group.id}" />
+		</section>
+
+		<h2 class="search-h" id="search-h">Or add one game</h2>
 		<div class="strip">
 			<label class="search">
 				<Search size={18} aria-hidden="true" />
@@ -169,6 +182,13 @@
 	}
 	.search input::placeholder {
 		color: var(--label-ink-2);
+	}
+	.add > .panel,
+	.add > :global(.hydrate) {
+		margin: var(--s-4) 0;
+	}
+	.search-h {
+		margin-top: var(--s-6);
 	}
 	.status {
 		min-height: 1.5rem;

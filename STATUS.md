@@ -2,7 +2,7 @@
 
 Last updated 2026-11-06 (Friday night). Redesigned as the cube shelf (DECISIONS D26, DESIGN.md). Runs locally: create a group, join with a code, personal links across devices, the account page, adding games (BGG search on test data, or by hand), removing your copy, and the catalog, game pages and picker. 106 tests pass. Nothing is deployed, and no Cloudflare or BGG credentials exist yet.
 
-**Next up:** BGG collection import with the hydrate loop (Sunday 11), then links (13), then group settings and roles (14). The live BGG client is written and tested against a fake server, but has never talked to BGG: that waits for the token.
+**Next up:** rules and tutorial links (Sunday 13), then group settings and roles (14), then the admin page (15). The live BGG client is written and tested against a fake server, but has never talked to BGG: that waits for the token.
 
 Agents: tick items as they're done, add a line to the session log at the bottom, and move assumptions to "Verified" with a date and source when you confirm them.
 
@@ -46,7 +46,7 @@ Checkpoint: the app answers "who has X" and "what fits 5 players in under an hou
 
 ## Sunday 2026-11-08
 
-11. [ ] Import, confirm, and the hydrate loop with progress and resume. TECH: "Import and hydrate."
+11. [x] Import, confirm, and the hydrate loop with progress and resume (`importer.ts`, `/api/bgg/import`, `/import/confirm`, `/hydrate`, `ImportPanel`, `HydrateProgress`, the "still loading" note on group pages). TECH: "Import and hydrate."
 12. [x] Picker with "who's here." TECH: "Picker."
 13. [ ] Links, with URL validation, and generated links.
 14. [ ] Group settings: members list, roles, rename, code, remove, transfer, delete.
@@ -112,3 +112,4 @@ From memory when the docs were written. Check each before relying on it, then mo
 - 2026-11-06 (night): Add-game page. Live BGG client with mocked-fetch tests, `searchBgg` (one search plus one `thing` call for uncached top hits; every hit stored so it can be added), add and remove copies, manual entry, "Add games" in group nav for members of editable groups. 106 tests; checked end to end on the dev server including the demo 403 and a rejected `javascript:` image URL. Game ids for new games now land above the demo range (9,000,001+); harmless, since the demo seed deletes by `created_by`.
 - 2026-11-06 (night): Redesign through the Impeccable flow. Init wrote PRODUCT.md. A direction round on the decision page: Carlo chose the cube shelf over the rolled rulebook direction. The build was code-led and the design hook ran throughout. The independent finish reviewer returned fix, then fix, then ship after two batches: Spines view, a single group top bar, player colours kept apart from marigold, low-chroma mostly-light box fronts, a readable +N for extra owners, and matching picker limits. Direction contract in `.impeccable/surfaces/`; DESIGN.md and `.impeccable/design.json` written by the documenter. Not captured headlessly, checked from source only: the picker's drawn state and Spines past four owners. Phone widths were captured through a 390px same-origin iframe, because headless Chrome won't render narrower than about 500px.
 - 2026-11-06 (night): Fixed design drift the documenter reported. Focus rings use the ink colour, not player blue. "Best at N" is a neutral tag and the cube mark's second box is kraft, so marigold only means "chosen". Boxes use `--r-cube` (2px). Every font size and corner radius now sits on the DESIGN.md scale, and `impeccable detect` reports 0 findings. DESIGN.md and design.json are updated to match.
+- 2026-11-06 (night): BGG collection import. Preview stores nothing; confirm re-fetches the collection so names never come from the browser; details load 20 games per call through the pacer and resume from any group page ("Details are still loading … Finish loading them"). 113 tests. Checked end to end on the dev server in fake mode (preview, 202 pending, unknown user, bad username, add, hydrate, note, catalog) and visually at phone and desktop width.

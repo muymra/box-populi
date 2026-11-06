@@ -540,9 +540,9 @@ At most two BGG calls per search, and one when every hit is cached. With instanc
 
 ### Import and hydrate
 
-`POST /api/bgg/import` with `{ username }` (rate-limited to 5 per 10 minutes per user):
+`POST /api/bgg/import` with `{ username }` (rate-limited to 20 calls per 10 minutes per person, since one lookup can poll up to 12 times):
 
-1. Call `collection?username=<u>&own=1`. On 202, retry up to 3 times within the request, each retry going through the pacer. Still pending: return `{ status: 'pending' }`; the client posts again every 5 seconds for about a minute, then shows a retry button.
+1. Call `collection?username=<u>&own=1` once. On 202, return `{ status: 'pending' }` with HTTP 202; the page asks again every 5 seconds, up to 12 times (one paced BGG request each), then shows a retry button.
 2. Ready: return the preview list with `alreadyOwned` flags. Store nothing. The username is not stored.
 
 `POST /api/bgg/import/confirm` with `{ username, bggIds }`:
@@ -557,7 +557,7 @@ Hydrate is idempotent and resumable. Any page that sees the caller owns stubs sh
 
 ### If BGG declines the application
 
-Not built; a plan, in order.
+Not built; a plan, in order. Steps 3 to 5 are also the planned public-sources mode (D27): a hoster who doesn't want to apply to BGG sets `GAME_SOURCE=wikidata` with `BGG_MODE=off` and gets the same thing. It's in the PRD stretch list, so it waits until the Sunday items are done or cut.
 
 1. **Ask why and reapply.** BGG decides case by case. Fix whatever it objects to (volume, images, the open-source distribution) and resubmit. Development continues on `BGG_MODE=fake` meanwhile.
 2. **Ruled out:** scraping BGG pages, BGG's unofficial JSON endpoints, borrowing another application's token, or importing BGG's collection CSV exports to get the same data. Each works around BGG's decision and puts Carlo's BGG account at risk. The CSV route is possible only if BGG says yes to it in writing.

@@ -42,6 +42,11 @@
 	{/if}
 </header>
 
+{#if data.pendingDetails > 0 && !current.startsWith(`${base}/add`)}
+	<p class="note">
+		Details are still loading for <span class="num">{data.pendingDetails}</span> of your games. <a href="{base}/add">Finish loading them</a>
+	</p>
+{/if}
 {#if data.group.isDemo}
 	<p class="note">Demo shelf: invented games and people, read-only.</p>
 {:else if data.group.suspended}

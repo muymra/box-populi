@@ -9,7 +9,8 @@ export const LIMITS = {
 	groupCreate: { kind: 'group_create', max: 5, windowMs: 24 * 60 * 60_000 },
 	linkFail: { kind: 'link_fail', max: 10, windowMs: 60 * 60_000 },
 	adminFail: { kind: 'admin_fail', max: 5, windowMs: 15 * 60_000 },
-	bggSearch: { kind: 'bgg_search', max: 30, windowMs: 60_000 }
+	bggSearch: { kind: 'bgg_search', max: 30, windowMs: 60_000 },
+	bggImport: { kind: 'bgg_import', max: 20, windowMs: 10 * 60_000 } // one lookup can poll up to 12 times
 } satisfies Record<string, Limit>;
 
 export const ipSubject = (ip: string) => `ip:${ip}`;

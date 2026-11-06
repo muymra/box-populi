@@ -2,6 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import { requireRole } from '#lib/server/authz.ts';
 import { one } from '#lib/server/db.ts';
 import { addCopy, addManualGame, parseManualGame } from '#lib/server/games.ts';
+import { pendingDetails } from '#lib/server/importer.ts';
 import { getDb } from '#lib/server/platform.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -10,7 +11,8 @@ export const load: PageServerLoad = async (event) => {
 	await requireRole(event, db, event.params.groupId, 'member');
 	const user = event.locals.user!;
 	const mine = await one<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM copies WHERE user_id = ?1', user.id);
-	return { bggMode: event.locals.config.bggMode, myGameCount: mine?.n ?? 0, userId: user.id };
+	const pending = event.locals.config.bggMode === 'off' ? 0 : await pendingDetails(db, user.id);
+	return { bggMode: event.locals.config.bggMode, myGameCount: mine?.n ?? 0, userId: user.id, pending };
 };
 
 export const actions: Actions = {

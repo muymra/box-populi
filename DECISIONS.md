@@ -147,3 +147,10 @@ Replaces Google sign-in (D05) and email-based instance admins (D21), and narrows
 
 Chosen on the Impeccable decision page over the rolled rulebook direction and the category standard. The catalog is the group's cube shelf: games as boxes in square cubes, owner colours along each cube's front edge, a dark label strip for filters, marigold only for active filters and selection. Archivo (self-hosted through `@fontsource-variable/archivo`) and Lucide icons (`@lucide/svelte`) are the two dependencies it adds. The direction contract is in `.impeccable/surfaces/`; DESIGN.md records the built system.
 **Why:** Carlo found the first pages utilitarian; the shelf is the product's lead claim made visible.
+
+## D27. Public-sources mode is a hoster option, built later (2026-11-06)
+
+The Wikidata fallback planned for a BGG refusal (TECH.md "If BGG declines the application", steps 3 to 5) becomes a setting any hoster can pick, `GAME_SOURCE=wikidata` with `BGG_MODE=off`, so running an instance doesn't require a BGG application. It goes on the PRD stretch list, not the weekend.
+**Why:** Carlo asked for it: applying to BGG is a hassle some hosters will skip, and today they get manual entry only.
+**Trade-offs accepted:** Wikidata covers about 4,800 games with BGG ids and has no weight, no best-at counts and few box images, so those groups fill in more by hand.
+**Revisit if:** BGG declines Carlo's application, which moves it into the weekend's scope.
