@@ -86,6 +86,8 @@ From memory when the docs were written. Check each before relying on it, then mo
 
 | Fact | Checked | Source |
 |---|---|---|
+| Wikidata search works on the live instance (after the fetch fix) | 2026-11-06 | Carlo, on his private instance |
+| Group themes, and "Play tonight" setup links, work on the live instance | 2026-11-06 | Carlo, on his private instance |
 | A deployed Pages project reads `vars` and the D1 binding from `wrangler.jsonc` | 2026-11-06 | Both production instances run on them |
 | `wrangler d1 export` works for backups, also by binding name (`DB`) | 2026-11-06 | Exported the demo database |
 | BGG requires a registered application and a bearer token for nearly all XML API use; approval may take a week or more | 2026-11-06 | BGG "Using the XML API" page, via search summary (the page blocks automated fetches) |
@@ -142,3 +144,4 @@ From memory when the docs were written. Check each before relying on it, then mo
 - 2026-11-06 (night): Picker setup in the address (PRD "Picker"): `here`, `n`, `t`, `w`, with a "Copy a link to this setup" button; a link wins over the device's remembered "who's here". Checked in headless Chrome on the demo: changing settings updated the address, and a link with Ada and Bram, 4 players, 90 minutes and medium restored exactly that over a device that remembered Ada and Chen. Copy notes dropped (D33): removed from the PRD and the game page; the column stays unused.
 - 2026-11-06 (night): Wikidata games now edit exactly like hand-entered ones, including name and image; a rename keeps the old titles and Wikidata aliases searchable. The game page lists what a non-BGG game is missing (players, play time, complexity, a box image) above "Fill in the details…". "Paste a list of games" became a collapsed option below the search on the add page. Checked with screenshots at phone width.
 - 2026-11-06 (night): Loading states (DESIGN.md "Loading"): a shared `.skeleton` shimmer; skeleton cubes on the shelf, a skeleton setup on "Play tonight", skeleton result rows plus a looking-around magnifier on the add page's search (old results dim while a refined search runs), skeleton preview rows while a pasted list is checked. Fixed the reduced-motion rule, which shortened looping animations to 0.01ms but kept them looping (a flicker); it now also stops them. Checked by freezing each page's requests in headless Chrome and screenshotting the four states.
+- 2026-11-06 (night): Carlo confirmed on his live instance: Wikidata search, group themes and shareable "Play tonight" setups. The custom theme hasn't been tried yet (`instance_settings` on his instance is still empty).
