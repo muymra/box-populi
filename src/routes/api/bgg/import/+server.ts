@@ -3,7 +3,7 @@ import { getBggClient } from '#lib/server/bgg/client.ts';
 import { bggFailure, jsonError, OFF_MESSAGE } from '#lib/server/bgg/http.ts';
 import { cleanBggUsername, fetchCollection, previewItems } from '#lib/server/importer.ts';
 import { getDb } from '#lib/server/platform.ts';
-import { isLimited, LIMITS, recordEvent } from '#lib/server/ratelimit.ts';
+import { LIMITS, take } from '#lib/server/ratelimit.ts';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async (event) => {
@@ -18,8 +18,7 @@ export const POST: RequestHandler = async (event) => {
 	if (!client) return jsonError(503, OFF_MESSAGE);
 
 	const now = Date.now();
-	if (await isLimited(db, user.id, LIMITS.bggImport, now)) return jsonError(429, 'Too many imports in a row. Wait ten minutes.');
-	await recordEvent(db, user.id, LIMITS.bggImport, now);
+	if (!(await take(db, now, [user.id, LIMITS.bggImport])).ok) return jsonError(429, 'Too many imports in a row. Wait ten minutes.');
 
 	try {
 		// One BGG request per call: while BGG prepares the collection, the page asks again every 5 seconds.

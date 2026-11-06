@@ -112,7 +112,7 @@ Ratings and reviews, a trading marketplace, chat, notifications, a native app, c
 
 - The code is five characters from an alphabet without lookalikes (no 0/O, 1/I/L), shown uppercase and matched case-insensitively. Example: `K7M4P`.
 - Join flow: open `/join/K7M4P` (or type the code), type a display name, land on the catalog. A device that's already in another group skips the name step.
-- The code is a shared secret, so failed join attempts are rate-limited per device and IP address.
+- The code is a shared secret, so failed join attempts are rate-limited per network address (an IPv6 /64 counts as one address) and across the whole instance.
 - The owner or a co-admin can regenerate the code, which invalidates the old one. Existing members are unaffected.
 
 ### Roles and permissions

@@ -27,10 +27,24 @@
 				<li>
 					<a href="/g/{g.id}">{g.name}</a>
 					<span class="muted">{ROLE_LABELS[g.role]} · {g.memberCount} {g.memberCount === 1 ? 'member' : 'members'}</span>
-					<form method="POST" action="?/leave">
-						<input type="hidden" name="groupId" value={g.id} />
-						<button class="link-button">Leave</button>
-					</form>
+					<details class="confirm">
+						<summary class="link-button">Leave<span class="visually-hidden"> {g.name}</span>…</summary>
+						<div class="confirm-body">
+							{#if g.memberCount === 1}
+								<p>You’re its only member, so leaving deletes {g.name}: its code stops working and its links are gone. Your games stay with you.</p>
+							{:else if g.role === 'owner'}
+								<p>You own {g.name}. Hand ownership to someone on its <a href="/g/{g.id}/group">Group tab</a> first, or delete the group there.</p>
+							{:else}
+								<p>Your games leave {g.name}’s shelf. You can rejoin with its code.</p>
+							{/if}
+							{#if g.memberCount === 1 || g.role !== 'owner'}
+								<form method="POST" action="?/leave">
+									<input type="hidden" name="groupId" value={g.id} />
+									<button class="btn small danger">{g.memberCount === 1 ? `Leave and delete ${g.name}` : `Leave ${g.name}`}</button>
+								</form>
+							{/if}
+						</div>
+					</details>
 				</li>
 			{/each}
 		</ul>
@@ -61,7 +75,10 @@
 	{#if data.newLink}
 		<PersonalLink link={data.newLink} />
 	{:else}
-		<p>Your personal link signs you in on another device. Lost it, or think someone else has it? Make a new one; the old one stops working straight away.</p>
+		<p>
+			Your personal link signs you in on another device. Lost it, or think someone else has it? Make a new one. The old one stops
+			working straight away, and every other device signed in as you is signed out; use the new link to sign them back in.
+		</p>
 		<form method="POST" action="?/newLink">
 			<button class="btn">Make a new personal link</button>
 		</form>
@@ -75,7 +92,10 @@
 	<p class="muted">Before signing out, make sure you have your personal link, or you'll need to rejoin your groups.</p>
 
 	<h2>Delete your account</h2>
-	<p class="muted">Removes your name, games, wishlist and group memberships. Links you added stay, credited to "former member."</p>
+	<p class="muted">
+		Removes your name, shelf, wishlist and group memberships, and the games you typed in unless another member has them too.
+		Links you added stay, credited to "former member."
+	</p>
 	<form method="POST" action="?/deleteAccount" class="inline">
 		<label class="visually-hidden" for="confirm">Type delete to confirm</label>
 		<input id="confirm" class="field" name="confirm" placeholder='Type "delete"' autocomplete="off" />
@@ -115,8 +135,40 @@
 	.groups li a {
 		font-weight: 700;
 	}
-	.groups li form {
+	.groups li .confirm {
 		margin-left: auto;
+	}
+	.groups li .confirm[open] {
+		flex-basis: 100%;
+		margin-left: 0;
+	}
+	.confirm summary {
+		display: inline-block;
+		min-height: 44px;
+		line-height: 44px;
+		font-weight: 650;
+		list-style: none;
+		cursor: pointer;
+	}
+	.confirm summary::-webkit-details-marker {
+		display: none;
+	}
+	.confirm-body {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--s-3);
+		max-width: 34rem;
+	}
+	.confirm-body p {
+		margin: 0;
+	}
+	.btn.danger {
+		border-color: var(--danger);
+		color: var(--danger);
+	}
+	.btn.danger:hover {
+		background: var(--danger-soft);
 	}
 	.row {
 		display: flex;

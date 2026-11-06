@@ -9,7 +9,7 @@
 <section class="narrow">
 	{#if data.state === 'limited'}
 		<h1>Too many tries</h1>
-		<p>This network tried too many codes that didn't match. Wait ten minutes, then try again.</p>
+		<p>{data.message}</p>
 	{:else if data.state === 'not_found'}
 		<h1>No group with that code</h1>
 		<p>Check the code with whoever shared it. Codes are five letters and numbers, like K7M4P.</p>

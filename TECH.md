@@ -282,11 +282,11 @@ CREATE INDEX game_links_lookup ON game_links(group_id, game_id);
 -- rate limiting: subject is a user id, or 'ip:<address>' before a person exists
 CREATE TABLE rate_events (
   subject  TEXT NOT NULL,
-  kind     TEXT NOT NULL,     -- 'join_fail', 'group_create', 'link_fail', 'bgg_search', 'bgg_import'
+  kind     TEXT NOT NULL,     -- the `kind` of each entry in LIMITS, src/lib/server/ratelimit.ts
   at       INTEGER NOT NULL
 );
 CREATE INDEX rate_events_lookup ON rate_events(subject, kind, at);
-CREATE INDEX rate_events_at ON rate_events(at);   -- every write deletes rows older than the longest window
+CREATE INDEX rate_events_at ON rate_events(at);   -- every take deletes rows older than the longest window
 
 -- instance-wide BGG request pacing (exactly one row)
 CREATE TABLE bgg_pace (
@@ -313,7 +313,7 @@ Notes on the choices:
 - **Bitmasks for the player poll.** "Best at 4" is `(best_mask >> 4) & 1`. Capped at 12 players so JavaScript's 32-bit `<<` stays safe.
 - **Roles live on `memberships`.** No owner column on `groups` to drift out of sync. The partial unique index makes a second owner impossible.
 - **Ownership transfer** is one `db.batch([...])`: demote the old owner to `admin`, then promote the new one. D1 batches run as a transaction. The order matters because the index rejects two owners at once.
-- **Account deletion guard.** The cascade would delete an owner's membership and leave the group ownerless. The delete action first finds groups where the user is owner and other members remain, and refuses with a message to transfer or delete them. Groups where the user is the only member are deleted with them.
+- **Account deletion guard.** The cascade would delete an owner's membership and leave the group ownerless. The delete action first finds groups where the user is owner and other members remain, and refuses with a message to transfer or delete them. Groups where the user is the only member are deleted with them, and so are the hand-entered games they created that nobody else has on a shelf or wishlist (with those games' links).
 - **Lending** lives in `src/lib/server/lending.ts`: the game page's `lend` and `returned` actions for the owner's own copy, and `returned` on `/me`. A borrower must be a member of the group the owner is lending from; anyone else is typed as a name (1 to 40 characters, the display-name rule). Every change bumps the owner's groups' `catalog_version`.
 - **Lending to a member** uses `lent_to_user_id`. That copy stays available in the group if the borrower is a member of it. `lent_to_text` means lent outside, which the availability filter hides.
 - **Games are never deleted.** They're a cache shared by every group. Stubs (`fetched_at IS NULL`) are valid rows that show name and cover.
@@ -381,7 +381,7 @@ No accounts (D25). A person is a display name; a device proves who it is with a 
 
 **Personal link.** `/key/<token>`, with 32 random bytes as the token and its SHA-256 in `personal_links`, one row per person.
 - `GET /key/<token>` shows "Sign in as Ada on this device?" and changes nothing, so chat apps that preview links can't sign anyone in. The button POSTs to the same URL, which creates a new session for that person and redirects to `/`.
-- The account page regenerates it, which replaces the row, so the old link stops working at once. The same page offers "Sign out everywhere", which deletes all the person's sessions and regenerates the link.
+- The account page regenerates it, which replaces the row, so the old link stops working at once, and deletes every session of the person's except the one on the device asking: whoever used a leaked link is signed out too. The same page offers "Sign out everywhere", which also ends this device's session.
 - Failed redemptions record `link_fail` rate events by IP: 10 per hour.
 - Nobody can create a link for someone else, admins included. Recovery after losing every device is rejoining as a new person (D25).
 
@@ -416,7 +416,7 @@ The group actions live in `src/lib/server/group-admin.ts`. Each reads the target
 
 `hooks.server.ts` touches `memberships.last_seen_at` on group routes when the stored value is more than an hour old. That's one write per member per hour at most.
 
-Instance limits apply in the actions: creating a group checks `GROUP_CREATION`, the caller's owned-group count against `MAX_GROUPS_PER_USER`, and 5 `group_create` events per IP per day. Joining checks `MAX_MEMBERS_PER_GROUP` and refuses suspended and demo groups.
+Instance limits apply in the actions: creating a group checks `GROUP_CREATION`, the caller's owned-group count against `MAX_GROUPS_PER_USER`, and 5 `group_create` tries per network address per day, given back when the form turns out invalid. Joining checks `MAX_MEMBERS_PER_GROUP` and refuses suspended and demo groups.
 
 ## Instance administration
 
@@ -445,7 +445,7 @@ The hoster operates the database and can read all of it with `wrangler d1 execut
 - Alphabet `ABCDEFGHJKMNPQRSTUVWXYZ23456789`: 31 characters with no 0, O, 1, I or L. Five characters give about 28.6 million codes.
 - Generate with `crypto.getRandomValues` and rejection sampling (discard bytes ≥ 248 so each character is uniform). Retry on a unique-constraint collision.
 - Normalize input with trim and uppercase. Lookalike characters never appear in a code, so no substitution is needed.
-- Joining records a `join_fail` rate event on a miss, keyed on the IP address (and the person, when signed in). Five misses in 10 minutes block further attempts until the window passes. Old `rate_events` rows for the subject and kind are deleted whenever a new one is written, since Pages has no cron.
+- Joining takes a try from two limits before looking the code up: 5 per 10 minutes per network address (`ipSubject`, which counts an IPv6 address by its /64) and 100 per hour across the instance (`join_fail_all`, subject `instance`). A right code gives both tries back, so only misses count. With 20 groups, the instance limit puts a lucky guess about 600 days away. The cost: someone sending 100 wrong codes an hour blocks joining for everyone until the hour passes (D34).
 - The demo group's code is `DEMO0`. The `0` keeps it out of the generator's alphabet, and the join action refuses demo groups anyway.
 
 ## BoardGameGeek integration
@@ -601,7 +601,7 @@ Built 2026-11-06 (D31), from steps 3 to 5 of the plan below. While BGG is off an
 - **Client.** `src/lib/server/wikidata.ts`. A search is two Wikidata API calls: `wbsearchentities` finds items by title or alias, then `wbgetentities` reads their claims. Only items with a BGG id (P2339) count as board games. From each it takes the English label (or any label), labels and aliases in ten common languages as alternate titles, min and max players (P1872, P1873, preferred rank first, deprecated never), and the year from P577 or P571. Requests carry the same User-Agent as BGG requests. There's no `maxlag`: Wikidata's lag is often over 5 seconds, which made it refuse every search. 429 and 5xx count as busy.
 - **Cache.** Results become `games` rows with `source = 'wikidata'` and `wikidata_id`, so adding, wishing and the catalog work as for any game. A row already known by its BGG id is linked, never overwritten. A refresh doesn't overwrite fields a member has edited (`edited_at`).
 - **Upgrade.** Wikidata games keep the BGG id Wikidata gives them. Once BGG is on, the hydrate step treats them like import stubs and fetches full BGG data, turning them into `source = 'bgg'`. If BGG doesn't know the id, the game stays Wikidata and loses the id.
-- **Editing.** `src/lib/server/game-edit.ts`: anyone with the game on their shelf, or a co-admin or owner of a group that shows it, can edit a hand-entered or Wikidata game the same way: name, image, players, play time and a 1 to 5 complexity stored in `weight` (labelled as set by the group). A renamed game keeps its earlier titles and Wikidata's aliases in `search_text`, so searches and pasted lists still find it. The game page lists what's missing (players, play time, complexity, a box image) above the edit link. BGG games are never editable. `edited_by` and `edited_at` show on the page; every group showing the game gets a new `catalog_version`.
+- **Editing.** `src/lib/server/game-edit.ts`: anyone with the game on their shelf, or a co-admin or owner of a group that shows it, can edit a hand-entered or Wikidata game the same way: name, image, players, play time and a 1 to 5 complexity stored in `weight` (labelled as set by the group). A renamed game keeps its earlier titles and Wikidata's aliases in `search_text`, so searches and pasted lists still find it. The game page lists what's missing (players, play time, complexity, a box image) above the edit link. BGG games are never editable. `edited_at` shows on the page with the editor's name to groups the editor is in, and "someone outside this group" elsewhere; every group showing the game gets a new `catalog_version`.
 - **Paste a list.** `src/lib/server/game-list.ts`. One title per line, optionally `| players | minutes` or tab-separated, up to 200 lines. Each line is checked against the person's shelf, then the group's games, then stored BGG and Wikidata games (exact title or alternate title), then Wikidata; whatever's left becomes a typed-in game, with Wikidata's closest title offered as a swap. Other groups' hand-entered games never match. The browser sends 10 lines per match call and 25 rows per add call: a Wikidata lookup is two subrequests, and Cloudflare's free plan allows 50 per request. D1 on the free plan also allows 50 queries per request (a `batch()` counts as one), so a match call looks up all its stored titles in one query and an add call is one check plus one batch. Stored titles match on whole `|`-separated segments of `search_text` with `instr()`, not `LIKE`: D1 refuses LIKE patterns over 50 bytes, which long titles reach. On the add page it's a collapsed option below the search, next to "Can't find it? Add it by hand".
 - **Credit and privacy.** The footer says "Game details from Wikidata" (CC0, so not required). The privacy page says searched titles go to Wikidata.
 
@@ -736,7 +736,7 @@ D1 binds parameters by position (`?1`, `?2` or `?`). Named parameters like `:gro
 - Link URLs: parse with `new URL()`, accept only `http:` and `https:`, store the normalized string, and render with `rel="noopener noreferrer nofollow"` and `target="_blank"`.
 - BGG descriptions are stored as plain text. Never use `{@html}` anywhere in the app.
 - `returnTo` is validated as described under "Identity and sessions."
-- Join attempts, group creation, personal-link redemption and admin sign-in are rate-limited by IP; BGG proxy calls per person. All through `rate_events`.
+- Join attempts, group creation, personal-link redemption and admin sign-in are rate-limited by network address; searches, list matches and BGG imports per person. All through `rate_events` and `take()`, which checks and records in one INSERT so parallel requests can't all slip under a limit. Limits that count failures take a try up front and give it back when the attempt was right.
 - Session tokens, personal-link tokens and the admin key are compared as SHA-256 digests; only digests are stored.
 - The personal-link GET never changes state, so link previews in chat apps can't sign anyone in.
 - The demo group is read-only on the server, not only in the UI.
@@ -755,7 +755,7 @@ Run with `pnpm test` (Vitest). Tests sit next to their code as `*.test.ts`.
 | `codes.ts` | Alphabet only, length 5. |
 | BGG pacer | SQL test: ten concurrent reservations get distinct slots at least `BGG_MIN_INTERVAL_MS` apart; a 503 pushes `next_at` out by 30 seconds. |
 | `instance.ts` | Defaults applied, required values reported by name, bad values (`GROUP_CREATION=maybe`, non-numeric limits, `BGG_MIN_INTERVAL_MS` under 2000) rejected. |
-| Identity | SQL tests: creating and joining make a person, membership, session and personal link; a regenerated link kills the old one; "sign out everywhere" deletes every session; expired sessions are refused and deleted. |
+| Identity | SQL tests: creating and joining make a person, membership, session and personal link; a regenerated link kills the old one and every other session; "sign out everywhere" deletes every session; expired sessions are refused and deleted; 40 parallel tries take no more than a limit's max. |
 | Instance admin | The admin cookie verifies and expires; a changed `ADMIN_KEY` invalidates it; a suspended group refuses changes but allows leaving; every action writes `admin_actions`. |
 | SQL | `src/lib/server/testing/d1.ts` applies `migrations/*.sql` to an in-memory `node:sqlite` database with `PRAGMA foreign_keys = ON` (D1 enforces foreign keys by default; plain SQLite doesn't) and gives it D1's `prepare().bind().first()/all()/run()` and `batch()` shape. Cover ownership transfer order, the second-owner rejection, the account deletion guard, the catalog payload query, and the Wanted query. |
 

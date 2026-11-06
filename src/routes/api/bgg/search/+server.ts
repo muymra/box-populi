@@ -4,7 +4,7 @@ import { getBggClient } from '#lib/server/bgg/client.ts';
 import { bggFailure } from '#lib/server/bgg/http.ts';
 import { searchBgg } from '#lib/server/games.ts';
 import { getDb } from '#lib/server/platform.ts';
-import { isLimited, LIMITS, recordEvent } from '#lib/server/ratelimit.ts';
+import { LIMITS, take } from '#lib/server/ratelimit.ts';
 import type { RequestHandler } from './$types';
 
 const error = (status: number, message: string, extra: Record<string, unknown> = {}) =>
@@ -22,8 +22,7 @@ export const GET: RequestHandler = async (event) => {
 	if (!client) return error(503, 'BoardGameGeek search isn’t set up on this site. Add the game by hand below.');
 
 	const now = Date.now();
-	if (await isLimited(db, user.id, LIMITS.bggSearch, now)) return error(429, 'That’s a lot of searches. Wait a minute.');
-	await recordEvent(db, user.id, LIMITS.bggSearch, now);
+	if (!(await take(db, now, [user.id, LIMITS.bggSearch])).ok) return error(429, 'That’s a lot of searches. Wait a minute.');
 
 	try {
 		return Response.json({ results: await searchBgg(db, client, query, user.id, now) }, { headers: { 'cache-control': 'no-store' } });

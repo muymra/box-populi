@@ -70,6 +70,24 @@ describe('schema', () => {
 		expect(await one<{ added_by: string | null }>(db, 'SELECT added_by FROM game_links')).toEqual({ added_by: null });
 	});
 
+	it('deletes the games a person typed in, unless someone else still has them', async () => {
+		const alone = await gameRow('Only Mine', { source: 'manual', is_manual: 1, created_by: 'cat' });
+		const shared = await gameRow('Bob Has It Too', { source: 'manual', is_manual: 1, created_by: 'cat' });
+		const wished = await gameRow('Dan Wants It', { source: 'manual', is_manual: 1, created_by: 'cat' });
+		const fromBgg = await gameRow('From BGG', { bgg_id: 90 });
+		for (const id of [alone, shared, wished, fromBgg]) await copyRow('cat', id);
+		await copyRow('bob', shared);
+		await run(db, `INSERT INTO wishlist (user_id, game_id, added_at) VALUES ('dan', ?1, 0)`, wished);
+		await run(db, `INSERT INTO game_links (group_id, game_id, kind, url, added_by, added_at) VALUES ('g1', ?1, 'rules', 'https://example.org', 'cat', 0)`, alone);
+		await db.batch(deletePersonStatements(db, 'cat'));
+		expect(await all(db, 'SELECT name, created_by FROM games ORDER BY name')).toEqual([
+			{ name: 'Bob Has It Too', created_by: null },
+			{ name: 'Dan Wants It', created_by: null },
+			{ name: 'From BGG', created_by: null }
+		]);
+		expect(await all(db, 'SELECT * FROM game_links')).toEqual([]);
+	});
+
 	it('rejects a copy lent both to a member and outside', async () => {
 		const gid = await gameRow('Both');
 		await expect(copyRow('ann', gid, { lent_to_user_id: 'bob', lent_to_text: 'Neighbour' })).rejects.toThrow();

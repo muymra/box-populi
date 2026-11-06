@@ -189,3 +189,10 @@ Built from D29. `BOX_TARGET` picks the adapter and the platform module at build 
 ## D33. No copy notes (2026-11-06)
 
 The PRD's optional note on a copy ("Dutch edition") is dropped; nothing set it and Carlo chose not to build it. The `copies.note` column stays, unused, because applied migrations aren't edited.
+
+## D34. An instance-wide ceiling on wrong join codes (2026-11-06)
+
+Besides 5 misses per network address per 10 minutes, a whole instance allows 100 wrong join codes an hour. A right code never counts.
+**Why:** the 2026-11-06 audit found that a per-address limit alone can be shared out: IPv6 hands one connection a /64 of addresses, and many machines can guess together. Five-character codes are 28.6 million; the ceiling keeps a lucky guess about 600 days away with 20 groups.
+**Trade-offs accepted:** anyone can block joining on an instance for an hour by sending 100 wrong codes. Joining is rare and the page says to try later; a guessed code would expose a group's names, collections and loans.
+**Revisit if:** a busy instance hits the ceiling with honest typos.

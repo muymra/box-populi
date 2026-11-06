@@ -3,7 +3,7 @@ import { getDb } from '#lib/server/platform.ts';
 import { normalizeCode } from '#lib/server/codes.ts';
 import { cleanDisplayName, newPersonStatements } from '#lib/server/identity.ts';
 import { findGroupByCode, isMember, joinGroup, joinRefusal } from '#lib/server/groups.ts';
-import { ipSubject, isLimited, LIMITS, recordEvent } from '#lib/server/ratelimit.ts';
+import { giveBack, INSTANCE, ipSubject, LIMITS, take, type Limit } from '#lib/server/ratelimit.ts';
 import { setNewLinkCookie, setSessionCookie } from '#lib/server/cookies.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -13,18 +13,28 @@ const REFUSALS = {
 	full: 'This group is full.'
 } as const;
 
+/**
+ * A try from this address and from the instance as a whole, given back when the code is right, so
+ * only wrong codes count. Parallel guesses can't slip past it (ratelimit.ts `take`).
+ */
+const tryJoin = (event: { getClientAddress(): string }, db: ReturnType<typeof getDb>, now: number) =>
+	take(db, now, [ipSubject(event.getClientAddress()), LIMITS.joinFail], [INSTANCE, LIMITS.joinFailInstance]);
+
+const LIMITED = (limit: Limit) =>
+	limit === LIMITS.joinFail
+		? 'This network tried too many codes that didn’t match. Wait ten minutes, then try again.'
+		: 'This site has seen too many codes that didn’t match in the last hour. Try again later.';
+
 export const load: PageServerLoad = async (event) => {
 	const db = getDb();
 	const now = Date.now();
-	const ip = ipSubject(event.getClientAddress());
-	if (await isLimited(db, ip, LIMITS.joinFail, now)) return { state: 'limited' as const };
+	const tried = await tryJoin(event, db, now);
+	if (!tried.ok) return { state: 'limited' as const, message: LIMITED(tried.limit) };
 
 	const code = normalizeCode(event.params.code);
 	const target = code ? await findGroupByCode(db, code) : null;
-	if (!target) {
-		await recordEvent(db, ip, LIMITS.joinFail, now);
-		return { state: 'not_found' as const };
-	}
+	if (!target) return { state: 'not_found' as const };
+	await giveBack(db, tried.taken);
 	if (event.locals.user && (await isMember(db, target.id, event.locals.user.id))) redirect(303, `/g/${target.id}`);
 
 	const refusal = joinRefusal(target, event.locals.config.maxMembersPerGroup);
@@ -42,16 +52,14 @@ export const actions: Actions = {
 		const { locals, url, cookies } = event;
 		const db = getDb();
 		const now = Date.now();
-		const ip = ipSubject(event.getClientAddress());
 		const displayNameRaw = String((await event.request.formData()).get('displayName') ?? '');
 
-		if (await isLimited(db, ip, LIMITS.joinFail, now)) return fail(429, { displayName: displayNameRaw, error: 'Too many tries. Wait ten minutes.' });
+		const tried = await tryJoin(event, db, now);
+		if (!tried.ok) return fail(429, { displayName: displayNameRaw, error: LIMITED(tried.limit) });
 		const code = normalizeCode(event.params.code);
 		const target = code ? await findGroupByCode(db, code) : null;
-		if (!target) {
-			await recordEvent(db, ip, LIMITS.joinFail, now);
-			return fail(404, { displayName: displayNameRaw, error: 'That code doesn’t match a group.' });
-		}
+		if (!target) return fail(404, { displayName: displayNameRaw, error: 'That code doesn’t match a group.' });
+		await giveBack(db, tried.taken);
 		const refusal = joinRefusal(target, locals.config.maxMembersPerGroup);
 		if (refusal) return fail(403, { displayName: displayNameRaw, error: REFUSALS[refusal] });
 

@@ -2,7 +2,7 @@
 // Same contract as /api/bgg/search: needs a session, no CORS headers, rate-limited per person.
 import { userAgent } from '#lib/server/bgg/client.ts';
 import { getDb } from '#lib/server/platform.ts';
-import { isLimited, LIMITS, recordEvent } from '#lib/server/ratelimit.ts';
+import { LIMITS, take } from '#lib/server/ratelimit.ts';
 import { getWikidataClient, searchWikidata, WikidataBusyError } from '#lib/server/wikidata.ts';
 import type { RequestHandler } from './$types';
 
@@ -21,8 +21,7 @@ export const GET: RequestHandler = async (event) => {
 
 	const db = getDb();
 	const now = Date.now();
-	if (await isLimited(db, user.id, LIMITS.wikidataSearch, now)) return error(429, 'That’s a lot of searches. Wait a minute.');
-	await recordEvent(db, user.id, LIMITS.wikidataSearch, now);
+	if (!(await take(db, now, [user.id, LIMITS.wikidataSearch])).ok) return error(429, 'That’s a lot of searches. Wait a minute.');
 
 	try {
 		return Response.json({ results: await searchWikidata(db, client, query, user.id, now) }, { headers: { 'cache-control': 'no-store' } });

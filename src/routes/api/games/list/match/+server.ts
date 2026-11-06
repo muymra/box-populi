@@ -3,7 +3,7 @@ import { requireRole } from '#lib/server/authz.ts';
 import { userAgent } from '#lib/server/bgg/client.ts';
 import { MATCH_CHUNK, matchLines } from '#lib/server/game-list.ts';
 import { getDb } from '#lib/server/platform.ts';
-import { isLimited, LIMITS, recordEvent } from '#lib/server/ratelimit.ts';
+import { LIMITS, take } from '#lib/server/ratelimit.ts';
 import { getWikidataClient, WikidataBusyError } from '#lib/server/wikidata.ts';
 import type { RequestHandler } from './$types';
 
@@ -19,8 +19,7 @@ export const POST: RequestHandler = async (event) => {
 	await requireRole(event, db, body.groupId, 'member');
 	const userId = event.locals.user.id;
 	const now = Date.now();
-	if (await isLimited(db, userId, LIMITS.listMatch, now)) return reply(429, { error: 'That’s a lot of lists. Wait ten minutes.' });
-	await recordEvent(db, userId, LIMITS.listMatch, now);
+	if (!(await take(db, now, [userId, LIMITS.listMatch])).ok) return reply(429, { error: 'That’s a lot of lists. Wait ten minutes.' });
 
 	try {
 		const rows = await matchLines(db, body.groupId, userId, lines, getWikidataClient(event.locals.config, userAgent(event.url.origin)), now);

@@ -130,14 +130,21 @@ export const load: PageServerLoad = async (event) => {
 		: null;
 	const mine = myCopy != null;
 	const canEditDetails = canEdit && actor != null && (await canEditGame(db, groupId, actor, gameId));
-	const editedBy = game.edited_by ? await one<{ name: string }>(db, 'SELECT name FROM users WHERE id = ?1', game.edited_by) : null;
+	// A game is one row shared by every group, so its editor may be in another group. Their name
+	// shows only to groups they're in (the privacy page: only your groups see your name).
+	const editedByName =
+		game.edited_at == null
+			? null
+			: game.edited_by == null
+				? 'a former member'
+				: (members.find((m) => m.id === game.edited_by)?.name ?? 'someone outside this group');
 	const wanted = me ? wishers.some((w) => w.id === me.id) : false;
 
 	return {
 		mine,
 		wanted,
 		canEditDetails,
-		editedByName: game.edited_at != null ? (editedBy?.name ?? 'a former member') : null,
+		editedByName,
 		myLoan: myCopy && (myCopy.lent_to_user_id || myCopy.lent_to_text) ? { toUserId: myCopy.lent_to_user_id, toText: myCopy.lent_to_text } : null,
 		// Borrowers to pick from: this group's other members, most recently active first.
 		lendTo: me ? members.filter((m) => m.id !== me.id).map((m) => ({ id: m.id, name: m.name })) : [],

@@ -16,12 +16,16 @@
 	<h2>What's stored</h2>
 	<ul>
 		<li>The display name you choose. Members of your groups see it, and you can change it.</li>
-		<li>The games you add, your notes on them, what you've lent or borrowed, your wishlist and the groups you're in.</li>
+		<li>
+			The games you add, what you've lent or borrowed, your wishlist and the groups you're in. If you fill in a game's details, your
+			name shows beside them to the groups you're in.
+		</li>
 		<li>Links you add to games, credited to you within that group.</li>
 		<li>A cookie that keeps this device signed in. The server stores only a scrambled fingerprint of it, and the same for your personal link.</li>
 		<li>
 			Network addresses that tried a wrong join code, sign-in link or admin key, or created a group, and how often you searched
-			or imported from BoardGameGeek. These are kept for about a day, to slow down guessing and to stay within BGG's limits.
+			for games, matched a pasted list or imported from BoardGameGeek. These are kept for about a day, to slow down guessing
+			and to stay within the game sources' limits.
 		</li>
 	</ul>
 	<p>
@@ -42,9 +46,10 @@
 
 	<h2>Deleting your data</h2>
 	<p>
-		You can delete your account from your account page. That removes your name, games, wishlist,
-		memberships and sessions; links you added stay, credited to "former member." The host has no email or
-		other way to find you, so do it from a device where you're signed in.
+		You can delete your account from your account page. That removes your name, your shelf, wishlist, memberships and
+		sessions, and the games you typed in yourself. A typed-in game that another member also has stays, without your
+		name. Links you added stay, credited to "former member." The host has no email or other way to find you, so do it
+		from a device where you're signed in.
 	</p>
 
 	<h2>Game data</h2>
@@ -63,6 +68,10 @@
 	{:else}
 		<p>Games on this instance are entered by their owners. Nothing is fetched from BoardGameGeek.</p>
 	{/if}
+	<p>
+		Box pictures load in your browser straight from where they're kept, such as BoardGameGeek's image servers or a web
+		address a member typed in. That server sees your network address, as any website you visit does.
+	</p>
 </article>
 
 <style>

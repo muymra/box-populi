@@ -16,7 +16,7 @@ import {
 	signOutEverywhere
 } from './identity.ts';
 import { createGroup, findGroupByCode, joinGroup, joinRefusal, ownedGroupCount, touchLastSeen } from './groups.ts';
-import { isLimited, KEEP_MS, LIMITS, recordEvent } from './ratelimit.ts';
+import { giveBack, INSTANCE, ipSubject, KEEP_MS, LIMITS, take, type Limit } from './ratelimit.ts';
 import { SECRET_PAGE_HEADERS } from './cookies.ts';
 
 let db: ReturnType<typeof createTestDb>;
@@ -87,11 +87,16 @@ describe('sessions', () => {
 });
 
 describe('personal links', () => {
-	it('regenerating kills the old link', async () => {
+	it('regenerating kills the old link and signs out every other device', async () => {
 		const p = await newPerson('Ada');
-		const fresh = await regeneratePersonalLink(db, p.person.id, NOW);
+		const other = await createSession(db, p.person.id, NOW); // say, whoever used a leaked link
+		const bram = await newPerson('Bram');
+		const fresh = await regeneratePersonalLink(db, p.person.id, NOW, p.sessionToken);
 		expect(await findPersonByLink(db, p.linkToken)).toBeNull();
 		expect((await findPersonByLink(db, fresh))?.name).toBe('Ada');
+		expect(await resolveSession(db, p.sessionToken, NOW)).not.toBeNull();
+		expect(await resolveSession(db, other, NOW)).toBeNull();
+		expect(await resolveSession(db, bram.sessionToken, NOW)).not.toBeNull();
 	});
 
 	it('signing out everywhere ends sessions and replaces the link', async () => {
@@ -171,22 +176,47 @@ describe('leaving and deleting', () => {
 });
 
 describe('rate limits', () => {
-	it('blocks after the max within the window and forgets old events', async () => {
+	const ok = async (subject: string, limit: Limit, now: number) => (await take(db, now, [subject, limit])).ok;
+
+	it('refuses after the max within the window and forgets old tries', async () => {
 		const limit = LIMITS.joinFail;
-		for (let i = 0; i < limit.max; i++) await recordEvent(db, 'ip:1.2.3.4', limit, NOW + i);
-		expect(await isLimited(db, 'ip:1.2.3.4', limit, NOW + 10)).toBe(true);
-		expect(await isLimited(db, 'ip:5.6.7.8', limit, NOW + 10)).toBe(false);
-		const later = NOW + limit.windowMs + 100;
-		expect(await isLimited(db, 'ip:1.2.3.4', limit, later)).toBe(false);
-		await recordEvent(db, 'ip:1.2.3.4', limit, later);
-		expect(await all(db, 'SELECT * FROM rate_events')).toHaveLength(1);
+		for (let i = 0; i < limit.max; i++) expect(await ok('ip:1.2.3.4', limit, NOW + i)).toBe(true);
+		expect(await take(db, NOW + 10, ['ip:1.2.3.4', limit])).toEqual({ ok: false, limit });
+		expect(await ok('ip:5.6.7.8', limit, NOW + 10)).toBe(true);
+		expect(await ok('ip:1.2.3.4', limit, NOW + limit.windowMs + 100)).toBe(true);
+		expect(await all(db, `SELECT * FROM rate_events WHERE subject = 'ip:1.2.3.4'`)).toHaveLength(1);
+	});
+
+	it('lets no more than the max through when tries arrive at once', async () => {
+		const limit = LIMITS.joinFail;
+		const results = await Promise.all(Array.from({ length: 40 }, () => ok('ip:1.2.3.4', limit, NOW)));
+		expect(results.filter(Boolean)).toHaveLength(limit.max);
+	});
+
+	it('takes from every limit or none, and gives tries back', async () => {
+		const instance = { kind: 'all', max: 1, windowMs: 60_000 };
+		const first = await take(db, NOW, ['ip:1.2.3.4', LIMITS.joinFail], [INSTANCE, instance]);
+		expect(first.ok).toBe(true);
+		expect(await take(db, NOW, ['ip:5.6.7.8', LIMITS.joinFail], [INSTANCE, instance])).toEqual({ ok: false, limit: instance });
+		expect(await all(db, `SELECT subject FROM rate_events ORDER BY subject`)).toEqual([{ subject: 'instance' }, { subject: 'ip:1.2.3.4' }]);
+		if (first.ok) await giveBack(db, first.taken);
+		expect(await all(db, 'SELECT * FROM rate_events')).toEqual([]);
 	});
 
 	it('deletes rows older than a day for addresses that never come back', async () => {
-		await recordEvent(db, 'ip:1.2.3.4', LIMITS.groupCreate, NOW);
-		await recordEvent(db, 'person:ada', LIMITS.bggSearch, NOW + KEEP_MS - 1);
-		await recordEvent(db, 'ip:9.9.9.9', LIMITS.joinFail, NOW + KEEP_MS + 1);
+		await take(db, NOW, ['ip:1.2.3.4', LIMITS.groupCreate]);
+		await take(db, NOW + KEEP_MS - 1, ['person:ada', LIMITS.bggSearch]);
+		await take(db, NOW + KEEP_MS + 1, ['ip:9.9.9.9', LIMITS.joinFail]);
 		expect((await all<{ subject: string }>(db, 'SELECT subject FROM rate_events ORDER BY at')).map((r) => r.subject)).toEqual(['person:ada', 'ip:9.9.9.9']);
+	});
+
+	it('counts an IPv6 address by its /64', () => {
+		expect(ipSubject('203.0.113.7')).toBe('ip:203.0.113.7');
+		expect(ipSubject('::ffff:203.0.113.7')).toBe('ip:203.0.113.7');
+		expect(ipSubject('2001:db8:1:2:aaaa:bbbb:cccc:dddd')).toBe('ip:2001:db8:1:2::/64');
+		expect(ipSubject('2001:0db8:0001:0002::1')).toBe('ip:2001:db8:1:2::/64');
+		expect(ipSubject('2001:db8::5')).toBe('ip:2001:db8:0:0::/64');
+		expect(ipSubject('::1')).toBe('ip:0:0:0:0::/64');
 	});
 });
 

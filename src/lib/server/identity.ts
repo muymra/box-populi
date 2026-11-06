@@ -83,17 +83,24 @@ export async function endSession(db: DB, token: string): Promise<void> {
 	await run(db, 'DELETE FROM sessions WHERE id = ?1', await sha256Hex(token));
 }
 
-/** Replaces the person's personal link; the old one stops working immediately. */
-export async function regeneratePersonalLink(db: DB, userId: string, now: number): Promise<string> {
+/**
+ * Replaces the person's personal link. The old one stops working, and every device signed in as
+ * them is signed out except the one holding `keepToken`: someone who used a leaked link would
+ * otherwise stay signed in as them. Returns the new link's token.
+ */
+export async function regeneratePersonalLink(db: DB, userId: string, now: number, keepToken: string | null): Promise<string> {
 	const token = randomToken();
-	await run(
-		db,
-		`INSERT INTO personal_links (user_id, token_hash, created_at) VALUES (?1, ?2, ?3)
-		 ON CONFLICT(user_id) DO UPDATE SET token_hash = excluded.token_hash, created_at = excluded.created_at`,
-		userId,
-		await sha256Hex(token),
-		now
-	);
+	await db.batch([
+		stmt(
+			db,
+			`INSERT INTO personal_links (user_id, token_hash, created_at) VALUES (?1, ?2, ?3)
+			 ON CONFLICT(user_id) DO UPDATE SET token_hash = excluded.token_hash, created_at = excluded.created_at`,
+			userId,
+			await sha256Hex(token),
+			now
+		),
+		stmt(db, 'DELETE FROM sessions WHERE user_id = ?1 AND id IS NOT ?2', userId, keepToken ? await sha256Hex(keepToken) : null)
+	]);
 	return token;
 }
 
@@ -108,8 +115,7 @@ export async function findPersonByLink(db: DB, token: string): Promise<Person | 
 
 /** Ends every session and replaces the personal link. Returns the new link. */
 export async function signOutEverywhere(db: DB, userId: string, now: number): Promise<string> {
-	await run(db, 'DELETE FROM sessions WHERE user_id = ?1', userId);
-	return regeneratePersonalLink(db, userId, now);
+	return regeneratePersonalLink(db, userId, now, null);
 }
 
 export async function renamePerson(db: DB, userId: string, name: string): Promise<void> {

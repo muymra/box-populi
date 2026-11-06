@@ -2,7 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import { getDb } from '#lib/server/platform.ts';
 import { cleanDisplayName, newPersonStatements } from '#lib/server/identity.ts';
 import { cleanGroupName, createGroup, ownedGroupCount } from '#lib/server/groups.ts';
-import { ipSubject, isLimited, LIMITS, recordEvent } from '#lib/server/ratelimit.ts';
+import { giveBack, ipSubject, LIMITS, take } from '#lib/server/ratelimit.ts';
 import { setNewLinkCookie, setSessionCookie } from '#lib/server/cookies.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -25,27 +25,28 @@ export const actions: Actions = {
 		const groupName = cleanGroupName(values.groupName);
 		if (!groupName) return fail(400, { ...values, error: 'Give the group a name, up to 60 characters.' });
 
-		const ip = ipSubject(event.getClientAddress());
-		if (await isLimited(db, ip, LIMITS.groupCreate, now)) {
-			return fail(429, { ...values, error: 'Too many new groups from this network today. Try again tomorrow.' });
-		}
+		const tried = await take(db, now, [ipSubject(event.getClientAddress()), LIMITS.groupCreate]);
+		if (!tried.ok) return fail(429, { ...values, error: 'Too many new groups from this network today. Try again tomorrow.' });
 
 		let userId: string;
 		let newPerson: Awaited<ReturnType<typeof newPersonStatements>> | null = null;
 		if (locals.user) {
 			if ((await ownedGroupCount(db, locals.user.id)) >= locals.config.maxGroupsPerUser) {
+				await giveBack(db, tried.taken);
 				return fail(400, { ...values, error: `You already own ${locals.config.maxGroupsPerUser} groups, the most this site allows.` });
 			}
 			userId = locals.user.id;
 		} else {
 			const displayName = cleanDisplayName(values.displayName);
-			if (!displayName) return fail(400, { ...values, error: 'Add your name as the group will see it, up to 40 characters.' });
+			if (!displayName) {
+				await giveBack(db, tried.taken);
+				return fail(400, { ...values, error: 'Add your name as the group will see it, up to 40 characters.' });
+			}
 			newPerson = await newPersonStatements(db, displayName, now);
 			userId = newPerson.person.id;
 		}
 
 		const { groupId } = await createGroup(db, { userId, name: groupName, now, before: newPerson?.statements });
-		await recordEvent(db, ip, LIMITS.groupCreate, now);
 
 		if (newPerson) {
 			setSessionCookie(cookies, url, newPerson.sessionToken);

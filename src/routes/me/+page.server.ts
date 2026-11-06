@@ -47,7 +47,9 @@ export const actions: Actions = {
 
 	newLink: async (event) => {
 		const user = requireUser(event);
-		setNewLinkCookie(event.cookies, event.url, await regeneratePersonalLink(getDb(), user.id, Date.now()));
+		// This device stays signed in; every other device is signed out.
+		const link = await regeneratePersonalLink(getDb(), user.id, Date.now(), event.cookies.get(SESSION_COOKIE) ?? null);
+		setNewLinkCookie(event.cookies, event.url, link);
 		redirect(303, '/me#personal-link');
 	},
 
