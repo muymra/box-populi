@@ -26,8 +26,9 @@
 		document.documentElement.dataset.theme = resolveTheme(deviceTheme, groupTheme, data.instanceTheme);
 	});
 
-	// Group pages draw their own top bar with the group's name in it.
-	const inGroup = $derived(page.route.id?.startsWith('/g/') ?? false);
+	// Group pages draw their own top bar with the group's name in it. When the group itself failed
+	// to load (a wrong or removed group), there's no group bar, so this one shows with the error.
+	const inGroup = $derived((page.route.id?.startsWith('/g/') ?? false) && (page.data as { group?: unknown }).group != null);
 </script>
 
 <svelte:head>

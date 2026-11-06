@@ -27,6 +27,8 @@
 	let progress = $state({ done: 0, total: 0 });
 	let error = $state<string | null>(null);
 	let result = $state({ added: 0, skipped: 0 });
+	// Rows a finished chunk already added: kept in the preview, unticked, so a retry sends only the rest.
+	let addedRows = $state<boolean[]>([]);
 
 	const lines = $derived(
 		text
@@ -34,7 +36,7 @@
 			.map((l) => l.trim())
 			.filter((l) => l && !l.startsWith('#'))
 	);
-	const chosen = $derived(rows.map((r, i) => ({ r, i })).filter(({ r, i }) => include[i] && r.status !== 'error' && r.status !== 'owned'));
+	const chosen = $derived(rows.map((r, i) => ({ r, i })).filter(({ r, i }) => include[i] && !addedRows[i] && r.status !== 'error' && r.status !== 'owned'));
 
 	const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 	const post = (url: string, body: unknown) =>
@@ -76,28 +78,37 @@
 		rows = found;
 		include = found.map((r) => r.status !== 'error' && r.status !== 'owned');
 		useSuggestion = found.map(() => false);
+		addedRows = found.map(() => false);
+		result = { added: 0, skipped: 0 };
 		phase = 'preview';
 	}
 
 	async function add() {
-		const items = chosen.map(({ r, i }) =>
-			r.status === 'new' ? (useSuggestion[i] && r.suggestion ? { gameId: r.suggestion.gameId } : { line: r.line }) : { gameId: (r as { game: Game }).game.gameId }
-		);
+		const picked = chosen.map(({ r, i }) => ({
+			index: i,
+			item: r.status === 'new' ? (useSuggestion[i] && r.suggestion ? { gameId: r.suggestion.gameId } : { line: r.line }) : { gameId: (r as { game: Game }).game.gameId }
+		}));
 		error = null;
 		phase = 'adding';
-		progress = { done: 0, total: items.length };
-		const total = { added: 0, skipped: 0 };
+		progress = { done: 0, total: picked.length };
 		try {
-			for (let i = 0; i < items.length; i += ADD_CHUNK) {
-				const r = await call<{ added: number; skipped: number }>('/api/games/list/add', { groupId, items: items.slice(i, i + ADD_CHUNK) });
-				total.added += r.added;
-				total.skipped += r.skipped;
-				progress = { done: Math.min(i + ADD_CHUNK, items.length), total: items.length };
+			for (let i = 0; i < picked.length; i += ADD_CHUNK) {
+				const chunk = picked.slice(i, i + ADD_CHUNK);
+				const r = await call<{ added: number; skipped: number }>('/api/games/list/add', { groupId, items: chunk.map((p) => p.item) });
+				result = { added: result.added + r.added, skipped: result.skipped + r.skipped };
+				for (const p of chunk) {
+					addedRows[p.index] = true;
+					include[p.index] = false;
+				}
+				progress = { done: Math.min(i + ADD_CHUNK, picked.length), total: picked.length };
 			}
 		} catch (e) {
-			error = (e as Error).message;
+			// Back to the list, with what's done marked, so trying again sends only the rest.
+			const done = progress.done;
+			error = `${done ? `Added ${done} of ${picked.length}. ` : ''}${(e as Error).message} The rest are still ticked: try again.`;
+			phase = 'preview';
+			return;
 		}
-		result = total;
 		phase = 'done';
 	}
 
@@ -158,9 +169,9 @@
 		</p>
 		<ul class="rows">
 			{#each rows as row, i (i)}
-				<li class:muted-row={row.status === 'error' || row.status === 'owned'}>
+				<li class:muted-row={row.status === 'error' || row.status === 'owned' || addedRows[i]}>
 					<label class="main">
-						<input type="checkbox" bind:checked={include[i]} disabled={row.status === 'error' || row.status === 'owned' || phase === 'adding'} />
+						<input type="checkbox" bind:checked={include[i]} disabled={row.status === 'error' || row.status === 'owned' || addedRows[i] || phase === 'adding'} />
 						<span class="text">
 							{#if row.status === 'error'}
 								<span class="title">{row.line}</span>
@@ -176,6 +187,7 @@
 									{#if row.status === 'owned'}<Check size={14} aria-hidden="true" /> Already on your shelf{:else if row.status === 'group'}Already in your group{:else if row.game.source === 'wikidata'}From Wikidata{:else if row.game.source === 'bgg'}From BoardGameGeek{:else}Matched{/if}{describe(row.game) ? ` · ${describe(row.game)}` : ''}
 								</span>
 							{/if}
+							{#if addedRows[i]}<span class="note"><Check size={14} aria-hidden="true" /> Added to your shelf</span>{/if}
 						</span>
 					</label>
 					{#if row.status === 'new' && row.suggestion && wikidata}

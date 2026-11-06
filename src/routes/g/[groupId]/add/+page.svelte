@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { applyAction, enhance, type SubmitFunction } from '$app/forms';
 	import Search from '@lucide/svelte/icons/search';
 	import Check from '@lucide/svelte/icons/check';
 	import Gift from '@lucide/svelte/icons/gift';
@@ -29,6 +29,9 @@
 	let status = $state<'idle' | 'searching' | 'done' | 'error'>('idle');
 	let message = $state<string | null>(null);
 	let added = $state(0);
+	// Per result: a request in flight (its buttons disable), or why the last tap failed.
+	let busy = $state<Record<number, boolean>>({});
+	let rowError = $state<Record<number, string>>({});
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let controller: AbortController | undefined;
 
@@ -42,6 +45,7 @@
 		clearTimeout(timer);
 		const q = query.trim();
 		if (q.length < 3) {
+			controller?.abort(); // a slow search for the longer text mustn't land after this
 			results = [];
 			status = 'idle';
 			message = null;
@@ -71,6 +75,23 @@
 			status = 'error';
 			message = 'Search failed. Check your connection and try again.';
 		}
+	}
+
+	/**
+	 * Enhances a result's Add or Want form: one request at a time, a failure shown on that row, and
+	 * anything else (an expired session's redirect, a server error) handled as a plain post would be.
+	 */
+	function act(r: Result, onSuccess: (data: Record<string, unknown>) => void): SubmitFunction {
+		return () => {
+			busy[r.gameId] = true;
+			delete rowError[r.gameId];
+			return async ({ result }) => {
+				busy[r.gameId] = false;
+				if (result.type === 'success') onSuccess(result.data ?? {});
+				else if (result.type === 'failure') rowError[r.gameId] = String(result.data?.addError ?? 'That didn’t work. Try again.');
+				else await applyAction(result);
+			};
+		};
 	}
 </script>
 
@@ -143,14 +164,11 @@
 						<form
 							method="POST"
 							action="?/want"
-							use:enhance={() =>
-								async ({ result }) => {
-									if (result.type === 'success') r.wanted = !r.wanted;
-								}}
+							use:enhance={act(r, (d) => (r.wanted = d.wanted === true))}
 						>
 							<input type="hidden" name="gameId" value={r.gameId} />
 							<input type="hidden" name="on" value={r.wanted ? '0' : '1'} />
-							<button class="btn want" aria-pressed={r.wanted} aria-label="{r.wanted ? 'Wanted' : 'Want'}: {r.name}">
+							<button class="btn want" aria-pressed={r.wanted} aria-label="Want {r.name}" disabled={busy[r.gameId]}>
 								<Gift size={16} aria-hidden="true" />
 								<span class="want-text">{r.wanted ? 'Wanted' : 'Want'}</span>
 							</button>
@@ -158,18 +176,16 @@
 						<form
 							method="POST"
 							action="?/add"
-							use:enhance={() =>
-								async ({ result }) => {
-									if (result.type === 'success') {
-										r.owned = true;
-										added += 1;
-									}
-								}}
+							use:enhance={act(r, () => {
+								if (!r.owned) added += 1;
+								r.owned = true;
+							})}
 						>
 							<input type="hidden" name="gameId" value={r.gameId} />
-							<button class="btn primary" aria-label="Add {r.name} to my games">Add</button>
+							<button class="btn primary" aria-label="Add {r.name} to my games" disabled={busy[r.gameId]}>Add</button>
 						</form>
 					{/if}
+					{#if rowError[r.gameId]}<p class="row-error" role="alert">{rowError[r.gameId]}</p>{/if}
 				</li>
 			{/each}
 		</ul>
@@ -330,10 +346,18 @@
 	}
 	.results li {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: var(--s-3);
 		padding: var(--s-2) var(--s-3);
 		background: var(--cube);
+	}
+	.row-error {
+		flex-basis: 100%;
+		margin: 0;
+		color: var(--danger);
+		font-size: var(--t-small);
+		font-weight: 650;
 	}
 	.mini {
 		flex: none;

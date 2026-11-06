@@ -10,7 +10,7 @@
 	import Search from '@lucide/svelte/icons/search';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Gift from '@lucide/svelte/icons/gift';
-	import { enhance } from '$app/forms';
+	import { enhance, type SubmitFunction } from '$app/forms';
 	import { guessKind, KIND_LABELS, LINK_KINDS, type LinkKind } from '#lib/link-kinds.ts';
 	import BoxFront from '#lib/components/BoxFront.svelte';
 	import { BUCKET_LABELS, formatPlaytime, formatWeight, weightBucket } from '#lib/catalog/buckets.ts';
@@ -45,6 +45,24 @@
 	const youtube = $derived(`https://www.youtube.com/results?search_query=${encodeURIComponent(`how to play ${g.name}`)}`);
 
 	let expanded = $state(false);
+
+	// One form sends at a time, and its button stays disabled until the answer is in, so a second
+	// tap on a slow phone doesn't send it twice. `after` runs once the page has the new data.
+	let sending = $state<string | null>(null);
+	const send =
+		(name: string, after?: (ok: boolean) => void): SubmitFunction =>
+		() => {
+			sending = name;
+			return async ({ result, update }) => {
+				await update({ reset: false });
+				sending = null;
+				after?.(result.type === 'success');
+			};
+		};
+	let editOpen = $state(false);
+	$effect(() => {
+		if (form?.editError) editOpen = true;
+	});
 	const longDescription = $derived((g.description?.length ?? 0) > 500);
 
 	const KIND_ICONS = { rules: BookOpen, video: Play, other: LinkIcon };
@@ -134,12 +152,13 @@
 
 	{#if data.canEditDetails || data.editedByName}
 		<section class="details-edit" aria-label="Game details">
+			{#if form?.detailsSaved}<p class="banner" role="status">Details saved. Only {data.group.name} sees them.</p>{/if}
 			{#if data.editedByName}<p class="muted small">Details last edited by {data.editedByName}.</p>{/if}
 			{#if data.canEditDetails}
 				{#if missing.length}<p class="muted small">Missing: {missing.join(', ')}.</p>{/if}
-				<details class="lend" open={!!form?.editError}>
+				<details class="lend" bind:open={editOpen}>
 					<summary class="link-button">{missing.length ? 'Fill in the details…' : 'Edit details…'}</summary>
-					<form method="POST" action="?/editDetails" class="lend-form edit-form" use:enhance={() => async ({ update }) => update({ reset: false })}>
+					<form method="POST" action="?/editDetails" class="lend-form edit-form" use:enhance={send('details', (ok) => ok && (editOpen = false))}>
 						<label>Name <input class="field" name="name" required maxlength="120" value={g.name} /></label>
 						<div class="pair">
 							<label>Fewest players <input class="field num" name="minPlayers" inputmode="numeric" pattern="[0-9]*" value={g.minPlayers ?? ''} /></label>
@@ -167,7 +186,7 @@
 						</label>
 						<p class="hint">Changes show only in this group. Other groups with this game keep their own details.</p>
 						{#if form?.editError}<p class="banner error" role="alert">{form.editError}</p>{/if}
-						<button class="btn primary small">Save details</button>
+						<button class="btn primary small" disabled={sending === 'details'}>{sending === 'details' ? 'Saving…' : 'Save details'}</button>
 					</form>
 				</details>
 			{/if}
@@ -199,24 +218,25 @@
 					<button class="btn">{data.mine ? 'Remove from my games' : data.owners.length ? 'I own this too' : 'I own this'}</button>
 				</form>
 				{#if data.mine && data.myLoan}
-					<form method="POST" action="?/returned" use:enhance>
-						<button class="btn">Mark as returned</button>
+					<form method="POST" action="?/returned" use:enhance={send('returned')}>
+						<button class="btn" disabled={sending === 'returned'}>Mark as returned</button>
 					</form>
 				{/if}
 				{#if !data.mine}
-					<form method="POST" action="?/want" use:enhance>
+					<form method="POST" action="?/want" use:enhance={send('want')}>
 						<input type="hidden" name="on" value={data.wanted ? '0' : '1'} />
-						<button class="btn want" aria-pressed={data.wanted}>
+						<button class="btn want" aria-pressed={data.wanted} disabled={sending === 'want'}>
 							<Gift size={18} aria-hidden="true" />
 							{data.wanted ? 'On your wishlist' : 'I want this'}
 						</button>
 					</form>
 				{/if}
 			</div>
+			{#if form?.lent}<p class="banner" role="status">Marked as lent.</p>{:else if form?.returned}<p class="banner" role="status">Marked as returned.</p>{/if}
 			{#if data.mine && !data.myLoan}
 				<details class="lend" open={!!form?.lendError}>
 					<summary class="link-button">Lend your copy…</summary>
-					<form method="POST" action="?/lend" class="lend-form" use:enhance>
+					<form method="POST" action="?/lend" class="lend-form" use:enhance={send('lend')}>
 						{#if data.lendTo.length}
 							<label>
 								Someone in {data.group.name}
@@ -232,7 +252,7 @@
 						</label>
 						<p class="hint">Lent to a member, it still counts as available here. Lent outside, it’s hidden when people look for available games.</p>
 						{#if form?.lendError}<p class="banner error" role="alert">{form.lendError}</p>{/if}
-						<button class="btn primary small">Mark as lent</button>
+						<button class="btn primary small" disabled={sending === 'lend'}>Mark as lent</button>
 					</form>
 				</details>
 			{/if}
@@ -278,6 +298,7 @@
 			</li>
 		</ul>
 		{#if form?.deleteError}<p class="banner error" role="alert">{form.deleteError}</p>{/if}
+		{#if form?.linkAdded}<p class="banner" role="status">Link added.</p>{/if}
 
 		{#if data.canEdit}
 			<details class="add-link" bind:open={adding}>
@@ -286,15 +307,18 @@
 					method="POST"
 					action="?/addLink"
 					class="link-form"
-					use:enhance={() =>
-						async ({ result, update }) => {
+					use:enhance={() => {
+						sending = 'link';
+						return async ({ result, update }) => {
 							await update();
+							sending = null;
 							if (result.type === 'success') {
 								kind = '';
 								kindPicked = false;
 								adding = false;
 							}
-						}}
+						};
+					}}
 				>
 					<label>
 						Address
@@ -329,7 +353,7 @@
 					</label>
 					{#if form?.linkError}<p class="banner error" role="alert">{form.linkError}</p>{/if}
 					<div class="inline">
-						<button class="btn primary small">Add link</button>
+						<button class="btn primary small" disabled={sending === 'link'}>Add link</button>
 						<button type="button" class="link-button" onclick={() => (adding = false)}>Cancel</button>
 					</div>
 				</form>

@@ -244,7 +244,7 @@ The world refuses the category default for game catalogs: a dark app with a grid
 A cardboard-and-laminate neutral field with two kinds of colour on top: player colours that say who owns a game, and marigold that says what you picked. Neutral token keys match the custom properties in `src/app.css` except where noted (dark values are the `-dark` keys, applied under `prefers-color-scheme: dark`); player and print colours live in `src/lib/catalog/colors.ts`.
 
 ### Primary
-- **Marigold** (marigold, CSS `--mark` and `--mark-ink`): the state colour. It fills active filter chips and set filter selects in the label strip, the current tab (the whole tab from 760px, the icon pill below it), selected people in the picker, the filter-count badge, text selection, and the focus ring on search fields inside the dark label strip, where the blue focus ring would not read. Its ink is near-black (marigold-ink), 7.58:1.
+- **Marigold** (marigold, CSS `--mark` and `--mark-ink`): the state colour. It fills active filter chips and set filter selects in the label strip, the current tab (the whole tab from 760px, the icon pill below it), selected people in the picker, the filter-count badge, text selection, and the focus ring on every control inside the dark label strip, where the ink focus ring would not read. Its ink is near-black (marigold-ink), 7.58:1.
 
 ### Secondary
 - **Wooden-cube player colours** (player-red, player-blue, player-pink, player-green, player-purple, player-orange, player-teal, player-black): one per member, assigned by join order and wrapping after eight, so a person's colour never changes. They paint the owner edge under each cube, the spine ends in the Spines view, the member chips on the Group tab and game pages, and the dot on each person toggle in the picker. Each carries white ink at 4.97:1 or better. The set holds pink where a yellow would sit, so no player colour shares marigold's hue (marigold sits near hue 81 in OKLCH; the nearest player colour, orange, sits near 45).
@@ -351,7 +351,7 @@ Ink-filled and plain, so marigold stays free for state.
 
 ### Inputs / Fields
 - **Style:** cube fill, 1.5px rule border, 8px corners, 46px tall; selects use a drawn chevron 12px from the right. Checkboxes use the ink as accent at 18px.
-- **Focus:** border darkens to ink-3, plus the global focus outline. Search fields in the label strip sit on label-field with no border and take a 2px marigold outline when focused.
+- **Focus:** border darkens to ink-3, plus the global focus outline. Search fields in the label strip sit on label-field with no border and take a 2px marigold outline when focused, as does every other control in the strip (`.strip :focus-visible` in app.css).
 
 ### Navigation
 - **Top bar:** cube mark, group name at title size, tabs, then the person's name behind a 1px divider. 56px tall, 64px from 760px, 1px rule underneath.

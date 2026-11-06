@@ -153,6 +153,10 @@ textarea {
 	outline-offset: 2px;
 	border-radius: 2px;
 }
+/* The label strip is ink-dark, so the ink focus ring would vanish on it (DESIGN.md "Marigold"). */
+.strip :focus-visible {
+	outline-color: var(--mark);
+}
 
 .num {
 	font-variant-numeric: tabular-nums;

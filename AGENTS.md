@@ -80,7 +80,7 @@ Many models learned older versions of these tools. Check yourself against this l
   - `$app/environment` became `$app/env`. `$app/stores` is gone; use `$app/state` (`page.url`, no `$`).
   - Bindings come from `cloudflare:workers`, not `event.platform`.
   - `error(status, 'message')` takes a string. `redirect()` and `error()` throw by themselves; don't write `throw`. Use `Response.json()`, not `json()`.
-  - Hook types come from `@sveltejs/kit/hooks`. `goto` options are `replace` and `reset: false` (formerly `replaceState`, `keepFocus`, `noScroll`).
+  - Hook types come from `@sveltejs/kit/hooks`. `SubmitFunction` (for `use:enhance`) comes from `$app/forms`, not `@sveltejs/kit`. `goto` options are `replace` and `reset: false` (formerly `replaceState`, `keepFocus`, `noScroll`).
   - Any directory named `server` is server-only.
   - `+page.server.ts` may only export SvelteKit's own names (`load`, `actions`, ...). Put helpers in `#lib`.
   - The migration guide: https://svelte.dev/docs/kit/migrating-to-sveltekit-3
