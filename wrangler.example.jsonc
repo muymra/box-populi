@@ -29,6 +29,8 @@
 		"SEARCH_ENGINES": "allow",
 		// The default colour theme: "cube" or a preset id from src/lib/themes.ts. Each device can pick another.
 		"THEME": "cube",
+		// While BGG is off: "wikidata" looks games up on Wikidata (titles, years, player counts); "manual" means typing only.
+		"GAME_SOURCE": "wikidata",
 		"MAX_GROUPS_PER_USER": "5",
 		"MAX_MEMBERS_PER_GROUP": "100"
 	}

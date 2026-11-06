@@ -172,3 +172,10 @@ Docker (Node with a SQLite file) and Cloudflare Workers are planned stretch item
 The footer credits BoardGameGeek, with the "Powered by BGG" badge and the non-affiliation line, whenever the instance shows BGG data: with BGG on, and with BGG off for as long as BGG-sourced games stay cached. An instance that has never had BGG on, such as the public demo or a new instance waiting for its token, shows no BGG credit.
 **Why:** Carlo pointed out that an instance with BGG off was claiming its game data came from BGG. BGG's terms require the credit where its data is used; claiming it elsewhere is simply untrue.
 **Trade-offs accepted:** a database check once per isolate on instances with BGG off.
+
+## D31. Public-sources mode is the default while BGG is off (2026-11-06)
+
+Built from D27's plan. With BGG off, `GAME_SOURCE` defaults to `wikidata`: members search Wikidata for games, paste lists that are matched against Wikidata, and can fill in or correct any game that isn't from BGG. `manual` keeps typing only. Games record where their details came from in a new `source` column (`bgg`, `wikidata`, `manual`), added by migration `0002` because `0001` is frozen.
+**Why:** Carlo asked to build the plan now: his instance runs without BGG until his application is approved, and typed-in games had no way to get real data or be corrected.
+**Trade-offs accepted:** searched titles leave the instance for Wikidata (the privacy page says so). Wikidata knows about 4,800 games, with no weight, play time or "best at" counts; groups fill those in. Wikidata games carry BGG ids, so they upgrade to BGG data once BGG is on.
+**Revisit if:** Wikidata's coverage or availability disappoints in use, or another open source appears.

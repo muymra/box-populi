@@ -133,6 +133,7 @@ The repo commits `wrangler.example.jsonc`. `pnpm install` copies it to `wrangler
 | `INSTANCE_MODE` | var | `standard` | `standard` or `demo`. `demo` turns the home page into an introduction to the demo group, with links to the GitHub repo and SELF_HOSTING.md instead of joining, and the signed-out header link becomes "Run your own". For an instance that exists to show the demo. |
 | `SEARCH_ENGINES` | var | `allow` | `allow` or `block`. `block` serves a `robots.txt` that disallows everything and adds `X-Robots-Tag: noindex, nofollow` to every response, for an instance only its groups should know about. `allow` still disallows `/admin` and `/key/`. |
 | `THEME` | var | `cube` | The instance's default colour theme: `cube` or a preset id from `src/lib/themes.ts` (`dracula`, `catppuccin`, `solarized`, `gruvbox`, `tokyo-night`, `kanagawa`, `nord`, `everforest`, `rose-pine`, `one`, `github`, `ayu`). Each device can pick another from the footer; the choice lives in the `bp_theme` cookie. |
+| `GAME_SOURCE` | var | `wikidata` | Where game details come from while BGG is off (D31): `wikidata` searches Wikidata for titles, years and player counts; `manual` means members type everything. Ignored while BGG is on. |
 | `MAX_GROUPS_PER_USER` | var | `5` | Groups one user can own. |
 | `MAX_MEMBERS_PER_GROUP` | var | `100` | Joins are refused past this. |
 
@@ -571,9 +572,20 @@ At most two BGG calls per search, and one when every hit is cached. With instanc
 
 Hydrate is idempotent and resumable. Any page that sees the caller owns stubs shows "Finish loading game details," which restarts the loop. Two members hydrating the same stub at once is harmless.
 
+### Public-sources mode
+
+Built 2026-11-06 (D31), from steps 3 to 5 of the plan below. While BGG is off and `GAME_SOURCE` is `wikidata` (the default), the add page searches Wikidata instead of BGG.
+
+- **Client.** `src/lib/server/wikidata.ts`. A search is two Wikidata API calls: `wbsearchentities` finds items by title or alias, then `wbgetentities` reads their claims. Only items with a BGG id (P2339) count as board games. From each it takes the English label (or any label), labels and aliases in ten common languages as alternate titles, min and max players (P1872, P1873, preferred rank first, deprecated never), and the year from P577 or P571. Requests carry the same User-Agent as BGG requests. There's no `maxlag`: Wikidata's lag is often over 5 seconds, which made it refuse every search. 429 and 5xx count as busy.
+- **Cache.** Results become `games` rows with `source = 'wikidata'` and `wikidata_id`, so adding, wishing and the catalog work as for any game. A row already known by its BGG id is linked, never overwritten. A refresh doesn't overwrite fields a member has edited (`edited_at`).
+- **Upgrade.** Wikidata games keep the BGG id Wikidata gives them. Once BGG is on, the hydrate step treats them like import stubs and fetches full BGG data, turning them into `source = 'bgg'`. If BGG doesn't know the id, the game stays Wikidata and loses the id.
+- **Editing.** `src/lib/server/game-edit.ts`: anyone with the game on their shelf, or a co-admin or owner of a group that shows it, can edit a hand-entered or Wikidata game. That covers players, play time and a 1 to 5 complexity stored in `weight` (labelled as set by the group), plus the name and image of hand-entered ones. BGG games are never editable. `edited_by` and `edited_at` show on the page; every group showing the game gets a new `catalog_version`.
+- **Paste a list.** `src/lib/server/game-list.ts`. One title per line, optionally `| players | minutes` or tab-separated, up to 200 lines. Each line is checked against the person's shelf, then the group's games, then stored BGG and Wikidata games (exact title or alternate title), then Wikidata; whatever's left becomes a typed-in game, with Wikidata's closest title offered as a swap. Other groups' hand-entered games never match. The browser sends 10 lines per match call and 25 rows per add call: a Wikidata lookup is two subrequests, and Cloudflare's free plan allows 50 per request.
+- **Credit and privacy.** The footer says "Game details from Wikidata" (CC0, so not required). The privacy page says searched titles go to Wikidata.
+
 ### If BGG declines the application
 
-Not built; a plan, in order. Steps 3 to 5 are also the planned public-sources mode (D27): a hoster who doesn't want to apply to BGG sets `GAME_SOURCE=wikidata` with `BGG_MODE=off` and gets the same thing. It's in the PRD stretch list, so it waits until the Sunday items are done or cut.
+The original plan, in order. Steps 3 to 5 are built as the public-sources mode above. Steps 3 to 5 are also the planned public-sources mode (D27): a hoster who doesn't want to apply to BGG sets `GAME_SOURCE=wikidata` with `BGG_MODE=off` and gets the same thing. It's in the PRD stretch list, so it waits until the Sunday items are done or cut.
 
 1. **Ask why and reapply.** BGG decides case by case. Fix whatever it objects to (volume, images, the open-source distribution) and resubmit. Development continues on `BGG_MODE=fake` meanwhile.
 2. **Ruled out:** scraping BGG pages, BGG's unofficial JSON endpoints, borrowing another application's token, or importing BGG's collection CSV exports to get the same data. Each works around BGG's decision and puts Carlo's BGG account at risk. The CSV route is possible only if BGG says yes to it in writing.
@@ -671,6 +683,8 @@ URL params: `n`, `t`, `w`, `present` (comma-separated user ids), `seen` (ids alr
 | `GET /api/bgg/search` | BGG search proxy. | `requireUser` |
 | `POST /api/bgg/import`, `/api/bgg/import/confirm`, `/api/bgg/hydrate` | Import flow. | `requireUser` |
 | `POST /theme` | Saves this device's theme in `bp_theme`. 204 for `Accept: application/json` (the footer select already switched the page), otherwise a 303 back to the page it came from. | none |
+| `GET /api/wikidata/search` | Wikidata title search for the add page while BGG is off; results are cached as games. | `requireUser`, rate-limited per person |
+| `POST /api/games/list/match`, `/api/games/list/add` | Paste a list: match up to 10 lines, then add up to 25 chosen rows per call. | `requireRole(member)`; matching rate-limited per person |
 
 Mutations on pages are SvelteKit form actions. They work without client JavaScript, and SvelteKit's origin check covers CSRF for form posts. The JSON endpoints are reached only with the `SameSite=Lax` session cookie, which browsers don't send on cross-site POSTs.
 

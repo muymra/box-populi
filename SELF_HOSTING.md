@@ -56,6 +56,7 @@ In `wrangler.jsonc` under `"vars"`:
 | `INSTANCE_MODE` | `standard`. Set `demo` for an instance that only shows the demo group: its home page introduces the demo and links to GitHub. |
 | `SEARCH_ENGINES` | `allow`. Set `block` if only your groups should find the instance; search engines are asked not to index it. |
 | `THEME` | `cube`, the default look. Or a preset such as `dracula`, `catppuccin` or `nord`; the full list is in `src/lib/themes.ts`. Visitors can still pick their own from the footer. |
+| `GAME_SOURCE` | `wikidata`. While you have no BGG token, members search Wikidata for games; set `manual` to have them type everything instead. |
 | `MAX_GROUPS_PER_USER` | Default `5`. |
 | `MAX_MEMBERS_PER_GROUP` | Default `100`. |
 | `BGG_MODE` | Leave it empty. BGG turns on when the `BGG_TOKEN` secret exists. Set `off` to keep BGG off even with a token. |
