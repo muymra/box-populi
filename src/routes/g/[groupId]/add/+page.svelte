@@ -6,11 +6,22 @@
 	import BoxFront from '#lib/components/BoxFront.svelte';
 	import ImportPanel from '#lib/components/ImportPanel.svelte';
 	import HydrateProgress from '#lib/components/HydrateProgress.svelte';
+	import { formatPlayerRange } from '#lib/catalog/players.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
 
-	type Result = { gameId: number; bggId: number; name: string; year: number | null; thumbUrl: string | null; isExpansion: boolean; owned: boolean; wanted: boolean };
+	type Result = {
+		gameId: number;
+		name: string;
+		year: number | null;
+		thumbUrl: string | null;
+		isExpansion: boolean;
+		minPlayers: number | null;
+		maxPlayers: number | null;
+		owned: boolean;
+		wanted: boolean;
+	};
 
 	let query = $state('');
 	let results = $state<Result[]>([]);
@@ -20,7 +31,10 @@
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let controller: AbortController | undefined;
 
-	const bggOn = $derived(data.bggMode !== 'off');
+	const bggOn = $derived(data.source === 'bgg');
+	// Search goes to BGG while it's on, otherwise to Wikidata (public-sources mode), or nowhere.
+	const searchable = $derived(data.source !== 'manual');
+	const sourceName = $derived(data.source === 'bgg' ? 'BoardGameGeek' : 'Wikidata');
 	const myGamesHref = $derived(`/g/${data.group.id}?own=${encodeURIComponent(data.userId)}&avail=0&exp=1`);
 
 	function onInput() {
@@ -41,7 +55,8 @@
 		status = 'searching';
 		message = null;
 		try {
-			const response = await fetch(`/api/bgg/search?q=${encodeURIComponent(q)}`, { signal: controller.signal });
+			const endpoint = data.source === 'bgg' ? '/api/bgg/search' : '/api/wikidata/search';
+			const response = await fetch(`${endpoint}?q=${encodeURIComponent(q)}`, { signal: controller.signal });
 			const body = (await response.json()) as { results?: Result[]; error?: string };
 			if (!response.ok) {
 				status = 'error';
@@ -73,17 +88,25 @@
 			<p class="muted">The quickest way to stock the shelf: every game you own on BGG, in one go.</p>
 			<ImportPanel shelfHref="/g/{data.group.id}" />
 		</section>
+	{/if}
 
-		<h2 class="search-h" id="search-h">Or add one game</h2>
+	{#if searchable}
+		<h2 class="search-h" id="search-h">{bggOn ? 'Or add one game' : 'Add a game'}</h2>
 		<div class="strip">
 			<label class="search">
 				<Search size={18} aria-hidden="true" />
-				<span class="visually-hidden">Search BoardGameGeek</span>
-				<input type="search" placeholder="Search BoardGameGeek by title" bind:value={query} oninput={onInput} autocomplete="off" />
+				<span class="visually-hidden">Search {sourceName}</span>
+				<input type="search" placeholder="Search {sourceName} by title" bind:value={query} oninput={onInput} autocomplete="off" />
 			</label>
 		</div>
+		{#if !bggOn}
+			<p class="hint">
+				Titles, years and player counts come from <a href="https://www.wikidata.org" rel="noopener">Wikidata</a>, a free public
+				database that knows about 4,800 popular board games. Add anything it doesn't know by hand below.
+			</p>
+		{/if}
 		<p class="status muted" aria-live="polite">
-			{#if status === 'searching'}Searching BoardGameGeek…{:else if status === 'done' && results.length === 0}No matches on BoardGameGeek. Try another spelling, or add it by hand below.{:else if query.trim().length > 0 && query.trim().length < 3}Keep typing…{/if}
+			{#if status === 'searching'}Searching {sourceName}…{:else if status === 'done' && results.length === 0}No matches on {sourceName}. Try another spelling, or add it by hand below.{:else if query.trim().length > 0 && query.trim().length < 3}Keep typing…{/if}
 		</p>
 		{#if message}<p class="banner error" role="alert">{message}</p>{/if}
 		{#if form?.addError}<p class="banner error" role="alert">{form.addError}</p>{/if}
@@ -94,7 +117,9 @@
 					<span class="mini"><BoxFront name={r.name} src={r.thumbUrl} size="mini" /></span>
 					<div class="info">
 						<span class="name">{r.name}</span>
-						<span class="muted">{r.year ?? 'Year unknown'}{#if r.isExpansion} · Expansion{/if}</span>
+						<span class="muted">
+							{r.year ?? 'Year unknown'}{#if formatPlayerRange(r.minPlayers, r.maxPlayers)}{' · '}{formatPlayerRange(r.minPlayers, r.maxPlayers)} players{/if}{#if r.isExpansion}{' · '}Expansion{/if}
+						</span>
 					</div>
 					{#if r.owned}
 						<span class="owned"><Check size={16} aria-hidden="true" /> On your shelf</span>
@@ -133,11 +158,11 @@
 			{/each}
 		</ul>
 	{:else}
-		<p class="banner">BoardGameGeek search isn't set up on this site yet, so games are added by hand for now.</p>
+		<p class="banner">Game search isn't set up on this site, so games are added by hand.</p>
 	{/if}
 
-	<details class="manual" open={!bggOn || !!form?.manualError}>
-		<summary>{bggOn ? "Can't find it? Add it by hand" : 'Add a game by hand'}</summary>
+	<details class="manual" open={!searchable || !!form?.manualError}>
+		<summary>{searchable ? "Can't find it? Add it by hand" : 'Add a game by hand'}</summary>
 		<form method="POST" action="?/manual" class="stack">
 			<label>
 				Name

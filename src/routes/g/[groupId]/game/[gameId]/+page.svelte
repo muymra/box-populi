@@ -68,10 +68,11 @@
 		<div class="hero-box"><BoxFront name={g.name} src={g.imageUrl} size="hero" /></div>
 		<div class="intro">
 			<h2 class="title">{g.name} {#if g.year}<span class="year num">{g.year}</span>{/if}</h2>
-			{#if g.isExpansion || g.isManual || g.detailsPending}
+			{#if g.isExpansion || g.isManual || g.source === 'wikidata' || g.detailsPending}
 				<p class="tags">
 					{#if g.isExpansion}<span class="tag">Expansion</span>{/if}
 					{#if g.isManual}<span class="tag">Hand-entered</span>{/if}
+					{#if g.source === 'wikidata'}<span class="tag">Details from Wikidata</span>{/if}
 					{#if g.detailsPending}<span class="tag">Details still loading from BGG</span>{/if}
 				</p>
 			{/if}
@@ -98,11 +99,18 @@
 					<span><strong class="num">{weight}</strong> <span class="muted">BGG weight{#if bucket}{' · '}{BUCKET_LABELS[bucket].toLowerCase()} on Box Populi's scale{/if}</span></span>
 				</li>
 			{/if}
-			{#if g.bggId}
+			{#if g.bggId || g.wikidataId}
 				<li class="bgg">
-					<a class="btn small" href="https://boardgamegeek.com/boardgame/{g.bggId}" rel="noopener" target="_blank">
-						View on BoardGameGeek <ExternalLink size={14} aria-hidden="true" />
-					</a>
+					{#if g.bggId}
+						<a class="btn small" href="https://boardgamegeek.com/boardgame/{g.bggId}" rel="noopener" target="_blank">
+							View on BoardGameGeek <ExternalLink size={14} aria-hidden="true" />
+						</a>
+					{/if}
+					{#if g.wikidataId && g.source === 'wikidata'}
+						<a class="btn small" href="https://www.wikidata.org/wiki/{g.wikidataId}" rel="noopener" target="_blank">
+							View on Wikidata <ExternalLink size={14} aria-hidden="true" />
+						</a>
+					{/if}
 				</li>
 			{/if}
 		</ul>
@@ -361,6 +369,7 @@
 	}
 	.facts .bgg {
 		margin-top: var(--s-2);
+		flex-wrap: wrap;
 	}
 	.facts .bgg :global(svg) {
 		margin: 0;

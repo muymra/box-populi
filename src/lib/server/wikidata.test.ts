@@ -85,7 +85,7 @@ describe('the live client', () => {
 		expect(games.map((g) => g.wikidataId)).toEqual(['Q1']);
 		expect(seen[0].searchParams.get('action')).toBe('wbsearchentities');
 		expect(seen[1].searchParams.get('ids')).toBe('Q2|Q1');
-		expect(seen[1].searchParams.get('maxlag')).toBe('5');
+		expect(seen[1].searchParams.get('maxlag')).toBeNull();
 	});
 
 	it('reports busy on 429, server errors and maxlag', async () => {

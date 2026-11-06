@@ -53,6 +53,13 @@
 			Game information and images come from <a href="https://boardgamegeek.com">BoardGameGeek</a> and are shown as BGG
 			provides them. Box Populi is not affiliated with or endorsed by BoardGameGeek.
 		</p>
+		<p>When you search for a game, the search text is sent to BoardGameGeek.</p>
+	{:else if data.wikidataOn}
+		<p>
+			Game titles, years and player counts come from <a href="https://www.wikidata.org">Wikidata</a>, which anyone may reuse.
+			When you search for a game or match a pasted list, the titles are sent to Wikidata. Nothing is fetched from
+			BoardGameGeek.
+		</p>
 	{:else}
 		<p>Games on this instance are entered by their owners. Nothing is fetched from BoardGameGeek.</p>
 	{/if}

@@ -9,7 +9,7 @@
 	import ThemePicker from './ThemePicker.svelte';
 
 	/** `bgg`: whether this instance shows BGG data and so must credit it (D30). */
-	let { theme, bgg }: { theme: string; bgg: boolean } = $props();
+	let { theme, bgg, wikidata }: { theme: string; bgg: boolean; wikidata: boolean } = $props();
 </script>
 
 <footer class="credit">
@@ -19,6 +19,9 @@
 				Game data from <a href="https://boardgamegeek.com" rel="noopener">BoardGameGeek</a>
 				<a class="badge" href="https://boardgamegeek.com" rel="noopener">Powered by BGG</a>
 			</p>
+		{/if}
+		{#if wikidata}
+			<p><span>Game details from <a href="https://www.wikidata.org" rel="noopener">Wikidata</a>, free to reuse (CC0).</span></p>
 		{/if}
 		<p class="small">
 			{#if bgg}Box Populi is not affiliated with or endorsed by BoardGameGeek.{/if}

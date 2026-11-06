@@ -33,6 +33,8 @@ type GameDetail = {
 	is_expansion: number;
 	is_manual: number;
 	fetched_at: number | null;
+	source: 'bgg' | 'wikidata' | 'manual';
+	wikidata_id: string | null;
 };
 
 export const load: PageServerLoad = async (event) => {
@@ -152,6 +154,8 @@ export const load: PageServerLoad = async (event) => {
 			categories: jsonArray<string>(game.categories),
 			isExpansion: game.is_expansion === 1,
 			isManual: game.is_manual === 1,
+			source: game.is_manual === 1 ? 'manual' : game.source,
+			wikidataId: game.wikidata_id,
 			detailsPending: game.bgg_id != null && game.fetched_at == null
 		},
 		owners: owners.map((o) => ({

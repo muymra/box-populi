@@ -110,7 +110,9 @@ export class LiveWikidataClient implements WikidataClient {
 
 	private async call(params: Record<string, string>): Promise<unknown> {
 		const url = new URL(API);
-		for (const [k, v] of Object.entries({ ...params, format: 'json', maxlag: '5' })) url.searchParams.set(k, v);
+		// No maxlag: it's for background bots, and Wikidata's lag is often over the usual 5 seconds,
+		// which would refuse searches people are waiting on. 429 and 5xx still count as busy.
+		for (const [k, v] of Object.entries({ ...params, format: 'json' })) url.searchParams.set(k, v);
 		let response: Response;
 		try {
 			response = await this.fetcher(url, { headers: { 'user-agent': this.userAgent, accept: 'application/json' }, signal: AbortSignal.timeout(8000) });

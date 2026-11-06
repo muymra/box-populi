@@ -123,3 +123,8 @@ export function parseInstanceConfig(env: Record<string, unknown>, opts: { dev: b
 
 	return errors.length ? { ok: false, errors } : { ok: true, config };
 }
+
+/** Where new games come from on this instance: BGG while it's on, otherwise GAME_SOURCE. */
+export function activeGameSource(config: InstanceConfig): 'bgg' | 'wikidata' | 'manual' {
+	return config.bggMode !== 'off' ? 'bgg' : config.gameSource;
+}
