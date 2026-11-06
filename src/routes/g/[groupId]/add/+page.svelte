@@ -95,7 +95,7 @@
 		<h2 class="search-h" id="search-h">{bggOn ? 'Or add one game' : 'Add a game'}</h2>
 		<div class="strip">
 			<label class="search">
-				<Search size={18} aria-hidden="true" />
+				<span class="look" class:searching={status === 'searching'}><Search size={18} aria-hidden="true" /></span>
 				<span class="visually-hidden">Search {sourceName}</span>
 				<input type="search" placeholder="Search {sourceName} by title" bind:value={query} oninput={onInput} autocomplete="off" />
 			</label>
@@ -112,7 +112,22 @@
 		{#if message}<p class="banner error" role="alert">{message}</p>{/if}
 		{#if form?.addError}<p class="banner error" role="alert">{form.addError}</p>{/if}
 
-		<ul class="results">
+		{#if status === 'searching' && results.length === 0}
+			<!-- Placeholder rows in the shape of results while the first search runs. -->
+			<ul class="results" aria-hidden="true">
+				{#each [64, 46, 56] as width, i (i)}
+					<li class="ghost" style:--i={i}>
+						<span class="mini skeleton"></span>
+						<span class="info">
+							<span class="skeleton bar" style:width="{width}%"></span>
+							<span class="skeleton bar thin"></span>
+						</span>
+						<span class="skeleton action"></span>
+					</li>
+				{/each}
+			</ul>
+		{:else}
+		<ul class="results" class:refreshing={status === 'searching'}>
 			{#each results as r (r.gameId)}
 				<li>
 					<span class="mini"><BoxFront name={r.name} src={r.thumbUrl} size="mini" /></span>
@@ -158,6 +173,7 @@
 				</li>
 			{/each}
 		</ul>
+		{/if}
 	{:else}
 		<p class="banner">Game search isn't set up on this site, so games are added by hand.</p>
 	{/if}
@@ -261,6 +277,56 @@
 	}
 	.results:empty {
 		display: none;
+	}
+	/* Refining a search: the old results stay, dimmed, until the new ones arrive. */
+	.results.refreshing {
+		opacity: 0.55;
+		transition: opacity 0.2s var(--ease-out);
+	}
+	.ghost .skeleton {
+		animation-delay: calc(var(--i) * 120ms);
+	}
+	.ghost .info {
+		gap: 6px;
+	}
+	.ghost .bar {
+		height: 12px;
+		border-radius: 999px;
+	}
+	.ghost .bar.thin {
+		width: 28%;
+		height: 9px;
+	}
+	.ghost .action {
+		flex: none;
+		width: 64px;
+		height: 44px;
+		border-radius: var(--r-ctl);
+	}
+	/* The magnifier looks around while a search runs. */
+	.look {
+		display: grid;
+		flex: none;
+	}
+	.look.searching {
+		animation: look-around 1s ease-in-out infinite;
+	}
+	@keyframes look-around {
+		0%,
+		100% {
+			transform: translate(0, 0) rotate(0deg);
+		}
+		30% {
+			transform: translate(-2px, -1px) rotate(-12deg);
+		}
+		70% {
+			transform: translate(2px, 1px) rotate(9deg);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.look.searching {
+			animation: none;
+		}
 	}
 	.results li {
 		display: flex;

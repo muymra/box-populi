@@ -373,6 +373,9 @@ The one authored motion. Three suggestions come off the shelf as hero boxes tilt
 ### BGG credit
 A footer on every page, above the bottom tab bar's clearance on phones: "Game data from BoardGameGeek", an outlined "Powered by BGG" text badge, the non-affiliation line, and Privacy and Source links.
 
+### Loading
+Waiting shows the shape of what's coming, never a spinner. `.skeleton` in `app.css` is a shelf-gap block with a band of light sweeping across it every 1.6s; neighbouring placeholders start 90 to 120ms apart, so the sweep ripples along a row instead of flashing at once. The shelf shows placeholder cubes (a box and a caption bar), "Play tonight" a skeleton setup, the add page three result rows (and dims old results while a refined search runs), the list panel a few preview rows. While a search runs, the magnifier in the label strip swings gently as if looking around. Each has a visually hidden "Loading…" status for screen readers. Under reduced motion all of it is still; the global rule also stops looping animations rather than shortening them.
+
 ## Themes
 
 The cube shelf above is the default and the reference design. Twelve presets recolour it, each with its own light and dark palette that follows the device's light or dark setting: Dracula (Alucard in light), Catppuccin (Latte, Mocha), Solarized, Gruvbox, Tokyo Night (Day, Night), Kanagawa (Lotus, Wave), Nord, Everforest, Rosé Pine (Dawn, Main), One Light and Dark, GitHub and Ayu.

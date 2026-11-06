@@ -176,8 +176,14 @@
 
 {#if !payload && !loadError}
 	<div class="shelf" aria-hidden="true">
-		{#each Array.from({ length: 12 }) as _, i (i)}<div class="cube-empty"></div>{/each}
+		{#each Array.from({ length: 12 }) as _, i (i)}
+			<div class="cube-empty" style:--i={i}>
+				<span class="skeleton box"></span>
+				<span class="skeleton line"></span>
+			</div>
+		{/each}
 	</div>
+	<p class="visually-hidden" role="status">Loading the shelf…</p>
 {:else if view === 'cubes' && results.length}
 	<ul class="shelf">
 		{#each results.slice(0, limit) as game (game.id)}
@@ -413,6 +419,24 @@
 	.cube-empty {
 		aspect-ratio: 1 / 1.3;
 		background: var(--cube);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 10px;
+		padding: 12px 10px;
+	}
+	/* The sweep runs cube by cube, so it ripples along the shelf instead of flashing at once. */
+	.cube-empty .skeleton {
+		animation-delay: calc(var(--i) * 90ms);
+	}
+	.cube-empty .box {
+		width: 78%;
+		flex: 1;
+	}
+	.cube-empty .line {
+		width: 58%;
+		height: 9px;
+		border-radius: 999px;
 	}
 	@media (min-width: 760px) {
 		.shelf {

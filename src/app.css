@@ -336,11 +336,44 @@ select.field {
 	padding: var(--s-5);
 }
 
+/* Loading placeholders: the shape of what's coming, with a slow band of light passing over the
+   shelf-gap colour. Still for reduced motion. Set --skeleton-base to sit on another surface. */
+.skeleton {
+	display: block;
+	border-radius: var(--r-cube);
+	background: linear-gradient(
+			100deg,
+			transparent 30%,
+			color-mix(in srgb, var(--cube) 55%, transparent) 50%,
+			transparent 70%
+		)
+		var(--skeleton-base, var(--gap));
+	background-size: 250% 100%;
+	animation: skeleton-sweep 1.6s ease-in-out infinite;
+}
+
+@keyframes skeleton-sweep {
+	from {
+		background-position: 120% 0;
+	}
+	to {
+		background-position: -120% 0;
+	}
+}
+
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,
 	*::after {
 		transition-duration: 0.01ms !important;
 		animation-duration: 0.01ms !important;
+		/* Without this, a looping animation (the skeleton shimmer) would flicker instead of stopping. */
+		animation-iteration-count: 1 !important;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.skeleton {
+		animation: none;
 	}
 }

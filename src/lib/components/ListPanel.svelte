@@ -134,6 +134,22 @@
 			<button class="btn primary" disabled={phase === 'matching' || lines.length === 0}>
 				{phase === 'matching' ? `Checked ${progress.done} of ${progress.total}…` : `Check ${lines.length || ''} ${lines.length === 1 ? 'line' : 'lines'}`}
 			</button>
+			{#if phase === 'matching'}
+				<!-- The preview's shape while lines are checked, ten at a time. -->
+				<ul class="rows ghost" aria-hidden="true">
+					{#each [58, 72, 46, 64] as width, i (i)}
+						<li style:--i={i}>
+							<span class="main">
+								<span class="skeleton tick"></span>
+								<span class="text">
+									<span class="skeleton bar" style:width="{width}%"></span>
+									<span class="skeleton bar thin"></span>
+								</span>
+							</span>
+						</li>
+					{/each}
+				</ul>
+			{/if}
 		</form>
 	{:else if phase === 'preview' || phase === 'adding'}
 		<p class="summary">
@@ -272,6 +288,30 @@
 		gap: 4px;
 		font-size: var(--t-small);
 		color: var(--ink-2);
+	}
+	.ghost {
+		align-self: stretch;
+	}
+	.ghost .skeleton {
+		animation-delay: calc(var(--i) * 110ms);
+	}
+	.ghost .text {
+		flex: 1;
+		gap: 6px;
+	}
+	.skeleton.tick {
+		flex: none;
+		width: 18px;
+		height: 18px;
+		margin-top: 2px;
+	}
+	.skeleton.bar {
+		height: 12px;
+		border-radius: 999px;
+	}
+	.skeleton.bar.thin {
+		width: 34%;
+		height: 9px;
 	}
 	.muted-row .title {
 		color: var(--ink-2);

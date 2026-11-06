@@ -116,7 +116,20 @@
 	{#if loadError}
 		<p class="banner error">{loadError}</p>
 	{:else if !payload}
-		<p class="muted">Loading the shelf…</p>
+		<!-- The setup's shape while the shelf loads: people, the three limits, the button. -->
+		<section class="setup" aria-hidden="true">
+			<div class="who">
+				<span class="skeleton heading"></span>
+				<div class="people">
+					{#each [72, 88, 64, 96, 80] as width, i (i)}<span class="skeleton chip" style:width="{width}px" style:--i={i}></span>{/each}
+				</div>
+			</div>
+			<div class="limits">
+				{#each [0, 1, 2] as i (i)}<span class="skeleton select" style:--i={i + 5}></span>{/each}
+			</div>
+			<span class="skeleton pull"></span>
+		</section>
+		<p class="visually-hidden" role="status">Loading the shelf…</p>
 	{:else}
 		<section class="setup" aria-label="Who's playing">
 			<div class="who">
@@ -274,6 +287,27 @@
 		font-size: var(--t-small);
 		font-weight: 650;
 		color: var(--ink-2);
+	}
+	.setup .skeleton {
+		animation-delay: calc(var(--i, 0) * 90ms);
+	}
+	.skeleton.heading {
+		width: 9rem;
+		height: 22px;
+		margin-bottom: var(--s-3);
+	}
+	.skeleton.chip {
+		height: 40px;
+		border-radius: 999px;
+	}
+	.skeleton.select {
+		height: 46px;
+		border-radius: var(--r-ctl);
+	}
+	.skeleton.pull {
+		width: 13rem;
+		height: 52px;
+		border-radius: var(--r-ctl);
 	}
 	.go {
 		display: flex;
