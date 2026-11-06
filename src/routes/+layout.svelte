@@ -7,9 +7,20 @@
 	import BggCredit from '#lib/components/BggCredit.svelte';
 	import CubeMark from '#lib/components/CubeMark.svelte';
 	import { SOURCE_URL } from '#lib/project.ts';
+	import { resolveTheme } from '#lib/themes.ts';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
+	// This device's theme setting, changed by the footer picker; the page's theme follows it, then the
+	// group's theme (group layouts load `groupTheme`), then the instance's. The server renders the
+	// same answer into <html data-theme>, so this only matters after client-side navigation.
+	// svelte-ignore state_referenced_locally (the server's value seeds it once; the picker owns it after)
+	let deviceTheme = $state(data.deviceTheme);
+	$effect(() => {
+		const groupTheme = (page.data as { groupTheme?: string | null }).groupTheme;
+		document.documentElement.dataset.theme = resolveTheme(deviceTheme, groupTheme, data.instanceTheme);
+	});
+
 	// Group pages draw their own top bar with the group's name in it.
 	const inGroup = $derived(page.route.id?.startsWith('/g/') ?? false);
 </script>
@@ -40,7 +51,7 @@
 	{@render children()}
 </main>
 
-<BggCredit theme={data.theme} bgg={data.bggCredit} wikidata={data.wikidataCredit} />
+<BggCredit bind:deviceTheme bgg={data.bggCredit} wikidata={data.wikidataCredit} />
 
 <style>
 	.top {

@@ -9,7 +9,9 @@ declare global {
 			user: { id: string; name: string } | null;
 			/** True with a valid /admin sign-in cookie. Grants nothing inside groups. */
 			isAdmin: boolean;
-			/** The colour theme for this request: the device's choice, else the instance default. */
+			/** This device's theme setting: a theme id, or `auto`. */
+			deviceTheme: string;
+			/** The colour theme for this request: the device's pick, else the group's, else the instance default. */
 			theme: string;
 		}
 	}

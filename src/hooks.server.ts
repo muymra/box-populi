@@ -2,7 +2,8 @@ import type { Handle } from '@sveltejs/kit/hooks';
 import { getConfig, getDb } from '#lib/server/platform.ts';
 import { resolveSession, SESSION_COOKIE } from '#lib/server/identity.ts';
 import { clearAdminCookie, clearSessionCookie, setSessionCookie, THEME_COOKIE } from '#lib/server/cookies.ts';
-import { isThemeId } from '#lib/themes.ts';
+import { AUTO_THEME, isDeviceTheme, isThemeId, resolveTheme } from '#lib/themes.ts';
+import { groupThemeFor } from '#lib/server/group-admin.ts';
 import { ADMIN_COOKIE, verifyAdminCookie } from '#lib/server/admin.ts';
 
 const escapeHtml = (s: string) =>
@@ -38,8 +39,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (adminCookie && !event.locals.isAdmin) clearAdminCookie(event.cookies, event.url);
 
 	// The theme goes into the HTML before it's sent, so the page never flashes the default colours.
+	// On a group's pages a device left on "Automatic" shows the group's theme (members only).
 	const chosen = event.cookies.get(THEME_COOKIE);
-	event.locals.theme = isThemeId(chosen) ? chosen : config.config.theme;
+	event.locals.deviceTheme = isDeviceTheme(chosen) ? chosen : AUTO_THEME;
+	const groupId = event.url.pathname.match(/^\/g\/([^/]+)/)?.[1];
+	const groupTheme =
+		groupId && !isThemeId(event.locals.deviceTheme) ? await groupThemeFor(getDb(), groupId, event.locals.user?.id ?? null) : null;
+	event.locals.theme = resolveTheme(event.locals.deviceTheme, groupTheme, config.config.theme);
 	const theme = event.locals.theme;
 	const response = await resolve(event, { transformPageChunk: ({ html }) => html.replace('%bp.theme%', theme) });
 	// SEARCH_ENGINES=block: an instance meant only for the people who have its links.

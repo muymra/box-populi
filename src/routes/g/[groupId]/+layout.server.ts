@@ -15,5 +15,7 @@ export const load: LayoutServerLoad = async (event) => {
 	// Imported games still waiting for BGG details; the note offers to finish loading them.
 	const pending =
 		access.role && event.locals.user && event.locals.config.bggMode !== 'off' ? await pendingDetails(db, event.locals.user.id) : 0;
-	return { ...access, code, contact: event.locals.config.instanceContact, pendingDetails: pending };
+	// The group's theme, for switching colours without a reload when moving between groups.
+	const groupTheme = (await one<{ theme: string | null }>(db, 'SELECT theme FROM groups WHERE id = ?1', access.group.id))?.theme ?? null;
+	return { ...access, code, groupTheme, contact: event.locals.config.instanceContact, pendingDetails: pending };
 };

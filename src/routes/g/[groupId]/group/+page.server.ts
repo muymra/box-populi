@@ -9,6 +9,7 @@ import {
 	removeMember,
 	renameGroup,
 	setCoAdmin,
+	setGroupTheme,
 	transferOwnership,
 	type Actor,
 	type AdminResult
@@ -62,6 +63,11 @@ export const actions: Actions = {
 	rename: async (event) => {
 		const result = await act(event, 'admin', (db, id, actor, form) => renameGroup(db, id, actor, form.get('name')));
 		return result.ok ? { renamed: true } : fail(400, { renameError: result.error });
+	},
+
+	theme: async (event) => {
+		const result = await act(event, 'admin', (db, id, actor, form) => setGroupTheme(db, id, actor, form.get('theme')));
+		return result.ok ? { themeSaved: true } : fail(400, { themeError: result.error });
 	},
 
 	newCode: async (event) => {

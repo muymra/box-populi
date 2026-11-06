@@ -6,6 +6,7 @@
 	import CopyButton from '#lib/components/CopyButton.svelte';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { lastActive } from '#lib/time.ts';
+	import { THEME_IDS, THEME_LABELS } from '#lib/themes.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -135,6 +136,20 @@
 				<button class="btn">Rename</button>
 			</form>
 			{#if form?.renameError}<p class="banner error" role="alert">{form.renameError}</p>{/if}
+		</section>
+
+		<section aria-labelledby="theme-h">
+			<h2 id="theme-h">Group theme</h2>
+			<p class="muted">Colours everyone sees on this group's pages, unless they've picked their own theme in the footer.</p>
+			<form method="POST" action="?/theme" class="rename" use:enhance={() => async ({ update }) => update({ reset: false })}>
+				<label class="visually-hidden" for="group-theme">Group theme</label>
+				<select id="group-theme" class="field" name="theme" value={data.groupTheme ?? ''}>
+					<option value="">This site's default</option>
+					{#each THEME_IDS as id (id)}<option value={id}>{THEME_LABELS[id]}</option>{/each}
+				</select>
+				<button class="btn">Save</button>
+			</form>
+			{#if form?.themeError}<p class="banner error" role="alert">{form.themeError}</p>{/if}
 		</section>
 	{/if}
 

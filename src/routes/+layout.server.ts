@@ -9,5 +9,7 @@ export const load: LayoutServerLoad = async ({ locals }) => ({
 	wikidataCredit: activeGameSource(locals.config) === 'wikidata',
 	demoMode: locals.config.instanceMode === 'demo',
 	theme: locals.theme,
+	deviceTheme: locals.deviceTheme,
+	instanceTheme: locals.config.theme,
 	user: locals.user ? { name: locals.user.name } : null
 });

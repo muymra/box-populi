@@ -1,13 +1,14 @@
 <!--
-	Picks this device's colour theme (DESIGN.md "Themes"). With JavaScript the page switches at
-	once and the choice is saved in the background; without, the form posts and comes back here.
+	Picks this device's colour theme (DESIGN.md "Themes"). "Automatic" follows the group's theme on
+	group pages and the instance's elsewhere. With JavaScript the page switches at once (the root
+	layout applies `current`) and the choice is saved in the background; without, the form posts.
 -->
 <script lang="ts">
 	import { page } from '$app/state';
 	import Palette from '@lucide/svelte/icons/palette';
-	import { THEME_IDS, THEME_LABELS } from '#lib/themes.ts';
+	import { AUTO_THEME, THEME_IDS, THEME_LABELS } from '#lib/themes.ts';
 
-	let { current }: { current: string } = $props();
+	let { current = $bindable() }: { current: string } = $props();
 	let enhanced = $state(false);
 
 	$effect(() => {
@@ -15,9 +16,8 @@
 	});
 
 	function pick(event: Event & { currentTarget: HTMLSelectElement }) {
-		const form = event.currentTarget.form!;
-		document.documentElement.dataset.theme = event.currentTarget.value;
-		fetch('/theme', { method: 'POST', body: new FormData(form), headers: { accept: 'application/json' } }).catch(() => {});
+		current = event.currentTarget.value;
+		fetch('/theme', { method: 'POST', body: new FormData(event.currentTarget.form!), headers: { accept: 'application/json' } }).catch(() => {});
 	}
 </script>
 
@@ -27,6 +27,7 @@
 		<Palette size={16} aria-hidden="true" />
 		<span>Theme</span>
 		<select name="theme" value={current} onchange={pick}>
+			<option value={AUTO_THEME}>Automatic</option>
 			{#each THEME_IDS as id (id)}<option value={id}>{THEME_LABELS[id]}</option>{/each}
 		</select>
 	</label>

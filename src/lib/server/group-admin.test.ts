@@ -9,6 +9,8 @@ import {
 	renameGroup,
 	setCoAdmin,
 	transferOwnership,
+	setGroupTheme,
+	groupThemeFor,
 	type Actor
 } from './group-admin.ts';
 import { lastActive } from '../time.ts';
@@ -121,5 +123,18 @@ describe('lastActive', () => {
 		expect(lastActive(now - 21 * day, now)).toBe('active 3 weeks ago');
 		expect(lastActive(now - 100 * day, now)).toBe('active 3 months ago');
 		expect(lastActive(now - 400 * day, now)).toBe('active a year ago');
+	});
+});
+
+describe('group themes', () => {
+	it('lets co-admins and the owner set it, shows it only to members, and clears with empty', async () => {
+		expect((await setGroupTheme(db, 'g1', member, 'nord')).ok).toBe(false);
+		expect((await setGroupTheme(db, 'g1', admin, 'comic-sans')).ok).toBe(false);
+		expect(await setGroupTheme(db, 'g1', admin, 'nord')).toEqual({ ok: true });
+		expect(await groupThemeFor(db, 'g1', 'bo')).toBe('nord');
+		expect(await groupThemeFor(db, 'g1', 'stranger')).toBeNull();
+		expect(await groupThemeFor(db, 'g1', null)).toBeNull();
+		expect(await setGroupTheme(db, 'g1', owner, '')).toEqual({ ok: true });
+		expect(await groupThemeFor(db, 'g1', 'bo')).toBeNull();
 	});
 });

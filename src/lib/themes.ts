@@ -460,6 +460,20 @@ export function isThemeId(value: unknown): value is string {
 	return typeof value === 'string' && THEME_IDS.includes(value);
 }
 
+/** A device's setting: a theme id, or `auto` to follow the group's theme and then the instance's. */
+export const AUTO_THEME = 'auto';
+
+export function isDeviceTheme(value: unknown): value is string {
+	return value === AUTO_THEME || isThemeId(value);
+}
+
+/** What a page shows: the device's pick, else the group's theme (on its pages), else the instance default. */
+export function resolveTheme(device: string | null | undefined, group: string | null | undefined, instance: string): string {
+	if (isThemeId(device)) return device;
+	if (isThemeId(group)) return group;
+	return instance;
+}
+
 // Colour arithmetic in sRGB, enough for mixing tokens and checking WCAG contrast.
 
 type Rgb = [number, number, number];

@@ -381,7 +381,7 @@ The cube shelf above is the default and the reference design. Twelve presets rec
 - **What a theme sets:** the colour tokens only (laminate, cube, gap, rule, the inks, the label strip, mark, danger and the derived note and danger-soft fills, plus the chevrons). Spacing, type, shapes, motion, box prints and the eight player colours stay the same in every theme.
 - **The accent is always the theme's yellow.** Marigold's job (chosen state only) goes to each palette's yellow or gold, the one hue no player colour uses.
 - **Readability is enforced, not hoped for.** When a palette's text colour falls under 4.5:1 on a surface it's drawn on, the generator moves it toward black (light) or white (dark) until it passes; `themes.test.ts` checks every text and surface pair in all 24 palettes. Solarized's body grey and Tokyo Night Day's blue ink are the most visibly adjusted.
-- **Choosing:** the hoster sets the instance default with `THEME`; each device can pick another from the footer's Theme select, stored in the `bp_theme` cookie. The server writes the theme into `<html data-theme>`, so pages never flash the default.
+- **Choosing:** three levels, the most specific winning. The hoster sets the instance default with `THEME`. A group's owner or co-admins set a group theme on the Group tab, shown on that group's pages. Each device picks from the footer's Theme select, stored in the `bp_theme` cookie: "Automatic" (the default) follows the group and then the instance, any named theme overrides both. The server writes the result into `<html data-theme>`, so pages never flash; after client-side navigation the root layout recomputes it from the group layout's `groupTheme`.
 
 ## Do's and Don'ts
 

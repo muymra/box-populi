@@ -7,6 +7,7 @@ import { cleanGroupName } from './groups.ts';
 import { all, one, stmt, type DB } from './db.ts';
 import { can, type GroupAction } from './permissions.ts';
 import type { Role } from '#lib/catalog/types.ts';
+import { isThemeId } from '#lib/themes.ts';
 
 export type Actor = { id: string; role: Role };
 export type AdminResult = { ok: true } | { ok: false; error: string };
@@ -112,4 +113,25 @@ export async function gameCounts(db: DB, groupId: string): Promise<Map<string, n
 		groupId
 	);
 	return new Map(rows.map((r) => [r.user_id, r.n]));
+}
+
+/** The group's theme for the page, when the viewer may see the group: a member, or anyone for the demo. */
+export async function groupThemeFor(db: DB, groupId: string, userId: string | null): Promise<string | null> {
+	const row = await one<{ theme: string | null }>(
+		db,
+		`SELECT g.theme FROM groups g
+		 WHERE g.id = ?1 AND (g.is_demo = 1 OR EXISTS (SELECT 1 FROM memberships m WHERE m.group_id = g.id AND m.user_id = ?2))`,
+		groupId,
+		userId
+	);
+	return row?.theme ?? null;
+}
+
+/** Sets the group's theme; empty means the instance default. Co-admins and the owner, like renaming. */
+export async function setGroupTheme(db: DB, groupId: string, actor: Actor, raw: unknown): Promise<AdminResult> {
+	if (!can(actor.role, 'rename')) return refused;
+	const value = typeof raw === 'string' ? raw : '';
+	if (value !== '' && !isThemeId(value)) return { ok: false, error: 'Pick one of the listed themes.' };
+	await db.batch([stmt(db, 'UPDATE groups SET theme = ?1 WHERE id = ?2', value || null, groupId)]);
+	return { ok: true };
 }
