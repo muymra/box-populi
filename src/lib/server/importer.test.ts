@@ -101,4 +101,30 @@ describe('import', () => {
 		expect(games.every((g) => g.fetched_at === NOW + 1)).toBe(true);
 		expect(await hydrateStep(db, fake, 'ada', NOW + 2)).toEqual({ updated: 0, remaining: 0 });
 	});
+
+	it('refreshes the catalog of every group that shows a hydrated game, not only the caller’s', async () => {
+		// Bo owns the same stub as Ada, in a group Ada isn't in; Cy's group doesn't have it.
+		await run(db, `INSERT INTO users (id, name, created_at) VALUES ('bo', 'Bo', 0), ('cy', 'Cy', 0)`);
+		await run(db, `INSERT INTO groups (id, name, code, created_at) VALUES ('g2', 'H', 'BBBBB', 0), ('g3', 'I', 'CCCCC', 0)`);
+		await run(
+			db,
+			`INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES ('g2', 'bo', 'owner', 0, 0), ('g3', 'cy', 'owner', 0, 0)`
+		);
+		const collection = await fetchCollection(fake, 'ada');
+		if (collection.status !== 'ready') throw new Error('expected ready');
+		await confirmImport(db, 'ada', collection.items, [900002], NOW);
+		await confirmImport(db, 'bo', collection.items, [900002], NOW);
+		await confirmImport(db, 'cy', collection.items, [900004], NOW);
+		const versions = async () =>
+			Object.fromEntries(
+				(await all<{ id: string; catalog_version: number }>(db, 'SELECT id, catalog_version FROM groups ORDER BY id')).map((g) => [g.id, g.catalog_version])
+			);
+		const before = await versions();
+
+		await hydrateStep(db, fake, 'ada', NOW + 1);
+		const after = await versions();
+		expect(after.g1).toBe(before.g1 + 1);
+		expect(after.g2).toBe(before.g2 + 1);
+		expect(after.g3).toBe(before.g3);
+	});
 });

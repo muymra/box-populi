@@ -14,7 +14,9 @@ export const LIMITS = {
 	bggSearch: { kind: 'bgg_search', max: 30, windowMs: 60_000 },
 	wikidataSearch: { kind: 'wikidata_search', max: 30, windowMs: 60_000 },
 	listMatch: { kind: 'list_match', max: 40, windowMs: 10 * 60_000 }, // a 200-line list is 20 calls
-	bggImport: { kind: 'bgg_import', max: 20, windowMs: 10 * 60_000 } // one lookup can poll up to 12 times
+	bggImport: { kind: 'bgg_import', max: 20, windowMs: 10 * 60_000 }, // one lookup can poll up to 12 times, then one confirm
+	// Each step fills in 20 games, so 1,200 games per 10 minutes; past that the page pauses, then carries on.
+	bggHydrate: { kind: 'bgg_hydrate', max: 60, windowMs: 10 * 60_000 }
 } satisfies Record<string, Limit>;
 
 /** The subject for limits that count the whole instance. */

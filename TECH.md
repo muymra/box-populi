@@ -323,7 +323,7 @@ Notes on the choices:
 - **Games are never deleted.** They're a cache shared by every group. Stubs (`fetched_at IS NULL`) are valid rows that show name and cover.
 - **Suspension** is a timestamp rather than a status enum, so "when" comes for free and NULL means normal.
 - **No personal data beyond a display name.** There are no emails to protect, look up or leak.
-- **`catalog_version`** is bumped by `bumpCatalogForUser(userId)` in the same batch as any change that alters a group's catalog payload: adding, editing or removing a copy, loans, joining, leaving or removal of a member, a display name change, and each hydrate step. It bumps every group the user belongs to. Background refreshes of stale games don't bump it; that staleness is accepted.
+- **`catalog_version`** is bumped by `bumpCatalogForUser(userId)` in the same batch as any change that alters a group's catalog payload: adding, editing or removing a copy, loans, joining, leaving or removal of a member, and a display name change. It bumps every group the user belongs to. A change to a shared game row instead bumps every group where any member has a copy of that game: editing a game, and each hydrate step (`bumpCatalogForGames(gameIds)` in `importer.ts`, the ids bound as one JSON array read with `json_each`). Background refreshes of stale games don't bump it; that staleness is accepted.
 
 ## Catalog delivery
 
@@ -402,9 +402,12 @@ Helpers in `src/lib/server/authz.ts`, used by every load function, action and en
 | `requireUser(event)` | a device with a session; otherwise redirect to `/signin?returnTo=<current path>` | `/me` |
 | `requireRead(event, groupId)` | members of the group, or anyone when `is_demo = 1` | every group page load and the catalog endpoint |
 | `requireRole(event, groupId, minRole)` | members with role at least `minRole` (`member` < `admin` < `owner`); always refuses demo groups; refuses suspended groups except for leaving and for the owner deleting the group | every mutation |
+| `requireActiveMember(event, groupId \| null)` | with a group id, the same as `requireRole(member)`; without one, a person with at least one membership in a group that's neither suspended nor the demo (403 otherwise) | the per-person endpoints: `/api/bgg/search`, `/api/bgg/import`, `/api/bgg/import/confirm`, `/api/bgg/hydrate`, `/api/wikidata/search` |
 | `requireAdmin(event)` | a valid `bp_admin` cookie; otherwise 404, so the page doesn't announce itself (hosters sign in at `/admin/login`) | `/admin` and its actions |
 
 Each group helper returns the group row and the caller's role. A missing group and a non-member get the same 404, so group IDs can't be probed. Being the instance admin grants nothing inside groups: `requireRead` and `requireRole` ignore `isAdmin`.
+
+A person's shelf isn't owned by a group: their copies show in every group they're in, suspended ones included. Suspension therefore stops what's done through the suspended group (its pages and actions, and the per-person endpoints when the page sends that group's id), but a member who is also in an active group can still change their shelf from there, and the suspended group's read-only catalog shows the result. The import components send `groupId` from the page they're on; the add page's search box doesn't send one yet, so search falls back to the any-active-group check. `/me` actions (loans returned, name, links) are per person and not refused by suspension. The JSON endpoints answer refusals as `{ error }` through `refuseInactive()` in `bgg/http.ts`.
 
 The role table from the PRD lives in `src/lib/server/permissions.ts` as a pure function, `can(actorRole, action, targetRole?)`, tested against every combination. Actions call `requireRole` and then `can()` with the target's role read fresh from the database. Never trust a role sent by the client, and never rely on a hidden button.
 
@@ -438,7 +441,7 @@ Actions. Each requires a written reason and writes a row to `admin_actions`.
 
 | Action | Effect |
 |---|---|
-| Suspend group | Members can still open it read-only, with a banner showing the reason and `INSTANCE_CONTACT`. Joins and all other changes are refused. Members can leave, and the owner can delete the group. |
+| Suspend group | Members can still open it read-only, with a banner showing the reason and `INSTANCE_CONTACT`. Joins and every change made through the group are refused, including BGG search and import sent from its add page. Members can leave, and the owner can delete the group. Members' shelves are their own, so one who is also in an active group can still change it there, and the change shows here too (see "Authorization"). |
 | Unsuspend group | Back to normal. |
 | Delete group | Requires typing the group name. Same cascade as an owner deleting it. Members' copies stay on their accounts. |
 
@@ -511,18 +514,20 @@ Fixtures: the committed fixtures are hand-written in BGG's XML shape with invent
 
 The live client sends `User-Agent: BoxPopuli/<version> (+https://github.com/muymra/box-populi; instance=<origin>)` on every request. `<version>` is read from `package.json` at build time, so it never needs editing. `<origin>` is the instance's own address (`url.origin` of the request that triggered the call), so BGG can tell instances apart and reach the right hoster instead of assuming all traffic is Carlo's. No email or personal data goes in the header.
 
-Pacing is instance-wide, through the one-row `bgg_pace` table, because isolates share no memory. Before each request the client reserves a slot:
+Pacing is instance-wide, through the one-row `bgg_pace` table, because isolates share no memory. Before each request the client reserves a slot (`reserveSlot` in `bgg/pace.ts`):
 
 ```sql
 UPDATE bgg_pace
 SET next_at = MAX(next_at, ?1) + ?2   -- ?1 = now, ?2 = BGG_MIN_INTERVAL_MS
-WHERE id = 1
+WHERE id = 1 AND MAX(next_at, ?1) - ?1 <= ?3   -- ?3 = 15 seconds, the longest wait
 RETURNING next_at - ?2 AS slot_at;
 ```
 
-D1 applies writes one at a time, so concurrent requests get distinct slots at least the interval apart. The client waits until `slot_at`, then sends. If the wait would exceed 15 seconds, it throws `BggBusyError` instead. The abandoned slot only widens the spacing, which is harmless.
+D1 applies writes one at a time, so concurrent requests get distinct slots at least the interval apart. The client waits until `slot_at`, then sends. When the wait would exceed 15 seconds, the statement matches no row, so nothing is reserved; the client reads `next_at` for the retry hint and throws `BggBusyError`. Checking and reserving in one statement matters: a run of refused calls that each took a slot would push `next_at` out without limit and lock the whole instance out of BGG.
 
-On 429, 500 or 503, the client sets `next_at` to at least now plus 30 seconds (or now plus `Retry-After` when given), so the whole instance backs off, and throws `BggBusyError`. Callers turn that into a "BGG is busy" response. A 202 from the collection endpoint isn't an error; the import flow handles it.
+Each request has a 10-second timeout (`BGG_TIMEOUT_MS`, `AbortSignal.timeout`), started after the wait for the slot and covering the body as well as the headers. A timeout becomes `BggBusyError` with a 30-second retry hint, so callers show the same busy message; it doesn't back the instance off.
+
+On 429, 500, 502 or 503, the client sets `next_at` to at least now plus 30 seconds (or now plus `Retry-After` when given), so the whole instance backs off, and throws `BggBusyError`. Callers turn that into a "BGG is busy" response. A 202 from the collection endpoint isn't an error; the import flow handles it.
 
 ### Parsing `thing`
 
@@ -573,7 +578,7 @@ Rules:
 
 ### Search
 
-`GET /api/bgg/search?q=` (signed in, rate-limited to 30 per minute per user; the client debounces 400 ms and waits for three characters):
+`GET /api/bgg/search?q=&groupId=` (signed in and `requireActiveMember`, rate-limited to 30 per minute per user; the client debounces 400 ms and waits for three characters):
 
 1. `search?query=<q>&type=boardgame,boardgameexpansion`. De-duplicate hits by id; BGG can list an item under both types.
 2. Rank hits: exact name match first, then names starting with the query, then the rest, keeping BGG's order within each tier. Keep the first 10.
@@ -583,18 +588,20 @@ At most two BGG calls per search, and one when every hit is cached. With instanc
 
 ### Import and hydrate
 
-`POST /api/bgg/import` with `{ username }` (rate-limited to 20 calls per 10 minutes per person, since one lookup can poll up to 12 times):
+All three endpoints take the add page's `groupId` and call `requireActiveMember` (see "Authorization").
+
+`POST /api/bgg/import` with `{ username, groupId }` (rate-limited to 20 `bgg_import` calls per 10 minutes per person, since one lookup can poll up to 12 times):
 
 1. Call `collection?username=<u>&own=1` once. On 202, return `{ status: 'pending' }` with HTTP 202; the page asks again every 5 seconds, up to 12 times (one paced BGG request each), then shows a retry button.
 2. Ready: return the preview list with `alreadyOwned` flags. Store nothing. The username is not stored.
 
-`POST /api/bgg/import/confirm` with `{ username, bggIds }`:
+`POST /api/bgg/import/confirm` with `{ username, bggIds, groupId }` (takes a `bgg_import` try too, since fetching the collection can make up to three BGG requests):
 
 1. Fetch the collection again. BGG has it ready by now, and this avoids trusting names sent by the client. Keep only the requested ids that are in it.
 2. In batches of statements: `INSERT ... ON CONFLICT(bgg_id) DO NOTHING` a stub for each game (name, year, thumbnail, image, `search_text` from the name, `fetched_at` NULL), then `INSERT OR IGNORE` the copies, then bump the catalog version. Each statement binds one row; D1 caps bound parameters at 100 per statement.
 3. Return `{ created, stubs }`.
 
-`POST /api/bgg/hydrate` (no body): select up to 20 games with `fetched_at IS NULL AND bgg_id IS NOT NULL` among the caller's copies, call `things()`, update the rows, bump the catalog version, and return `{ updated, remaining }`. On `BggBusyError`, return `{ status: 'busy', retryAfterMs }`. The client loops until `remaining` is 0. It calls again as soon as each step returns, since the server-side pacer sets the rate, and backs off on busy (the given delay, or 5 seconds doubling to 60). A 1,000-game import takes 50 steps: at least 100 seconds, likely three to four minutes, behind a progress bar.
+`POST /api/bgg/hydrate` with `{ groupId }` (rate-limited to 60 `bgg_hydrate` calls per 10 minutes per person, 1,200 games' worth): select up to 20 games with `fetched_at IS NULL AND bgg_id IS NOT NULL` among the caller's copies, call `things()`, update the rows, bump the catalog of every group where anyone has a copy of those games (other people may own the same stubs), and return `{ updated, remaining }`. On `BggBusyError`, answer 503 with `{ error, retryAfterMs }`; past the rate limit, 429 with `retryAfterMs` of 60 seconds. The client loops until `remaining` is 0. It calls again as soon as each step returns, since the server-side pacer sets the rate. On a 503 or 429 with `retryAfterMs` it waits that long or its own backoff, whichever is longer (5 seconds doubling to 60), then carries on. A 1,000-game import takes 50 steps: at least 100 seconds, likely three to four minutes, behind a progress bar. A larger import pauses at the rate limit and resumes by itself.
 
 Hydrate is idempotent and resumable. Any page that sees the caller owns stubs shows "Finish loading game details," which restarts the loop. Two members hydrating the same stub at once is harmless.
 
@@ -708,11 +715,11 @@ The setup lives in the address: `here` (comma-separated member ids), `n` (player
 | `/g/[groupId]/group` | The Group tab: invite code, members list, and the settings actions (`rename`, `newCode`, `promote`, `demote`, `transfer`, `remove`, `delete`). Members see the code and the list; co-admins and the owner see the controls their role allows. | `requireRead`; each action `requireRole(admin)` or `requireRole(owner)` |
 | `/me` | Display name, groups, loans (what you lent, with "Mark as returned", and what you borrowed), new personal link, sign out of this device or everywhere, account deletion. Later: my games and wishlist. | `requireUser` |
 | `GET /api/g/[groupId]/catalog` | Catalog payload with ETag. | `requireRead` |
-| `GET /api/bgg/search` | BGG search proxy. | `requireUser` |
-| `POST /api/bgg/import`, `/api/bgg/import/confirm`, `/api/bgg/hydrate` | Import flow. | `requireUser` |
+| `GET /api/bgg/search` | BGG search proxy. | `requireActiveMember` (optional `groupId`), rate-limited per person |
+| `POST /api/bgg/import`, `/api/bgg/import/confirm`, `/api/bgg/hydrate` | Import flow. | `requireActiveMember` with the page's `groupId`, rate-limited per person |
 | `POST /theme` | Saves this device's theme setting in `bp_theme`: a theme id, or `auto` to follow the group's theme and then the instance's. 204 for `Accept: application/json` (the footer select already switched the page), otherwise a 303 back to the page it came from. Group themes (`groups.theme`, migration `0003`) are set by the Group tab's `theme` action, co-admins and up, and applied in `hooks.server.ts` only for members (or anyone on the demo). | none |
 | `GET /custom-theme.css` | The custom theme's stylesheet, built from the five colours in `instance_settings` (migration `0004`) by `customThemeCss()`. Linked as `?v=<updated_at>` and cached a year; a save on `/admin` changes the version. `src/lib/server/appearance.ts` reads the settings once a minute per isolate. | none |
-| `GET /api/wikidata/search` | Wikidata title search for the add page while BGG is off; results are cached as games. | `requireUser`, rate-limited per person |
+| `GET /api/wikidata/search` | Wikidata title search for the add page while BGG is off; results are cached as games. | `requireActiveMember` (optional `groupId`), rate-limited per person |
 | `POST /api/games/list/match`, `/api/games/list/add` | Paste a list: match up to 10 lines, then add up to 25 chosen rows per call. | `requireRole(member)`; matching rate-limited per person |
 
 Mutations on pages are SvelteKit form actions. They work without client JavaScript, and SvelteKit's origin check covers CSRF for form posts. The JSON endpoints are reached only with the `SameSite=Lax` session cookie, which browsers don't send on cross-site POSTs.
@@ -740,7 +747,7 @@ D1 binds parameters by position (`?1`, `?2` or `?`). Named parameters like `:gro
 - Link URLs: parse with `new URL()`, accept only `http:` and `https:`, store the normalized string, and render with `rel="noopener noreferrer nofollow"` and `target="_blank"`.
 - BGG descriptions are stored as plain text. Never use `{@html}` anywhere in the app.
 - `returnTo` is validated as described under "Identity and sessions."
-- Join attempts, group creation, personal-link redemption and admin sign-in are rate-limited by network address; searches, list matches and BGG imports per person. All through `rate_events` and `take()`, which checks and records in one INSERT so parallel requests can't all slip under a limit. Limits that count failures take a try up front and give it back when the attempt was right.
+- Join attempts, group creation, personal-link redemption and admin sign-in are rate-limited by network address; searches, list matches, BGG imports and hydrate steps per person. All through `rate_events` and `take()`, which checks and records in one INSERT so parallel requests can't all slip under a limit. Limits that count failures take a try up front and give it back when the attempt was right.
 - Session tokens, personal-link tokens and the admin key are compared as SHA-256 digests; only digests are stored.
 - The personal-link GET never changes state, so link previews in chat apps can't sign anyone in.
 - The demo group is read-only on the server, not only in the UI.
@@ -757,7 +764,7 @@ Run with `pnpm test` (Vitest). Tests sit next to their code as `*.test.ts`.
 | `permissions.ts` | Table test over every role, action and target role. Must fail: admin removes admin, admin promotes self, owner leaves with members, anyone acting on a demo group. |
 | `bgg/parse.ts`, `bgg/poll.ts` | Against the fixtures: zeros become NULL, "N+" rows skipped, low-vote polls give no data, double-encoded descriptions decode, expansions get base ids. |
 | `codes.ts` | Alphabet only, length 5. |
-| BGG pacer | SQL test: ten concurrent reservations get distinct slots at least `BGG_MIN_INTERVAL_MS` apart; a 503 pushes `next_at` out by 30 seconds. |
+| BGG pacer | SQL test: ten concurrent reservations get distinct slots at least `BGG_MIN_INTERVAL_MS` apart; a 503 pushes `next_at` out by 30 seconds; refused reservations leave `next_at` unchanged. Client tests (stubbed fetch): a refused slot sends nothing, and a timed-out request or body read becomes `BggBusyError`. |
 | `instance.ts` | Defaults applied, required values reported by name, bad values (`GROUP_CREATION=maybe`, non-numeric limits, `BGG_MIN_INTERVAL_MS` under 2000) rejected. |
 | Identity | SQL tests: creating and joining make a person, membership, session and personal link; a regenerated link kills the old one and every other session; "sign out everywhere" deletes every session; expired sessions are refused and deleted; 40 parallel tries take no more than a limit's max. |
 | Instance admin | The admin cookie verifies and expires; a changed `ADMIN_KEY` invalidates it; a suspended group refuses changes but allows leaving; every action writes `admin_actions`. |

@@ -20,6 +20,11 @@ import type { InstanceConfig } from '../instance.ts';
 export const BGG_BASE = 'https://boardgamegeek.com/xmlapi2/';
 /** Longest a request will wait for its slot before telling the caller BGG is busy. */
 export const MAX_SLOT_WAIT_MS = 15_000;
+/**
+ * Longest a request may take, answer included, before it counts as BGG being busy. Wikidata gets
+ * 8 seconds; BGG gets a little more because a `thing` call with stats for 20 games is heavier.
+ */
+export const BGG_TIMEOUT_MS = 10_000;
 
 export class BggAuthError extends Error {
 	constructor(status: number) {
@@ -40,6 +45,19 @@ function retryAfterMs(header: string | null): number | null {
 	return Number.isFinite(date) ? Math.max(0, Math.min(date - Date.now(), 10 * 60_000)) : null;
 }
 
+/** A request that ran out of time reports BGG as busy, so callers show their usual busy message. */
+async function timed<T>(work: Promise<T>): Promise<T> {
+	try {
+		return await work;
+	} catch (e) {
+		const name = (e as { name?: unknown } | null)?.name;
+		if (name === 'TimeoutError' || name === 'AbortError') throw new BggBusyError(BACKOFF_MS);
+		throw e;
+	}
+}
+
+type BggResponse = { status: number; ok: boolean; text: string };
+
 export type LiveClientOptions = {
 	token: string;
 	db: DB;
@@ -48,12 +66,14 @@ export type LiveClientOptions = {
 	fetchFn?: typeof fetch;
 	now?: () => number;
 	sleep?: (ms: number) => Promise<void>;
+	timeoutMs?: number;
 };
 
 export class LiveBggClient implements BggClient {
 	private fetchFn: typeof fetch;
 	private now: () => number;
 	private sleep: (ms: number) => Promise<void>;
+	private timeoutMs: number;
 
 	constructor(private opts: LiveClientOptions) {
 		// A plain function, never `fetch` itself as a property: Workers throw "Illegal invocation"
@@ -61,36 +81,43 @@ export class LiveBggClient implements BggClient {
 		this.fetchFn = opts.fetchFn ?? ((input, init) => fetch(input, init));
 		this.now = opts.now ?? Date.now;
 		this.sleep = opts.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+		this.timeoutMs = opts.timeoutMs ?? BGG_TIMEOUT_MS;
 	}
 
-	private async request(path: string): Promise<Response> {
+	private async request(path: string): Promise<BggResponse> {
 		const now = this.now();
-		const slot = await reserveSlot(this.opts.db, now, this.opts.intervalMs);
-		const wait = slot - now;
-		if (wait > MAX_SLOT_WAIT_MS) throw new BggBusyError(wait);
+		const slot = await reserveSlot(this.opts.db, now, this.opts.intervalMs, MAX_SLOT_WAIT_MS);
+		if (!slot.ok) throw new BggBusyError(slot.waitMs);
+		const wait = slot.slotAt - now;
 		if (wait > 0) await this.sleep(wait);
 
 		const fetchFn = this.fetchFn;
-		const response = await fetchFn(BGG_BASE + path, {
-			headers: {
-				Authorization: `Bearer ${this.opts.token}`,
-				'User-Agent': userAgent(this.opts.origin),
-				Accept: 'application/xml, text/xml'
-			}
-		});
+		// Started after the wait for the slot, and it covers reading the body too.
+		const signal = AbortSignal.timeout(this.timeoutMs);
+		const response = await timed(
+			fetchFn(BGG_BASE + path, {
+				headers: {
+					Authorization: `Bearer ${this.opts.token}`,
+					'User-Agent': userAgent(this.opts.origin),
+					Accept: 'application/xml, text/xml'
+				},
+				signal
+			})
+		);
 		if (response.status === 429 || response.status === 500 || response.status === 502 || response.status === 503) {
 			const delay = retryAfterMs(response.headers.get('retry-after')) ?? BACKOFF_MS;
 			await backOff(this.opts.db, this.now() + delay);
 			throw new BggBusyError(delay);
 		}
 		if (response.status === 401 || response.status === 403) throw new BggAuthError(response.status);
-		return response;
+		const text = response.ok ? await timed(response.text()) : '';
+		return { status: response.status, ok: response.ok, text };
 	}
 
 	async search(query: string): Promise<BggSearchHit[]> {
 		const response = await this.request(`search?query=${encodeURIComponent(query)}&type=boardgame,boardgameexpansion`);
 		if (!response.ok) throw new Error(`BGG search failed (HTTP ${response.status})`);
-		return parseSearch(await response.text());
+		return parseSearch(response.text);
 	}
 
 	async things(bggIds: number[]): Promise<BggThing[]> {
@@ -100,7 +127,7 @@ export class LiveBggClient implements BggClient {
 			const chunk = ids.slice(i, i + THINGS_PER_REQUEST);
 			const response = await this.request(`thing?id=${chunk.join(',')}&stats=1`);
 			if (!response.ok) throw new Error(`BGG thing request failed (HTTP ${response.status})`);
-			out.push(...parseThings(await response.text()));
+			out.push(...parseThings(response.text));
 		}
 		return out;
 	}
@@ -109,7 +136,7 @@ export class LiveBggClient implements BggClient {
 		const response = await this.request(`collection?username=${encodeURIComponent(username)}&own=1`);
 		if (response.status === 202) return { status: 'pending' };
 		if (!response.ok) throw new Error(`BGG collection request failed (HTTP ${response.status})`);
-		return parseCollection(await response.text());
+		return parseCollection(response.text);
 	}
 }
 

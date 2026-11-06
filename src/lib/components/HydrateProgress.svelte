@@ -4,9 +4,12 @@
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import Check from '@lucide/svelte/icons/check';
 
 	let { pending, shelfHref }: { pending: number; shelfHref: string } = $props();
+	// The group whose add page this is: the server refuses the step for a suspended group.
+	const groupId = page.params.groupId;
 
 	let done = $state(0);
 	let remaining = $state(0);
@@ -27,17 +30,22 @@
 			let response: Response;
 			let body: { updated?: number; remaining?: number; error?: string; retryAfterMs?: number };
 			try {
-				response = await fetch('/api/bgg/hydrate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+				response = await fetch('/api/bgg/hydrate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ groupId }) });
 				body = await response.json();
 			} catch {
 				status = 'error';
 				message = 'Lost the connection. Your games are on the shelf; their details will finish loading when you try again.';
 				return;
 			}
-			if (response.status === 503 && body.retryAfterMs != null) {
+			// 503: BGG is busy. 429: this person's hydrate limit is used up for now.
+			if ((response.status === 503 || response.status === 429) && body.retryAfterMs != null) {
 				const wait = Math.max(body.retryAfterMs, backoff);
+				const seconds = Math.ceil(wait / 1000);
 				status = 'waiting';
-				message = `BoardGameGeek asked us to slow down. Carrying on in ${Math.ceil(wait / 1000)} seconds.`;
+				message =
+					response.status === 429
+						? `That’s a lot of games at once. Carrying on in ${seconds} seconds.`
+						: `BoardGameGeek asked us to slow down. Carrying on in ${seconds} seconds.`;
 				await sleep(wait);
 				backoff = Math.min(backoff * 2, 60_000);
 				status = 'running';

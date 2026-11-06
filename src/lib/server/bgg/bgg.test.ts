@@ -1,9 +1,14 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { countsFromMask } from '#lib/catalog/players.ts';
+import { createTestDb } from '../testing/d1.ts';
+import { one, run } from '../db.ts';
 import { cleanDescription, parseCollection, parseSearch, parseThings, positiveNumber } from './parse.ts';
 import { masksFromVotes, parseCountList } from './poll.ts';
 import { FakeBggClient } from './fake.ts';
+import { LiveBggClient, MAX_SLOT_WAIT_MS } from './client.ts';
+import { BACKOFF_MS } from './pace.ts';
+import { BggBusyError } from './types.ts';
 
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 
@@ -134,6 +139,70 @@ describe('FakeBggClient', () => {
 		expect((await client.things([900001])).map((t) => t.name)).toEqual(['Test Game Alpha']);
 		expect(await client.collection('pending')).toEqual({ status: 'pending' });
 		expect(await client.collection('nobody')).toEqual({ status: 'not_found' });
+	});
+});
+
+describe('LiveBggClient slots and timeouts', () => {
+	const NOW = 1_800_000_000_000;
+	const ok = () => Promise.resolve(new Response('<?xml version="1.0"?><items></items>', { status: 200 }));
+	function setup(fetchFn: typeof fetch, timeoutMs?: number) {
+		const db = createTestDb();
+		const calls: RequestInit[] = [];
+		const live = new LiveBggClient({
+			token: 't',
+			db,
+			intervalMs: 2000,
+			origin: 'https://example.pages.dev',
+			now: () => NOW,
+			sleep: async () => {},
+			timeoutMs,
+			fetchFn: (input, init) => {
+				calls.push(init ?? {});
+				return fetchFn(input, init);
+			}
+		});
+		const nextAt = async () => (await one<{ next_at: number }>(db, 'SELECT next_at FROM bgg_pace WHERE id = 1'))!.next_at;
+		return { db, live, calls, nextAt };
+	}
+
+	it('refuses without sending or taking a slot when the queue is too long', async () => {
+		const { db, live, calls, nextAt } = setup(ok);
+		await run(db, 'UPDATE bgg_pace SET next_at = ?1', NOW + MAX_SLOT_WAIT_MS + 1);
+		for (let i = 0; i < 5; i++) {
+			const busy = await live.search('catan').catch((e) => e);
+			expect(busy).toBeInstanceOf(BggBusyError);
+			expect(busy.retryAfterMs).toBe(MAX_SLOT_WAIT_MS + 1);
+		}
+		expect(calls).toHaveLength(0);
+		expect(await nextAt()).toBe(NOW + MAX_SLOT_WAIT_MS + 1);
+	});
+
+	it('sends a timeout signal with every request', async () => {
+		const { live, calls } = setup(ok);
+		await live.search('catan');
+		expect(calls[0].signal).toBeInstanceOf(AbortSignal);
+	});
+
+	it('reports a request that runs out of time as BGG being busy', async () => {
+		// Never answers; only the signal ends it.
+		const hang: typeof fetch = (_input, init) =>
+			new Promise((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal!.reason)));
+		const { live } = setup(hang, 20);
+		const busy = await live.things([1]).catch((e) => e);
+		expect(busy).toBeInstanceOf(BggBusyError);
+		expect(busy.retryAfterMs).toBe(BACKOFF_MS);
+	});
+
+	it('maps an aborted body read the same way, and leaves other failures alone', async () => {
+		const abort = () => Object.assign(new Error('aborted'), { name: 'AbortError' });
+		const stalls: typeof fetch = async () => {
+			const response = new Response('', { status: 200 });
+			Object.defineProperty(response, 'text', { value: () => Promise.reject(abort()) });
+			return response;
+		};
+		await expect(setup(stalls).live.collection('someone')).rejects.toBeInstanceOf(BggBusyError);
+		const offline: typeof fetch = () => Promise.reject(new TypeError('fetch failed'));
+		await expect(setup(offline).live.search('x')).rejects.toThrow(TypeError);
 	});
 });
 
