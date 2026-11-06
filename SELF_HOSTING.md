@@ -1,6 +1,8 @@
 # Running your own Box Populi
 
-This guide sets up an instance on your own Cloudflare account, which is the main path and the one followed end to end (STATUS.md, 2026-11-06). The same code also runs on Cloudflare Workers, in Docker on any server, and on Vercel or Netlify; those have their own sections near the end.
+This guide sets up a copy of Box Populi (an "instance") for your group. You don't need to know how to program: you'll create a free Cloudflare account and paste commands into a terminal, and every command is written out below. Set aside 30 minutes to an hour. Your friends never need any of this; once it's running, they just open the link you share.
+
+The steps follow Cloudflare Pages, the main path and the one tested end to end. The same code also runs on Cloudflare Workers, in Docker on a home server, and on Vercel or Netlify; those have their own sections near the end. If a step goes wrong, the error usually names what's missing, and [opening an issue](https://github.com/muymra/box-populi/issues) is welcome.
 
 ## Where to host it
 
@@ -27,7 +29,7 @@ This guide sets up an instance on your own Cloudflare account, which is the main
 
 - A Cloudflare account (free plan is enough).
 - Optional: a BoardGameGeek account to register an application. Apply first, because approval can take a week or more. The instance runs without it: members find games on Wikidata (titles, years, player counts) or type them in, and fill in the rest themselves.
-- Node 22.18 or newer (the setup scripts are TypeScript, which Node runs directly from 22.18), pnpm (`corepack enable pnpm`, or install it with your package manager), and git.
+- On your computer: [Node.js](https://nodejs.org) 22.18 or newer, [pnpm](https://pnpm.io/installation) (after installing Node, `corepack enable pnpm` sets it up), and [git](https://git-scm.com/downloads). A terminal is the command window: Terminal on a Mac or Linux. On Windows, use the Ubuntu terminal that comes with [WSL](https://learn.microsoft.com/windows/wsl/install); that's where these steps were tested.
 
 ## 1. Apply for BGG access (optional, do it first)
 

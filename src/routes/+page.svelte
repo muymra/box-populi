@@ -19,6 +19,21 @@
 		{ name: 'Ember Tavern', owners: [5] }
 	];
 	const NAMES = ['Ada', 'Bram', 'Chen', 'Dewi', 'Eli', 'Fen'];
+
+	// What the demo page tells someone deciding whether to run their own (PRD "Demo group").
+	const GETS = [
+		['One shelf for everyone', 'Each member adds the games they own once, and they show in every group they’re in, with who owns which copy.'],
+		['Filters for game night', 'Players, time, complexity, mechanics, themes, owner, and whether a copy is lent out. A filtered view is a link you can share.'],
+		['Play tonight', 'Tick who showed up and get three games from what they own, weighted towards ones that play best at that count.'],
+		['Wanted and lending', 'Wishlists, a list of games someone wants and nobody in the group owns yet, and who has whose copy.'],
+		['Rules and tutorials', 'Members add rulebook and video links to each game, so the group stops searching for them every time.'],
+		['No accounts', 'Join with a group code and a name. A personal link signs you in on another device; there are no passwords or emails.']
+	] as const;
+	const HOSTING = [
+		['Where it runs', 'Cloudflare Pages or Workers on the free plan, Docker with a SQLite file on a home server, or Vercel or Netlify with a Turso database.'],
+		['Where games come from', 'BoardGameGeek search and collection import with your own BGG application. Without one: Wikidata search, a pasted list, and hand entry, which each group can correct for itself.'],
+		['What you manage', 'An admin page to suspend or delete groups without seeing inside them, twelve colour themes, and your own colours and logo.']
+	] as const;
 </script>
 
 {#snippet exampleShelf()}
@@ -48,6 +63,7 @@
 					<li><a href="/demo">Filter the shelf</a> by players, time and complexity</li>
 					<li>Open a game to see who owns it and where its rules are</li>
 					<li>Let <a href="/g/demo/pick">Play tonight</a> pull three games for whoever showed up</li>
+					<li>Try another of the twelve colour themes at the bottom of the page</li>
 				</ul>
 			{/if}
 			<div class="actions">
@@ -55,12 +71,34 @@
 				<a class="btn" href={SOURCE_URL} rel="noopener"><Code size={18} aria-hidden="true" /> Code on GitHub</a>
 			</div>
 			<p class="lede small open-source">
-				Free and open source. Run it for your own group on a free Cloudflare account with
+				Free and open source. Run it for your own group on Cloudflare, Docker, Vercel or Netlify with
 				<a href={SELF_HOSTING_URL} rel="noopener">the self-hosting guide</a>.
 			</p>
 			{#if !data.demoExists}<p class="banner">The demo group isn't loaded on this instance yet.</p>{/if}
 		</div>
 		{@render exampleShelf()}
+	</section>
+
+	<section class="more" aria-labelledby="gets-h">
+		<h2 id="gets-h">What a group gets</h2>
+		<dl class="points">
+			{#each GETS as [term, detail] (term)}
+				<div><dt>{term}</dt><dd>{detail}</dd></div>
+			{/each}
+		</dl>
+	</section>
+
+	<section class="more" aria-labelledby="own-h">
+		<h2 id="own-h">Running your own</h2>
+		<dl class="points">
+			{#each HOSTING as [term, detail] (term)}
+				<div><dt>{term}</dt><dd>{detail}</dd></div>
+			{/each}
+		</dl>
+		<div class="actions">
+			<a class="btn primary" href={SELF_HOSTING_URL} rel="noopener">Read the self-hosting guide</a>
+			<a class="btn" href={SOURCE_URL} rel="noopener"><Code size={18} aria-hidden="true" /> Code on GitHub</a>
+		</div>
 	</section>
 {:else if data.groups.length}
 	<section class="mine">
@@ -102,6 +140,37 @@
 <style>
 	.open-source {
 		margin-top: var(--s-4);
+	}
+	.more {
+		padding: var(--s-6) 0;
+		border-top: 1px solid var(--rule);
+	}
+	.more h2 {
+		margin: 0 0 var(--s-5);
+	}
+	.points {
+		display: grid;
+		gap: var(--s-5) var(--s-6);
+		margin: 0;
+	}
+	@media (min-width: 640px) {
+		.points {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+	@media (min-width: 900px) {
+		.points {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+	}
+	.points dt {
+		font-weight: 750;
+		margin-bottom: var(--s-1);
+	}
+	.points dd {
+		margin: 0;
+		color: var(--ink-2);
+		max-width: 38ch;
 	}
 	.tries {
 		margin: 0 0 var(--s-4);

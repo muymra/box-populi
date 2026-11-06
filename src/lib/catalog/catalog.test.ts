@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildSearchText, normalize } from './normalize.ts';
-import { countsFromMask, formatCounts, maskFromCounts, maskHas } from './players.ts';
+import { countsFromMask, formatCounts, formatPlayerRange, formatPlayersShort, maskFromCounts, maskHas } from './players.ts';
 import { formatPlaytime, formatWeight, weightBucket } from './buckets.ts';
 import { DEFAULT_FILTERS, filterGames, parseFilters, passedOnUnknown, serializeFilters, type Filters } from './filter.ts';
 import { gamesAtHand, pick, seededRng } from './pick.ts';
@@ -29,6 +29,14 @@ describe('player masks', () => {
 	it('formats ranges', () => {
 		expect(formatCounts([5, 1, 3, 4])).toBe('1, 3–5');
 		expect(formatCounts([])).toBe('');
+	});
+	it('says which end of a half-known player range is known', () => {
+		expect(formatPlayerRange(2, 4)).toBe('2–4');
+		expect(formatPlayerRange(3, 3)).toBe('3');
+		expect(formatPlayerRange(null, 5)).toBe('up to 5');
+		expect(formatPlayerRange(2, null)).toBe('2+');
+		expect(formatPlayerRange(null, null)).toBeNull();
+		expect([formatPlayersShort(2, 4), formatPlayersShort(null, 5), formatPlayersShort(2, null)]).toEqual(['2–4p', 'up to 5p', '2p+']);
 	});
 });
 

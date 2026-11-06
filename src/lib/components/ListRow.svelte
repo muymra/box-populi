@@ -6,7 +6,7 @@
 <script lang="ts">
 	import { boxColor, playerColor } from '#lib/catalog/colors.ts';
 	import { BUCKET_LABELS, formatPlaytime, weightBucket } from '#lib/catalog/buckets.ts';
-	import { formatPlayerRange } from '#lib/catalog/players.ts';
+	import { formatPlayersShort } from '#lib/catalog/players.ts';
 	import { isCopyAvailable } from '#lib/catalog/filter.ts';
 	import type { CatalogGame, CatalogMember } from '#lib/catalog/types.ts';
 
@@ -22,12 +22,12 @@
 	const color = $derived(boxColor(game.name));
 	const owners = $derived([...new Set(game.copies.map((c) => c.ownerId))].map((id) => members.get(id)).filter((m) => m != null));
 	const shown = $derived(owners.length > 4 ? owners.slice(0, 3) : owners);
-	const players = $derived(formatPlayerRange(game.minPlayers, game.maxPlayers));
+	const players = $derived(formatPlayersShort(game.minPlayers, game.maxPlayers));
 	const time = $derived(formatPlaytime(game.minPlaytime, game.maxPlaytime));
 	const bucket = $derived(weightBucket(game.weight));
 	const unavailable = $derived(!game.copies.some((c) => isCopyAvailable(c, memberIds)));
 	const facts = $derived(
-		[players && `${players}p`, time, bucket && BUCKET_LABELS[bucket], owners.length > 4 ? `${owners.length} owners` : null]
+		[players, time, bucket && BUCKET_LABELS[bucket], owners.length > 4 ? `${owners.length} owners` : null]
 			.filter(Boolean)
 			.join(' · ')
 	);

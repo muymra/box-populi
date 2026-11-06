@@ -39,5 +39,13 @@ export function formatCounts(counts: number[]): string {
 export function formatPlayerRange(min: number | null, max: number | null): string | null {
 	if (min == null && max == null) return null;
 	if (min != null && max != null) return min === max ? `${min}` : `${min}–${max}`;
-	return `${min ?? max}`;
+	// Half-known (hand-entered with one end only): say which end, so "5" doesn't read as exactly five.
+	return min == null ? `up to ${max}` : `${min}+`;
+}
+
+/** The shelf's short form: "2–4p", "up to 5p", "2p+". */
+export function formatPlayersShort(min: number | null, max: number | null): string | null {
+	const range = formatPlayerRange(min, max);
+	if (range == null) return null;
+	return range.endsWith('+') ? `${range.slice(0, -1)}p+` : `${range}p`;
 }

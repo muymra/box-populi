@@ -3,7 +3,7 @@
 	import BoxFront from './BoxFront.svelte';
 	import OwnerEdge from './OwnerEdge.svelte';
 	import { formatPlaytime } from '#lib/catalog/buckets.ts';
-	import { formatPlayerRange } from '#lib/catalog/players.ts';
+	import { formatPlayersShort } from '#lib/catalog/players.ts';
 	import { isCopyAvailable } from '#lib/catalog/filter.ts';
 	import type { CatalogGame, CatalogMember } from '#lib/catalog/types.ts';
 
@@ -22,10 +22,10 @@
 			.filter((m) => m != null)
 			.map((m) => ({ name: m.name, colorIndex: m.colorIndex }))
 	);
-	const players = $derived(formatPlayerRange(game.minPlayers, game.maxPlayers));
+	const players = $derived(formatPlayersShort(game.minPlayers, game.maxPlayers));
 	const time = $derived(formatPlaytime(game.minPlaytime, game.maxPlaytime));
 	const unavailable = $derived(!game.copies.some((c) => isCopyAvailable(c, memberIds)));
-	const caption = $derived([players && `${players}p`, time].filter(Boolean).join(' · '));
+	const caption = $derived([players, time].filter(Boolean).join(' · '));
 	// One flag fits on a box: lent out first, then the filter note, then expansion.
 	const flag = $derived(unavailable ? 'Lent out' : unknown ? 'Info missing' : game.isExpansion ? 'Expansion' : null);
 </script>
