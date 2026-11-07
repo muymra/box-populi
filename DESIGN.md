@@ -28,6 +28,7 @@ colors:
   ink-2-dark: "#c4bdb2"
   ink-3-dark: "#a59d91"
   label-dark: "#302b25"
+  label-ink-dark: "#f1ede6"
   label-ink-2-dark: "#c7bfb3"
   label-line-dark: "#5b544a"
   label-field-dark: "#1f1b17"
@@ -281,7 +282,7 @@ A cardboard-and-laminate neutral field with two kinds of colour on top: player c
 ### Hierarchy
 - **Display** (800, clamp 32 to 52px, 1.02, width 82%): the headline on the landing page only, capped at 14ch.
 - **Headline** (780, clamp 26 to 36px, 1.15, width 88%): page titles and game names on game pages.
-- **Title** (780, 22px, 1.15, width 88%): section headings; the group name in the top bar uses this size from 900px and 20px below.
+- **Title** (780, 22px, 1.15, width 88%): section headings; the group name in the top bar uses this size from 900px and 18px (the lead size) below.
 - **Title small** (780, 18px): sub-section headings; the same 18px at body weight is the lead size for intros and pick results.
 - **Box title** (800, sized from the box width at 15.5cqi between 9 and 30px, 1.05, width 78%): titles printed on box fronts, clamped to four lines.
 - **Spine title** (800, 17px, 1.1, width 80%): titles along spines, one line with ellipsis.
@@ -339,7 +340,7 @@ Ink-filled and plain, so marigold stays free for state.
 
 ### Tags and flags
 - **Tag:** shelf-gap pill, ink-2 text, 12px at 600. Used for categories and facts on game pages.
-- **Flag:** a cube-white pill with a 1px rule ring at the bottom of a box, 11px at 700, for "Lent out", "Info missing" (an active filter let the game through only because it lacks that detail) and "Expansion", one per box in that order; the Spines view shows each that applies. Lent-out boxes fade to 45% opacity at half saturation.
+- **Flag:** a cube-white pill with a 1px rule ring at the bottom of a box, 12px at 700, for "Lent out", "Info missing" (an active filter let the game through only because it lacks that detail) and "Expansion", one per box in that order; the Spines view shows each that applies. Lent-out boxes fade to 45% opacity at half saturation.
 
 ### Cards / Containers
 - **Corner Style:** 10px for panels, the label strip and empty states.
@@ -354,8 +355,8 @@ Ink-filled and plain, so marigold stays free for state.
 - **Focus:** border darkens to ink-3, plus the global focus outline. Search fields in the label strip sit on label-field with no border and take a 2px marigold outline when focused, as does every other control in the strip (`.strip :focus-visible` in app.css).
 
 ### Navigation
-- **Top bar:** cube mark, group name at title size, tabs, three icons, then the person's name behind a 1px divider (capped at 6rem below 900px so the group name keeps room). 56px tall, 64px from 900px, 1px rule underneath. The icons are 44px, ink-2, shelf-gap on hover: Crown ("Who goes first?") and Dice 5 ("Dice") open modals; Trophy ("Plays and leaderboard") is a link to the plays page and fills marigold while you're on it. Below 900px they sit beside the name, since the tabs are at the bottom.
-- **Tabs:** Shelf, Play tonight, Wanted, Add games, Group, each a Lucide icon plus label. The tabs never shrink; the group name is what shortens. Between 900 and 1099px the top bar drops the tab icons, tightens tabs to 8px padding, the icons to 40px and the bar's gaps to 8px, so all five tabs and the three icons fit; at 900px with five tabs the group name keeps about 170px. Below 900px they form a fixed bottom bar on laminate (12px labels, 52px targets) where the current tab's icon sits in a marigold pill. The bar moved up at 760px until the third icon came; at 760px that left the group name 35px. From 900px they sit in the top bar at 15px, and the whole current tab fills marigold; others take a shelf-gap fill on hover.
+- **Top bar:** cube mark, group name at title size, tabs, three icons, then the person's name behind a 1px divider (capped at 6rem below 900px so the group name keeps room). 56px tall, 64px from 900px, 1px rule underneath. The icons are 44px, ink-2, shelf-gap on hover: Crown ("Who goes first?") and Dice 5 ("Roll dice", opening the "Dice" modal) open modals; Trophy ("Plays and leaderboard") is a link to the plays page and fills marigold while you're on it. Below 900px they sit beside the name, since the tabs are at the bottom.
+- **Tabs:** Shelf, Play tonight, Wanted, Add games, Group, each a Lucide icon plus label. The tabs never shrink; the group name is what shortens. Between 900 and 1099px the top bar drops the tab icons, tightens tabs to 8px padding, the icons to 40px and the bar's gaps to 8px, so all five tabs and the three icons fit; at 900px with five tabs the group name keeps about 170px. Below 900px they form a fixed bottom bar on laminate (12px labels, 52px targets) where the current tab's icon sits in a marigold pill. The bar moved up at 760px until the third icon came; at 760px that left the group name 35px. From 900px they sit in the top bar at 16px (body size), and the whole current tab fills marigold; others take a shelf-gap fill on hover.
 - **View switch:** a two-button segmented control (Cubes, Spines) with a 1.5px rule border; the pressed side fills with ink, not marigold.
 
 ### Modals
@@ -367,7 +368,7 @@ A native `<dialog>` over the current page, on a 50% near-black backdrop. Below 7
 ### Play log
 - **Log form** (in a modal): a date field, the who's-here toggles for the players, "How it ended" as four pills (Places, Scores, Co-op: won, Co-op: lost) where the chosen one fills marigold, then a row per player: their colour square and name, and either a place select (–, 1st, 2nd…) or a score field with the place it gives in ink-2. The primary button names the game: "Log Azul".
 - **Play rows:** the date in label size and ink-2, the game as a link when the list mixes games, a neutral "Co-op, won" tag, and edit and delete as 36px icon buttons at the right. Players follow in finishing order on one wrapping line, each a 12px colour square, the name (the winner at 700), the place and score in ink-2. Guests get an outlined square. Delete asks first, inline, with a danger-outlined button.
-- **Leaderboard:** a plain table on the page ground with 1px rules, points at 780, numbers right-aligned and tabular. "This year / All time" is the shelf's segmented switch (current side filled with ink).
+- **Leaderboard:** a plain table on the page ground with 1px rules, points at 780, numbers right-aligned and tabular. The period switch (the current year, e.g. "2026", and "All time") is the shelf's segmented switch (current side filled with ink).
 
 ### Cube
 The signature. A cube-white cell holding a box front standing on its floor, a centred caption (players and time, tabular, ink-2), and the owner edge closing the bottom. On hover or focus the box rises 3px and takes the lift shadow over 0.2s on the shared ease-out curve.
@@ -406,13 +407,13 @@ The cube shelf above is the default and the reference design. Twelve presets rec
 - **Do** put every grid of games on the shelf-gap ground with 6px gaps (8px from 760px) and close each cube with the owner edge.
 - **Do** take player colours from `playerColor()` by join order and box prints from `boxColor()` by name; both live in `src/lib/catalog/colors.ts`.
 - **Do** keep marigold for state: active filters, the current tab, selected people, text selection and focused label-strip fields.
-- **Don't** use marigold for facts. The picker's "Best at N" tag is a neutral cube-white tag with a rule outline, and the cube mark's second box is kraft cardboard, not marigold.
 - **Do** set box and spine titles at 800 and 78 to 80% width, and interface headings at 780 and 88%.
 - **Do** hotlink BGG box art and fall back to the printed front when it is missing or fails to load.
 - **Do** render the footer on every page, including new routes outside the root layout. It carries the BGG credit whenever the instance shows BGG data; an instance that has never had BGG on shows only Privacy, Source and the theme select.
 - **Do** give any new motion a reduced-motion state with no animation and no tilt.
 
 ### Don't:
+- **Don't** use marigold for facts. The picker's "Best at N" tag is a neutral cube-white tag with a rule outline, and the cube mark's second box is kraft cardboard, not marigold.
 - **Don't** use marigold for decoration, emphasis, ownership or a primary button.
 - **Don't** add a saturated colour to the shelf other than the owner edges, and don't add a player colour near marigold's hue.
 - **Don't** add a box print that is saturated, sits in a player hue, or falls below 4.5:1 with its ink; keep dark prints to about a quarter of the set.

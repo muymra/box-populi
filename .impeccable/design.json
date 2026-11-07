@@ -1162,13 +1162,13 @@
       "Do put every grid of games on the shelf-gap ground with 6px gaps (8px from 760px) and close each cube with the owner edge.",
       "Do take player colours from `playerColor()` by join order and box prints from `boxColor()` by name; both live in `src/lib/catalog/colors.ts`.",
       "Do keep marigold for state: active filters, the current tab, selected people, text selection and focused label-strip fields.",
-      "Don't use marigold for facts. The picker's \"Best at N\" tag is a neutral cube-white tag with a rule outline, and the cube mark's second box is kraft cardboard, not marigold.",
       "Do set box and spine titles at 800 and 78 to 80% width, and interface headings at 780 and 88%.",
       "Do hotlink BGG box art and fall back to the printed front when it is missing or fails to load.",
       "Do render the footer on every page, including new routes outside the root layout. It carries the BGG credit whenever the instance shows BGG data; an instance that has never had BGG on shows only Privacy, Source and the theme select.",
       "Do give any new motion a reduced-motion state with no animation and no tilt."
     ],
     "donts": [
+      "Don't use marigold for facts. The picker's \"Best at N\" tag is a neutral cube-white tag with a rule outline, and the cube mark's second box is kraft cardboard, not marigold.",
       "Don't use marigold for decoration, emphasis, ownership or a primary button.",
       "Don't add a saturated colour to the shelf other than the owner edges, and don't add a player colour near marigold's hue.",
       "Don't add a box print that is saturated, sits in a player hue, or falls below 4.5:1 with its ink; keep dark prints to about a quarter of the set.",
