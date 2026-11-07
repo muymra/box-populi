@@ -282,3 +282,19 @@ describe('saving plays', () => {
 		expect(await one(db, 'SELECT COUNT(*) AS n FROM plays')).toEqual({ n: 0 });
 	});
 });
+
+describe('where a played game’s details came from', () => {
+	it('counts as BGG only with a BGG id, like the footer’s credit', async () => {
+		const db = createTestDb();
+		await run(db, `INSERT INTO users (id, name, created_at) VALUES ('ada', 'Ada', 0)`);
+		await run(db, `INSERT INTO groups (id, name, code, created_at) VALUES ('g1', 'G', 'AAAAA', 0)`);
+		await run(db, `INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES ('g1', 'ada', 'owner', 0, 0)`);
+		// An invented demo game keeps the column default 'bgg' but has no BGG id.
+		await run(db, `INSERT INTO games (id, bgg_id, name, search_text, source) VALUES (1, NULL, 'Invented', 'invented', 'bgg'), (2, 13, 'Real', 'real', 'bgg'), (3, NULL, 'Wiki', 'wiki', 'wikidata')`);
+		await run(db, `INSERT INTO copies (user_id, game_id, added_at) VALUES ('ada', 1, 0), ('ada', 2, 0), ('ada', 3, 0)`);
+		const actor: Actor = { id: 'ada', role: 'owner' };
+		for (const id of [1, 2, 3]) await savePlay(db, 'g1', actor, id, { playedOn: '2026-11-07', coop: 'won', lowestWins: false, players: [{ userId: 'ada', guestName: null, place: null, score: null }] });
+		const sources = Object.fromEntries((await loadPlays(db, 'g1')).map((p) => [p.gameName, p.gameSource]));
+		expect(sources).toEqual({ Invented: 'manual', Real: 'bgg', Wiki: 'wikidata' });
+	});
+});

@@ -245,7 +245,8 @@ export async function loadPlays(db: DB, groupId: string, q: PlayQuery = {}): Pro
 				gameId: r.game_id,
 				gameName: r.game_name,
 				bggId: r.bgg_id,
-				gameSource: r.is_manual === 1 ? 'manual' : r.source === 'bgg' || r.source === 'wikidata' ? r.source : 'manual',
+				// BGG data means what the footer's credit means (holdsBggData): a BGG id, not typed in.
+				gameSource: r.is_manual === 1 ? 'manual' : r.source === 'wikidata' ? 'wikidata' : r.source === 'bgg' && r.bgg_id != null ? 'bgg' : 'manual',
 				playedOn: r.played_on,
 				coop: r.coop,
 				lowestWins: r.lowest_wins === 1,
