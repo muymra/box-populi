@@ -89,3 +89,56 @@ export function seededRng(seed: number): () => number {
 		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 	};
 }
+
+/** A game fits n players when n is inside its range; an unknown end doesn't rule it out, as in the filter. */
+export function fitsPlayers(game: CatalogGame, n: number): boolean {
+	return (game.minPlayers == null || n >= game.minPlayers) && (game.maxPlayers == null || n <= game.maxPlayers);
+}
+
+/** `players` split across `tables` as evenly as possible, largest first: 9 across 2 is [5, 4]. */
+export function tableSizes(players: number, tables: number): number[] {
+	const base = Math.floor(players / tables);
+	const extra = players % tables;
+	return Array.from({ length: tables }, (_, i) => base + (i < extra ? 1 : 0));
+}
+
+export const MAX_TABLES = 6;
+export type TableFiller = { players: number; game: CatalogGame };
+
+/**
+ * Fillers for a group no filler takes whole (PRD "Picker"): the fewest tables, each of two or more
+ * players, that can each get a different filler that fits them. Larger tables draw first, since fewer
+ * fillers take them. Ids in `seen` are avoided while others fit. Null when no split works.
+ */
+export function splitFillers(
+	fillers: CatalogGame[],
+	players: number,
+	rng: () => number,
+	seen: ReadonlySet<number> = new Set()
+): TableFiller[] | null {
+	for (let count = 2; count <= Math.min(MAX_TABLES, Math.floor(players / 2)); count++) {
+		const used = new Set<number>();
+		const tables: TableFiller[] = [];
+		for (const size of tableSizes(players, count)) {
+			const fits = fillers.filter((g) => !used.has(g.id) && fitsPlayers(g, size));
+			const [game] = pick(fits, size, rng, seen, 1, fillerWeight).games;
+			if (!game) break;
+			used.add(game.id);
+			tables.push({ players: size, game });
+		}
+		if (tables.length === count) return tables;
+	}
+	return null;
+}
+
+/**
+ * Whether fillers should split the group across tables: every filler with a known upper limit is too
+ * small for the group, and there are enough players for two tables of two. A game with no upper limit
+ * set doesn't count, since nothing says it seats them all; one that needs more players than are here
+ * doesn't either, since splitting wouldn't help.
+ */
+export function needsSplit(fillers: CatalogGame[], players: number | null): boolean {
+	if (players == null || players < 4) return false;
+	const known = fillers.filter((g) => g.maxPlayers != null);
+	return known.length > 0 && known.every((g) => g.maxPlayers! < players);
+}

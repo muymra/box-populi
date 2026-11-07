@@ -21,6 +21,10 @@
 			name shows beside them to the groups you're in.
 		</li>
 		<li>Links you add to games, credited to you within that group.</li>
+		<li>
+			Plays logged in a group: the game, the date, who played, and places or scores. That includes the names of guests at
+			the table who aren't members, as typed by whoever logged the play.
+		</li>
 		<li>A cookie that keeps this device signed in. The server stores only a scrambled fingerprint of it, and the same for your personal link.</li>
 		<li>
 			Network addresses that tried a wrong join code, sign-in link or admin key, or created a group, and how often you searched
@@ -35,8 +39,9 @@
 
 	<h2>Who can see it</h2>
 	<p>
-		Members of a group see each other's names, games, loans and wishlists, and the links added to games. Nobody outside a
-		group can see inside it. The demo group is the exception: it's public and contains no real people.
+		Members of a group see each other's names, games, loans and wishlists, the links added to games, and the group's plays.
+		Any member can download the plays as a spreadsheet file, which names everyone in them. Nobody outside a group can see
+		inside it. The demo group is the exception: it's public and contains no real people.
 	</p>
 	<p>
 		The host's admin page shows totals and, per group, its name, number of members and games, and last activity. It
@@ -47,8 +52,8 @@
 	<h2>Deleting your data</h2>
 	<p>
 		You can delete your account from your account page. That removes your name, your shelf, wishlist, memberships and
-		sessions, and the games you typed in yourself. A typed-in game that another member also has stays, without your
-		name. Links you added stay, credited to "former member." The host has no email or other way to find you, so do it
+		sessions, your results in logged plays, and the games you typed in yourself. A typed-in game that another member also
+		has, or that a logged play names, stays, without your name. Plays you were in stay for the others in them. Links you added stay, credited to "former member." The host has no email or other way to find you, so do it
 		from a device where you're signed in.
 	</p>
 

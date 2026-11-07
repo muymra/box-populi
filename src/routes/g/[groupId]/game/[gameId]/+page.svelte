@@ -10,7 +10,15 @@
 	import Search from '@lucide/svelte/icons/search';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Gift from '@lucide/svelte/icons/gift';
+	import { onMount } from 'svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
+	import Trophy from '@lucide/svelte/icons/trophy';
+	import Modal from '#lib/components/Modal.svelte';
+	import PlayForm from '#lib/components/PlayForm.svelte';
+	import PlayList from '#lib/components/PlayList.svelte';
+	import { getTable } from '#lib/table/table.svelte.ts';
 	import { guessKind, KIND_LABELS, LINK_KINDS, type LinkKind } from '#lib/link-kinds.ts';
 	import BoxFront from '#lib/components/BoxFront.svelte';
 	import { BUCKET_LABELS, formatPlaytime, formatWeight, weightBucket } from '#lib/catalog/buckets.ts';
@@ -20,6 +28,21 @@
 
 	let { data, form }: PageProps = $props();
 	const g = $derived(data.game);
+	const table = getTable();
+
+	// Logging a play (PRD "Play log"). "We played this" in the picker links here with ?log=1.
+	let logOpen = $state(false);
+	let logged = $state(false);
+	onMount(() => {
+		if (page.url.searchParams.get('log') !== '1') return;
+		if (data.canLog) logOpen = true;
+		const url = new URL(page.url.href);
+		url.searchParams.delete('log');
+		goto(`${url.pathname}${url.search}`, { replace: true, reset: false });
+	});
+	const lastPlayed = $derived(
+		data.plays[0] ? new Date(`${data.plays[0].playedOn}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : null
+	);
 	const base = $derived(`/g/${data.group.id}`);
 
 	const players = $derived(formatPlayerRange(g.minPlayers, g.maxPlayers));
@@ -258,6 +281,41 @@
 			{/if}
 		{/if}
 	</section>
+
+	<section aria-labelledby="plays-h">
+		<h3 id="plays-h">Plays {#if data.playCount}<span class="muted num">{data.playCount}</span>{/if}</h3>
+		{#if data.playCount}
+			<p class="muted">
+				Last played {lastPlayed}.{#if data.mostWins}{' '}Most wins: {data.mostWins.name} ({data.mostWins.wins}).{/if}
+			</p>
+			<PlayList plays={data.plays} members={data.tableMembers} {table} groupId={data.group.id} />
+			{#if data.playCount > data.plays.length}<p><a href="{base}/plays">All plays and the leaderboard</a></p>{/if}
+		{:else}
+			<p class="muted">Nobody has logged a play of this yet.</p>
+		{/if}
+		{#if logged}<p class="banner" role="status">Play logged.</p>{/if}
+		{#if data.canLog}
+			<div class="copy-actions">
+				<button type="button" class="btn" onclick={() => (logOpen = true)}><Trophy size={18} aria-hidden="true" /> Log a play</button>
+				{#if data.playCount}<a class="link-button" href="{base}/plays">Leaderboard</a>{/if}
+			</div>
+		{/if}
+	</section>
+
+	<Modal bind:open={logOpen} title="Log a play">
+		{#if logOpen}
+			<PlayForm
+				action="{base}/plays?/logPlay"
+				game={{ id: g.id, name: g.name }}
+				members={data.tableMembers}
+				{table}
+				ondone={(saved) => {
+					logOpen = false;
+					logged = saved;
+				}}
+			/>
+		{/if}
+	</Modal>
 
 	{#if data.expansions.length}
 		<section aria-labelledby="exp-h">

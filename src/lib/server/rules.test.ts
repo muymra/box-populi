@@ -50,7 +50,14 @@ describe('permissions', () => {
 		['owner', 'transfer_ownership', 'owner', true, false],
 		['admin', 'transfer_ownership', 'member', false, false],
 		['admin', 'delete_group', undefined, false, false],
-		['owner', 'delete_group', undefined, false, true]
+		['owner', 'delete_group', undefined, false, true],
+		// change_play: targetIsSelf means the actor logged the play or played in it
+		['member', 'change_play', undefined, true, true],
+		['member', 'change_play', undefined, false, false],
+		['admin', 'change_play', undefined, false, true],
+		['owner', 'change_play', undefined, false, true],
+		['member', 'set_points', undefined, false, false],
+		['admin', 'set_points', undefined, false, true]
 	];
 	it.each(cases)('%s %s on %s (self=%s) → %s', (actor, action, targetRole, targetIsSelf, expected) => {
 		expect(can(actor, action, { targetRole, targetIsSelf })).toBe(expected);

@@ -244,7 +244,7 @@ The world refuses the category default for game catalogs: a dark app with a grid
 A cardboard-and-laminate neutral field with two kinds of colour on top: player colours that say who owns a game, and marigold that says what you picked. Neutral token keys match the custom properties in `src/app.css` except where noted (dark values are the `-dark` keys, applied under `prefers-color-scheme: dark`); player and print colours live in `src/lib/catalog/colors.ts`.
 
 ### Primary
-- **Marigold** (marigold, CSS `--mark` and `--mark-ink`): the state colour. It fills active filter chips and set filter selects in the label strip, the current tab (the whole tab from 760px, the icon pill below it), selected people in the picker, the filter-count badge, text selection, and the focus ring on every control inside the dark label strip, where the ink focus ring would not read. Its ink is near-black (marigold-ink), 7.58:1.
+- **Marigold** (marigold, CSS `--mark` and `--mark-ink`): the state colour. It fills active filter chips and set filter selects in the label strip, the current tab (the whole tab from 900px, the icon pill below it), the trophy in the group bar on the plays page, selected people in the picker, the filter-count badge, text selection, and the focus ring on every control inside the dark label strip, where the ink focus ring would not read. Its ink is near-black (marigold-ink), 7.58:1.
 
 ### Secondary
 - **Wooden-cube player colours** (player-red, player-blue, player-pink, player-green, player-purple, player-orange, player-teal, player-black): one per member, assigned by join order and wrapping after eight, so a person's colour never changes. They paint the owner edge under each cube, the spine ends in the Spines view, the member chips on the Group tab and game pages, and the dot on each person toggle in the picker. Each carries white ink at 4.97:1 or better. The set holds pink where a yellow would sit, so no player colour shares marigold's hue (marigold sits near hue 81 in OKLCH; the nearest player colour, orange, sits near 45).
@@ -281,7 +281,7 @@ A cardboard-and-laminate neutral field with two kinds of colour on top: player c
 ### Hierarchy
 - **Display** (800, clamp 32 to 52px, 1.02, width 82%): the headline on the landing page only, capped at 14ch.
 - **Headline** (780, clamp 26 to 36px, 1.15, width 88%): page titles and game names on game pages.
-- **Title** (780, 22px, 1.15, width 88%): section headings; the group name in the top bar uses this size from 760px and 20px below.
+- **Title** (780, 22px, 1.15, width 88%): section headings; the group name in the top bar uses this size from 900px and 20px below.
 - **Title small** (780, 18px): sub-section headings; the same 18px at body weight is the lead size for intros and pick results.
 - **Box title** (800, sized from the box width at 15.5cqi between 9 and 30px, 1.05, width 78%): titles printed on box fronts, clamped to four lines.
 - **Spine title** (800, 17px, 1.1, width 80%): titles along spines, one line with ellipsis.
@@ -300,12 +300,12 @@ A centred container (max 76rem, 16px side padding) holds a top bar, the page, an
 
 The shelf is a CSS grid of auto-filling columns on a shelf-gap background: minimum 104px cubes with 6px gaps on phones (three across at 390px), minimum 142px with 8px gaps from 760px (five to seven across). Each cube is 1:1.04 inside its padding. The Spines view stacks full-width spines with 4px gaps on the same shelf-gap ground. Narrow single-task pages (join, create, account) cap at 30rem; the Group and Add pages at 46rem.
 
-Breakpoints, as used: 480px (spines move their facts to a second line below this), 640px (the game page places the box beside its title), 760px (tabs leave the bottom bar for the top bar, cubes widen, filter chips wrap instead of scrolling sideways), 900px (the landing hero goes two-column).
+Breakpoints, as used: 480px (spines move their facts to a second line below this), 640px (the game page places the box beside its title), 760px (cubes widen, filter chips wrap instead of scrolling sideways, modals centre), 900px (group tabs leave the bottom bar for the top bar; the landing hero goes two-column).
 
 ### Named Rules
 **The Shelf Gap Rule.** Cubes are separated by the shelf-gap colour showing between them, not by borders or shadows. A new grid of games sits on the same gap ground.
 
-**The Thumb Reach Rule.** Below 760px the group tabs are a fixed bottom bar with 52px targets and safe-area padding; the filter row scrolls sideways in one line rather than wrapping. Tap targets are 44px for buttons and search, 38px for filter chips, 40px for person toggles.
+**The Thumb Reach Rule.** Below 900px the group tabs are a fixed bottom bar with 52px targets and safe-area padding; the filter row scrolls sideways in one line rather than wrapping. Tap targets are 44px for buttons and search, 38px for filter chips, 40px for person toggles.
 
 ## Elevation & Depth
 
@@ -354,9 +354,20 @@ Ink-filled and plain, so marigold stays free for state.
 - **Focus:** border darkens to ink-3, plus the global focus outline. Search fields in the label strip sit on label-field with no border and take a 2px marigold outline when focused, as does every other control in the strip (`.strip :focus-visible` in app.css).
 
 ### Navigation
-- **Top bar:** cube mark, group name at title size, tabs, then the person's name behind a 1px divider. 56px tall, 64px from 760px, 1px rule underneath.
-- **Tabs:** Shelf, Play tonight, Wanted, Add games, Group, each a Lucide icon plus label. Between 760 and 1099px the top bar drops the icons and tightens to 10px padding so all five fit beside the group name. Below 760px they form a fixed bottom bar on laminate (12px labels, 52px targets) where the current tab's icon sits in a marigold pill. From 760px they sit in the top bar at 15px, and the whole current tab fills marigold; others take a shelf-gap fill on hover.
+- **Top bar:** cube mark, group name at title size, tabs, three icons, then the person's name behind a 1px divider (capped at 6rem below 900px so the group name keeps room). 56px tall, 64px from 900px, 1px rule underneath. The icons are 44px, ink-2, shelf-gap on hover: Crown ("Who goes first?") and Dice 5 ("Dice") open modals; Trophy ("Plays and leaderboard") is a link to the plays page and fills marigold while you're on it. Below 900px they sit beside the name, since the tabs are at the bottom.
+- **Tabs:** Shelf, Play tonight, Wanted, Add games, Group, each a Lucide icon plus label. The tabs never shrink; the group name is what shortens. Between 900 and 1099px the top bar drops the tab icons, tightens tabs to 8px padding, the icons to 40px and the bar's gaps to 8px, so all five tabs and the three icons fit; at 900px with five tabs the group name keeps about 170px. Below 900px they form a fixed bottom bar on laminate (12px labels, 52px targets) where the current tab's icon sits in a marigold pill. The bar moved up at 760px until the third icon came; at 760px that left the group name 35px. From 900px they sit in the top bar at 15px, and the whole current tab fills marigold; others take a shelf-gap fill on hover.
 - **View switch:** a two-button segmented control (Cubes, Spines) with a 1.5px rule border; the pressed side fills with ink, not marigold.
+
+### Modals
+A native `<dialog>` over the current page, on a 50% near-black backdrop. Below 760px it's a sheet on the bottom edge (10px top corners, safe-area padding, up to 88% of the screen tall); from 760px a centred panel 30rem wide. The panel follows Cards: cube white, 1px rule, 10px corners, no shadow (the backdrop separates it). A title-size heading and a 44px close button head it; Escape, the button or a tap outside close it. It rises 24px over 0.28s, still under reduced motion.
+
+- **Who goes first?** The picker's person toggles, guests as marigold pills with a remove button and an outlined dot (no player colour, since those mean a member), an "Add a guest by name" field, and the 52px primary button. In a big group the toggles end with "N more": a person-toggle-sized pill with a dashed rule border, ink-2 text and a chevron, never filled, so it doesn't read as a person. The result is a slot machine reel in a laminate panel: a 104px window showing one 64px row (the colour square and the name at headline size), its neighbours fading out through a mask. The names roll up for 2.3s, slow down, overshoot by a fifth of a row and settle; then "goes first" appears under the name. Under reduced motion the name shows without the roll.
+- **Dice.** Six steppers (d4 to d20) in three columns, the kind's name at 780 and 88% width; a stepper with dice in it takes an ink-3 border. Dice are 56px squares with a 1.5px ink-3 border and the number at 800; an unrolled die is dashed and shows a dash; a kept die fills marigold (it's something the person turned on). Rerolled dice tumble in over 0.4s. The total sits at headline size at the row's right. A coin under a rule, and "Recent" in label size with the newest in ink.
+
+### Play log
+- **Log form** (in a modal): a date field, the who's-here toggles for the players, "How it ended" as four pills (Places, Scores, Co-op: won, Co-op: lost) where the chosen one fills marigold, then a row per player: their colour square and name, and either a place select (–, 1st, 2nd…) or a score field with the place it gives in ink-2. The primary button names the game: "Log Azul".
+- **Play rows:** the date in label size and ink-2, the game as a link when the list mixes games, a neutral "Co-op, won" tag, and edit and delete as 36px icon buttons at the right. Players follow in finishing order on one wrapping line, each a 12px colour square, the name (the winner at 700), the place and score in ink-2. Guests get an outlined square. Delete asks first, inline, with a danger-outlined button.
+- **Leaderboard:** a plain table on the page ground with 1px rules, points at 780, numbers right-aligned and tabular. "This year / All time" is the shelf's segmented switch (current side filled with ink).
 
 ### Cube
 The signature. A cube-white cell holding a box front standing on its floor, a centred caption (players and time, tabular, ink-2), and the owner edge closing the bottom. On hover or focus the box rises 3px and takes the lift shadow over 0.2s on the shared ease-out curve.
@@ -370,7 +381,7 @@ Each game as a box lying on its side: a 46px bar in its cardboard print with the
 ### Picker pull
 The one authored motion. Three suggestions come off the shelf as hero boxes tilted -2.5, 1.75 and -1.25 degrees, each rising 28px from 96% scale over 0.55s, staggered 70ms. Hover straightens a box and lifts it 4px. Under reduced motion there is no animation and no tilt; a global rule also cuts every transition to near zero.
 
-Fillers, when asked for, come in a smaller row under the three: cube-size boxes, straight rather than tilted (they're the side dish), with the same rise and stagger. An unrated filler carries a neutral "Complexity unknown" tag.
+Fillers, when asked for, come in a smaller row under the three: cube-size boxes, straight rather than tilted (they're the side dish), with the same rise and stagger. An unrated filler carries a neutral "Complexity unknown" tag. When the group splits across tables, a muted line says so ("No filler here takes 13 players, so split into 2 tables.") and each filler has its table above the box in label size, ink-2: "Table 1 · 7 players".
 
 ### BGG credit
 A footer on every page, above the bottom tab bar's clearance on phones: "Game data from BoardGameGeek", an outlined "Powered by BGG" text badge, the non-affiliation line, and Privacy and Source links on the left; the Theme select sits at the far right of the same row, and on a narrow screen wraps under the credit while staying at the right edge.

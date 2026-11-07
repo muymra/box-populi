@@ -77,11 +77,11 @@
 		text-decoration: none;
 		color: var(--ink);
 	}
-	/* Group pages carry a bottom tab bar on phones; keep the credit clear of it. */
+	/* Group pages carry a bottom tab bar below 900px; keep the credit clear of it. */
 	:global(body:has(.tabbar)) .credit {
 		padding-bottom: calc(var(--s-6) + 72px + env(safe-area-inset-bottom));
 	}
-	@media (min-width: 760px) {
+	@media (min-width: 900px) {
 		:global(body:has(.tabbar)) .credit {
 			padding-bottom: var(--s-6);
 		}

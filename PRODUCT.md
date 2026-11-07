@@ -40,26 +40,29 @@ Supporting claims, in order: the "who's here" picker, which suggests from the ga
 
 ## Capabilities and Constraints
 
-- **Built so far (2026-11-06):**
+- **Built (as of 2026-11-07):**
   - no-account identity;
-  - create and join groups;
+  - create and join groups, with roles and group settings;
   - catalog with filters;
-  - game pages;
-  - the picker;
-  - adding games through BGG search or by hand, and removing your copy;
-  - the public demo group.
-- **Planned:** BGG collection import, rules and video links, group roles and settings, wishlist and the Wanted view, lending, and the instance admin page. See STATUS.md.
+  - game pages with rules and video links;
+  - the picker, with guests, fillers and split tables;
+  - adding games through BGG search, collection import, Wikidata search, a pasted list or by hand;
+  - wishlist and the Wanted view, and lending;
+  - the play log with a leaderboard and CSV export;
+  - who goes first and dice;
+  - themes, the instance admin page, and the public demo group.
+- **Planned:** see STATUS.md "Next up" and the PRD's stretch list.
 - **Language:** English only (confirmed). Other languages may come later; not planned.
 - **No accounts** (DECISIONS D25): no email, password or third-party sign-in. The app stores a display name, games, memberships, and hashed session and link tokens.
 - **BoardGameGeek terms** (DECISIONS D23):
   - non-commercial only: no ads, payments, donations or sponsorship;
   - BGG data shown unmodified;
-  - BGG credited on every page;
+  - BGG credited wherever its data shows (D30);
   - no public API;
   - no AI training on BGG data.
-- **Self-hosted** on Cloudflare Pages and D1, free tier, open source (MIT) at github.com/muymra/box-populi. Each hoster uses their own BGG application.
+- **Self-hosted** on Cloudflare Pages and D1 on the free tier, or on Workers, Docker, Vercel or Netlify (D32); open source (MIT) at github.com/muymra/box-populi. Each hoster uses their own BGG application, or none (D28, D31).
 - **Scale per group:** up to 50 members, 1,500 distinct games, 4,000 copies.
-- **Terminology** used in the UI and docs: group, member, owner, co-admin, copy, catalog, join code, invite link, personal link, "What should we play?", Wanted.
+- **Terminology** used in the UI and docs: group, member, owner, co-admin, copy, catalog (the shelf), join code, invite link, personal link, Play tonight (the picker), who's here, guest, filler, Wanted, play, leaderboard.
 
 ## Brand Commitments
 

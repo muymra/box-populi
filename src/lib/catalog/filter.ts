@@ -21,8 +21,17 @@ export type Filters = {
 	owners: string[];
 	availableOnly: boolean;
 	expansions: boolean;
+	/** Only games not played in the last STALE_DAYS, or never logged (PRD "Play log"). */
+	stale: boolean;
 	sort: SortKey;
 };
+
+export const STALE_DAYS = 90;
+
+/** The first night that still counts as played lately. */
+export function staleCutoff(now: number): string {
+	return new Date(now - STALE_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
 
 export const DEFAULT_FILTERS: Filters = {
 	q: '',
@@ -36,6 +45,7 @@ export const DEFAULT_FILTERS: Filters = {
 	owners: [],
 	availableOnly: true,
 	expansions: false,
+	stale: false,
 	sort: 'title'
 };
 
@@ -60,6 +70,7 @@ export function parseFilters(params: Pick<URLSearchParams, 'get' | 'getAll'>): F
 		owners: params.getAll('own').slice(0, 50),
 		availableOnly: params.get('avail') !== '0',
 		expansions: params.get('exp') === '1',
+		stale: params.get('stale') === '1',
 		sort: SORT_KEYS.includes(sort as SortKey) ? (sort as SortKey) : 'title'
 	};
 }
@@ -78,6 +89,7 @@ export function serializeFilters(f: Filters): URLSearchParams {
 	for (const o of f.owners) p.append('own', o);
 	if (!f.availableOnly) p.set('avail', '0');
 	if (f.expansions) p.set('exp', '1');
+	if (f.stale) p.set('stale', '1');
 	if (f.sort !== 'title') p.set('sort', f.sort);
 	return p;
 }
@@ -98,9 +110,11 @@ function matchesTags(gameTags: string[], wanted: string[], all: boolean, incompl
 export function matchesFilters(
 	game: CatalogGame,
 	f: Filters,
-	memberIds: ReadonlySet<string>
+	memberIds: ReadonlySet<string>,
+	cutoff: string = staleCutoff(Date.now())
 ): boolean {
 	if (!f.expansions && game.isExpansion) return false;
+	if (f.stale && game.lastPlayed != null && game.lastPlayed >= cutoff) return false;
 
 	if (f.q.trim()) {
 		const q = normalize(f.q);
@@ -177,9 +191,11 @@ export function compareGames(a: CatalogGame, b: CatalogGame, sort: SortKey): num
 export function filterGames(
 	games: CatalogGame[],
 	f: Filters,
-	memberIds: ReadonlySet<string>
+	memberIds: ReadonlySet<string>,
+	now = Date.now()
 ): CatalogGame[] {
-	return games.filter((g) => matchesFilters(g, f, memberIds)).sort((a, b) => compareGames(a, b, f.sort));
+	const cutoff = staleCutoff(now);
+	return games.filter((g) => matchesFilters(g, f, memberIds, cutoff)).sort((a, b) => compareGames(a, b, f.sort));
 }
 
 /** Distinct tag values across the catalog, most common first, for the filter pickers. */

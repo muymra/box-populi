@@ -1,7 +1,15 @@
-// Player-count bitmasks: bit n set means "best/recommended at n players". Capped at 12 so
-// JavaScript's 32-bit shifts stay safe. See TECH.md "Parsing `thing`".
+// Player-count bitmasks: bit n set means "best/recommended at n players". JavaScript shifts work on
+// 32-bit signed numbers and bit 31 is the sign, so 30 is the highest count a mask can hold. See
+// TECH.md "Parsing `thing`".
 
-export const MAX_MASK_PLAYERS = 12;
+export const MAX_MASK_PLAYERS = 30;
+
+/** Player dropdowns offer 1 to 12, then 13 shown as "13+", so the lists stay short. */
+export const MANY_PLAYERS = 13;
+export const PLAYER_CHOICES = Array.from({ length: MANY_PLAYERS }, (_, i) => i + 1);
+export function playerChoiceLabel(n: number): string {
+	return n >= MANY_PLAYERS ? `${MANY_PLAYERS}+` : String(n);
+}
 
 export function maskHas(mask: number, players: number): boolean {
 	if (!Number.isInteger(players) || players < 1 || players > MAX_MASK_PLAYERS) return false;

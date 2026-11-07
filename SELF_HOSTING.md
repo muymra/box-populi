@@ -109,7 +109,7 @@ pnpm exec wrangler d1 execute DB --remote --file seed/demo.sql
 
 For an instance that exists only to show the demo, also set `INSTANCE_MODE` to `demo` and `GROUP_CREATION` to `admins`.
 
-This seeds about 440 invented games, which needs no BGG token. Seeding from a real BGG collection (`--bgg-user`) isn't built; it would contain BGG data, which is one reason `seed/demo.sql` is gitignored. The landing page links to `/demo` once it exists.
+This seeds about 440 invented games and 140 invented plays for the leaderboard, which needs no BGG token. Re-run both commands after an upgrade to refresh it; it replaces the demo group each time. Seeding from a real BGG collection (`--bgg-user`) isn't built; it would contain BGG data, which is one reason `seed/demo.sql` is gitignored. The landing page links to `/demo` once it exists.
 
 ## Cloudflare Workers
 

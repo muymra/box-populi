@@ -1,11 +1,19 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 	import LayoutGrid from '@lucide/svelte/icons/layout-grid';
 	import Dices from '@lucide/svelte/icons/dices';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Users from '@lucide/svelte/icons/users';
 	import Gift from '@lucide/svelte/icons/gift';
+	import Crown from '@lucide/svelte/icons/crown';
+	import Dice5 from '@lucide/svelte/icons/dice-5';
+	import Trophy from '@lucide/svelte/icons/trophy';
 	import CubeMark from '#lib/components/CubeMark.svelte';
+	import Modal from '#lib/components/Modal.svelte';
+	import StartPlayer from '#lib/components/StartPlayer.svelte';
+	import DiceRoller from '#lib/components/DiceRoller.svelte';
+	import { Table, setTable } from '#lib/table/table.svelte.ts';
 	import { SOURCE_URL } from '#lib/project.ts';
 	import type { LayoutProps } from './$types';
 
@@ -23,6 +31,17 @@
 	);
 	const isCurrent = (href: string) =>
 		href === base ? current === base || current.startsWith(`${base}/game/`) : current.startsWith(href);
+
+	// Who's here on this device, shared with the picker (PRD "At the table").
+	const table = setTable(new Table());
+	let startOpen = $state(false);
+	let diceOpen = $state(false);
+	$effect(() => {
+		// Re-read when switching groups and each time the modal opens, so a table left overnight has reset.
+		const groupId = data.group.id;
+		void startOpen;
+		untrack(() => table.load(groupId));
+	});
 </script>
 
 <svelte:head><title>{data.group.name} · {data.instanceName}</title></svelte:head>
@@ -31,7 +50,7 @@
 	<a class="home" href="/" aria-label="{data.instanceName}: all your groups">
 		{#if data.logoUrl}<img class="logo" src={data.logoUrl} alt="" />{:else}<CubeMark size={24} />{/if}
 	</a>
-	<h1>{data.group.name}</h1>
+	<h1 title={data.group.name}>{data.group.name}</h1>
 	<nav class="tabbar" aria-label="Group">
 		{#each tabs as t (t.href)}
 			<a href={t.href} aria-current={isCurrent(t.href) ? 'page' : undefined}>
@@ -40,6 +59,18 @@
 			</a>
 		{/each}
 	</nav>
+	<div class="tools">
+		<button type="button" class="tool" aria-label="Who goes first?" title="Who goes first?" aria-haspopup="dialog" onclick={() => (startOpen = true)}>
+			<Crown size={22} strokeWidth={2} aria-hidden="true" />
+		</button>
+		<button type="button" class="tool" aria-label="Roll dice" title="Roll dice" aria-haspopup="dialog" onclick={() => (diceOpen = true)}>
+			<Dice5 size={22} strokeWidth={2} aria-hidden="true" />
+		</button>
+		<!-- The play log is a page of its own (leaderboard, plays, export), so this one is a link, not a modal. -->
+		<a class="tool" href="{base}/plays" aria-label="Plays and leaderboard" title="Plays and leaderboard" aria-current={current.startsWith(`${base}/plays`) ? 'page' : undefined}>
+			<Trophy size={22} strokeWidth={2} aria-hidden="true" />
+		</a>
+	</div>
 	{#if data.user}
 		<a href="/me" class="me">{data.user.name}</a>
 	{:else if data.demoMode}
@@ -69,6 +100,13 @@
 <div class="group-body">
 	{@render children()}
 </div>
+
+<Modal bind:open={startOpen} title="Who goes first?">
+	{#key data.group.id}<StartPlayer members={data.tableMembers} {table} />{/key}
+</Modal>
+<Modal bind:open={diceOpen} title="Dice">
+	<DiceRoller />
+</Modal>
 
 <style>
 	.logo {
@@ -102,6 +140,31 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
+	/* Start player and dice: icon-only buttons that open modals, beside the person's name. */
+	.tools {
+		display: flex;
+		flex: none;
+		gap: 2px;
+	}
+	.tool {
+		display: grid;
+		place-items: center;
+		width: 44px;
+		height: 44px;
+		border: 0;
+		border-radius: var(--r-ctl);
+		background: none;
+		color: var(--ink-2);
+		cursor: pointer;
+	}
+	.tool:hover {
+		background: var(--gap);
+		color: var(--ink);
+	}
+	.tool[aria-current='page'] {
+		background: var(--mark);
+		color: var(--mark-ink);
+	}
 	.me {
 		flex: none;
 		max-width: 9rem;
@@ -120,7 +183,9 @@
 		font-size: var(--t-small);
 		color: var(--ink-2);
 	}
-	/* Phones: a bottom tab bar within thumb reach. */
+	/* Phones and narrow tablets: a bottom tab bar within thumb reach. It moves up at 900px, not the
+	   760px most layouts use, because the top bar needs that much room for five tabs, three icons and the
+	   group name. */
 	.tabbar {
 		position: fixed;
 		z-index: 20;
@@ -161,8 +226,24 @@
 	.group-body {
 		padding: var(--s-3) 0 var(--s-4);
 	}
+	/* Below that the bar holds the mark, the name, three 44px icons and the person's link. The link
+	   stays short and can shrink further, and a hoster's logo is capped, so nothing pushes the bar wider
+	   than a 320px phone. */
+	@media (max-width: 899px) {
+		.group-bar {
+			gap: var(--s-2);
+		}
+		.logo {
+			max-width: 72px;
+		}
+		.me {
+			flex: 0 1 auto;
+			min-width: 2.5rem;
+			max-width: 6rem;
+		}
+	}
 	/* Wider screens: the same tabs sit in the top bar. */
-	@media (min-width: 760px) {
+	@media (min-width: 900px) {
 		.group-bar {
 			min-height: 64px;
 		}
@@ -170,7 +251,9 @@
 			flex: 0 1 auto;
 			font-size: 1.375rem;
 		}
+		/* The tabs keep their width; the group name is what shortens when the bar is full. */
 		.tabbar {
+			flex: none;
 			position: static;
 			margin-left: auto;
 			background: none;
@@ -204,10 +287,24 @@
 			border-left: 1px solid var(--rule);
 		}
 	}
-	/* Five tabs don't fit beside the group name with icons until about 1100px; drop the icons until then. */
-	@media (min-width: 760px) and (max-width: 1099px) {
+	/* Five tabs and the three icons don't fit beside the group name with tab icons until about 1100px;
+	   drop the tab icons and tighten the spacing until then. */
+	@media (min-width: 900px) and (max-width: 1099px) {
+		.group-bar {
+			gap: var(--s-2);
+		}
 		.tabbar a {
-			padding: 0 10px;
+			padding: 0 8px;
+		}
+		.tools {
+			gap: 0;
+		}
+		.tool {
+			width: 40px;
+		}
+		.me {
+			margin-left: 0;
+			padding-left: var(--s-3);
 		}
 		.tabbar a :global(svg) {
 			display: none;

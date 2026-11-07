@@ -11,7 +11,8 @@
 	import CheckList from '#lib/components/CheckList.svelte';
 	import { fetchCatalog, storage } from '#lib/catalog/client.ts';
 	import { BUCKET_LABELS, WEIGHT_BUCKETS, type WeightBucket } from '#lib/catalog/buckets.ts';
-	import { filterGames, parseFilters, passedOnUnknown, serializeFilters, tagOptions, type SortKey } from '#lib/catalog/filter.ts';
+	import { STALE_DAYS, filterGames, parseFilters, passedOnUnknown, serializeFilters, tagOptions, type SortKey } from '#lib/catalog/filter.ts';
+	import { PLAYER_CHOICES, playerChoiceLabel } from '#lib/catalog/players.ts';
 	import type { CatalogPayload } from '#lib/catalog/types.ts';
 	import type { PageProps } from './$types';
 
@@ -19,7 +20,6 @@
 
 	const PAGE_SIZE = 60;
 	const TIME_OPTIONS = [20, 30, 45, 60, 90, 120, 180];
-	const PLAYER_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
 	const SORTS: Array<{ value: SortKey; label: string }> = [
 		{ value: 'title', label: 'A–Z' },
 		{ value: 'weight', label: 'Lightest' },
@@ -29,6 +29,8 @@
 	];
 
 	let payload = $state<CatalogPayload | null>(null);
+	// The "not played lately" filter appears once the group has logged a play (PRD "Play log").
+	const hasPlays = $derived(payload?.games.some((g) => g.lastPlayed != null) ?? false);
 	let loadError = $state<string | null>(null);
 	let filters = $state(parseFilters(page.url.searchParams));
 	let limit = $state(PAGE_SIZE);
@@ -43,7 +45,7 @@
 	const categoryOptions = $derived(payload ? tagOptions(payload.games, 'categories').map((t) => ({ value: t, label: t })) : []);
 	const ownerOptions = $derived(payload?.members.map((m) => ({ value: m.id, label: m.name })) ?? []);
 	const moreCount = $derived(
-		filters.mechanics.length + filters.categories.length + filters.owners.length + (filters.availableOnly ? 0 : 1) + (filters.expansions ? 1 : 0)
+		filters.mechanics.length + filters.categories.length + filters.owners.length + (filters.availableOnly ? 0 : 1) + (filters.expansions ? 1 : 0) + (filters.stale ? 1 : 0)
 	);
 	const anyFilter = $derived(serializeFilters({ ...filters, sort: 'title' }).toString() !== '');
 
@@ -102,7 +104,7 @@
 	<div class="controls">
 		<select bind:value={filters.players} class:on={filters.players != null} aria-label="Players">
 			<option value={null}>Any players</option>
-			{#each PLAYER_OPTIONS as n (n)}<option value={n}>{n} {n === 1 ? 'player' : 'players'}</option>{/each}
+			{#each PLAYER_CHOICES as n (n)}<option value={n}>{playerChoiceLabel(n)} {n === 1 ? 'player' : 'players'}</option>{/each}
 		</select>
 		<select bind:value={filters.minutes} class:on={filters.minutes != null} aria-label="Time available">
 			<option value={null}>Any length</option>
@@ -135,6 +137,7 @@
 			{/if}
 			<label><input type="checkbox" checked={!filters.availableOnly} onchange={(e) => (filters.availableOnly = !e.currentTarget.checked)} /> Include games lent outside the group</label>
 			<label><input type="checkbox" bind:checked={filters.expansions} /> Include expansions</label>
+			{#if hasPlays}<label><input type="checkbox" bind:checked={filters.stale} /> Not played in the last {STALE_DAYS / 30} months</label>{/if}
 		</div>
 	</section>
 {/if}

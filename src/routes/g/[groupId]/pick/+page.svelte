@@ -7,21 +7,23 @@
 	import BoxFront from '#lib/components/BoxFront.svelte';
 	import CopyButton from '#lib/components/CopyButton.svelte';
 	import OwnerEdge from '#lib/components/OwnerEdge.svelte';
-	import { fetchCatalog, storage } from '#lib/catalog/client.ts';
+	import WhosHere from '#lib/components/WhosHere.svelte';
+	import { fetchCatalog } from '#lib/catalog/client.ts';
 	import { WEIGHT_BUCKETS, formatPlaytime, type WeightBucket } from '#lib/catalog/buckets.ts';
-	import { formatPlayerRange, maskHas } from '#lib/catalog/players.ts';
-	import { playerColor } from '#lib/catalog/colors.ts';
+	import { MANY_PLAYERS, PLAYER_CHOICES, formatPlayerRange, maskHas, playerChoiceLabel } from '#lib/catalog/players.ts';
 	import { DEFAULT_FILTERS, filterGames } from '#lib/catalog/filter.ts';
-	import { FILLER_MAX_MINUTES, fillerWeight, gamesAtHand, isFiller, pick } from '#lib/catalog/pick.ts';
+	import { FILLER_MAX_MINUTES, fillerWeight, fitsPlayers, gamesAtHand, isFiller, needsSplit, pick, splitFillers, type TableFiller } from '#lib/catalog/pick.ts';
 	import type { CatalogGame, CatalogPayload } from '#lib/catalog/types.ts';
+	import { cleanGuests } from '#lib/table/here.ts';
+	import { getTable } from '#lib/table/table.svelte.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-	const storageKey = $derived(`bp:present:${data.group.id}`);
+	// Who's here lives on this device, shared with the start player modal in the group bar.
+	const table = getTable();
 
 	let payload = $state<CatalogPayload | null>(null);
 	let loadError = $state<string | null>(null);
-	let present = $state<string[]>([]);
 	let playersOverride = $state<number | null>(null);
 	let minutes = $state<number | null>(null);
 	let ceiling = $state<WeightBucket | null>(null);
@@ -32,20 +34,23 @@
 	// Fillers (PRD "Picker"): a few short, light games pulled alongside, with their own re-roll.
 	let includeFillers = $state(false);
 	let fillers = $state<CatalogGame[]>([]);
+	// When no filler takes everyone: one filler per table, for the fewest tables that work.
+	let tableFillers = $state<TableFiller[] | null>(null);
 	let fillerSeen = $state<number[]>([]);
 	let fillerDraw = $state(0);
 	let fillerNote = $state<string | null>(null);
-	let memberQuery = $state('');
 	// True once the setup is read from the address or this device, so syncing doesn't erase it first.
 	let restored = $state(false);
 	const MINUTES = [30, 45, 60, 90, 120, 180];
 
-	const players = $derived(playersOverride ?? (present.length || null));
 	const memberIds = $derived(new Set(payload?.members.map((m) => m.id) ?? []));
 	const memberMap = $derived(new Map(payload?.members.map((m) => [m.id, m]) ?? []));
-	const shownMembers = $derived(
-		(payload?.members ?? []).filter((m) => !memberQuery.trim() || m.name.toLowerCase().includes(memberQuery.trim().toLowerCase()))
-	);
+	// Ticked members bring their games; guests only count as players.
+	const present = $derived(table.members.filter((id) => memberIds.has(id)));
+	const atTable = $derived(present.length + table.guests.length);
+	const players = $derived(playersOverride ?? (atTable || null));
+	// Members of a writable group can log what they ended up playing (PRD "Play log").
+	const canLog = $derived(!!data.role && !data.readonly);
 
 	const candidates = $derived.by(() => {
 		if (!payload) return [];
@@ -54,27 +59,36 @@
 		return present.length ? gamesAtHand(filtered, new Set(present)) : filtered;
 	});
 
-	// Fillers ignore the time and complexity limits (they have their own) but fit the same players
-	// and the same table, and never repeat a game in the main pull.
-	const fillerCandidates = $derived.by(() => {
+	// Fillers ignore the time and complexity limits (they have their own) but come from the same table
+	// and never repeat a game in the main pull. They fit the whole group when any can; otherwise the
+	// group splits across tables (`splitFillers`).
+	const fillerPool = $derived.by(() => {
 		if (!payload) return [];
-		const filtered = filterGames(payload.games, { ...DEFAULT_FILTERS, players, availableOnly: present.length === 0 }, memberIds);
+		const filtered = filterGames(payload.games, { ...DEFAULT_FILTERS, availableOnly: present.length === 0 }, memberIds);
 		const atHand = present.length ? gamesAtHand(filtered, new Set(present)) : filtered;
 		const main = new Set(suggestions.map((g) => g.id));
 		return atHand.filter((g) => isFiller(g) && !main.has(g.id));
 	});
+	const fillerCandidates = $derived(players ? fillerPool.filter((g) => fitsPlayers(g, players)) : fillerPool);
+	const splitting = $derived(needsSplit(fillerPool, players));
 
 	/**
-	 * The setup lives in the address (PRD "Picker"), so it can be shared or bookmarked: `here` (member
-	 * ids), `n` (players), `t` (minutes), `w` (complexity ceiling) and `f` (fillers). Returns false
-	 * when there's none.
+	 * The setup lives in the address (PRD "Picker"): `n` (players), `t` (minutes), `w` (complexity
+	 * ceiling) and `f` (fillers). A copied link adds who's here, `here` (member ids) and `guest` (one per
+	 * name); opening one replaces who's here on this device, and the address then drops them again, so
+	 * reloading the page next week can't bring back last week's table (D36). Returns false when there's none.
 	 */
-	function readSetup(params: Pick<URLSearchParams, 'get' | 'has'>): boolean {
-		if (!['here', 'n', 't', 'w', 'f'].some((k) => params.has(k))) return false;
+	function readSetup(params: Pick<URLSearchParams, 'get' | 'getAll' | 'has'>): boolean {
+		if (!['here', 'guest', 'n', 't', 'w', 'f'].some((k) => params.has(k))) return false;
 		includeFillers = params.get('f') === '1';
-		present = (params.get('here') ?? '').split(',').filter((id) => memberIds.has(id));
+		if (params.has('here') || params.has('guest')) {
+			table.set({
+				members: (params.get('here') ?? '').split(',').filter((id) => memberIds.has(id)),
+				guests: cleanGuests(params.getAll('guest'))
+			});
+		}
 		const n = Number(params.get('n'));
-		playersOverride = Number.isInteger(n) && n >= 1 && n <= 12 ? n : null;
+		playersOverride = Number.isInteger(n) && n >= 1 && n <= MANY_PLAYERS ? n : null;
 		const t = Number(params.get('t'));
 		minutes = MINUTES.includes(t) ? t : null;
 		const w = params.get('w');
@@ -85,33 +99,37 @@
 	onMount(async () => {
 		try {
 			payload = await fetchCatalog(data.group.id);
-			// A shared link wins; otherwise this device's last "who's here" for this group.
-			if (!readSetup(page.url.searchParams)) {
-				const remembered = JSON.parse(storage.get(storageKey) ?? '[]');
-				if (Array.isArray(remembered)) present = remembered.filter((id) => memberIds.has(id));
-			}
+			// A shared link wins; otherwise this device's "who's here" for this group, if it's from tonight.
+			table.load(data.group.id);
+			readSetup(page.url.searchParams);
 			restored = true;
 		} catch (e) {
 			loadError = e instanceof Error ? e.message : "Couldn't load the shelf.";
 		}
 	});
 
-	$effect(() => {
-		if (!restored) return;
-		storage.set(storageKey, JSON.stringify(present));
+	const setupParams = $derived.by(() => {
 		const params = new URLSearchParams();
-		if (present.length) params.set('here', present.join(','));
 		if (playersOverride) params.set('n', String(playersOverride));
 		if (minutes) params.set('t', String(minutes));
 		if (ceiling) params.set('w', ceiling);
 		if (includeFillers) params.set('f', '1');
-		const search = params.size ? `?${params}` : '';
-		if (search !== page.url.search) goto(`${page.url.pathname}${search}`, { replace: true, reset: false });
+		return params;
+	});
+	// The link "Copy a link to this setup" copies: the setup plus who's here.
+	const shareUrl = $derived.by(() => {
+		const params = new URLSearchParams();
+		if (present.length) params.set('here', present.join(','));
+		for (const name of table.guests) params.append('guest', name);
+		for (const [k, v] of setupParams) params.append(k, v);
+		return `${page.url.origin}${page.url.pathname}${params.size ? `?${params}` : ''}`;
 	});
 
-	function togglePresent(id: string) {
-		present = present.includes(id) ? present.filter((p) => p !== id) : [...present, id];
-	}
+	$effect(() => {
+		if (!restored) return;
+		const search = setupParams.size ? `?${setupParams}` : '';
+		if (search !== page.url.search) goto(`${page.url.pathname}${search}`, { replace: true, reset: false });
+	});
 
 	function suggest(again = false) {
 		const result = pick(candidates, players, Math.random, new Set(again ? seen : []));
@@ -120,11 +138,22 @@
 		note = result.reset ? "That's every game that fits. Starting over." : null;
 		draw += 1;
 		// A fresh pull brings fresh fillers; "Pull three more" keeps them unless one is now a main pick.
-		if (includeFillers && (!again || fillers.length === 0)) pullFillers(false);
-		else fillers = fillers.filter((f) => !result.games.some((g) => g.id === f.id));
+		const isMain = (id: number) => result.games.some((g) => g.id === id);
+		if (includeFillers && (!again || (fillers.length === 0 && !tableFillers) || tableFillers?.some((t) => isMain(t.game.id)))) pullFillers(false);
+		else fillers = fillers.filter((f) => !isMain(f.id));
 	}
 
 	function pullFillers(again: boolean) {
+		if (splitting && players) {
+			tableFillers = splitFillers(fillerPool, players, Math.random, new Set(again ? fillerSeen : []));
+			fillers = [];
+			const ids = tableFillers?.map((t) => t.game.id) ?? [];
+			fillerSeen = again ? [...fillerSeen, ...ids] : ids;
+			fillerNote = null;
+			fillerDraw += 1;
+			return;
+		}
+		tableFillers = null;
 		const result = pick(fillerCandidates, players, Math.random, new Set(again ? fillerSeen : []), 3, fillerWeight);
 		fillers = result.games;
 		fillerSeen = result.reset || !again ? result.games.map((g) => g.id) : [...fillerSeen, ...result.games.map((g) => g.id)];
@@ -134,7 +163,10 @@
 
 	function toggleFillers() {
 		if (includeFillers && suggestions.length) pullFillers(false);
-		if (!includeFillers) fillers = [];
+		if (!includeFillers) {
+			fillers = [];
+			tableFillers = null;
+		}
 	}
 
 	function ownersOf(game: CatalogGame) {
@@ -169,26 +201,20 @@
 		<section class="setup" aria-label="Who's playing">
 			<div class="who">
 				<h2>Who's here?</h2>
-				{#if payload.members.length > 12}
-					<input class="field" type="search" placeholder="Find a name" bind:value={memberQuery} aria-label="Find a member" />
-				{/if}
-				<div class="people" role="group" aria-label="People at the table">
-					{#each shownMembers as m (m.id)}
-						{@const c = playerColor(m.colorIndex)}
-						<button type="button" class="person" aria-pressed={present.includes(m.id)} onclick={() => togglePresent(m.id)}>
-							<span class="dot" style:background={c.bg}></span>{m.name}
-						</button>
-					{/each}
-				</div>
-				<p class="hint">{present.length ? `Only games ${present.length === 1 ? 'they' : 'these people'} brought or borrowed.` : 'Nobody ticked: the whole shelf counts.'}</p>
+				<WhosHere members={payload.members} {table} />
+				<p class="hint">
+					{present.length
+						? `Only games ${present.length === 1 ? 'they' : 'these members'} brought or borrowed.`
+						: `No members ticked: the whole shelf counts.`}{table.guests.length ? ' Guests count as players.' : ''}
+				</p>
 			</div>
 
 			<div class="limits">
 				<label>
 					Players
 					<select class="field num" bind:value={playersOverride}>
-						<option value={null}>{present.length ? `${present.length} here` : 'Any'}</option>
-						{#each Array.from({ length: 12 }, (_, i) => i + 1) as n (n)}<option value={n}>{n}</option>{/each}
+						<option value={null}>{atTable ? `${atTable} here` : 'Any'}</option>
+						{#each PLAYER_CHOICES as n (n)}<option value={n}>{playerChoiceLabel(n)}</option>{/each}
 					</select>
 				</label>
 				<label>
@@ -213,8 +239,9 @@
 				<input type="checkbox" bind:checked={includeFillers} onchange={toggleFillers} />
 				<span>
 					<strong>Add fillers</strong>
-					<span class="muted">Short, light games ({FILLER_MAX_MINUTES} min or less) for while people arrive or between longer ones.
-						<span class="num">{fillerCandidates.length}</span> at the table.</span
+					<span class="muted"
+						>Short, light games ({FILLER_MAX_MINUTES} min or less) for while people arrive or between longer ones.
+						{#if splitting}None take {players}, so they'll be split across tables.{:else}<span class="num">{fillerCandidates.length}</span> at the table.{/if}</span
 					>
 				</span>
 			</label>
@@ -224,7 +251,7 @@
 					<Dices size={20} aria-hidden="true" /> Pull three games
 				</button>
 				<p class="muted num">{candidates.length} {candidates.length === 1 ? 'game fits' : 'games fit'}</p>
-				{#if restored}<CopyButton text={page.url.href} label="Copy a link to this setup" />{/if}
+				{#if restored}<CopyButton text={shareUrl} label="Copy a link to this setup" />{/if}
 				{#if payload.games.length === 0}
 					<p class="hint">The shelf is empty, so there’s nothing to pull yet.{#if data.role && !data.readonly}{' '}<a href="/g/{data.group.id}/add">Add your games</a>{/if}</p>
 				{:else if candidates.length === 0}
@@ -250,6 +277,7 @@
 										{#if formatPlaytime(game.minPlaytime, game.maxPlaytime)}· {formatPlaytime(game.minPlaytime, game.maxPlaytime)}{/if}
 									</span>
 									{#if players && maskHas(game.bestMask, players)}<span class="tag best">Best at {players}</span>{/if}
+									{#if canLog}<a class="played" href="/g/{data.group.id}/game/{game.id}?log=1">We played this</a>{/if}
 								</div>
 							</li>
 						{/each}
@@ -263,25 +291,39 @@
 				{#if includeFillers}
 					<section class="fillers" aria-labelledby="fillers-h">
 						<h2 id="fillers-h">Fillers</h2>
-						{#if fillers.length}
+						{#snippet filler(game: CatalogGame, i: number, tableLabel: string | null)}
+							<li style:--delay="{i * 70}ms">
+								{#if tableLabel}<span class="table-label num">{tableLabel}</span>{/if}
+								<a href="/g/{data.group.id}/game/{game.id}" class="filler-box">
+									<span class="art small"><BoxFront name={game.name} src={game.thumbUrl} /></span>
+									<OwnerEdge owners={ownersOf(game)} />
+								</a>
+								<div class="facts">
+									<strong>{game.name}</strong>
+									<span class="muted num">
+										{formatPlayerRange(game.minPlayers, game.maxPlayers) ?? '?'} players
+										{#if formatPlaytime(game.minPlaytime, game.maxPlaytime)}· {formatPlaytime(game.minPlaytime, game.maxPlaytime)}{/if}
+									</span>
+									{#if game.weight == null}<span class="tag best">Complexity unknown</span>{/if}
+									{#if canLog}<a class="played" href="/g/{data.group.id}/game/{game.id}?log=1">We played this</a>{/if}
+								</div>
+							</li>
+						{/snippet}
+						{#if tableFillers}
+							{@const total = tableFillers.reduce((sum, t) => sum + t.players, 0)}
+							<p class="muted split-note">No filler here takes {total} players, so split into {tableFillers.length} tables.</p>
 							{#key fillerDraw}
 								<ul class="filler-list">
-									{#each fillers as game, i (game.id)}
-										<li style:--delay="{i * 70}ms">
-											<a href="/g/{data.group.id}/game/{game.id}" class="filler-box">
-												<span class="art small"><BoxFront name={game.name} src={game.thumbUrl} /></span>
-												<OwnerEdge owners={ownersOf(game)} />
-											</a>
-											<div class="facts">
-												<strong>{game.name}</strong>
-												<span class="muted num">
-													{formatPlayerRange(game.minPlayers, game.maxPlayers) ?? '?'} players
-													{#if formatPlaytime(game.minPlaytime, game.maxPlaytime)}· {formatPlaytime(game.minPlaytime, game.maxPlaytime)}{/if}
-												</span>
-												{#if game.weight == null}<span class="tag best">Complexity unknown</span>{/if}
-											</div>
-										</li>
-									{/each}
+									{#each tableFillers as t, i (t.game.id)}{@render filler(t.game, i, `Table ${i + 1} · ${t.players} players`)}{/each}
+								</ul>
+							{/key}
+							<div class="again">
+								<button type="button" class="btn" onclick={() => pullFillers(true)}><RotateCcw size={18} aria-hidden="true" /> Other fillers</button>
+							</div>
+						{:else if fillers.length}
+							{#key fillerDraw}
+								<ul class="filler-list">
+									{#each fillers as game, i (game.id)}{@render filler(game, i, null)}{/each}
 								</ul>
 							{/key}
 							<div class="again">
@@ -320,36 +362,11 @@
 	.who h2 {
 		margin-bottom: var(--s-3);
 	}
-	.who .field {
-		max-width: 20rem;
-		margin-bottom: var(--s-3);
-	}
+	/* the skeleton's row of people; the real toggles are WhosHere's */
 	.people {
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--s-2);
-	}
-	.person {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--s-2);
-		min-height: 40px;
-		padding: 0 14px 0 10px;
-		border-radius: 999px;
-		border: 1.5px solid var(--rule);
-		background: var(--laminate);
-		font-weight: 650;
-		cursor: pointer;
-	}
-	.person .dot {
-		width: 14px;
-		height: 14px;
-		border-radius: 4px;
-	}
-	.person[aria-pressed='true'] {
-		background: var(--mark);
-		border-color: var(--mark);
-		color: var(--mark-ink);
 	}
 	.hint {
 		margin-top: var(--s-2);
@@ -498,6 +515,21 @@
 	}
 	.fillers h2 {
 		margin: 0;
+	}
+	.played {
+		align-self: flex-start;
+		margin-top: 4px;
+		font-size: var(--t-small);
+		font-weight: 650;
+	}
+	.split-note {
+		margin: var(--s-2) 0 0;
+	}
+	/* Which table a split filler is for, above its box. */
+	.table-label {
+		font-size: var(--t-small);
+		font-weight: 650;
+		color: var(--ink-2);
 	}
 	.filler-list {
 		list-style: none;

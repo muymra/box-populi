@@ -220,7 +220,8 @@
 		padding: var(--s-2) 0;
 		background: linear-gradient(to top, var(--cube) 70%, transparent);
 	}
-	@media (min-width: 760px) {
+	/* Clear of the bottom tab bar until it moves to the top bar at 900px. */
+	@media (min-width: 900px) {
 		.actions {
 			bottom: 0;
 		}

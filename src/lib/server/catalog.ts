@@ -79,9 +79,11 @@ export async function loadMembers(db: DB, groupId: string): Promise<CatalogMembe
 }
 
 export async function loadCatalog(db: DB, groupId: string, version: number): Promise<CatalogPayload> {
-	const [members, corrections, rows] = await Promise.all([
+	const [members, corrections, played, rows] = await Promise.all([
 		loadMembers(db, groupId),
 		groupCorrections(db, groupId),
+		// For "not played lately" (PRD "Play log").
+		all<{ game_id: number; last: string }>(db, 'SELECT game_id, MAX(played_on) AS last FROM plays WHERE group_id = ?1 GROUP BY game_id', groupId),
 		all<GameRow & { owner_id: string; lent_to_user_id: string | null; lent_to_text: string | null; added_at: number }>(
 			db,
 			`SELECT ${GAME_COLUMNS}, c.user_id AS owner_id, c.lent_to_user_id, c.lent_to_text, c.added_at
@@ -93,11 +95,12 @@ export async function loadCatalog(db: DB, groupId: string, version: number): Pro
 		)
 	]);
 
+	const lastPlayed = new Map(played.map((p) => [p.game_id, p.last]));
 	const games = new Map<number, CatalogGame>();
 	for (const row of rows) {
 		let game = games.get(row.id);
 		if (!game) {
-			game = { ...toCatalogGame(applyCorrection(row, corrections.get(row.id))), copies: [] };
+			game = { ...toCatalogGame(applyCorrection(row, corrections.get(row.id))), lastPlayed: lastPlayed.get(row.id) ?? null, copies: [] };
 			games.set(row.id, game);
 		}
 		game.copies.push({

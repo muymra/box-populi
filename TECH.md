@@ -63,7 +63,7 @@ box-populi/
   vercel.json  netlify.toml     the Vercel and Netlify targets
   package.json  vite.config.ts  tsconfig.json  pnpm-workspace.yaml
   migrations/                   0001_init (schema below), 0002_game_sources, 0003_group_theme,
-                                0004_instance_settings, 0005_game_corrections
+                                0004_instance_settings, 0005_game_corrections, 0006_plays
   scripts/
     ensure-local-config.ts      creates the two gitignored config files on install
     seed-demo.ts                writes seed/demo.sql
@@ -78,6 +78,7 @@ box-populi/
       link-kinds.ts             rulebook / video / other, guessed from an address
       project.ts                the source repository's address
       time.ts                   coarse "active 3 weeks ago"
+      plays.ts                  play log rules: places, podium points, standings, the CSV
       catalog/                  pure TS: runs in browser, server and tests
         types.ts                CatalogPayload and friends
         colors.ts               player colours (by join order) and box-front colours
@@ -88,9 +89,15 @@ box-populi/
         pick.ts                 picker draw, gamesAtHand(), seededRng()
         client.ts               browser fetch of the catalog, safe localStorage
         testing.ts              builders for tests
+      table/                    "At the table": who's here, start player, dice (browser)
+        here.ts                 who's here on a device: parse, 12-hour reset, guest names
+        regulars.ts             nights each member was here, ranking, folding the list
+        table.svelte.ts         Table, the shared who's-here state, and its context
+        dice.ts                 dice pool, rolls, holds, coin, recent results
+        random.ts               randomInt(): crypto.getRandomValues without modulo bias
       components/               BoxFront, Cube, OwnerEdge, ListRow (Spines view), CubeMark, CheckList,
                                 BggCredit, PersonalLink, CopyButton, ThemePicker, ImportPanel,
-                                HydrateProgress, ListPanel
+                                HydrateProgress, ListPanel, Modal, WhosHere, StartPlayer, DiceRoller, PlayForm, PlayList
       server/                   server-only (SvelteKit 3 treats any `server` directory so)
         platform.ts             Cloudflare (Pages and Workers), the only importer of `cloudflare:workers`: getDb(), getConfig(), afterResponse()
         platform.node.ts        the same three for Node and Docker: a SQLite file (BOX_TARGET=node)
@@ -118,6 +125,8 @@ box-populi/
         links.ts                rules and tutorial links
         wishlist.ts             wishes and the Wanted query
         lending.ts              lending, returns, and the account page's loans
+        plays.ts                the play log: form parsing, save, edit, delete, load, podium points
+        play-actions.ts         the play log's form actions, shared by the plays and game pages
         ratelimit.ts            rate_events: take() and giveBack(), cleanup of rows older than a day
         admin.ts                instance admin: key check, signed cookie, totals, groups table, actions
         appearance.ts           the custom theme and logo set on /admin
@@ -190,6 +199,7 @@ Bindings and variables come from `import { env } from 'cloudflare:workers'` (Sve
 - `0003_group_theme.sql`: `groups.theme`, a preset id or NULL.
 - `0004_instance_settings.sql`: the one-row `instance_settings` table (custom colours, whether they're the default, the logo address).
 - `0005_game_corrections.sql`: `game_corrections`, each group's corrections to a non-BGG game (D35; shown after `wishlist` below).
+- `0006_plays.sql`: `plays`, `play_players` and `groups.podium_points`, the play log (D37; shown after `game_links` below).
 
 Timestamps are Unix milliseconds. JSON columns hold arrays and are written and read only through helpers in `db.ts`.
 
@@ -254,7 +264,7 @@ CREATE TABLE games (
   thumb_url     TEXT,
   min_players   INTEGER,
   max_players   INTEGER,
-  best_mask     INTEGER NOT NULL DEFAULT 0,  -- bit n set = voted best at n players (n ≤ 12)
+  best_mask     INTEGER NOT NULL DEFAULT 0,  -- bit n set = voted best at n players (n ≤ 30)
   rec_mask      INTEGER NOT NULL DEFAULT 0,  -- bit n set = recommended at n
   min_playtime  INTEGER,                 -- minutes
   max_playtime  INTEGER,
@@ -307,6 +317,11 @@ CREATE TABLE game_links (
 );
 CREATE INDEX game_links_lookup ON game_links(group_id, game_id);
 
+-- migrations/0006_plays.sql: the play log (D37). plays: id (random text), group_id, game_id,
+-- played_on (YYYY-MM-DD), coop ('won', 'lost' or NULL for competitive), lowest_wins, logged_by,
+-- created_at. play_players: (play_id, seat) with either user_id or guest_name, place (NULL for
+-- co-op) and score. groups.podium_points: "3,2,1" style, NULL for the default.
+
 -- rate limiting: subject is a user id, or 'ip:<address>' before a person exists
 CREATE TABLE rate_events (
   subject  TEXT NOT NULL,
@@ -338,7 +353,7 @@ Notes on the choices:
 
 - **One row per game.** Tags, alternate names and expansion links are JSON columns because the browser does the filtering and nothing queries them in SQL, except the expansions list on a game page (`json_each(base_bgg_ids)`). This keeps hydrate writes to one row per game; see "Scale and budget."
 - **One copy per user per game.** Owning two copies of a game isn't recorded.
-- **Bitmasks for the player poll.** "Best at 4" is `(best_mask >> 4) & 1`. Capped at 12 players so JavaScript's 32-bit `<<` stays safe.
+- **Bitmasks for the player poll.** "Best at 4" is `(best_mask >> 4) & 1`. Capped at 30 players (`MAX_MASK_PLAYERS`): JavaScript's `<<` works on 32-bit signed numbers, and bit 31 would make the mask negative. The player filter compares a game's own range directly, with no cap. The shelf's and the picker's dropdowns offer 1 to 12 and then "13+" (`PLAYER_CHOICES`), which filters at 13; the picker's default count from who's here is exact, so 15 people filter at 15.
 - **Roles live on `memberships`.** No owner column on `groups` to drift out of sync. The partial unique index makes a second owner impossible.
 - **Ownership transfer** is one `db.batch([...])`: demote the old owner to `admin`, then promote the new one. D1 batches run as a transaction. The order matters because the index rejects two owners at once.
 - **Account deletion guard.** The cascade would delete an owner's membership and leave the group ownerless. The delete action first finds groups where the user is owner and other members remain, and refuses with a message to transfer or delete them. Groups where the user is the only member are deleted with them, and so are the hand-entered games they created that nobody else has on a shelf or wishlist (with those games' links).
@@ -598,8 +613,8 @@ Rules:
 - **Zero means unknown.** BGG sends `0` for missing player counts, play times, weight (no votes) and year. Store NULL.
 - Play time: `min_playtime` and `max_playtime`; when one is zero, fall back to `playingtime`.
 - Description: BGG double-encodes entities, so after XML parsing the text still contains `&#10;` and friends. Decode those, strip any tags, and store plain text.
-- Player counts (`poll.ts`): prefer BGG's own summary. The `poll-summary name="suggested_numplayers"` element's `bestwith` and `recommmendedwith` results carry text like "Best with 3–4 players" (BGG spells it with three m's; confirm against a real response). Parse the counts, ranges and comma lists into the masks, ignoring counts above 12. This keeps the app's "best at" identical to what BGG shows, so it isn't a modified version of BGG's data.
-- When the summary is missing, fall back to the raw poll and label the result in the UI as "computed from BGG poll votes." Ignore `results` rows whose `numplayers` contains `+` or is above 12. If `totalvotes` is under 10, both masks are 0. Otherwise a count is **best** when Best votes exceed both Recommended and Not Recommended, and **recommended** when Best plus Recommended exceed Not Recommended. Store which source was used in a `poll_source` column (`summary`, `votes`, or NULL).
+- Player counts (`poll.ts`): prefer BGG's own summary. The `poll-summary name="suggested_numplayers"` element's `bestwith` and `recommmendedwith` results carry text like "Best with 3–4 players" (BGG spells it with three m's; confirm against a real response). Parse the counts, ranges and comma lists into the masks, ignoring counts above 30. This keeps the app's "best at" identical to what BGG shows, so it isn't a modified version of BGG's data.
+- When the summary is missing, fall back to the raw poll and label the result in the UI as "computed from BGG poll votes." Ignore `results` rows whose `numplayers` contains `+` or is above 30. If `totalvotes` is under 10, both masks are 0. Otherwise a count is **best** when Best votes exceed both Recommended and Not Recommended, and **recommended** when Best plus Recommended exceed Not Recommended. Store which source was used in a `poll_source` column (`summary`, `votes`, or NULL).
 
 ### Search
 
@@ -715,11 +730,40 @@ This is the default for a new instance (D28). With `BGG_MODE=off`, the add page 
 3. Draw three without replacement, with probability proportional to weight, skipping ids in `exclude`. When fewer than three remain, clear `exclude` and draw again.
 4. `rng` is injected so tests can seed it.
 
-The last "who's here" selection is stored in `localStorage` under `bp:present:<groupId>`. Wrap every storage access in try/catch and treat failure as an empty selection.
+"Who's here" is a `Table` (`src/lib/table/table.svelte.ts`) that the group layout creates and puts in context, so the picker and the start player modal edit the same one. It's stored in `localStorage` under `bp:present:<groupId>` as `{ members, guests, at }`: ticked member ids, guest names, and the time of the last change. `parseHere()` treats a value older than 12 hours (`HERE_TTL_MS`), unreadable, or in the old array format as empty, and the table is read again whenever the picker or the start player modal opens. Guest names are tidied, capped at 30 characters and 20 names, and de-duplicated ignoring case. Every storage access goes through the safe `storage` wrapper. Only ticked members' copies count; guests add to the player count.
 
-The setup lives in the address: `here` (comma-separated member ids), `n` (players), `t` (minutes), `w` (complexity ceiling) and `f=1` (add fillers), kept in step with `goto(..., { replace: true, reset: false })` like the shelf's filters. Opening a link with any of them restores that setup; without them, the page starts from this device's last "who's here" for the group. A "Copy a link to this setup" button copies the address. The three pulled games aren't in the address; they're random each time.
+Regulars: `bp:regulars:<groupId>` holds, per member id, the nights this device ticked them (newest first, at most 12). A night is the local date six hours earlier (`nightOf()`), so a tick at 1 a.m. counts for the evening before. Ticking records tonight and unticking takes it back. `rankMembers()` orders by nights in the last 90 days, ties keeping the server's order (most recently active first). The `Table` reads the regulars on each `load()` and ranks from that snapshot, so the list doesn't reorder while people are being ticked. `foldMembers()` shows everyone up to 10 members; past that the first 8 plus anyone ticked or tapped since the last load, with "N more" for the rest.
+
+The setup lives in the address: `n` (players), `t` (minutes), `w` (complexity ceiling) and `f=1` (add fillers), kept in step with `goto(..., { replace: true, reset: false })` like the shelf's filters. "Copy a link to this setup" copies the address plus who's here: `here` (comma-separated member ids) and `guest` (one per guest name). Opening a link with `here` or `guest` replaces who's here on this device; the address then drops them, so reloading the page, or a phone restoring the tab next week, can't bring back an old table past the 12-hour reset. Old links that carried them in the address still work the same way. Without them, the page starts from this device's who's here. The three pulled games aren't in the address; they're random each time.
 
 Fillers: `isFiller(game)` in `pick.ts` is true when the longest listed play time is at most `FILLER_MAX_MINUTES` (30) and the weight bucket is light or unknown; a game with no play time isn't one. The candidates are the games at the table that fit the players, minus the main picks; the time and complexity limits don't apply. `pick()` takes an optional weight function, and fillers use `fillerWeight`: `pickWeight` doubled for games known to be light, so unrated short games come up half as often. Fillers keep their own `seen` list and re-roll; "Pull three more" keeps them unless one became a main pick.
+
+Split tables: when `needsSplit(pool, players)` holds (four or more players, and every filler with a known maximum is too small for them; games with no maximum don't count either way), the picker calls `splitFillers(pool, players, rng, seen)`. It tries 2 tables, then 3, up to `MAX_TABLES` (6) or half the players, with sizes from `tableSizes()` (9 across 2 is [5, 4]). Larger tables draw first, one filler each through `pick(..., 1, fillerWeight)`, never the same game twice; the first table count where every table gets one wins. `fitsPlayers()` matches the filter's rule, so a game with an unknown end can fill any table.
+
+## At the table
+
+Two icon-only buttons in the group bar open modals (`Modal.svelte`, a native `<dialog>` opened with `showModal()`): "Who goes first?" (`StartPlayer.svelte`) and "Dice" (`DiceRoller.svelte`). Both run in the browser and store nothing on the server, so they work for every reader, including demo visitors and suspended groups. The modals stay mounted while closed, so a pick or a roll survives closing and reopening until the page reloads.
+
+- **Members:** the group layout's load returns `tableMembers` (id, name, colour) from `loadMembers()`, one query per group load, so the start player modal opens without the catalog.
+- **Randomness:** `randomInt(n)` in `random.ts` draws from `crypto.getRandomValues` and redraws values above the last whole multiple of `n`, so no face or person is favoured. The picker keeps `Math.random`.
+- **Start player:** one person from the ticked members and the guests, with at least two needed. The choice is made first; then a reel of at least 24 names (the table repeated, ending on the pick, plus two after it) scrolls up with the Web Animations API over 2.3 s, overshoots by a fifth of a row and settles. Under reduced motion the pick shows at once.
+- **Dice:** a pool of up to 20 dice from d4, d6, d8, d10, d12 and d20, starting with one d6. Changing the pool starts fresh dice. A rolled die can be held (kept) for the next roll. The total shows once every die has a number. A coin flip sits under the dice. The five newest results, dice and coins together, are listed under "Recent"; they live in memory only.
+
+## Play log
+
+`src/lib/plays.ts` holds the rules, shared by the pages and the tests: `placesFromScores()` (competition ranking, missing scores last), `fillPlaces()` (unplaced players share the place after the last one given), `playPoints()` (a player scores only if someone finished below), `isWin()`, `standings()` (members only; points, then wins, then fewer plays), `parsePoints()` and `playsCsv()`.
+
+`src/lib/server/plays.ts` reads the form (`parsePlayForm`: `player` as `m:<id>` or `g:<name>` with `score` and `place` alongside, and `result` of `places`, `scores`, `won` or `lost`), saves (`savePlay`, which checks the game has a copy on the group's shelf and every member is in the group, then writes the play and its players in one batch, one statement per player to stay under D1's 100 bound parameters, and bumps the group's catalog), deletes (`deletePlay`), reads (`loadPlays`, newest first, filtered by game, date or player, with the group's corrected game names) and keeps the points (`podiumPoints`, `setPodiumPoints`). `canChangePlay` goes through `can(role, 'change_play')`, with `targetIsSelf` meaning the actor logged the play or is in it. The form actions live in `play-actions.ts` and are exported by the plays page; the game page's forms post there and call `update({ navigate: false })` to stay put.
+
+Dates: the server accepts plays up to its own date plus a day, because people east of UTC are already in tomorrow. The form's default is `nightOf(now)` from `regulars.ts`.
+
+The catalog payload carries `lastPlayed` per game (one `MAX(played_on)` query per group); the shelf's `stale=1` filter keeps games last played before `staleCutoff()` (90 days ago) or never. Deleting a group clears its plays; deleting a person clears their `play_players` rows and their `logged_by`, and a game a play still names is no longer an orphan, so it stays.
+
+The CSV: one row per player per play, CRLF line ends and a byte-order mark for spreadsheet apps. `game_data_from` names where each game's details came from ("BoardGameGeek", "Wikidata" or "typed in"), so BGG is credited by name on the rows that carry its data and nowhere else. Text people typed (names, guests, typed-in and Wikidata titles) starting with `=`, `+`, `-`, `@`, a tab or a return gets a leading apostrophe, so a guest called `=cmd()` can't run as a formula; BGG titles are written as BGG gives them. Numbers stay numbers.
+
+Form fields: each player's score and place are named after them (`score:m:<id>`, `place:g:<name>`), not paired with `player` by position, because a select whose bound value has no option sends nothing and would shift every later player's place. An edit keeps players who have since left the group (shown as "a former member", removable) and works after the game leaves the shelf; only new plays need the game on the shelf and every player in the group. Deleting an account also deletes any play left with no players.
+
+The demo seed invents 140 plays over 14 months with weighted skill per member, a few guests, scores that agree with places, winner-only logs and co-op games.
 
 ## Demo group
 
@@ -752,6 +796,8 @@ Fillers: `isFiller(game)` in `pick.ts` is true when the longest listed play time
 | `/g/[groupId]/game/[gameId]` | Game page: details, owners, links, wishlisters, expansions. | `requireRead` |
 | `/g/[groupId]/add` | BGG search, manual entry, import. | `requireRole(member)` |
 | `/g/[groupId]/pick` | Picker. | `requireRead` |
+| `/g/[groupId]/plays` | The play log: leaderboard (`?period=all` for all time), plays, points setting, export. Actions `logPlay`, `editPlay`, `deletePlay` (also used by the game page's forms) and `points`. | `requireRead`; plays `requireRole(member)` plus `canChangePlay`; `points` `requireRole(admin)` |
+| `GET /g/[groupId]/plays/export.csv` | The plays as CSV (`who=me|all`, `period=year|all`), a download for people, no CORS. | `requireRead`; `who=me` needs membership |
 | `/g/[groupId]/wanted` | The Wanted tab: games members want that nobody in the group owns, with who wants each and a "Me too" toggle. Wishes are set by the `want` action here, on the game page and on the add page (`on=0` removes). | `requireRead`; `want` needs `requireRole(member)` |
 | `/g/[groupId]/group` | The Group tab: invite code, members list, and the settings actions (`rename`, `newCode`, `promote`, `demote`, `transfer`, `remove`, `delete`). Members see the code and the list; co-admins and the owner see the controls their role allows. | `requireRead`; each action `requireRole(admin)` or `requireRole(owner)` |
 | `/me` | Display name, groups, loans (what you lent, with "Mark as returned", and what you borrowed), new personal link, sign out of this device or everywhere, account deletion. Later: my games and wishlist. | `requireUser` |

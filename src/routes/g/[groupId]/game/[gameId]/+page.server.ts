@@ -8,6 +8,8 @@ import { canEditGame, editGame } from '#lib/server/game-edit.ts';
 import { applyCorrection, groupCorrections } from '#lib/server/corrections.ts';
 import { linkHost } from '#lib/link-kinds.ts';
 import { loadMembers } from '#lib/server/catalog.ts';
+import { canChangePlay, loadPlays } from '#lib/server/plays.ts';
+import { isWin } from '#lib/plays.ts';
 import { all, jsonArray, one } from '#lib/server/db.ts';
 import { getDb } from '#lib/server/platform.ts';
 import type { PollSource } from '#lib/catalog/types.ts';
@@ -64,7 +66,7 @@ export const load: PageServerLoad = async (event) => {
 	const correction = (await groupCorrections(db, groupId, [gameId])).get(gameId);
 	const game = applyCorrection(shared, correction);
 
-	const [owners, wishers, links, expansions, bases, members] = await Promise.all([
+	const [owners, wishers, links, expansions, bases, members, plays] = await Promise.all([
 		all<{ user_id: string; name: string; lent_to_name: string | null; lent_to_text: string | null; lent_in_group: number }>(
 			db,
 			`SELECT c.user_id, u.name, lu.name AS lent_to_name, c.lent_to_text,
@@ -117,7 +119,8 @@ export const load: PageServerLoad = async (event) => {
 					game.base_bgg_ids
 				)
 			: Promise.resolve([]),
-		loadMembers(db, groupId)
+		loadMembers(db, groupId),
+		loadPlays(db, groupId, { gameId })
 	]);
 	const colorOf = new Map(members.map((m) => [m.id, m.colorIndex]));
 
@@ -148,8 +151,20 @@ export const load: PageServerLoad = async (event) => {
 					? 'a former member'
 					: (nameOf(game.edited_by) ?? 'someone outside this group');
 	const wanted = me ? wishers.some((w) => w.id === me.id) : false;
+	// Who has won this game most here, among current members (PRD "Play log").
+	const wins = new Map<string, number>();
+	for (const p of plays) {
+		if (p.coop) continue;
+		const places = p.players.map((x) => x.place);
+		for (const x of p.players) if (x.userId && colorOf.has(x.userId) && isWin(x.place, places)) wins.set(x.userId, (wins.get(x.userId) ?? 0) + 1);
+	}
+	const [topId, topWins] = [...wins.entries()].sort((a, b) => b[1] - a[1])[0] ?? [null, 0];
 
 	return {
+		plays: plays.slice(0, 10).map((p) => ({ ...p, canChange: canEdit && actor != null && canChangePlay(actor, p) })),
+		playCount: plays.length,
+		mostWins: topId ? { name: nameOf(topId) ?? '', wins: topWins } : null,
+		canLog: canEdit && owners.length > 0,
 		mine,
 		wanted,
 		canEditDetails,

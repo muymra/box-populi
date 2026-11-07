@@ -80,6 +80,7 @@ Many models learned older versions of these tools. Check yourself against this l
   - `$app/environment` became `$app/env`. `$app/stores` is gone; use `$app/state` (`page.url`, no `$`).
   - Bindings come from `cloudflare:workers`, not `event.platform`.
   - `error(status, 'message')` takes a string. `redirect()` and `error()` throw by themselves; don't write `throw`. Use `Response.json()`, not `json()`.
+  - `use:enhance`'s `update()` navigates to the page that owns the action, the way a browser would, so a form posting to another route leaves the current page. Pass `update({ navigate: false })` to stay. `invalidateAll` became `refreshAll`.
   - Hook types come from `@sveltejs/kit/hooks`. `SubmitFunction` (for `use:enhance`) comes from `$app/forms`, not `@sveltejs/kit`. `goto` options are `replace` and `reset: false` (formerly `replaceState`, `keepFocus`, `noScroll`).
   - Any directory named `server` is server-only.
   - `+page.server.ts` may only export SvelteKit's own names (`load`, `actions`, ...). Put helpers in `#lib`.
@@ -92,7 +93,7 @@ Many models learned older versions of these tools. Check yourself against this l
 - **D1.** No `BEGIN`/`COMMIT`; `db.batch()` is the transaction. At most 100 bound parameters per statement. Foreign keys are enforced by default; the test adapter in `src/lib/server/testing/d1.ts` turns them on to match. `INSERT OR IGNORE` silently skips NOT NULL violations, so don't use it to paper over errors. Two limits the tests can't catch, because node:sqlite and libSQL don't have them: a `LIKE` or `GLOB` pattern over 50 bytes is an error (match with `instr()` instead), and the free plan allows 50 queries per request, where a `batch()` counts as one. Never run a query per row in a loop; check with one `IN (...)` query and write with one batch.
 - **Pages Functions.** No cron triggers, so all cleanup is lazy. 50 subrequests per request on the free plan. 
 - **BGG XML API.** Requires a bearer token. Throttling can show up as 500 or 503, not only 429. Search results have no images. `thing` takes up to 20 ids. The collection endpoint answers 202 while it's building. Zero means unknown. Descriptions are double-encoded. Player polls have "N+" rows. The parsing rules are in TECH.md.
-- **JavaScript bit shifts are 32-bit.** The player masks cap at 12 for that reason.
+- **JavaScript bit shifts are 32-bit and signed.** `1 << 31` is negative, so the player masks stop at 30 (`MAX_MASK_PLAYERS`). Player dropdowns stop at "13+" (`MANY_PLAYERS`) to stay short.
 
 ## Done means
 

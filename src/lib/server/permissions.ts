@@ -11,12 +11,14 @@ export type GroupAction =
 	| 'demote'
 	| 'transfer_ownership'
 	| 'delete_group'
-	| 'leave';
+	| 'leave'
+	| 'change_play'
+	| 'set_points';
 
 export type PermissionContext = {
 	/** Role of the member being acted on, for member-targeted actions. */
 	targetRole?: Role;
-	/** True when the target is the actor. */
+	/** True when the target is the actor, or for `change_play`, when the actor logged the play or played in it. */
 	targetIsSelf?: boolean;
 	/** Members in the group other than the actor, for `leave`. */
 	otherMembers?: number;
@@ -34,7 +36,10 @@ export function can(actor: Role, action: GroupAction, ctx: PermissionContext = {
 		case 'rename':
 		case 'regenerate_code':
 		case 'delete_any_link':
+		case 'set_points':
 			return atLeast(actor, 'admin');
+		case 'change_play':
+			return targetIsSelf || atLeast(actor, 'admin');
 		case 'remove_member':
 			if (targetIsSelf || targetRole == null || targetRole === 'owner') return false;
 			if (actor === 'owner') return true;

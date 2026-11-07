@@ -94,7 +94,7 @@ Never cut: import, the picker, the demo group, the phone layout, and the instanc
 ### Stretch, in rough priority
 
 - **Game night.** The owner picks a date; members say yes or no; each member marks which copies they'll bring. The picker's "who's here" covers the evening itself, so this is about planning ahead.
-- **Play log.** Date, game, players, winner. Feeds a "not played in a while" filter.
+- **Play log.** Built 2026-11-07 (D37); see "Play log" below. Date, game, players, places or scores, a podium-points leaderboard, a CSV export, and a "not played lately" filter.
 - **Passkeys** as an optional second way to sign in on a new device, for people who'd rather not keep a link.
 - **CSV export** of the group catalog: game name, year, BGG link and owners. No BGG descriptions or statistics, so the export can't work as a copy of BGG's data.
 - **Installable PWA** so it sits on a phone home screen.
@@ -174,7 +174,7 @@ Hand-entered and Wikidata games can be filled in and corrected: name, image, pla
 | Filter | Behavior |
 |---|---|
 | Text | Matches primary and alternate titles; case- and accent-insensitive. |
-| Players | Pick N: games whose range includes N. A "best at N" toggle narrows to games BGG voters rate best at that count (available up to 12 players). |
+| Players | Pick N from 1 to 12, or "13+": games whose range includes N (13+ checks 13). A "best at N" toggle narrows to games BGG voters rate best at that count (available up to 30 players). |
 | Time | "Fits in N minutes": games whose maximum listed play time is at most N. A game listed at 60 to 120 minutes doesn't fit in an hour. |
 | Complexity | Light (under 2), Medium (2 to under 3), Heavy (3 and up), from BGG weight on its 1 to 5 scale. A range slider is a later addition (cut order item 3). |
 | Mechanics | Multi-select (deck building, worker placement, and so on). Matches any selected, with an "all of" switch (cut order item 2). |
@@ -197,12 +197,19 @@ A base game's page lists the expansions owned in the group. An expansion's page 
 
 Inputs:
 
-- **Who's here.** Tick the members present, from a searchable list with recently active members on top. The selection starts from the last one used on this device for this group, or empty. Only the ticked members' copies are considered, plus copies lent to them. With nobody ticked, the whole catalog is used.
-- **Players.** Defaults to the number ticked; editable for guests without an account. With nobody ticked it can stay "Any", which skips the player filter and the best/recommended weighting.
+- **Who's here.** Tick the members present and add guests by name for people at the table without an account. Regulars come first: the members this device has ticked on the most nights in the last 90 days, then the most recently active. In a group of more than 10, the first 8 show, plus anyone ticked; the rest sit behind "N more", which opens the full list with a search past 12. The device remembers the selection for the group and clears it 12 hours after the last change, so last week's table doesn't carry over (D36). The same list feeds "Who goes first?" (see "At the table"). Only the ticked members' copies are considered, plus copies lent to them; guests bring no games. With no members ticked, the whole catalog is used.
+- **Players.** Defaults to the number of people here, members and guests, however many; editable from 1 to 12 or "13+". With nobody ticked it can stay "Any", which skips the player filter and the best/recommended weighting.
 - **Minutes available** and an optional **complexity ceiling.**
-- **Add fillers.** A checkbox for game nights where people arrive at different times or want a palette cleanser between longer games. When ticked, each pull also brings up to three fillers in a smaller row with its own re-roll. A filler lists 30 minutes or less as its longest play time and is light (BGG weight under 2, or a group's complexity of 1). Short games nobody has rated count too, at half the odds, marked "Complexity unknown". Fillers fit the same players and the games at the table, ignore the time and complexity limits, and never repeat a main pick. Thirty minutes is where the usual fillers sit (Sushi Go, Coup, Love Letter, No Thanks!, For Sale list 15 to 30 on the box); measured on the longest time, it leaves out "30 to 60 minute" games.
+- **Add fillers.** A checkbox for game nights where people arrive at different times or want a palette cleanser between longer games. When ticked, each pull also brings up to three fillers in a smaller row with its own re-roll. A filler lists 30 minutes or less as its longest play time and is light (BGG weight under 2, or a group's complexity of 1). Short games nobody has rated count too, at half the odds, marked "Complexity unknown". Fillers fit the same players and the games at the table, ignore the time and complexity limits, and never repeat a main pick. When no filler takes the whole group, the group splits into the fewest tables (two to six, at least two players each, sizes as even as possible) that each get a different filler that fits them, shown as "Table 1 · 7 players" and so on; "Other fillers" draws again. A game with no upper player limit set doesn't count as taking everyone. Thirty minutes is where the usual fillers sit (Sushi Go, Coup, Love Letter, No Thanks!, For Sale list 15 to 30 on the box); measured on the longest time, it leaves out "30 to 60 minute" games.
 
-The result is three games with who owns each. Games voted "best" at the player count are three times as likely to be drawn as games merely in range; "recommended" games twice as likely. "Re-roll" draws three new games, avoiding ones already shown until the candidates run out. The picker state lives in the URL.
+The result is three games with who owns each. Games voted "best" at the player count are three times as likely to be drawn as games merely in range; "recommended" games twice as likely. "Re-roll" draws three new games, avoiding ones already shown until the candidates run out. The picker's limits live in the address; who's here goes into the copied link, not the address, so reloading the page doesn't undo the nightly reset.
+
+### At the table
+
+Two icon buttons in the group bar, on every group page, each open a modal over the current page. Nothing is saved on the server, so they work for anyone who can see the group, including demo visitors.
+
+- **Who goes first?** The "who's here" list from the picker, with the same ticks and guests, and a button that picks one of them at random. A slot machine reel rolls through the names and stops on the pick. Needs at least two people. "Pick again" draws again.
+- **Dice.** Any mix of d4, d6, d8, d10, d12 and d20, up to 20 dice, with the total. Tap a rolled die to keep it and roll the rest, for games like King of Tokyo. A coin flip sits underneath. The last five results stay listed so nobody argues about what was rolled; they're gone after a reload.
 
 ### Links
 
@@ -217,6 +224,20 @@ Members mark games they want from any game page or from search results. The game
 ### Lending
 
 The copy's owner can mark it lent to a group member (picked from a list) or to someone else (free text). Lent to a member, the game stays available in search and shows "with Sam." Lent to someone else, it's hidden by the availability filter. Marking it returned clears the loan.
+
+### Play log
+
+For fun, not for rankings anyone takes seriously (D37).
+
+- **Logging.** From a game's page ("Log a play"), or from a game "Play tonight" pulled ("We played this"). Only games on the group's shelf. The form starts from who's here tonight, members and guests; changing the players there leaves tonight's list alone. The date defaults to tonight, with 1 a.m. counting as the evening before.
+- **Results.** Places (picking just the winner is enough; anyone left blank shares last place), scores (places follow from them, with "lowest score wins"), or a co-op win or loss for the whole table. Ties share a place.
+- **Points.** A group setting, 3, 2, 1 by default, set by co-admins and the owner as one to five numbers from first place down. A player scores only if someone finished below them, so last place never scores and a draw scores nothing; tied players take their shared place's points. Points are worked out when shown, so changing them rescores every play. Co-op plays score nothing and count as plays.
+- **Leaderboard.** Points, wins and plays per member, for this year or all time. Guests appear in plays but not on it, since one typed name can be two people. A member who leaves drops off it and shows as "a former member" in plays.
+- **Where.** A trophy icon in the group bar, beside "Who goes first?" and "Dice", opens the plays page (`/g/<group>/plays`): the leaderboard, the plays (newest 100), the points setting and the export. A game's page lists its plays, when it was last played and who has won it most.
+- **Changing plays.** Whoever logged a play, anyone in it, and co-admins and the owner can edit or delete it. Demo and suspended groups can't log.
+- **Export.** A CSV file, one row per player per play: date, game, where the game's details came from, BGG id, play id, player, member or guest, place, score, won, co-op result, points. Plays you were in, or everyone's; this year or all time. Game names and BGG ids only, nothing from BGG's statistics. BoardGameGeek is named on the rows whose game details came from BGG, and only there, and BGG titles appear exactly as BGG gives them.
+- **Not played lately.** A shelf filter, under More once the group has logged a play: games not played in the last 3 months, including games never logged.
+- **Deleting.** Deleting an account removes that person's results; the plays stay for the others in them.
 
 ### Demo group
 

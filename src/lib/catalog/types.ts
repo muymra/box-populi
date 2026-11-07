@@ -46,6 +46,8 @@ export type CatalogGame = {
 	isManual: boolean;
 	/** True for hand-entered games and for BGG stubs still waiting for details. */
 	incomplete: boolean;
+	/** The last night this group logged a play of it (YYYY-MM-DD), or null. Only in a group's catalog. */
+	lastPlayed?: string | null;
 	copies: CatalogCopy[];
 };
 

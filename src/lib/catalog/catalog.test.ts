@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { buildSearchText, normalize } from './normalize.ts';
-import { countsFromMask, formatCounts, formatPlayerRange, formatPlayersShort, maskFromCounts, maskHas } from './players.ts';
+import {
+	PLAYER_CHOICES,
+	countsFromMask,
+	formatCounts,
+	formatPlayerRange,
+	formatPlayersShort,
+	maskFromCounts,
+	maskHas,
+	playerChoiceLabel
+} from './players.ts';
 import { formatPlaytime, formatWeight, weightBucket } from './buckets.ts';
 import { DEFAULT_FILTERS, filterGames, parseFilters, passedOnUnknown, serializeFilters, type Filters } from './filter.ts';
-import { fillerWeight, gamesAtHand, isFiller, pick, seededRng } from './pick.ts';
+import { fillerWeight, fitsPlayers, gamesAtHand, isFiller, needsSplit, pick, seededRng, splitFillers, tableSizes } from './pick.ts';
 import { copy, game } from './testing.ts';
 
 const members = new Set(['u1', 'u2', 'u3']);
@@ -22,9 +31,15 @@ describe('normalize', () => {
 
 describe('player masks', () => {
 	it('round-trips counts and ignores out-of-range ones', () => {
-		const mask = maskFromCounts([1, 3, 4, 13, 0, -2]);
-		expect(countsFromMask(mask)).toEqual([1, 3, 4]);
-		expect(maskHas(mask, 13)).toBe(false);
+		const mask = maskFromCounts([1, 3, 4, 13, 30, 31, 0, -2]);
+		expect(countsFromMask(mask)).toEqual([1, 3, 4, 13, 30]);
+		expect(mask).toBeGreaterThan(0);
+		expect(maskHas(mask, 13)).toBe(true);
+		expect(maskHas(mask, 31)).toBe(false);
+	});
+	it('offers 1 to 12 and then 13+ in dropdowns', () => {
+		expect(PLAYER_CHOICES).toHaveLength(13);
+		expect(PLAYER_CHOICES.map(playerChoiceLabel).slice(-2)).toEqual(['12', '13+']);
 	});
 	it('formats ranges', () => {
 		expect(formatCounts([5, 1, 3, 4])).toBe('1, 3–5');
@@ -158,7 +173,65 @@ describe('filterGames', () => {
 	});
 });
 
+describe('not played lately', () => {
+	it('keeps games never logged or last played before the cutoff', () => {
+		const now = Date.UTC(2026, 10, 7);
+		const recent = game({ lastPlayed: '2026-10-01' });
+		const old = game({ lastPlayed: '2026-07-01' });
+		const never = game({ lastPlayed: null });
+		const shown = filterGames([recent, old, never], f({ stale: true }), members, now).map((g) => g.id);
+		expect(shown.sort()).toEqual([old.id, never.id].sort());
+		expect(filterGames([recent, old, never], f({}), members, now)).toHaveLength(3);
+		expect(parseFilters(new URLSearchParams('stale=1')).stale).toBe(true);
+		expect(serializeFilters(f({ stale: true })).get('stale')).toBe('1');
+	});
+});
+
 describe('picker', () => {
+	it('splits players across tables as evenly as possible, largest first', () => {
+		expect(tableSizes(9, 2)).toEqual([5, 4]);
+		expect(tableSizes(13, 3)).toEqual([5, 4, 4]);
+		expect(tableSizes(8, 2)).toEqual([4, 4]);
+	});
+	it('fits a player count by range, with unknown ends allowed', () => {
+		expect(fitsPlayers(game({ minPlayers: 2, maxPlayers: 5 }), 5)).toBe(true);
+		expect(fitsPlayers(game({ minPlayers: 2, maxPlayers: 5 }), 6)).toBe(false);
+		expect(fitsPlayers(game({ minPlayers: 3, maxPlayers: null }), 12)).toBe(true);
+	});
+	it('gives each table of a big group its own filler, using the fewest tables that work', () => {
+		const upTo5 = game({ minPlayers: 2, maxPlayers: 5 });
+		const upTo4 = game({ minPlayers: 2, maxPlayers: 4 });
+		for (let seed = 1; seed <= 20; seed++) {
+			const tables = splitFillers([upTo5, upTo4], 9, seededRng(seed))!;
+			expect(tables.map((t) => [t.players, t.game.id])).toEqual([
+				[5, upTo5.id],
+				[4, upTo4.id]
+			]);
+		}
+		// Two tables of 7 and 6 fit nothing here; three of 5, 4 and 4 need three different games.
+		const third = game({ minPlayers: 3, maxPlayers: 4 });
+		expect(splitFillers([upTo5, upTo4, third], 13, seededRng(1))?.map((t) => t.players)).toEqual([5, 4, 4]);
+		expect(splitFillers([upTo5, upTo4], 13, seededRng(1))).toBeNull();
+	});
+	it('splits only when the group outgrows every filler with a known limit, and has four or more', () => {
+		const upTo5 = game({ minPlayers: 2, maxPlayers: 5 });
+		const bigMin = game({ minPlayers: 6, maxPlayers: 10 });
+		const noLimit = game({ minPlayers: 2, maxPlayers: null });
+		expect(needsSplit([upTo5, noLimit], 9)).toBe(true); // no upper limit doesn't count as seating 9
+		expect(needsSplit([upTo5, bigMin], 9)).toBe(false); // 6 to 10 takes 9
+		expect(needsSplit([bigMin], 3)).toBe(false); // too few for it; splitting won't help
+		expect(needsSplit([game({ minPlayers: 2, maxPlayers: 2 })], 3)).toBe(false); // not enough for two tables of two
+		expect(needsSplit([noLimit], 20)).toBe(false);
+		expect(needsSplit([upTo5], null)).toBe(false);
+	});
+		it('avoids fillers already shown while others fit', () => {
+		const a = game({ minPlayers: 2, maxPlayers: 5 });
+		const b = game({ minPlayers: 2, maxPlayers: 5 });
+		const c = game({ minPlayers: 2, maxPlayers: 5 });
+		const tables = splitFillers([a, b, c], 8, seededRng(2), new Set([a.id, b.id]))!;
+		expect(tables.map((t) => t.game.id)).toContain(c.id);
+		expect(tables).toHaveLength(2);
+	});
 	it('counts short, light games as fillers, and short ones of unknown complexity at half the odds', () => {
 		const sushi = game({ minPlaytime: 15, maxPlaytime: 15, weight: 1.2 });
 		const typed = game({ minPlaytime: 20, maxPlaytime: 20, weight: null, incomplete: true });
