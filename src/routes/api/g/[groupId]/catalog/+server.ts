@@ -4,6 +4,7 @@
 import { requireRead } from '#lib/server/authz.ts';
 import { catalogVersion, loadCatalog } from '#lib/server/catalog.ts';
 import { getDb } from '#lib/server/platform.ts';
+import { version as build } from '$app/env';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async (event) => {
@@ -12,7 +13,9 @@ export const GET: RequestHandler = async (event) => {
 	await requireRead(event, db, groupId);
 
 	const version = (await catalogVersion(db, groupId)) ?? 0;
-	const etag = `"${groupId}.${version}"`;
+	// The build is in the tag too, so a deploy that changes the payload's shape can't be answered with a
+	// 304 for a copy in the old shape (a reseeded demo also restarts at the same version).
+	const etag = `"${groupId}.${version}.${build}"`;
 	const headers = { etag, 'cache-control': 'private, no-cache', vary: 'cookie' };
 	if (event.request.headers.get('if-none-match') === etag) {
 		return new Response(null, { status: 304, headers });

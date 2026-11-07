@@ -139,6 +139,8 @@ cp docker.env.example .env      # then fill it in: DOMAIN, INSTANCE_CONTACT, ADM
 docker compose up -d --build
 ```
 
+The rest of `.env` holds the same settings as step 4, which explains each one. To change one later, edit `.env` and run `docker compose up -d` (see "Changing settings").
+
 Caddy, the second service in `compose.yaml`, gets an HTTPS certificate for `DOMAIN` and forwards to the app. HTTPS isn't optional: sign-in cookies are marked Secure, and the app takes requests as https unless a proxy says otherwise. If you already run a reverse proxy, drop the `caddy` service, publish the app's port 3000, and have your proxy send `X-Forwarded-For` (the app reads it for rate limits).
 
 - **Upgrading:** `git pull && docker compose up -d --build`. New migrations run when the app starts.
@@ -186,6 +188,20 @@ Apply migrations before deploying: new code can read columns an old database doe
 - **Vercel or Netlify:** push the new code to the repository the host builds from (or run its deploy command). The app applies new migrations to Turso when it starts.
 
 If a new version adds a required setting, the site names it on every page until you set it; the new keys are in `wrangler.example.jsonc`.
+
+## Changing settings
+
+Every setting from step 4 can be changed after launch, such as `MAX_MEMBERS_PER_GROUP` or `GROUP_CREATION`. The app reads its settings when it starts, so a change takes effect once you do the step for your host below. The site's look (a custom theme and logo) is the exception: it's set on the admin page and needs none of this.
+
+| Host | Where the settings live | To apply a change |
+|---|---|---|
+| Cloudflare Pages | `"vars"` in `wrangler.jsonc`; the secrets `ADMIN_KEY` and `BGG_TOKEN` through `pnpm exec wrangler pages secret put` (step 5) | `pnpm build && pnpm exec wrangler pages deploy` |
+| Cloudflare Workers | the same `"vars"`; secrets through `pnpm exec wrangler secret put` | `pnpm build && pnpm exec wrangler deploy` |
+| Docker | `.env`, next to `compose.yaml` | `docker compose up -d`, which recreates the app with the new values. `docker compose restart` doesn't: it keeps the values the container was created with. |
+| Node without Docker | the environment variables `node build` starts with | restart the process |
+| Vercel or Netlify | the project's environment variables | redeploy |
+
+A value the app can't use (a word where a number goes, an unknown theme) doesn't take the site down quietly: every page names the setting and what's wrong with it until you fix it.
 
 ## Backups
 

@@ -34,6 +34,7 @@ Confirmed working on 2026-11-06. Use pnpm, not npm (see the WSL trap below).
 pnpm install          # also creates wrangler.jsonc and .dev.vars from the examples if missing
 pnpm db:migrate       # apply migrations to the local D1 database (.wrangler/)
 pnpm db:seed          # generate seed/demo.sql (invented games) and load it locally
+pnpm db:sandbox       # a writable local group with invented data; prints a sign-in link per member
 pnpm dev              # http://localhost:5173; the demo group is at /demo
 pnpm test             # Vitest, once
 pnpm test:libsql      # the same suite on the libSQL (Turso) wrapper, foreign keys off

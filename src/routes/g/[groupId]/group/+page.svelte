@@ -13,7 +13,6 @@
 	let { data, form }: PageProps = $props();
 	const ROLE = { owner: 'Owner', admin: 'Co-admin', member: 'Member' } as const;
 	const inviteLink = $derived(data.code ? `${page.url.origin}/join/${data.code}` : null);
-
 	let query = $state('');
 
 	// A theme picked by name in the footer overrides the group's theme on this device.
@@ -31,32 +30,26 @@
 </script>
 
 <div class="group-page">
-	{#if data.code && inviteLink}
-		<section class="invite panel" aria-labelledby="invite-h">
-			<h2 id="invite-h">Invite people</h2>
-			<p class="muted">Anyone with the code can join with just a name.</p>
-			<div class="code num" aria-label="Join code {data.code.split('').join(' ')}">{data.code}</div>
-			<p class="link">{inviteLink}</p>
-			<CopyButton text={inviteLink} label="Copy invite link" />
-			{#if data.canManage}
-				<details class="confirm">
-					<summary class="link-button">Make a new code…</summary>
-					<div class="confirm-body">
-						<p>The current code and invite link stop working. Everyone already in the group stays. Do this after removing someone who shouldn’t come back.</p>
-						<form method="POST" action="?/newCode" use:enhance>
-							<button class="btn small">Make a new code</button>
-						</form>
-					</div>
-				</details>
-				{#if form?.codeChanged}<p class="banner" role="status">New code made. The old one no longer works.</p>{/if}
-				{#if form?.codeError}<p class="banner error" role="alert">{form.codeError}</p>{/if}
-			{/if}
-		</section>
-	{/if}
+	{#snippet inviteCode()}<div class="code num" aria-label="Join code {data.code?.split('').join(' ')}">{data.code}</div>{/snippet}
+	{#snippet inviteLinkBlock()}
+		<p class="link">{inviteLink}</p>
+		<div><CopyButton text={inviteLink ?? ''} label="Copy invite link" /></div>
+	{/snippet}
+	{#snippet newCode()}
+		<details class="confirm">
+			<summary class="link-button">Make a new code…</summary>
+			<div class="confirm-body">
+				<p>The current code and invite link stop working. Everyone already in the group stays. Do this after removing someone who shouldn’t come back.</p>
+				<form method="POST" action="?/newCode" use:enhance>
+					<button class="btn small">Make a new code</button>
+				</form>
+			</div>
+		</details>
+		{#if form?.codeChanged}<p class="banner" role="status">New code made. The old one no longer works.</p>{/if}
+		{#if form?.codeError}<p class="banner error" role="alert">{form.codeError}</p>{/if}
+	{/snippet}
 
-	<section aria-labelledby="members-h">
-		<h2 id="members-h">Members <span class="muted num">{data.members.length}</span></h2>
-		<p class="muted">Each person’s colour runs along the bottom of the cubes holding their games. Most recently active first.</p>
+	{#snippet memberList()}
 		{#if data.members.length > 8}
 			<label class="find">
 				<Search size={18} aria-hidden="true" />
@@ -65,7 +58,6 @@
 			</label>
 		{/if}
 		{#if form?.memberError}<p class="banner error" role="alert">{form.memberError}</p>{/if}
-
 		<ul class="members">
 			{#each shown as m (m.id)}
 				{@const c = playerColor(m.colorIndex)}
@@ -135,83 +127,123 @@
 		{#if data.role}
 			<p class="muted small">To leave this group, go to <a href="/me">your account</a>.</p>
 		{/if}
-	</section>
+	{/snippet}
 
-	{#if data.canManage}
-		<section aria-labelledby="name-h">
-			<h2 id="name-h">Group name</h2>
-			<form method="POST" action="?/rename" class="rename" use:enhance={() => async ({ update }) => update({ reset: false })}>
-				<label class="visually-hidden" for="group-name">Group name</label>
-				<input id="group-name" class="field" name="name" required maxlength="60" value={data.group.name} />
-				<button class="btn">Rename</button>
-			</form>
-			{#if form?.renameError}<p class="banner error" role="alert">{form.renameError}</p>{/if}
-		</section>
-
-		<section aria-labelledby="nights-by-h">
-			<h2 id="nights-by-h">Game nights</h2>
-			<p class="muted">Who can plan a night. Everyone can still say whether they're going and what they'll bring.</p>
-			<form method="POST" action="?/nightsBy" class="rename" use:enhance={() => async ({ update }) => update({ reset: false })}>
-				<label class="visually-hidden" for="nights-by">Who can plan game nights</label>
-				<select id="nights-by" class="field" name="nightsBy" value={data.nightsBy}>
-					<option value="members">Any member</option>
-					<option value="admins">Only the owner and co-admins</option>
-				</select>
-				<button class="btn">Save</button>
-			</form>
-			{#if form?.nightsBySaved}<p class="muted small" role="status">Saved.</p>{/if}
-			{#if form?.nightsByError}<p class="banner error" role="alert">{form.nightsByError}</p>{/if}
-		</section>
-
-		<section aria-labelledby="theme-h">
-			<h2 id="theme-h">Group theme</h2>
-			<p class="muted">Colours everyone sees on this group's pages, unless they've picked their own theme in the footer.</p>
-			<form method="POST" action="?/theme" class="rename" use:enhance={() => async ({ update }) => update({ reset: false })}>
-				<label class="visually-hidden" for="group-theme">Group theme</label>
-				<select id="group-theme" class="field" name="theme" value={data.groupTheme ?? ''}>
-					<option value="">This site's default</option>
-					{#if data.customTheme != null}<option value={CUSTOM_THEME}>{THEME_LABELS[CUSTOM_THEME]}</option>{/if}
-					{#each THEME_IDS as id (id)}<option value={id}>{THEME_LABELS[id]}</option>{/each}
-				</select>
-				<button class="btn">Save</button>
-			</form>
-			{#if form?.themeSaved}<p class="muted small" role="status">Saved.</p>{/if}
-			{#if deviceOverrides}
-				<div class="banner override">
-					<p>
-						This device shows <strong>{THEME_LABELS[data.deviceTheme] ?? data.deviceTheme}</strong>, picked in the footer's
-						Theme menu, so you won't see the group's theme here. Members on Automatic will.
-					</p>
-					<form method="POST" action="/theme" onsubmit={(e) => (e.preventDefault(), useGroupTheme())}>
-						<input type="hidden" name="theme" value={AUTO_THEME} />
-						<input type="hidden" name="returnTo" value="/g/{data.group.id}/group" />
-						<button class="btn small">Use the group's theme on this device</button>
-					</form>
-				</div>
-			{/if}
-			{#if form?.themeError}<p class="banner error" role="alert">{form.themeError}</p>{/if}
-		</section>
-	{/if}
-
-	{#if data.canDelete}
-		<section aria-labelledby="delete-h">
-			<h2 id="delete-h">Delete the group</h2>
-			<details class="confirm" open={!!form?.deleteError}>
-				<summary class="link-button">Delete {data.group.name}…</summary>
-				<form method="POST" action="?/delete" class="confirm-body delete" use:enhance>
-					<p>
-						This removes the group, its code and its links for everyone. Members keep their accounts and their games. It can’t be undone.
-					</p>
-					<label>
-						<span>Type <strong>{data.group.name}</strong> to confirm</span>
-						<input class="field" name="confirmName" required autocomplete="off" />
-					</label>
-					{#if form?.deleteError}<p class="banner error" role="alert">{form.deleteError}</p>{/if}
-					<button class="btn small danger">Delete the group</button>
+	{#snippet nameForm()}
+		<form method="POST" action="?/rename" class="rename" use:enhance={() => async ({ update }) => update({ reset: false })}>
+			<label class="visually-hidden" for="group-name">Group name</label>
+			<input id="group-name" class="field" name="name" required maxlength="60" value={data.group.name} />
+			<button class="btn">Rename</button>
+		</form>
+		{#if form?.renameError}<p class="banner error" role="alert">{form.renameError}</p>{/if}
+	{/snippet}
+	{#snippet nightsForm()}
+		<form method="POST" action="?/nightsBy" class="rename" use:enhance={() => async ({ update }) => update({ reset: false })}>
+			<label class="visually-hidden" for="nights-by">Who can plan game nights</label>
+			<select id="nights-by" class="field" name="nightsBy" value={data.nightsBy}>
+				<option value="members">Any member</option>
+				<option value="admins">Only the owner and co-admins</option>
+			</select>
+			<button class="btn">Save</button>
+		</form>
+		{#if form?.nightsBySaved}<p class="muted small" role="status">Saved.</p>{/if}
+		{#if form?.nightsByError}<p class="banner error" role="alert">{form.nightsByError}</p>{/if}
+	{/snippet}
+	{#snippet themeForm()}
+		<form method="POST" action="?/theme" class="rename" use:enhance={() => async ({ update }) => update({ reset: false })}>
+			<label class="visually-hidden" for="group-theme">Group theme</label>
+			<select id="group-theme" class="field" name="theme" value={data.groupTheme ?? ''}>
+				<option value="">This site's default</option>
+				{#if data.customTheme != null}<option value={CUSTOM_THEME}>{THEME_LABELS[CUSTOM_THEME]}</option>{/if}
+				{#each THEME_IDS as id (id)}<option value={id}>{THEME_LABELS[id]}</option>{/each}
+			</select>
+			<button class="btn">Save</button>
+		</form>
+		{#if form?.themeSaved}<p class="muted small" role="status">Saved.</p>{/if}
+		{#if deviceOverrides}
+			<div class="banner override">
+				<p>
+					This device shows <strong>{THEME_LABELS[data.deviceTheme] ?? data.deviceTheme}</strong>, picked in the footer's Theme menu, so you won't see the group's
+					theme here. Members on Automatic will.
+				</p>
+				<form method="POST" action="/theme" onsubmit={(e) => (e.preventDefault(), useGroupTheme())}>
+					<input type="hidden" name="theme" value={AUTO_THEME} />
+					<input type="hidden" name="returnTo" value="/g/{data.group.id}/group" />
+					<button class="btn small">Use the group's theme on this device</button>
 				</form>
-			</details>
+			</div>
+		{/if}
+		{#if form?.themeError}<p class="banner error" role="alert">{form.themeError}</p>{/if}
+	{/snippet}
+	{#snippet deleteBlock()}
+		<details class="confirm" open={!!form?.deleteError}>
+			<summary class="link-button">Delete {data.group.name}…</summary>
+			<form method="POST" action="?/delete" class="confirm-body delete" use:enhance>
+				<p>This removes the group, its code and its links for everyone. Members keep their accounts and their games. It can’t be undone.</p>
+				<label>
+					<span>Type <strong>{data.group.name}</strong> to confirm</span>
+					<input class="field" name="confirmName" required autocomplete="off" />
+				</label>
+				{#if form?.deleteError}<p class="banner error" role="alert">{form.deleteError}</p>{/if}
+				<button class="btn small danger">Delete the group</button>
+			</form>
+		</details>
+	{/snippet}
+
+	<!-- The settings as form-panel rows, every question above its controls in the narrow column. -->
+	{#snippet settingsRows()}
+		<div class="form-row">
+			<div class="form-label"><label class="form-q" for="group-name">Name</label></div>
+			<div class="form-body">{@render nameForm()}</div>
+		</div>
+		<div class="form-row">
+			<div class="form-label">
+				<label class="form-q" for="nights-by">Game nights</label>
+				<span class="hint">Who can plan one. Everyone can still answer and bring games.</span>
+			</div>
+			<div class="form-body">{@render nightsForm()}</div>
+		</div>
+		<div class="form-row">
+			<div class="form-label">
+				<label class="form-q" for="group-theme">Theme</label>
+				<span class="hint">What everyone sees here, unless they picked their own in the footer.</span>
+			</div>
+			<div class="form-body">{@render themeForm()}</div>
+		</div>
+		{#if data.canDelete}
+			<div class="form-row danger-row">
+				<div class="form-label">
+					<span class="form-q">Delete</span>
+					<span class="hint">For everyone, for good. Members keep their games.</span>
+				</div>
+				<div class="form-body">{@render deleteBlock()}</div>
+			</div>
+		{/if}
+	{/snippet}
+
+	<!-- From 900px: the invite and the settings in a left column, the people filling the right. On phones: invite, people, settings. -->
+	<div class="two">
+		{#if data.code && inviteLink}
+			<section class="invite-card" aria-labelledby="invite-h">
+				<h2 id="invite-h">Invite people</h2>
+				<p class="muted">Anyone with the code can join with just a name.</p>
+				{@render inviteCode()}
+				{@render inviteLinkBlock()}
+				{#if data.canManage}{@render newCode()}{/if}
+			</section>
+		{/if}
+		<section class="people" aria-labelledby="members-h">
+			<h2 id="members-h">Members <span class="muted num">{data.members.length}</span></h2>
+			<p class="muted">Each person’s colour runs along the bottom of the cubes holding their games. Most recently active first.</p>
+			{@render memberList()}
 		</section>
-	{/if}
+		{#if data.canManage}
+			<section class="form-panel side-settings" aria-labelledby="settings-h">
+				<div class="form-head"><div><h2 id="settings-h">Settings</h2></div></div>
+				{@render settingsRows()}
+			</section>
+		{/if}
+	</div>
 </div>
 
 <style>
@@ -226,11 +258,76 @@
 		margin: 0;
 	}
 	.group-page {
-		display: grid;
-		gap: var(--s-6);
 		max-width: 46rem;
 		padding-top: var(--s-3);
 	}
+	.danger-row .btn.danger {
+		justify-self: start;
+	}
+	/* Invite and settings on the left, the people on the right, from 900px. */
+	.two {
+		display: grid;
+		gap: var(--s-5);
+		grid-template-columns: minmax(0, 1fr);
+	}
+	@media (min-width: 900px) {
+		.group-page {
+			max-width: 76rem;
+		}
+		.two {
+			grid-template-columns: 22rem minmax(0, 1fr);
+			grid-template-areas: 'invite people' 'settings people';
+			align-items: start;
+			column-gap: var(--s-6);
+		}
+		.invite-card {
+			grid-area: invite;
+		}
+		.people {
+			grid-area: people;
+			grid-row: 1 / span 2;
+		}
+		.side-settings {
+			grid-area: settings;
+		}
+	}
+	.invite-card {
+		display: grid;
+		gap: var(--s-2);
+		padding: var(--s-5);
+		background: var(--label);
+		color: var(--label-ink);
+		border-radius: 10px;
+	}
+	.invite-card h2,
+	.invite-card p {
+		margin: 0;
+	}
+	.invite-card .muted,
+	.invite-card .link {
+		color: var(--label-ink-2);
+	}
+	.invite-card .code {
+		margin: var(--s-2) 0;
+	}
+	.invite-card :global(.link-button) {
+		color: var(--label-ink);
+	}
+	.invite-card :focus-visible {
+		outline-color: var(--mark);
+	}
+	/* The settings in the narrow column: every question above its controls. */
+	.side-settings .form-row {
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--s-3);
+	}
+	.side-settings .form-label {
+		padding-top: 0;
+	}
+	.people h2 {
+		margin-bottom: var(--s-2);
+	}
+
 	.code {
 		font-size: clamp(2rem, 6vw, 3.25rem);
 		font-weight: 800;
@@ -242,7 +339,7 @@
 		color: var(--ink-2);
 		overflow-wrap: anywhere;
 	}
-	.invite .confirm {
+	.invite-card :global(.confirm) {
 		margin-top: var(--s-4);
 	}
 	h2 .num {

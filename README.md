@@ -10,7 +10,7 @@ A shared shelf for your board game group. Everyone adds the games they own, and 
 
 - **One shelf for everyone's games.** Each box has a coloured line for each friend who owns it.
 - **Finding something to play.** Pick "4 players" and "fits in an hour", add "not too heavy" if you like, and the shelf shows only what fits.
-- **Game night.** Plan a night, see who's coming and what they'll bring, and copy it all to the group chat. On the night, Play tonight suggests three games from what's actually there, guests' games included, plus quick fillers for while others arrive, split across tables if the group is too big for any of them.
+- **Game night.** Plan a night, see who's coming and what they'll bring, and copy it all to the group chat. On the night, Play tonight suggests three games from what's actually there, guests' games included, or lets you choose and keep your own, plus quick fillers for while others arrive, split across tables if the group is too big for any of them.
 - **Play log.** Note who played what and who won, with scores if you like, kept with the night you played them. A leaderboard with points for the podium, just for fun, and a spreadsheet download of your plays.
 - **At the table.** Buttons at the top pick who goes first from the people there, guests included, and roll any mix of dice or flip a coin.
 - **Wishlists and lending.** See which games someone wants that nobody in the group has yet, and who borrowed whose copy.

@@ -12,7 +12,29 @@ import {
 } from './players.ts';
 import { formatPlaytime, formatWeight, weightBucket } from './buckets.ts';
 import { DEFAULT_FILTERS, filterGames, parseFilters, passedOnUnknown, serializeFilters, type Filters } from './filter.ts';
-import { fillerWeight, fitsPlayers, gamesAtHand, isFiller, needsSplit, pick, seededRng, splitFillers, tableSizes } from './pick.ts';
+import {
+	MAX_CHOSEN,
+	SPREAD_BANDS,
+	assignBands,
+	bandWeight,
+	chooseInto,
+	fitsBand,
+	pickSpread,
+	roomIsBig,
+	chooseOrder,
+	fillerWeight,
+	fitsPlayers,
+	gamesAtHand,
+	isFiller,
+	misfits,
+	needsSplit,
+	pick,
+	placeFiller,
+	refill,
+	seededRng,
+	splitFillers,
+	tableSizes
+} from './pick.ts';
 import { copy, game } from './testing.ts';
 
 const members = new Set(['u1', 'u2', 'u3']);
@@ -280,3 +302,140 @@ describe('picker', () => {
 		expect(fresh.games.map((g) => g.id)).not.toContain(games4[0].id);
 	});
 });
+
+describe('keeping and choosing (PRD "Picker")', () => {
+	const ids = (games: { id: number }[]) => games.map((g) => g.id);
+
+	it('refills only the places that are not kept, and keeps their order', () => {
+		const [a, b, c, d, e] = Array.from({ length: 5 }, () => game());
+		expect(ids(refill([a, b, c], new Set([b.id]), [d, e]))).toEqual([d.id, b.id, e.id]);
+		expect(ids(refill([a], new Set([a.id]), [d, e]))).toEqual([a.id, d.id, e.id]); // a chosen game, then a pull
+		expect(ids(refill([a, b, c], new Set([b.id]), [d]))).toEqual([d.id, b.id]); // ran out: the empty place goes
+		expect(ids(refill([], new Set(), [a, b, c, d]))).toEqual([a.id, b.id, c.id]);
+	});
+
+	it('puts a chosen game in an empty place, else over the last pulled game, else at the end', () => {
+		const [a, b, c, d, e] = Array.from({ length: 5 }, () => game());
+		expect(ids(chooseInto([a], new Set(), d)!)).toEqual([a.id, d.id]);
+		expect(ids(chooseInto([a, b, c], new Set([c.id]), d)!)).toEqual([a.id, d.id, c.id]);
+		expect(ids(chooseInto([a, b, c], new Set([a.id]), b)!)).toEqual([a.id, b.id, c.id]); // already there
+		// No cap of three: with every place kept, a chosen game is added.
+		const all = new Set([a.id, b.id, c.id, d.id]);
+		expect(ids(chooseInto([a, b, c, d], all, e)!)).toEqual([a.id, b.id, c.id, d.id, e.id]);
+		const many = Array.from({ length: MAX_CHOSEN }, () => game());
+		expect(chooseInto(many, new Set(many.map((g) => g.id)), e)).toBeNull();
+	});
+
+	it('says why a game falls outside the setup, and lets unknown details through', () => {
+		const long = game({ minPlayers: 2, maxPlayers: 4, maxPlaytime: 120, weight: 3.4 });
+		const limits = { players: 6, minutes: 60, ceiling: 'medium' as const };
+		expect(misfits(long, limits, false)).toEqual(['Not at the table', 'Not for 6 players', 'Over 60 min', 'Too heavy']);
+		expect(misfits(long, { players: 1, minutes: null, ceiling: null }, true)).toEqual(['Not for 1 player']);
+		const unknown = game({ minPlayers: null, maxPlayers: null, minPlaytime: null, maxPlaytime: null, weight: null });
+		expect(misfits(unknown, limits, true)).toEqual([]);
+		expect(misfits(game({ weight: 2.5 }), { players: null, minutes: null, ceiling: 'light' }, true)).toEqual(['Too heavy']);
+	});
+
+	it('lists games that fit first, then those best at the count, otherwise as given', () => {
+		const plain = game();
+		const best = game({ bestMask: maskFromCounts([4]) });
+		const outside = game({ bestMask: maskFromCounts([4]) });
+		const order = chooseOrder([plain, outside, best], 4, (g) => g !== outside);
+		expect(ids(order)).toEqual([best.id, plain.id, outside.id]);
+		expect(ids(chooseOrder([plain, best], null))).toEqual([plain.id, best.id]);
+	});
+
+	it('keeps a kept filler at its table and draws the others', () => {
+		const upTo5 = game({ minPlayers: 2, maxPlayers: 5 });
+		const upTo4 = game({ minPlayers: 2, maxPlayers: 4 });
+		const other4 = game({ minPlayers: 2, maxPlayers: 4 });
+		for (let seed = 1; seed <= 10; seed++) {
+			const tables = splitFillers([upTo5, upTo4, other4], 9, seededRng(seed), new Set(), [other4])!;
+			expect(tables.map((t) => [t.players, t.game.id])).toEqual([
+				[5, upTo5.id],
+				[4, other4.id]
+			]);
+		}
+		// One that fits no table sits the split out.
+		const duel = game({ minPlayers: 2, maxPlayers: 2 });
+		expect(splitFillers([upTo5, upTo4], 9, seededRng(1), new Set(), [duel])?.map((t) => t.game.id)).toEqual([upTo5.id, upTo4.id]);
+	});
+
+	it('places a chosen filler at the largest open table it fits', () => {
+		const a = game({ minPlayers: 2, maxPlayers: 5 });
+		const b = game({ minPlayers: 2, maxPlayers: 4 });
+		const tables = [
+			{ players: 5, game: a },
+			{ players: 4, game: b }
+		];
+		const fits4 = game({ minPlayers: 2, maxPlayers: 4 });
+		expect(placeFiller(tables, fits4, new Set())?.map((t) => t.game.id)).toEqual([a.id, fits4.id]);
+		const fits5 = game({ minPlayers: 2, maxPlayers: 6 });
+		expect(placeFiller(tables, fits5, new Set())?.map((t) => t.game.id)).toEqual([fits5.id, b.id]);
+		expect(placeFiller(tables, fits5, new Set([a.id]))?.map((t) => t.game.id)).toEqual([a.id, fits5.id]);
+		expect(placeFiller(tables, fits4, new Set([b.id]))).toBeNull();
+	});
+});
+
+describe('a spread for a free-flow evening (D41)', () => {
+	const [small, mid, big] = SPREAD_BANDS;
+	const duel = game({ minPlayers: 2, maxPlayers: 2 });
+	const four = game({ minPlayers: 2, maxPlayers: 4, bestMask: maskFromCounts([4]) });
+	const party = game({ minPlayers: 4, maxPlayers: 10 });
+	const solo = game({ minPlayers: 1, maxPlayers: 1 });
+
+	it('matches games to bands by the sizes they take', () => {
+		expect(fitsBand(duel, small)).toBe(true);
+		expect(fitsBand(duel, mid)).toBe(false);
+		expect(fitsBand(four, mid)).toBe(true);
+		expect(fitsBand(party, big)).toBe(true);
+		expect(fitsBand(four, big)).toBe(false);
+		expect(bandWeight(four, mid)).toBe(3); // best at 4 counts for 4 or 5
+		expect(bandWeight(four, small)).toBe(1);
+	});
+
+	it('calls a room big once more people are here than three in four games take', () => {
+		const games = [...Array.from({ length: 7 }, () => game({ maxPlayers: 5 })), ...Array.from({ length: 3 }, () => game({ maxPlayers: 12 }))];
+		expect(roomIsBig(6, games)).toBe(true); // a few 12-player games don't make the room small
+		expect(roomIsBig(5, games)).toBe(false);
+		expect(roomIsBig(3, games)).toBe(false);
+		expect(roomIsBig(9, [game({ maxPlayers: null })])).toBe(false);
+	});
+
+	it('gives each kept game the band it was pulled for, else the first free one it is best at', () => {
+		expect(assignBands([party], { [party.id]: 'big' }).get(party.id)).toBe('big');
+		expect(assignBands([four]).get(four.id)).toBe('mid'); // best at 4
+		expect(assignBands([duel, game({ minPlayers: 2, maxPlayers: 5 })]).size).toBe(2); // the second takes 4 or 5
+		expect(assignBands([duel, game({ minPlayers: 2, maxPlayers: 3 })]).size).toBe(1); // both only suit 2 or 3
+		expect(assignBands([solo]).has(solo.id)).toBe(false);
+	});
+
+	it('draws one game for each open band, in band order, around the kept ones', () => {
+		const pool = [duel, four, party, game({ minPlayers: 2, maxPlayers: 3 }), game({ minPlayers: 6, maxPlayers: 8 })];
+		for (let seed = 1; seed <= 10; seed++) {
+			const { slots } = pickSpread(pool, [], {}, seededRng(seed));
+			expect(slots.map((s) => s.band)).toEqual(['small', 'mid', 'big']);
+			expect(new Set(slots.map((s) => s.game.id)).size).toBe(3);
+			slots.forEach((s) => expect(fitsBand(s.game, SPREAD_BANDS.find((b) => b.id === s.band)!)).toBe(true));
+		}
+		const around = pickSpread(pool, [four], {}, seededRng(3)).slots;
+		expect(around.find((s) => s.band === 'mid')?.game.id).toBe(four.id);
+		expect(around).toHaveLength(3);
+		const withSolo = pickSpread(pool, [solo], {}, seededRng(3)).slots;
+		expect(withSolo.at(-1)).toEqual({ game: solo, band: null });
+	});
+
+	it('fills the scarcest band first, so a flexible game is not spent where others suit', () => {
+		for (let seed = 1; seed <= 20; seed++) {
+			const { slots } = pickSpread([duel, four], [], {}, seededRng(seed));
+			expect(slots.map((s) => [s.band, s.game.id])).toEqual([
+				['small', duel.id],
+				['mid', four.id]
+			]);
+		}
+	});
+	it('leaves a band out when nothing in the room suits it', () => {
+		expect(pickSpread([duel], [], {}, seededRng(1)).slots.map((s) => s.band)).toEqual(['small']);
+	});
+});
+

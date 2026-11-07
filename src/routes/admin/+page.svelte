@@ -7,7 +7,6 @@
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
-
 	// Each colour has a picker and a hex box kept in step; the hex box is what the form sends, so
 	// typing a code works without JavaScript too. A half-typed code leaves the picker where it was.
 	type ColorKey = keyof typeof data.look.colors;
@@ -67,76 +66,97 @@
 <svelte:head><title>Instance admin</title></svelte:head>
 
 <div class="admin">
-	<header class="head">
-		<h1>Instance admin</h1>
-		<form method="POST" action="?/signOut"><button class="btn small">Sign out of admin</button></form>
-	</header>
-	<p class="muted intro">
-		Counts and group names only. This page never shows who is in a group, their games or the join codes, and every action
-		below is logged.
-	</p>
-
-	{#if data.bggMode === 'off'}
-		<p class="banner">
-			BoardGameGeek search and import aren’t set up here (<code>BGG_MODE=off</code>).
-			{#if data.gameSource === 'wikidata'}Groups find games on Wikidata or type them in (<code>GAME_SOURCE=wikidata</code>).{:else}Groups type their games in (<code>GAME_SOURCE=manual</code>).{/if}
-		</p>
-	{/if}
-	{#if data.groupCreation === 'admins'}
-		<p class="banner">
-			Only you can create groups (<code>GROUP_CREATION=admins</code>). <a href="/groups/new">Create a group</a>
-		</p>
-	{/if}
-
-	<section aria-labelledby="look-h">
-		<h2 id="look-h">Look of this site</h2>
+	{#snippet head()}
+		<header class="head">
+			<h1>Instance admin</h1>
+			<form method="POST" action="?/signOut"><button class="btn small">Sign out of admin</button></form>
+		</header>
 		<p class="muted intro">
-			Five colours make a custom theme; the shades in between are worked out for you, and any text that would be hard to read
-			is darkened or lightened until it isn't. It appears as "Custom" in the footer's Theme menu and the group theme menu.
+			Counts and group names only. This page never shows who is in a group, their games or the join codes, and every action below is logged.
 		</p>
-		<form method="POST" action="?/look" class="look" use:enhance={() => async ({ update }) => update({ reset: false })}>
-			<div class="swatches">
-				{#each COLOR_FIELDS as [key, label] (key)}
-					<div class="swatch">
-						<label for="hex-{key}">{label}</label>
-						<div class="swatch-inputs">
-							<input type="color" value={colors[key]} oninput={(e) => picked(key, e.currentTarget.value)} aria-label="{label}: pick a colour" />
-							<input
-								id="hex-{key}"
-								class="field hex num"
-								name={key}
-								value={hexes[key]}
-								oninput={(e) => typed(key, e.currentTarget.value)}
-								required
-								spellcheck="false"
-								autocomplete="off"
-								maxlength="7"
-								pattern={'#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})'}
-								aria-invalid={normalizeHex(hexes[key]) == null}
-							/>
-						</div>
-					</div>
-				{/each}
-			</div>
-			<label class="check">
-				<input type="checkbox" name="customDefault" checked={data.look.customDefault} />
-				<span>Show the custom theme to everyone by default (people can still pick another in the footer)</span>
-			</label>
-			<label class="logo-field">
-				<span>Logo image address <span class="hint">(optional, https://; replaces the cube mark in the header)</span></span>
-				<input class="field" name="logoUrl" type="url" value={data.look.logoUrl} placeholder="https://example.com/logo.svg" />
-			</label>
-			{#if form?.lookError}<p class="banner error" role="alert">{form.lookError}</p>{/if}
-			{#if form?.lookSaved}<p class="muted" role="status">Saved. Other pages pick it up within a minute.</p>{/if}
-			<div class="inline">
-				<button class="btn primary small">{data.look.hasCustom ? 'Save' : 'Create the custom theme'}</button>
-				{#if data.look.hasCustom}<button class="btn small" name="remove" value="1" formnovalidate>Remove the custom theme</button>{/if}
-			</div>
-		</form>
-	</section>
+	{/snippet}
 
-	<section aria-labelledby="totals-h">
-		<h2 id="totals-h">Totals</h2>
+	{#snippet banners()}
+		{#if data.bggMode === 'off'}
+			<p class="banner">
+				BoardGameGeek search and import aren’t set up here (<code>BGG_MODE=off</code>).
+				{#if data.gameSource === 'wikidata'}Groups find games on Wikidata or type them in (<code>GAME_SOURCE=wikidata</code>).{:else}Groups type their games in (<code>GAME_SOURCE=manual</code>).{/if}
+			</p>
+		{/if}
+		{#if data.groupCreation === 'admins'}
+			<p class="banner">
+				Only you can create groups (<code>GROUP_CREATION=admins</code>). <a href="/groups/new">Create a group</a>
+			</p>
+		{/if}
+	{/snippet}
+
+	{#snippet lookIntro()}
+		Five colours make a custom theme; the shades in between are worked out for you, and any text that would be hard to read is darkened or lightened until it isn't. It
+		appears as "Custom" in the footer's Theme menu and the group theme menu.
+	{/snippet}
+	{#snippet swatches()}
+		<div class="swatches">
+			{#each COLOR_FIELDS as [key, label] (key)}
+				<div class="swatch">
+					<label for="hex-{key}">{label}</label>
+					<div class="swatch-inputs">
+						<input type="color" value={colors[key]} oninput={(e) => picked(key, e.currentTarget.value)} aria-label="{label}: pick a colour" />
+						<input
+							id="hex-{key}"
+							class="field hex num"
+							name={key}
+							value={hexes[key]}
+							oninput={(e) => typed(key, e.currentTarget.value)}
+							required
+							spellcheck="false"
+							autocomplete="off"
+							maxlength="7"
+							pattern={'#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})'}
+							aria-invalid={normalizeHex(hexes[key]) == null}
+						/>
+					</div>
+				</div>
+			{/each}
+		</div>
+	{/snippet}
+	{#snippet defaultCheck()}
+		<label class="check">
+			<input type="checkbox" name="customDefault" checked={data.look.customDefault} />
+			<span>Show the custom theme to everyone by default (people can still pick another in the footer)</span>
+		</label>
+	{/snippet}
+	{#snippet logoInput()}<input id="logo-url" class="field" name="logoUrl" type="url" value={data.look.logoUrl} placeholder="https://example.com/logo.svg" />{/snippet}
+	{#snippet lookMessages()}
+		{#if form?.lookError}<p class="banner error" role="alert">{form.lookError}</p>{/if}
+		{#if form?.lookSaved}<p class="muted" role="status">Saved. Other pages pick it up within a minute.</p>{/if}
+	{/snippet}
+	{#snippet lookButtons()}
+		<div class="inline">
+			<button class="btn primary small">{data.look.hasCustom ? 'Save' : 'Create the custom theme'}</button>
+			{#if data.look.hasCustom}<button class="btn small" name="remove" value="1" formnovalidate>Remove the custom theme</button>{/if}
+		</div>
+	{/snippet}
+	<!-- The look of the site as a form panel with rows and a Save band. -->
+	{#snippet lookPanel()}
+		<form method="POST" action="?/look" class="form-panel look-panel" use:enhance={() => async ({ update }) => update({ reset: false })}>
+			<div class="form-head"><div><h2 id="look-h">Look of this site</h2><p>{@render lookIntro()}</p></div></div>
+			<div class="form-row" role="group" aria-labelledby="colours-q">
+				<div class="form-label"><span id="colours-q" class="form-q">Colours</span><span class="hint">The rest is mixed from these five.</span></div>
+				<div class="form-body">{@render swatches()}</div>
+			</div>
+			<div class="form-row" role="group" aria-labelledby="default-q">
+				<div class="form-label"><span id="default-q" class="form-q">For everyone</span></div>
+				<div class="form-body">{@render defaultCheck()}</div>
+			</div>
+			<div class="form-row">
+				<div class="form-label"><label class="form-q" for="logo-url">Logo</label><span class="hint">Optional, https://. Replaces the cube mark.</span></div>
+				<div class="form-body">{@render logoInput()}</div>
+			</div>
+			<div class="form-foot indent">{@render lookMessages()}{@render lookButtons()}</div>
+		</form>
+	{/snippet}
+
+	{#snippet totalsList()}
 		<dl class="totals">
 			{#each TOTALS as [key, label] (key)}
 				<div>
@@ -145,10 +165,9 @@
 				</div>
 			{/each}
 		</dl>
-	</section>
+	{/snippet}
 
-	<section aria-labelledby="groups-h">
-		<h2 id="groups-h">Groups <span class="muted num">{data.groups.length}</span></h2>
+	{#snippet groupTools()}
 		<div class="tools">
 			{#if data.groups.length > 10}
 				<label class="find">
@@ -164,7 +183,8 @@
 				</select>
 			</label>
 		</div>
-
+	{/snippet}
+	{#snippet groupList()}
 		{#if data.groups.length === 0}
 			<p class="muted">No groups yet.</p>
 		{:else}
@@ -235,10 +255,9 @@
 				{/each}
 			</ul>
 		{/if}
-	</section>
+	{/snippet}
 
-	<section aria-labelledby="log-h">
-		<h2 id="log-h">Admin log</h2>
+	{#snippet adminLog()}
 		{#if data.log.length === 0}
 			<p class="muted">Nothing yet. Suspensions and deletions appear here with their reasons.</p>
 		{:else}
@@ -251,16 +270,31 @@
 				{/each}
 			</ol>
 		{/if}
+	{/snippet}
+
+	{@render head()}
+	{@render banners()}
+
+	<!-- Everyday work first: totals, the groups, the log; the one-time setup (the site's look) last. -->
+	<section class="form-panel" aria-labelledby="totals-h">
+		<div class="form-head"><div><h2 id="totals-h">Totals</h2></div></div>
+		<div class="form-block">{@render totalsList()}</div>
 	</section>
+	<section class="form-panel" aria-labelledby="groups-h">
+		<div class="form-head">
+			<div><h2 id="groups-h">Groups <span class="muted num">{data.groups.length}</span></h2><p>Suspend a group to make it read-only, or delete it. Each needs a reason.</p></div>
+			{@render groupTools()}
+		</div>
+		<div class="form-block">{@render groupList()}</div>
+	</section>
+	<section class="form-panel" aria-labelledby="log-h">
+		<div class="form-head"><div><h2 id="log-h">Admin log</h2></div></div>
+		<div class="form-block">{@render adminLog()}</div>
+	</section>
+	{@render lookPanel()}
 </div>
 
 <style>
-	.look {
-		display: flex;
-		flex-direction: column;
-		gap: var(--s-4);
-		max-width: 40rem;
-	}
 	.swatches {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr));
@@ -308,17 +342,40 @@
 		height: 18px;
 		margin-top: 2px;
 	}
-	.logo-field {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		font-weight: 650;
-	}
 	.admin {
 		display: grid;
 		gap: var(--s-5);
 		max-width: 60rem;
 		padding: var(--s-5) 0 var(--s-6);
+	}
+	.form-head .tools {
+		align-self: end;
+	}
+	.form-block .totals {
+		margin: 0;
+	}
+	/* A definite width, so auto-fill counts columns from the space there is rather than from the
+	   36rem maximum (which put three 168px columns in a 324px row on phones). */
+	.look-panel .swatches {
+		width: 100%;
+		max-width: 36rem;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
+	}
+	/* Inside a panel the hex box gives way, so a swatch never runs past its column. */
+	.look-panel .swatch {
+		min-width: 0;
+	}
+	.look-panel .hex {
+		width: 100%;
+		flex: 1 1 0;
+		min-width: 0;
+	}
+	.look-panel #logo-url {
+		max-width: 28rem;
+	}
+	.look-panel .form-foot :global(.inline) {
+		display: flex;
+		gap: var(--s-2);
 	}
 	.head {
 		display: flex;

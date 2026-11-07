@@ -17,7 +17,13 @@
 		members,
 		memberIds,
 		unknown = false
-	}: { game: CatalogGame; href: string; members: Map<string, CatalogMember>; memberIds: ReadonlySet<string>; unknown?: boolean } = $props();
+	}: {
+		game: CatalogGame;
+		href: string;
+		members: ReadonlyMap<string, Pick<CatalogMember, 'id' | 'name' | 'colorIndex'>>;
+		memberIds: ReadonlySet<string>;
+		unknown?: boolean;
+	} = $props();
 
 	const color = $derived(boxColor(game.name));
 	const owners = $derived([...new Set(game.copies.map((c) => c.ownerId))].map((id) => members.get(id)).filter((m) => m != null));

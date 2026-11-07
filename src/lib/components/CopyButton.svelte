@@ -1,5 +1,5 @@
 <script lang="ts">
-	let { text, label = 'Copy' }: { text: string; label?: string } = $props();
+	let { text, label = 'Copy', small = false }: { text: string; label?: string; small?: boolean } = $props();
 	let copied = $state(false);
 
 	async function copy() {
@@ -13,4 +13,4 @@
 	}
 </script>
 
-<button type="button" class="btn" onclick={copy} aria-live="polite">{copied ? 'Copied' : label}</button>
+<button type="button" class="btn" class:small onclick={copy} aria-live="polite">{copied ? 'Copied' : label}</button>

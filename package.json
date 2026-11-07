@@ -25,6 +25,7 @@
 		"test:watch": "vitest",
 		"db:migrate": "wrangler d1 migrations apply DB --local",
 		"db:seed": "node scripts/seed-demo.ts && wrangler d1 execute DB --local --file seed/demo.sql",
+		"db:sandbox": "node scripts/seed-sandbox.ts && wrangler d1 execute DB --local --file seed/sandbox.sql && node scripts/seed-sandbox.ts --print",
 		"deploy": "pnpm build && wrangler pages deploy"
 	},
 	"dependencies": {

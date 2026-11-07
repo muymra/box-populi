@@ -1,7 +1,10 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	// The Wanted tab (PRD "Wishlist and the Wanted view"): games members want that nobody in the group
+	// owns, as cubes on the shelf, the most wanted first. A game several people want takes a double cube.
+	// Nobody owns these, so where a cube's owner edge would be there's a dashed gap.
 	import Gift from '@lucide/svelte/icons/gift';
 	import BoxFront from '#lib/components/BoxFront.svelte';
+	import WantToggle from '#lib/components/WantToggle.svelte';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import type { PageProps } from './$types';
 
@@ -24,32 +27,29 @@
 			{/if}
 		</div>
 	{:else}
-		<ul class="list">
-			{#each data.games as g (g.id)}
-				<li>
-					<a class="mini" href="{base}/game/{g.id}" tabindex="-1" aria-hidden="true"><BoxFront name={g.name} src={g.thumbUrl} size="mini" /></a>
-					<div class="info">
-						<a class="name" href="{base}/game/{g.id}">{g.name}</a>
-						<span class="muted small">{g.year ?? 'Year unknown'}{#if g.isExpansion}{' · '}expansion{/if}</span>
+		<ul class="shelf">
+			{#each data.games as g, i (g.id)}
+				{@const names = g.wantedBy.map((w) => w.name).join(', ')}
+				<li class="cube" class:top={i === 0 && g.wantedBy.length > 1}>
+					<a
+						class="box"
+						href="{base}/game/{g.id}"
+						aria-label="{g.name}{g.year ? `, ${g.year}` : ''}{g.isExpansion ? ', expansion' : ''}, wanted by {names}"
+					>
+						<BoxFront name={g.name} src={g.thumbUrl} size={i === 0 ? 'hero' : 'cube'} />
+						{#if g.isExpansion}<span class="flag">Expansion</span>{/if}
+					</a>
+					<span class="gap-edge" aria-hidden="true"></span>
+					<div class="caption" aria-hidden="true">
+						<span class="count num">{g.wantedBy.length}</span>
 						<span class="who">
-							<span class="chips" aria-hidden="true">
-								{#each g.wantedBy as w (w.id)}
-									{@const c = playerColor(w.colorIndex)}
-									<span class="chip" style:background={c.bg} style:color={c.ink}>{w.name.slice(0, 1).toUpperCase()}</span>
-								{/each}
+							<span class="squares">
+								{#each g.wantedBy as w (w.id)}<span style:background={playerColor(w.colorIndex).bg}></span>{/each}
 							</span>
-							<span class="small">Wanted by {g.wantedBy.map((w) => w.name).join(', ')}</span>
+							<span class="names">{names}</span>
 						</span>
 					</div>
-					{#if data.canEdit}
-						<form method="POST" action="?/want" use:enhance>
-							<input type="hidden" name="gameId" value={g.id} />
-							<input type="hidden" name="on" value={g.mine ? '0' : '1'} />
-							<button class="btn small want" aria-pressed={g.mine} aria-label="{g.mine ? 'Take off my wishlist' : 'I want this too'}: {g.name}">
-								{g.mine ? 'On your list' : 'Me too'}
-							</button>
-						</form>
-					{/if}
+					{#if data.canEdit}<div class="act"><WantToggle id={g.id} name={g.name} mine={g.mine} /></div>{/if}
 				</li>
 			{/each}
 		</ul>
@@ -58,7 +58,7 @@
 
 <style>
 	.wanted {
-		max-width: 46rem;
+		max-width: 56rem;
 		padding-top: var(--s-3);
 	}
 	h2 .num {
@@ -81,76 +81,127 @@
 	.empty p {
 		margin: 0;
 	}
-	.list {
+	/* The shelf: cubes on the shelf-gap ground, as on the Shelf tab. */
+	.shelf {
 		list-style: none;
-		margin: var(--s-4) 0 0;
-		padding: 0;
+		margin: var(--s-5) 0 0;
+		padding: 6px;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 6px;
+		background: var(--gap);
+		border-radius: 6px;
+	}
+	/* The most wanted game, when several people want it, takes two cubes: the peak of the page. */
+	.cube.top {
+		grid-column: span 2;
+	}
+	@media (min-width: 760px) {
+		.shelf {
+			grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+			gap: 8px;
+			padding: 8px;
+		}
+		.cube.top {
+			grid-row: span 2;
+		}
+	}
+	.cube {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
-		background: var(--gap);
-		border-radius: var(--r-ctl);
-		overflow: hidden;
-	}
-	.list li {
-		display: flex;
-		align-items: center;
-		gap: var(--s-3);
-		padding: var(--s-3);
+		gap: 8px;
+		padding: 10px 10px 12px;
 		background: var(--cube);
 	}
-	.mini {
-		flex: none;
-		width: 44px;
-		height: 46px;
+	.box {
+		position: relative;
+		display: block;
+		aspect-ratio: 1 / 1.04;
+		border-radius: var(--r-cube);
+		transition:
+			transform 0.2s var(--ease-out),
+			box-shadow 0.2s var(--ease-out);
 	}
-	.info {
+	.box:hover,
+	.box:focus-visible {
+		transform: translateY(-3px);
+		box-shadow: var(--shadow-lift);
+	}
+	.top .box {
+		aspect-ratio: auto;
 		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
+		min-height: 14rem;
 	}
-	.name {
+	/* The shelf's flag, on the box. */
+	.flag {
+		position: absolute;
+		left: 50%;
+		bottom: 8px;
+		transform: translateX(-50%);
+		padding: 1px 7px;
+		border-radius: 999px;
+		background: var(--cube);
+		color: var(--ink);
+		font-size: 0.75rem;
 		font-weight: 700;
-		text-decoration: none;
-		overflow-wrap: anywhere;
+		white-space: nowrap;
+		box-shadow: 0 0 0 1px var(--rule);
 	}
-	.name:hover {
-		text-decoration: underline;
-		text-underline-offset: 0.2em;
+	/* Where the owner edge would be: dashed, because nobody here owns it yet. */
+	.gap-edge {
+		height: 0;
+		border-top: 3px dashed var(--ink-3);
+		opacity: 0.6;
 	}
-	.small {
-		font-size: var(--t-small);
+	.caption {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: center;
+		gap: 8px;
+	}
+	/* How many want it, set like a printed box title. */
+	.count {
+		font-size: 1.75rem;
+		font-weight: 800;
+		font-stretch: 82%;
+		line-height: 1;
+	}
+	.top .count {
+		font-size: clamp(2.25rem, 6vw, 3.25rem);
 	}
 	.who {
-		display: flex;
-		align-items: center;
-		gap: var(--s-2);
-		margin-top: 2px;
-		color: var(--ink-2);
-	}
-	.chips {
-		display: inline-flex;
-		flex: none;
-	}
-	.chip {
-		width: 22px;
-		height: 22px;
-		border-radius: var(--r-cube);
 		display: grid;
-		place-items: center;
+		gap: 3px;
+		min-width: 0;
+	}
+	.squares {
+		display: flex;
+		gap: 3px;
+	}
+	.squares span {
+		width: 12px;
+		height: 12px;
+		border-radius: 3px;
+	}
+	.names {
 		font-size: var(--t-small);
-		font-weight: 800;
-		box-shadow: 0 0 0 2px var(--cube);
+		color: var(--ink-2);
+		line-height: 1.3;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
-	.chip + .chip {
-		margin-left: -4px;
+	.top .names {
+		white-space: normal;
+		font-size: var(--t-body);
 	}
-	.want {
-		flex: none;
+	.act {
+		margin-top: auto;
 	}
-	.want[aria-pressed='true'] {
-		border-color: var(--ink);
+	@media (prefers-reduced-motion: reduce) {
+		.box:hover,
+		.box:focus-visible {
+			transform: none;
+		}
 	}
 </style>

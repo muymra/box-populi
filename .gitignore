@@ -17,7 +17,11 @@ wrangler.toml
 
 # BGG data must not be committed (DECISIONS D19)
 seed/demo.sql
+seed/sandbox.sql
+seed/sandbox-links.json
 src/lib/server/bgg/fixtures/local/
+# BGG data files a hoster downloads themselves (the ranks file). Never committed: TECH.md "Access and terms".
+bgg-data/
 
 # local backups
 backup-*.sql

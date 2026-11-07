@@ -14,6 +14,8 @@ import {
 	type HistoryEntry
 } from './dice.ts';
 import { randomInt } from './random.ts';
+import { EMPTY_LINEUP, cleanVenue, parseIdList, parseLineup, serializeLineup } from './lineup.ts';
+import { MAX_CHOSEN } from '#lib/catalog/pick.ts';
 import { COLLAPSE_ABOVE, NIGHTS_KEPT, SHOWN_MEMBERS, foldMembers, markNight, nightOf, parseRegulars, rankMembers, recentNights } from './regulars.ts';
 
 const NOW = 1_800_000_000_000;
@@ -152,5 +154,36 @@ describe('regulars', () => {
 		expect(big.hidden).toBe(3);
 		expect(foldMembers(members.slice(0, COLLAPSE_ABOVE), new Set()).hidden).toBe(0);
 		expect(SHOWN_MEMBERS).toBeLessThan(COLLAPSE_ABOVE);
+	});
+});
+
+describe('kept lineup', () => {
+	it('round-trips kept games and resets with who\'s here', () => {
+		const raw = serializeLineup({ main: [12, 40], fillers: [7] }, NOW);
+		expect(parseLineup(raw, NOW + 1000)).toEqual({ main: [12, 40], fillers: [7], at: null });
+		expect(parseLineup(raw, NOW + HERE_TTL_MS)).toEqual(EMPTY_LINEUP);
+		expect(parseLineup('{"main":[1]}', NOW)).toEqual(EMPTY_LINEUP); // no timestamp
+		expect(parseLineup('not json', NOW)).toEqual(EMPTY_LINEUP);
+	});
+	it('keeps distinct positive ids, more than three, up to the ceiling', () => {
+		const raw = JSON.stringify({ main: [1, 1, 'x', -2, 2.5, 3, 4, 5], fillers: [1, 2, 3, 4, 5, 6, 7], at: NOW });
+		expect(parseLineup(raw, NOW)).toEqual({ main: [1, 3, 4, 5], fillers: [1, 2, 3, 4, 5, 6, 7], at: null });
+		const lots = Array.from({ length: MAX_CHOSEN + 5 }, (_, i) => i + 1);
+		expect(parseLineup(JSON.stringify({ main: lots, fillers: [], at: NOW }), NOW).main).toHaveLength(MAX_CHOSEN);
+		expect(parseLineup(JSON.stringify({ main: null, at: NOW }), NOW)).toEqual(EMPTY_LINEUP);
+	});
+	it('keeps where the evening is with the kept games, under the same reset', () => {
+		const raw = serializeLineup({ main: [1], fillers: [], at: 'sbx-ada' }, NOW);
+		expect(parseLineup(raw, NOW + 1000).at).toBe('sbx-ada');
+		expect(parseLineup(raw, NOW + HERE_TTL_MS)).toEqual(EMPTY_LINEUP);
+		expect(parseLineup(serializeLineup({ main: [], fillers: [] }, NOW), NOW).at).toBeNull();
+		expect(cleanVenue('x'.repeat(65))).toBeNull();
+		expect(cleanVenue(42)).toBeNull();
+	});
+	it('reads ids from a setup link', () => {
+		expect(parseIdList('12,40, 7')).toEqual([12, 40, 7]);
+		expect(parseIdList('12,abc,,12,0,1e3')).toEqual([12]);
+		expect(parseIdList('1,2,3,4')).toEqual([1, 2, 3, 4]);
+		expect(parseIdList(null)).toEqual([]);
 	});
 });

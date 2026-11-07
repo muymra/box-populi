@@ -9,6 +9,7 @@
 	import Dices from '@lucide/svelte/icons/dices';
 	import Trophy from '@lucide/svelte/icons/trophy';
 	import CopyButton from '#lib/components/CopyButton.svelte';
+	import ListRow from '#lib/components/ListRow.svelte';
 	import Modal from '#lib/components/Modal.svelte';
 	import NightFields from '#lib/components/NightFields.svelte';
 	import PlayForm from '#lib/components/PlayForm.svelte';
@@ -99,6 +100,19 @@
 		chatText(night, memberIds, { member: (id) => memberById.get(id)?.name ?? 'someone', game: gameName }, `${page.url.origin}${base}/nights/${night.id}`)
 	);
 	const when = $derived(`${nightDate(night.nightOn)}${night.startsAt ? `, ${night.startsAt}` : ''}`);
+	const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+	const whoSummary = $derived(
+		`${going.length} of ${plural(members.length, 'member', 'members')} going${guests.length ? `, plus ${plural(guests.length, 'guest', 'guests')}` : ''}.`
+	);
+	const bringSummary = $derived(
+		[
+			list.length ? `${plural(list.length, 'game', 'games')} from ${plural(byBringer.length, 'person', 'people')}.` : 'Nothing on the list yet.',
+			host ? `Plus ${host.name}’s whole shelf, since it’s at their place.` : '',
+			isTonight && data.canAnswer && list.length ? 'Mark anything that stayed home.' : ''
+		]
+			.filter(Boolean)
+			.join(' ')
+	);
 	let editing = $state(false);
 	let confirmDelete = $state(false);
 </script>
@@ -108,13 +122,15 @@
 <a class="back" href="{base}/pick"><ArrowLeft size={18} aria-hidden="true" /> Game night</a>
 
 <article class="night">
-	<header>
-		<h1>{night.name}</h1>
-		<p class="lead">{when}</p>
-		<p class="muted">
-			{#if host}At {host.name}’s: their shelf counts on the night, plus whatever people bring.{:else}Somewhere else: only the games people bring.{/if}
-		</p>
-		<div class="row">
+	<header class="night-head">
+		<div>
+			<h1>{night.name}</h1>
+			<p class="lead">{when}</p>
+			<p class="muted">
+				{#if host}At {host.name}’s: their shelf counts on the night, plus whatever people bring.{:else}Somewhere else: only the games people bring.{/if}
+			</p>
+		</div>
+		<div class="row actions">
 			<CopyButton text={chat} label="Copy for the chat" />
 			{#if isTonight}<a class="btn primary" href="{base}/pick"><Dices size={18} aria-hidden="true" /> Play tonight</a>{/if}
 		</div>
@@ -122,102 +138,145 @@
 	</header>
 
 	{#if data.canAnswer && !isPast}
-		<section class="answer" aria-label="Your answer">
-			<span>{myAnswer === true ? 'You’re going.' : myAnswer === false ? 'You can’t make it.' : 'Are you going?'}</span>
-			<form method="POST" action="?/going" use:enhance>
-				<input type="hidden" name="going" value="1" />
-				<button class="btn small" aria-pressed={myAnswer === true}>I’m going</button>
-			</form>
-			<form method="POST" action="?/going" use:enhance>
-				<input type="hidden" name="going" value="0" />
-				<button class="btn small" aria-pressed={myAnswer === false}>Can’t make it</button>
-			</form>
+		<section class="form-panel" aria-labelledby="answer-q">
+			<div class="form-row">
+				<div class="form-label">
+					<span id="answer-q" class="form-q">{myAnswer === true ? 'You’re going' : myAnswer === false ? 'You can’t make it' : 'Are you going?'}</span>
+					{#if myAnswer == null}<span class="hint">Everyone in the group sees your answer.</span>{/if}
+				</div>
+				<div class="form-body answer">
+					<form method="POST" action="?/going" use:enhance>
+						<input type="hidden" name="going" value="1" />
+						<button class="btn" aria-pressed={myAnswer === true}>I’m going</button>
+					</form>
+					<form method="POST" action="?/going" use:enhance>
+						<input type="hidden" name="going" value="0" />
+						<button class="btn" aria-pressed={myAnswer === false}>Can’t make it</button>
+					</form>
+				</div>
+			</div>
 		</section>
 	{/if}
 
-	<section aria-labelledby="who-h">
-		<h2 id="who-h">Who's going <span class="muted num">{going.length + guests.length}</span></h2>
-		<ul class="people">
-			{#each members as m (m.id)}
-				{@const a = answer(m.id)}
-				{@const c = playerColor(m.colorIndex)}
-				<li>
-					{#if data.canChange && !isPast}
-						<form method="POST" action="?/going" use:enhance>
-							<input type="hidden" name="userId" value={m.id} />
-							<input type="hidden" name="going" value={a === true ? '0' : '1'} />
-							<button class="person" class:going={a === true} class:no={a === false} title={a === true ? `Mark ${m.name} not going` : `Mark ${m.name} going`}>
-								<span class="dot" style:background={c.bg}></span>{m.name}
-							</button>
-						</form>
-					{:else}
-						<span class="person" class:going={a === true} class:no={a === false}><span class="dot" style:background={c.bg}></span>{m.name}</span>
-					{/if}
-				</li>
-			{/each}
-			{#each guests as name (name)}
-				<li>
-					<span class="person going guest">
-						<span class="dot"></span>{name}
-						{#if data.canAnswer}
-							<form method="POST" action="?/removeGuest" use:enhance>
-								<input type="hidden" name="name" value={name} />
-								<button class="remove" aria-label="Take {name} off the night"><X size={14} aria-hidden="true" /></button>
-							</form>
-						{/if}
-					</span>
-				</li>
-			{/each}
-		</ul>
-		<p class="hint">Filled in: going. Struck through: can’t make it. Plain: no answer yet.</p>
-		{#if data.canAnswer && !isPast}
-			<form method="POST" action="?/addGuest" class="inline" use:enhance>
-				<label class="visually-hidden" for="guest-name">A guest’s name</label>
-				<input id="guest-name" class="field" name="name" maxlength="30" placeholder="Add a guest by name" autocomplete="off" />
-				<button class="btn">Add</button>
-			</form>
-		{/if}
-	</section>
-
-	<section aria-labelledby="bring-h">
-		<h2 id="bring-h">Bringing <span class="muted num">{list.length}</span></h2>
-		{#if host}<p class="muted">Plus {host.name}’s whole shelf, since it’s at their place.</p>{/if}
-		{#if byBringer.length}
-			<ul class="bring">
-				{#each byBringer as b (b.label)}
-					<li>
-						<span class="who"><span class="dot" class:guest={!b.color} style:background={b.color}></span>{b.label}</span>
-						<ul class="games">
-							{#each b.games as g (g.gameId)}
-								<li class:home={g.stayedHome}>
-									{#if isTonight && data.canAnswer}
-										<form method="POST" action="?/stayedHome" use:enhance>
-											<input type="hidden" name="gameId" value={g.gameId} />
-											<input type="hidden" name="stayedHome" value={g.stayedHome ? '0' : '1'} />
-											<button class="here" aria-pressed={!g.stayedHome} title={g.stayedHome ? 'It came after all' : 'It stayed home'}>{g.stayedHome ? 'Stayed home' : 'Here'}</button>
-										</form>
-									{/if}
-									<a href="{base}/game/{g.gameId}">{gameName(g.gameId)}</a>
-									{#if data.canAnswer && (data.canChange || g.broughtBy === data.me || g.addedBy === data.me)}
-										<form method="POST" action="?/unbring" use:enhance>
-											<input type="hidden" name="gameId" value={g.gameId} />
-											<button class="remove" aria-label="Take {gameName(g.gameId)} off the list"><X size={14} aria-hidden="true" /></button>
-										</form>
-									{/if}
+	<section class="form-panel" aria-labelledby="who-h">
+		<div class="form-head">
+			<div>
+				<h2 id="who-h">Who’s going</h2>
+				<p>{whoSummary}</p>
+			</div>
+		</div>
+		<div class="form-row" role="group" aria-labelledby="members-q">
+			<div class="form-label">
+				<span id="members-q" class="form-q">Members</span>
+				<span class="hint">{data.canChange && !isPast ? 'Tap someone to change their answer. ' : ''}Filled in: going. Struck through: can’t make it.</span>
+			</div>
+			<div class="form-body">
+				<ul class="people">
+					{#each members as m (m.id)}
+						{@const a = answer(m.id)}
+						{@const c = playerColor(m.colorIndex)}
+						<li>
+							{#if data.canChange && !isPast}
+								<form method="POST" action="?/going" use:enhance>
+									<input type="hidden" name="userId" value={m.id} />
+									<input type="hidden" name="going" value={a === true ? '0' : '1'} />
+									<button class="person" class:going={a === true} class:no={a === false} title={a === true ? `Mark ${m.name} not going` : `Mark ${m.name} going`}>
+										<span class="dot" style:background={c.bg}></span>{m.name}
+									</button>
+								</form>
+							{:else}
+								<span class="person" class:going={a === true} class:no={a === false}><span class="dot" style:background={c.bg}></span>{m.name}</span>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+			</div>
+		</div>
+		{#if guests.length || (data.canAnswer && !isPast)}
+			<div class="form-row" role="group" aria-labelledby="guests-q">
+				<div class="form-label">
+					<span id="guests-q" class="form-q">Guests</span>
+					<span class="hint">People coming who aren’t in the group.</span>
+				</div>
+				<div class="form-body">
+					{#if guests.length}
+						<ul class="people">
+							{#each guests as name (name)}
+								<li>
+									<span class="person going guest">
+										<span class="dot"></span>{name}
+										{#if data.canAnswer}
+											<form method="POST" action="?/removeGuest" use:enhance>
+												<input type="hidden" name="name" value={name} />
+												<button class="remove" aria-label="Take {name} off the night"><X size={14} aria-hidden="true" /></button>
+											</form>
+										{/if}
+									</span>
 								</li>
 							{/each}
 						</ul>
-					</li>
-				{/each}
-			</ul>
-		{:else}
-			<p class="muted">Nothing on the list yet.</p>
+					{/if}
+					{#if data.canAnswer && !isPast}
+						<form method="POST" action="?/addGuest" class="inline guest-form" use:enhance>
+							<label class="visually-hidden" for="guest-name">A guest’s name</label>
+							<input id="guest-name" class="field" name="name" maxlength="30" placeholder="Add a guest by name" autocomplete="off" />
+							<button class="btn">Add</button>
+						</form>
+					{/if}
+				</div>
+			</div>
 		{/if}
 	</section>
 
+	<section class="form-panel" aria-labelledby="bring-h">
+		<div class="form-head">
+			<div>
+				<h2 id="bring-h">Bringing</h2>
+				<p>{bringSummary}</p>
+			</div>
+		</div>
+		{#each byBringer as b (b.label)}
+			<div class="form-row" role="group" aria-label="What {b.label} brings">
+				<div class="form-label">
+					<span class="form-q bringer"><span class="dot" class:guest={!b.color} style:background={b.color}></span>{b.label}</span>
+				</div>
+				<ul class="form-body games">
+					{#each b.games as g (g.gameId)}
+						{@const game = gameById.get(g.gameId)}
+						<li class:home={g.stayedHome}>
+							{#if game}
+								<ListRow {game} href="{base}/game/{g.gameId}" members={memberById} {memberIds} />
+							{:else}
+								<a class="plain" href="{base}/game/{g.gameId}">{gameName(g.gameId)}</a>
+							{/if}
+							{#if isTonight && data.canAnswer}
+								<form method="POST" action="?/stayedHome" use:enhance>
+									<input type="hidden" name="gameId" value={g.gameId} />
+									<input type="hidden" name="stayedHome" value={g.stayedHome ? '0' : '1'} />
+									<button class="here" aria-pressed={!g.stayedHome} title={g.stayedHome ? 'It came after all' : 'It stayed home'}>{g.stayedHome ? 'Stayed home' : 'Here'}</button>
+								</form>
+							{/if}
+							{#if data.canAnswer && (data.canChange || g.broughtBy === data.me || g.addedBy === data.me)}
+								<form method="POST" action="?/unbring" use:enhance>
+									<input type="hidden" name="gameId" value={g.gameId} />
+									<button class="remove" aria-label="Take {gameName(g.gameId)} off the list"><X size={16} aria-hidden="true" /></button>
+								</form>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+			</div>
+		{/each}
+	</section>
+
 	{#if mayAdd && !isPast}
-		<section aria-labelledby="add-h" class="panel add">
-			<h2 id="add-h">Add to the list</h2>
+		<section aria-labelledby="add-h" class="form-panel add">
+			<div class="form-head">
+				<div>
+					<h2 id="add-h">Add to the list</h2>
+					<p>From the shelves of the people going{players ? `, for ${players} players` : ''}, or by name for anything else.</p>
+				</div>
+			</div>
 			{#snippet bringButton(g: CatalogGame)}
 				{@const owners = goingOwners(g)}
 				<form method="POST" action="?/bring" class="bring-it" use:enhance>
@@ -242,69 +301,91 @@
 				</li>
 			{/snippet}
 
-			<div class="suggest">
-				<button type="button" class="btn" disabled={!catalog || candidates.length === 0} onclick={suggest}><Dices size={18} aria-hidden="true" /> Suggest three</button>
-				<span class="muted small">From the shelves of the people going{players ? `, for ${players} players` : ''}.</span>
+			<div class="form-row" role="group" aria-labelledby="suggest-q">
+				<div class="form-label">
+					<span id="suggest-q" class="form-q">Suggest</span>
+					<span class="hint">Three at random from their shelves.</span>
+				</div>
+				<div class="form-body">
+					<div><button type="button" class="btn" disabled={!catalog || candidates.length === 0} onclick={suggest}><Dices size={18} aria-hidden="true" /> Suggest three</button></div>
+					{#if suggestions.length}<ul class="found">{#each suggestions as g (g.id)}{@render gameRow(g)}{/each}</ul>{/if}
+				</div>
 			</div>
-			{#if suggestions.length}<ul class="found">{#each suggestions as g (g.id)}{@render gameRow(g)}{/each}</ul>{/if}
 
-			<label class="find">
-				<span>Or find one on their shelves</span>
-				<input class="field" type="search" placeholder="Search {candidates.length} games" bind:value={query} autocomplete="off" />
-			</label>
-			{#if found.length}<ul class="found">{#each found as g (g.id)}{@render gameRow(g)}{/each}</ul>{/if}
+			<div class="form-row">
+				<div class="form-label"><label class="form-q" for="find-bring">Find one</label></div>
+				<div class="form-body">
+					<input id="find-bring" class="field find" type="search" placeholder="Search {candidates.length} games on their shelves" bind:value={query} autocomplete="off" />
+					{#if found.length}<ul class="found">{#each found as g (g.id)}{@render gameRow(g)}{/each}</ul>{/if}
+				</div>
+			</div>
 
-			<details class="other">
-				<summary class="link-button">A game that’s on nobody’s shelf…</summary>
-				<p class="hint">A guest’s game, or one someone is bringing that isn’t in Box Populi. Players and time help Play tonight.</p>
-				<form method="POST" action="?/bringOther" class="other-form" use:enhance>
-					<label>Name <input class="field" name="title" required maxlength="120" autocomplete="off" /></label>
-					<div class="nums">
-						<label>Fewest players <input class="field num" name="minPlayers" inputmode="numeric" autocomplete="off" /></label>
-						<label>Most players <input class="field num" name="maxPlayers" inputmode="numeric" autocomplete="off" /></label>
-						<label>Minutes <input class="field num" name="maxPlaytime" inputmode="numeric" autocomplete="off" /></label>
-					</div>
-					<label
-						>Who’s bringing it
-						<select class="field" name="bringer" required>
-							{#each going as id (id)}<option value="m:{id}">{memberById.get(id)?.name}</option>{/each}
-							{#each guests as name (name)}<option value="g:{name}">{name} (guest)</option>{/each}
-						</select>
-					</label>
-					<button class="btn">Add it</button>
-				</form>
-			</details>
+			<div class="form-row" role="group" aria-labelledby="other-q">
+				<div class="form-label">
+					<span id="other-q" class="form-q">On nobody’s shelf</span>
+					<span class="hint">A guest’s game, or one that isn’t in Box Populi.</span>
+				</div>
+				<div class="form-body">
+					<details class="other">
+						<summary class="link-button">Add one by name…</summary>
+						<form method="POST" action="?/bringOther" class="other-form" use:enhance>
+							<label class="form-sub">Name <input class="field" name="title" required maxlength="120" autocomplete="off" /></label>
+							<div class="nums">
+								<label class="form-sub">Fewest players <input class="field num" name="minPlayers" inputmode="numeric" autocomplete="off" /></label>
+								<label class="form-sub">Most players <input class="field num" name="maxPlayers" inputmode="numeric" autocomplete="off" /></label>
+								<label class="form-sub">Minutes <input class="field num" name="maxPlaytime" inputmode="numeric" autocomplete="off" /></label>
+							</div>
+							<p class="hint">Players and time help Play tonight pick it.</p>
+							<label class="form-sub"
+								>Who’s bringing it
+								<select class="field" name="bringer" required>
+									{#each going as id (id)}<option value="m:{id}">{memberById.get(id)?.name}</option>{/each}
+									{#each guests as name (name)}<option value="g:{name}">{name} (guest)</option>{/each}
+								</select>
+							</label>
+							<div><button class="btn">Add it</button></div>
+						</form>
+					</details>
+				</div>
+			</div>
 		</section>
 	{/if}
 
 	{#if isTonight || isPast || data.plays.length}
-		<section aria-labelledby="plays-h">
-			<h2 id="plays-h">Plays <span class="muted num">{data.plays.length}</span></h2>
-			{#if data.plays.length}
-				<PlayList plays={data.plays} {members} {table} groupId={data.group.id} />
-			{:else}
-				<p class="muted">Nothing logged{isTonight ? ' yet' : ''}.</p>
-			{/if}
-			{#if logged}<p class="banner" role="status">Play logged.</p>{/if}
-			{#if data.canAnswer}
-				<div class="row">
-					<button type="button" class="btn" onclick={() => (logOpen = true)}><Trophy size={18} aria-hidden="true" /> Log a play</button>
+		<section class="form-panel" aria-labelledby="plays-h">
+			<div class="form-head">
+				<div>
+					<h2 id="plays-h">Plays</h2>
+					<p>{data.plays.length ? `${plural(data.plays.length, 'play', 'plays')} logged.` : `Nothing logged${isTonight ? ' yet' : ''}.`}</p>
 				</div>
+				{#if data.canAnswer}
+					<button type="button" class="btn small" onclick={() => (logOpen = true)}><Trophy size={16} aria-hidden="true" /> Log a play</button>
+				{/if}
+			</div>
+			{#if logged}<div class="form-block"><p class="banner" role="status">Play logged.</p></div>{/if}
+			{#if data.plays.length}
+				<div class="form-block"><PlayList plays={data.plays} {members} {table} groupId={data.group.id} /></div>
 			{/if}
 		</section>
 	{/if}
 
 	{#if data.canChange}
-		<section aria-labelledby="manage-h">
+		<section class="manage" aria-labelledby="manage-h">
 			<h2 id="manage-h" class="visually-hidden">Change the night</h2>
 			<details bind:open={editing}>
 				<summary class="link-button">Change the name, date or place…</summary>
-				<form method="POST" action="?/edit" class="edit" use:enhance={() => async ({ update, result }) => {
-						await update({ reset: false });
-						if (result.type === 'success') editing = false;
-					}}>
+				<form
+					method="POST"
+					action="?/edit"
+					class="form-panel edit"
+					use:enhance={() =>
+						async ({ update, result }) => {
+							await update({ reset: false });
+							if (result.type === 'success') editing = false;
+						}}
+				>
 					<NightFields {members} values={{ name: night.name, nightOn: night.nightOn, startsAt: night.startsAt, host: night.hostId }} />
-					<button class="btn primary">Save</button>
+					<div class="form-foot indent"><div><button class="btn primary">Save</button></div></div>
 				</form>
 			</details>
 			{#if confirmDelete}
@@ -360,23 +441,40 @@
 		font-weight: 650;
 		text-decoration: none;
 	}
+	/* As wide as Play tonight's panel, so the two pages read as one tab. */
 	.night {
 		display: grid;
-		gap: var(--s-6);
-		max-width: 46rem;
+		gap: var(--s-5);
+		max-width: 56rem;
 		padding-block: var(--s-4) var(--s-6);
 	}
-	header {
+	.night-head {
 		display: grid;
-		gap: var(--s-2);
+		gap: var(--s-4);
+		padding-bottom: var(--s-2);
 	}
-	h1 {
+	.night-head h1 {
+		margin: 0 0 var(--s-2);
+	}
+	.night-head p {
 		margin: 0;
 	}
 	.lead {
-		margin: 0;
 		font-size: var(--t-lead);
 		font-weight: 650;
+	}
+	.night-head .muted {
+		margin-top: 2px;
+	}
+	/* From 760px the night's actions sit beside its name, as a form panel's head does. */
+	@media (min-width: 760px) {
+		.night-head {
+			grid-template-columns: minmax(0, 1fr) auto;
+			align-items: end;
+		}
+		.night-head .banner {
+			grid-column: 1 / -1;
+		}
 	}
 	section {
 		display: grid;
@@ -386,8 +484,7 @@
 		margin: 0;
 	}
 	.row,
-	.inline,
-	.suggest {
+	.inline {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
@@ -402,16 +499,12 @@
 	section > details {
 		justify-self: start;
 	}
+
+	/* Two answers side by side, the pressed one marigold (it's the person's own choice). */
 	.answer {
 		display: flex;
 		flex-wrap: wrap;
-		align-items: center;
-		gap: var(--s-2) var(--s-3);
-		padding: var(--s-3) var(--s-4);
-		background: var(--cube);
-		border: 1px solid var(--rule);
-		border-radius: 10px;
-		font-weight: 650;
+		gap: var(--s-2);
 	}
 	.answer button[aria-pressed='true'] {
 		background: var(--mark);
@@ -478,48 +571,58 @@
 	.remove:hover {
 		background: rgb(0 0 0 / 0.1);
 	}
-	.bring {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: grid;
-		gap: var(--s-3);
+	.guest-form .field {
+		flex: 1;
+		min-width: 0;
+		max-width: 18rem;
 	}
-	.bring > li {
-		display: grid;
-		grid-template-columns: minmax(7rem, 10rem) minmax(0, 1fr);
-		gap: var(--s-3);
-		align-items: start;
-		padding-bottom: var(--s-3);
-		border-bottom: 1px solid var(--rule);
-	}
-	.who {
+	/* Who brings it: the question column holds the person, with their colour. */
+	.bringer {
 		display: inline-flex;
 		align-items: center;
 		gap: var(--s-2);
-		font-weight: 700;
-		min-height: 32px;
 	}
+	/* Their games as spines, the same rows as the shelf's Spines view. */
 	.games {
 		list-style: none;
 		margin: 0;
 		padding: 0;
-		display: grid;
-		gap: 4px;
+		gap: 6px;
+	}
+	.games .remove {
+		width: 36px;
+		height: 36px;
 	}
 	.games li {
-		display: flex;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto auto;
 		align-items: center;
 		gap: var(--s-2);
-		min-height: 32px;
 	}
-	.games li.home a {
+	/* Before the shelf loads, or a game it can't name: a plain spine-sized row. */
+	.plain {
+		display: flex;
+		align-items: center;
+		min-height: 46px;
+		padding: 0 var(--s-3);
+		border-radius: var(--r-cube);
+		background: var(--gap);
+		font-weight: 700;
+		text-decoration: none;
+	}
+	/* Stayed home: faded and struck through, still there to tick back. */
+	.games li.home :global(.spine),
+	.games li.home .plain {
+		opacity: 0.45;
+	}
+	.games li.home :global(.spine .title),
+	.games li.home .plain {
 		text-decoration: line-through;
-		color: var(--ink-3);
 	}
 	.here {
-		min-width: 6.5rem;
-		padding: 2px 10px;
+		min-width: 7rem;
+		min-height: 36px;
+		padding: 0 12px;
 		border-radius: 999px;
 		border: 1.5px solid var(--rule);
 		background: var(--laminate);
@@ -534,8 +637,9 @@
 		border-color: var(--mark);
 		color: var(--mark-ink);
 	}
-	.add {
-		gap: var(--s-4);
+	/* A form panel is a grid of its own rows, not the sections' spaced stack. */
+	section.form-panel {
+		display: block;
 	}
 	.found {
 		list-style: none;
@@ -566,7 +670,9 @@
 		min-height: 36px;
 		width: auto;
 	}
-	.find,
+	.find {
+		max-width: 28rem;
+	}
 	.pick-game {
 		display: grid;
 		gap: 6px;
@@ -575,19 +681,19 @@
 		font-weight: 650;
 		color: var(--ink-2);
 	}
-	.other-form,
-	.edit {
+	.other-form {
 		display: grid;
 		gap: var(--s-3);
-		max-width: 30rem;
-		margin-top: var(--s-3);
+		max-width: 28rem;
+		margin-top: var(--s-4);
 	}
-	.other-form label {
-		display: grid;
-		gap: 6px;
-		font-size: var(--t-small);
-		font-weight: 650;
-		color: var(--ink-2);
+	.other summary {
+		min-height: 44px;
+		display: inline-flex;
+		align-items: center;
+	}
+	.edit {
+		margin-top: var(--s-3);
 	}
 	.nums {
 		display: grid;
@@ -605,10 +711,14 @@
 	.small {
 		font-size: var(--t-small);
 	}
-	@media (max-width: 520px) {
-		.bring > li {
-			grid-template-columns: 1fr;
-			gap: 4px;
-		}
+	/* Changing and deleting the night: two quiet links on one line; the edit form takes the full width once open. */
+	.manage {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--s-3) var(--s-5);
+	}
+	.manage details[open] {
+		flex-basis: 100%;
 	}
 </style>

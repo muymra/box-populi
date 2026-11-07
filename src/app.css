@@ -340,6 +340,114 @@ select.field {
 	padding: var(--s-5);
 }
 
+/* The form panel, shared by Play tonight, planning a night, a night's answer and its bring list
+   (DESIGN.md "Form panel"): a head with the title and one line of context, rows that each ask one
+   question (the question above its controls on phones, beside them from 760px), and a foot band on
+   the laminate that holds the main action. */
+.form-panel {
+	--form-pad: var(--s-4);
+	--form-radius: 10px;
+	background: var(--cube);
+	border: 1px solid var(--rule);
+	border-radius: var(--form-radius);
+}
+.form-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--s-3) var(--s-4);
+	padding: var(--s-5) var(--form-pad) var(--s-4);
+}
+.form-head h2 {
+	margin: 0;
+}
+.form-head p {
+	margin: 6px 0 0;
+	color: var(--ink-2);
+	max-width: 60ch;
+}
+.form-row {
+	display: grid;
+	gap: var(--s-3);
+	padding: var(--s-4) var(--form-pad) var(--s-5);
+	border-top: 1px solid var(--rule);
+}
+.form-panel > .form-row:first-child {
+	border-top: 0;
+}
+/* The question: lead size at heading weight, so it reads before its controls do. */
+.form-q {
+	display: block;
+	font-size: var(--t-lead);
+	font-weight: 780;
+	font-stretch: 88%;
+	letter-spacing: -0.01em;
+	line-height: 1.2;
+	color: var(--ink);
+}
+.form-label .hint {
+	display: block;
+	margin: 4px 0 0;
+}
+.form-body {
+	display: grid;
+	/* One column the width of the row: an auto column would grow to its widest content's minimum. */
+	grid-template-columns: minmax(0, 1fr);
+	align-content: start;
+	gap: var(--s-3);
+	min-width: 0;
+}
+/* A control's own small label inside a row: Players, Time, Date. */
+.form-sub {
+	display: grid;
+	gap: 6px;
+	font-size: var(--t-small);
+	font-weight: 650;
+	color: var(--ink-2);
+}
+.form-foot p,
+.form-body p,
+.form-block p {
+	margin: 0;
+}
+/* A full-width block inside a form panel, for content that isn't a question: a list of plays. */
+.form-block {
+	padding: var(--s-4) var(--form-pad) var(--s-5);
+	border-top: 1px solid var(--rule);
+}
+.form-foot {
+	display: grid;
+	gap: var(--s-4);
+	padding: var(--s-5) var(--form-pad);
+	background: var(--laminate);
+	border-top: 1px solid var(--rule);
+	/* the panel's corner less its 1px border, so the band meets the edge flush */
+	border-radius: 0 0 calc(var(--form-radius) - 1px) calc(var(--form-radius) - 1px);
+}
+@media (min-width: 760px) {
+	.form-panel {
+		--form-pad: var(--s-5);
+	}
+	.form-row {
+		grid-template-columns: 11rem minmax(0, 1fr);
+		align-items: start;
+		gap: var(--s-5);
+		padding-block: var(--s-5);
+	}
+	/* Lines the question up with the middle of a 40 to 46px control, or with the small labels when
+	   the row's controls have their own (Players, Time; Date, Starts). */
+	.form-label {
+		padding-top: 9px;
+	}
+	.form-row:has(> .form-body > .form-sub:first-child, > .form-body > :first-child > .form-sub:first-child) > .form-label {
+		padding-top: 0;
+	}
+	.form-foot.indent {
+		padding-left: calc(var(--form-pad) + 11rem + var(--s-5));
+	}
+}
+
 /* Loading placeholders: the shape of what's coming, with a slow band of light passing over the
    shelf-gap colour. Still for reduced motion. Set --skeleton-base to sit on another surface. */
 .skeleton {

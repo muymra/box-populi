@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import NightFields from '#lib/components/NightFields.svelte';
 	import { nightOf } from '#lib/table/regulars.ts';
 	import type { PageProps } from './$types';
@@ -9,30 +10,33 @@
 
 <svelte:head><title>Plan a game night · {data.group.name}</title></svelte:head>
 
-<div class="narrow plan">
-	<h1>Plan a game night</h1>
-	<p class="muted">Pick when and where. Then mark who's going and what they'll bring; everyone in the group sees the plan.</p>
+<div class="plan">
+	<header>
+		<h1>Plan a game night</h1>
+		<p class="muted">Pick when and where first. Next you’ll mark who’s going and what they’ll bring; everyone in the group sees the plan.</p>
+	</header>
 	{#if form?.error}<p class="banner error" role="alert">{form.error}</p>{/if}
-	<form method="POST" onsubmit={() => (sending = true)}>
+	<form method="POST" class="form-panel" onsubmit={() => (sending = true)}>
 		<NightFields
 			members={data.tableMembers}
 			values={form?.entered
 				? { name: form.entered.name, nightOn: form.entered.nightOn, startsAt: form.entered.startsAt, host: form.entered.host }
 				: { name: 'Game night', nightOn: nightOf(Date.now()) }}
 		/>
-		<button class="btn primary" disabled={sending}>Plan it</button>
+		<div class="form-foot indent">
+			<div><button class="btn primary" disabled={sending}>Next: who’s going <ArrowRight size={18} aria-hidden="true" /></button></div>
+		</div>
 	</form>
 </div>
 
 <style>
 	.plan {
 		display: grid;
-		gap: var(--s-4);
-		padding-top: var(--s-4);
-	}
-	form {
-		display: grid;
 		gap: var(--s-5);
-		justify-items: start;
+		max-width: 46rem;
+		padding: var(--s-5) 0 var(--s-6);
+	}
+	header p {
+		margin: 0;
 	}
 </style>
