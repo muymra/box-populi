@@ -91,6 +91,7 @@ pnpm test
 | [TECH.md](./TECH.md) | How it's built. |
 | [DECISIONS.md](./DECISIONS.md) | Choices already made, and why. |
 | [STATUS.md](./STATUS.md) | Progress and what's next. |
+| [CHANGELOG.md](./CHANGELOG.md) | What changed in each version, and what an upgrade needs. |
 | [AGENTS.md](./AGENTS.md) | Rules for coding agents working on it. |
 
 ## Credits

@@ -5,7 +5,7 @@
 	is confirmed (STATUS.md, unverified assumptions). Don't redraw the logo.
 -->
 <script lang="ts">
-	import { SOURCE_URL } from '#lib/project.ts';
+	import { APP_VERSION, CHANGELOG_URL, SOURCE_URL } from '#lib/project.ts';
 	import ThemePicker from './ThemePicker.svelte';
 
 	/** `bgg`: whether this instance shows BGG data and so must credit it (D30). */
@@ -26,7 +26,8 @@
 			{/if}
 			<p class="small">
 				{#if bgg}Box Populi is not affiliated with or endorsed by BoardGameGeek.{/if}
-				<a href="/privacy">Privacy</a> · <a href={SOURCE_URL} rel="noopener">Source</a>
+				<a href="/privacy">Privacy</a> · <a href={SOURCE_URL} rel="noopener">Source</a> ·
+				<a class="num" href={CHANGELOG_URL} rel="noopener" title="What changed in each version">v{APP_VERSION}</a>
 			</p>
 		</div>
 		<div class="theme"><ThemePicker bind:current={deviceTheme} {custom} /></div>

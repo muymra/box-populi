@@ -265,3 +265,10 @@ Four simulated user tests of Play tonight (a host at home, a café meetup, a clu
 **Why:** the pick is the point of the page, and it has to be readable at a glance at the table.
 **Trade-offs accepted:** the tilted boxes, the picker's one authored motion, become rows with a short rise; the result rows are new markup rather than the shelf's Spines rows, because they carry Keep, "We played this" and tags.
 **Revisit if:** groups do keep the app open through an evening, which is when the live board would earn its place.
+
+## D44. Versions: 0.x until Carlo says 1.0 (2026-11-08)
+
+Carlo asked for versioning without going to 1.x until he says so. Box Populi uses semantic versioning held at 0.x: a minor version for new features, a migration, or a setting a hoster must act on; a patch for fixes only. A version is cut at each production deploy: `package.json` gets the number, `CHANGELOG.md` moves its "Unreleased" lines under it with an **Upgrading** line, and git gets an annotated tag `vX.Y.Z`. Numbering starts with 0.1.0 for the build that went live on 2026-11-07 (`32fd16b`) and 0.2.0 for the work of 2026-11-08. The version is baked into the build (`__APP_VERSION__` in `vite.config.ts`, read through `APP_VERSION` in `#lib/project.ts`) and shown in every page's footer, linked to the changelog, and on `/admin`. SvelteKit's own build id stays separate: the catalog's cache tag needs a value that changes on every deploy, released or not.
+**Why:** hosters need to know what they run and what an upgrade asks of them, and bug reports need a version.
+**Trade-offs accepted:** a deploy without a version bump still shows the last number; the build id, not the version, is what busts caches.
+**Revisit if:** Carlo calls 1.0, or groups run instances far enough behind that the footer should say an update exists.

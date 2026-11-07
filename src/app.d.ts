@@ -3,6 +3,8 @@ import type { InstanceConfig } from '#lib/server/instance.ts';
 import type { Appearance } from '#lib/server/appearance.ts';
 
 declare global {
+	/** The release version from package.json, set at build time in vite.config.ts (DECISIONS D44). */
+	const __APP_VERSION__: string;
 	namespace App {
 		interface Locals {
 			config: InstanceConfig;

@@ -171,6 +171,8 @@ Turso doesn't enforce foreign keys over HTTP, so the app deletes a group's or a 
 
 ## Upgrading
 
+Your instance shows its version in the footer and on `/admin`. Before upgrading, read [CHANGELOG.md](./CHANGELOG.md) for each version between yours and the new one: its **Upgrading** line says whether it brings migrations or new settings. Versions stay at 0.x for now, so any minor version (0.2 to 0.3) can need a step from you.
+
 Cloudflare Pages:
 
 ```sh

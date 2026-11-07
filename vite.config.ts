@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 import { sveltekit } from '@sveltejs/kit/vite';
@@ -14,8 +15,11 @@ const target = (process.env.BOX_TARGET || 'cloudflare') as keyof typeof TARGETS;
 if (!(target in TARGETS)) throw new Error(`BOX_TARGET must be one of ${Object.keys(TARGETS).join(', ')} (got "${target}").`);
 const { adapter: adapterModule, platform } = TARGETS[target];
 const adapter = (await import(adapterModule)).default;
+// The release version (DECISIONS D44), baked into the build for the footer and /admin.
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
 
 export default defineConfig({
+	define: { __APP_VERSION__: JSON.stringify(version) },
 	plugins: [
 		sveltekit({
 			compilerOptions: {

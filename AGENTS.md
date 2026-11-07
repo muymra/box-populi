@@ -69,6 +69,7 @@ Restart `pnpm dev` after editing `.dev.vars` or `wrangler.jsonc`; the instance c
 - **Runtime access.** Only the platform modules (`platform.ts` for Cloudflare, `platform.node.ts`, `platform.libsql.ts`) know where the app runs, and only `platform.ts` imports `cloudflare:workers`. Load functions call `getDb()` and pass `db` down; library code takes `db` and `config` as arguments. Deleting a group or a person goes through `deleteGroupStatements` / `deletePersonStatements`, never a bare `DELETE` that relies on cascades (Turso doesn't run them).
 - **Secrets.** `.dev.vars` and `wrangler.jsonc` are gitignored. Never write secret values into any file, log or doc.
 - **Open questions.** If the PRD lists an open question with a starting default, build the default. Don't block on it, and don't settle it yourself.
+- **Versions.** Every change a user or hoster would notice gets a line under "Unreleased" in [CHANGELOG.md](./CHANGELOG.md). At a production deploy, cut a version (D44): minor for features, a migration or a new setting, patch for fixes only; set it in `package.json`, move the lines under the new heading with an **Upgrading** line, and tag `vX.Y.Z`. Stay at 0.x: never 1.0 without Carlo.
 
 ## Traps from outdated training data
 
@@ -103,6 +104,7 @@ Many models learned older versions of these tools. Check yourself against this l
 - New pure logic has tests. Permission changes update the `permissions.ts` table test.
 - Docs match the code: the PRD if behavior changed, TECH.md if the implementation differs, DECISIONS.md if a choice was made, SELF_HOSTING.md if config or deploy steps changed.
 - STATUS.md has the checklist item ticked and one line in the session log: date, what changed, anything left half-done.
+- CHANGELOG.md has a line under "Unreleased" if a user or hoster would notice the change.
 - Nothing instance-specific, secret, or BGG-sourced is staged for commit.
 
 ## Writing in this repo

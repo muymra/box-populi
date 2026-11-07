@@ -149,6 +149,10 @@ box-populi/
     routes/                     see "Routes and endpoints"
 ```
 
+## Versions
+
+The release version lives in `package.json` (D44). `vite.config.ts` reads it and defines `__APP_VERSION__` for the build; code reads it as `APP_VERSION` from `#lib/project.ts`. The footer (`BggCredit.svelte`) shows it as `vX.Y.Z` linked to `CHANGELOG.md` on GitHub, `/admin` shows it under its intro, and the BGG client's User-Agent carries it (`BoxPopuli/0.2.0`). It's separate from SvelteKit's build id (`version` from `$app/env`), which changes on every build and is what the catalog's ETag uses. Cutting a release: set `package.json`, move CHANGELOG.md's "Unreleased" lines under the new version with an **Upgrading** line, commit, and `git tag -a vX.Y.Z -m "Box Populi X.Y.Z"`.
+
 ## Hosting targets
 
 Built 2026-11-06 (D32). One codebase, five places to run it; `BOX_TARGET` at build time picks the SvelteKit adapter and swaps `#lib/server/platform.ts` (a Vite alias in `vite.config.ts`). Nothing else in the app knows where it runs.

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_VERSION, CHANGELOG_URL } from '#lib/project.ts';
 	import { enhance } from '$app/forms';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Search from '@lucide/svelte/icons/search';
@@ -74,6 +75,7 @@
 		<p class="muted intro">
 			Counts and group names only. This page never shows who is in a group, their games or the join codes, and every action below is logged.
 		</p>
+		<p class="muted version">This instance runs Box Populi <span class="num">{APP_VERSION}</span>. <a href={CHANGELOG_URL} rel="noopener">What changed in each version</a></p>
 	{/snippet}
 
 	{#snippet banners()}
@@ -390,6 +392,11 @@
 	.intro {
 		margin: calc(-1 * var(--s-3)) 0 0;
 		max-width: 68ch;
+	}
+	/* Which release this is, tucked under the intro. */
+	.version {
+		margin: calc(-1 * var(--s-4)) 0 0;
+		font-size: var(--t-small);
 	}
 	.banner {
 		margin: 0;
