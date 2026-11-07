@@ -57,12 +57,24 @@ describe('permissions', () => {
 		['admin', 'change_play', undefined, false, true],
 		['owner', 'change_play', undefined, false, true],
 		['member', 'set_points', undefined, false, false],
-		['admin', 'set_points', undefined, false, true]
+		['admin', 'set_points', undefined, false, true],
+		// change_night: targetIsSelf means the actor planned the night
+		['member', 'change_night', undefined, true, true],
+		['member', 'change_night', undefined, false, false],
+		['admin', 'change_night', undefined, false, true],
+		['member', 'set_night_planners', undefined, false, false],
+		['admin', 'set_night_planners', undefined, false, true]
 	];
 	it.each(cases)('%s %s on %s (self=%s) → %s', (actor, action, targetRole, targetIsSelf, expected) => {
 		expect(can(actor, action, { targetRole, targetIsSelf })).toBe(expected);
 	});
-	it('lets anyone leave except an owner with other members', () => {
+	it('lets any member plan nights unless the group limits it to co-admins and the owner', () => {
+		expect(can('member', 'plan_night', { openToMembers: true })).toBe(true);
+		expect(can('member', 'plan_night', { openToMembers: false })).toBe(false);
+		expect(can('admin', 'plan_night', { openToMembers: false })).toBe(true);
+		expect(can('owner', 'plan_night', { openToMembers: false })).toBe(true);
+	});
+		it('lets anyone leave except an owner with other members', () => {
 		for (const role of roles) expect(can(role, 'leave', { otherMembers: 3 })).toBe(role !== 'owner');
 		expect(can('owner', 'leave', { otherMembers: 0 })).toBe(true);
 	});

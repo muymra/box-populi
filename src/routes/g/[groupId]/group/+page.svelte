@@ -148,6 +148,21 @@
 			{#if form?.renameError}<p class="banner error" role="alert">{form.renameError}</p>{/if}
 		</section>
 
+		<section aria-labelledby="nights-by-h">
+			<h2 id="nights-by-h">Game nights</h2>
+			<p class="muted">Who can plan a night. Everyone can still say whether they're going and what they'll bring.</p>
+			<form method="POST" action="?/nightsBy" class="rename" use:enhance={() => async ({ update }) => update({ reset: false })}>
+				<label class="visually-hidden" for="nights-by">Who can plan game nights</label>
+				<select id="nights-by" class="field" name="nightsBy" value={data.nightsBy}>
+					<option value="members">Any member</option>
+					<option value="admins">Only the owner and co-admins</option>
+				</select>
+				<button class="btn">Save</button>
+			</form>
+			{#if form?.nightsBySaved}<p class="muted small" role="status">Saved.</p>{/if}
+			{#if form?.nightsByError}<p class="banner error" role="alert">{form.nightsByError}</p>{/if}
+		</section>
+
 		<section aria-labelledby="theme-h">
 			<h2 id="theme-h">Group theme</h2>
 			<p class="muted">Colours everyone sees on this group's pages, unless they've picked their own theme in the footer.</p>

@@ -29,7 +29,7 @@ type GameRow = {
 	fetched_at: number | null;
 };
 
-const GAME_COLUMNS = `g.id, g.bgg_id, g.name, g.search_text, g.year, g.thumb_url, g.min_players, g.max_players,
+export const GAME_COLUMNS = `g.id, g.bgg_id, g.name, g.search_text, g.year, g.thumb_url, g.min_players, g.max_players,
 	g.best_mask, g.rec_mask, g.poll_source, g.min_playtime, g.max_playtime, g.weight, g.users_rated,
 	g.mechanics, g.categories, g.is_expansion, g.is_manual, g.source, g.fetched_at`;
 

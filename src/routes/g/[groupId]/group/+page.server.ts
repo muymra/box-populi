@@ -14,7 +14,8 @@ import {
 	type Actor,
 	type AdminResult
 } from '#lib/server/group-admin.ts';
-import type { DB } from '#lib/server/db.ts';
+import { one, type DB } from '#lib/server/db.ts';
+import { setNightPlanners } from '#lib/server/nights.ts';
 import { getDb } from '#lib/server/platform.ts';
 import type { Actions, PageServerLoad, RequestEvent } from './$types';
 
@@ -22,12 +23,17 @@ export const load: PageServerLoad = async (event) => {
 	const db = getDb();
 	const { groupId } = event.params;
 	const access = await requireRead(event, db, groupId);
-	const [members, counts] = await Promise.all([loadMembers(db, groupId), gameCounts(db, groupId)]);
+	const [members, counts, settings] = await Promise.all([
+		loadMembers(db, groupId),
+		gameCounts(db, groupId),
+		one<{ nights_by: 'members' | 'admins' }>(db, 'SELECT nights_by FROM groups WHERE id = ?1', groupId)
+	]);
 	const me = event.locals.user;
 	// Controls only for members of a writable group; the server checks every action again anyway.
 	const actor: Actor | null = me && access.role && !access.readonly ? { id: me.id, role: access.role } : null;
 	return {
 		now: Date.now(),
+		nightsBy: settings?.nights_by ?? 'members',
 		canManage: actor != null && actor.role !== 'member',
 		// Deleting stays open to the owner of a suspended group.
 		canDelete: me != null && access.role === 'owner' && !access.group.isDemo,
@@ -63,6 +69,11 @@ export const actions: Actions = {
 	rename: async (event) => {
 		const result = await act(event, 'admin', (db, id, actor, form) => renameGroup(db, id, actor, form.get('name')));
 		return result.ok ? { renamed: true } : fail(400, { renameError: result.error });
+	},
+
+	nightsBy: async (event) => {
+		const result = await act(event, 'admin', (db, id, actor, form) => setNightPlanners(db, id, actor, form.get('nightsBy')));
+		return result.ok ? { nightsBySaved: true } : fail(400, { nightsByError: result.error });
 	},
 
 	theme: async (event) => {

@@ -4,6 +4,7 @@
 	import { enhance } from '$app/forms';
 	import Download from '@lucide/svelte/icons/download';
 	import PlayList from '#lib/components/PlayList.svelte';
+	import { nightDate } from '#lib/nights.ts';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { formatPoints, ordinal } from '#lib/plays.ts';
 	import { getTable } from '#lib/table/table.svelte.ts';
@@ -72,9 +73,25 @@
 
 	<section aria-labelledby="plays-h">
 		<h2 id="plays-h">Plays <span class="muted num">{data.totalPlays}</span></h2>
+		{#if data.nightCount}<p class="muted">{data.nightCount} {data.nightCount === 1 ? 'game night' : 'game nights'}, with the plays logged on each.</p>{/if}
 		{#if form?.playError}<p class="banner error" role="alert">{form.playError}</p>{/if}
-		{#if data.plays.length}
-			<PlayList plays={data.plays} members={data.tableMembers} {table} groupId={data.group.id} showGame />
+		{#if data.entries.length}
+			<div class="history">
+				{#each data.entries as entry, i (entry.kind === 'night' ? entry.id : `p${i}`)}
+					{#if entry.kind === 'night'}
+						<section class="night" aria-label="{entry.name}, {nightDate(entry.date)}">
+							<h3><a href="/g/{data.group.id}/nights/{entry.id}">{entry.name}</a> <span class="muted num">{nightDate(entry.date)} · {entry.people} went</span></h3>
+							{#if entry.plays.length}
+								<PlayList plays={entry.plays} members={data.tableMembers} {table} groupId={data.group.id} showGame />
+							{:else}
+								<p class="muted small">No plays logged.</p>
+							{/if}
+						</section>
+					{:else}
+						<PlayList plays={entry.plays} members={data.tableMembers} {table} groupId={data.group.id} showGame />
+					{/if}
+				{/each}
+			</div>
 			{#if data.totalPlays > data.listed}<p class="muted">The newest {data.listed} are shown; the export has them all.</p>{/if}
 		{:else}
 			<p class="muted">No plays logged {data.period === 'year' ? `in ${data.year}` : 'yet'}.</p>
@@ -226,6 +243,26 @@
 		font-size: var(--t-small);
 		font-weight: 650;
 		color: var(--ink-2);
+	}
+	.history {
+		display: grid;
+		gap: var(--s-4);
+	}
+	.history .night {
+		display: grid;
+		gap: 4px;
+		padding: var(--s-3) var(--s-4);
+		background: var(--cube);
+		border: 1px solid var(--rule);
+		border-radius: 10px;
+	}
+	.history .night h3 {
+		margin: 0;
+		font-size: var(--t-lead);
+	}
+	.history .night h3 .muted {
+		font-size: var(--t-small);
+		font-weight: 650;
 	}
 	.hint {
 		margin: var(--s-3) 0 0;

@@ -14,6 +14,8 @@
 	import StartPlayer from '#lib/components/StartPlayer.svelte';
 	import DiceRoller from '#lib/components/DiceRoller.svelte';
 	import { Table, setTable } from '#lib/table/table.svelte.ts';
+	import { nightOn, tonightSeed } from '#lib/nights.ts';
+	import { nightOf } from '#lib/table/regulars.ts';
 	import { SOURCE_URL } from '#lib/project.ts';
 	import type { LayoutProps } from './$types';
 
@@ -23,14 +25,16 @@
 	const tabs = $derived(
 		[
 			{ href: base, label: 'Shelf', icon: LayoutGrid, show: true },
-			{ href: `${base}/pick`, label: 'Play tonight', icon: Dices, show: true },
+			{ href: `${base}/pick`, label: 'Game night', icon: Dices, show: true },
 			{ href: `${base}/wanted`, label: 'Wanted', icon: Gift, show: true },
 			{ href: `${base}/add`, label: 'Add games', icon: Plus, show: !!data.role && !data.readonly },
 			{ href: `${base}/group`, label: 'Group', icon: Users, show: true }
 		].filter((t) => t.show)
 	);
 	const isCurrent = (href: string) =>
-		href === base ? current === base || current.startsWith(`${base}/game/`) : current.startsWith(href);
+		href === base
+			? current === base || current.startsWith(`${base}/game/`)
+			: current.startsWith(href) || (href === `${base}/pick` && current.startsWith(`${base}/nights`));
 
 	// Who's here on this device, shared with the picker (PRD "At the table").
 	const table = setTable(new Table());
@@ -39,8 +43,9 @@
 	$effect(() => {
 		// Re-read when switching groups and each time the modal opens, so a table left overnight has reset.
 		const groupId = data.group.id;
+		const seed = tonightSeed(nightOn(data.nights, nightOf(Date.now())), new Set(data.tableMembers.map((m) => m.id)));
 		void startOpen;
-		untrack(() => table.load(groupId));
+		untrack(() => table.load(groupId, seed));
 	});
 </script>
 

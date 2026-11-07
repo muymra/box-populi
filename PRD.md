@@ -93,7 +93,7 @@ Never cut: import, the picker, the demo group, the phone layout, and the instanc
 
 ### Stretch, in rough priority
 
-- **Game night.** The owner picks a date; members say yes or no; each member marks which copies they'll bring. The picker's "who's here" covers the evening itself, so this is about planning ahead.
+- **Game night.** Being built from 2026-11-07 (D38); see "Game night" below.
 - **Play log.** Built 2026-11-07 (D37); see "Play log" below. Date, game, players, places or scores, a podium-points leaderboard, a CSV export, and a "not played lately" filter.
 - **Passkeys** as an optional second way to sign in on a new device, for people who'd rather not keep a link.
 - **CSV export** of the group catalog: game name, year, BGG link and owners. No BGG descriptions or statistics, so the export can't work as a copy of BGG's data.
@@ -193,7 +193,22 @@ Cover image, title and year, description (collapsed past a few lines), player ra
 
 A base game's page lists the expansions owned in the group. An expansion's page links to its base game.
 
+### Game night
+
+Most groups pick what to bring before the night and choose what to play from that pool on the spot (D38). Many play at someone's home, where the host's shelf is there too; others meet at a café or a store, where only brought games are. The "Play tonight" tab becomes **Game night**.
+
+- **Planning a night.** A member plans a night: a name ("Café"), a date, an optional start time, and where: at a member's home (their shelf counts on the night) or somewhere else (only brought games count). Any member can plan by default; a group setting limits it to the owner and co-admins. Several nights can be planned at once.
+- **Who's going.** Each member marks themselves going or not. Whoever planned the night, and co-admins, can mark others; anyone can add guests by name.
+- **The bring list.** Games someone will bring, listed by person. Suggestions come from the shelves of the people going, drawn like the picker's. "Bring it" puts a copy on the list under its owner, asking whose copy when several going members own it. Anyone going can add a going member's copy; that member sees it on the night and can take it off. A guest's game, or anything not on a group shelf, is added by title (players and play time optional) and listed under the guest or the member bringing it.
+- **Telling people.** Box Populi sends no notifications. "Copy for the chat" copies the date, place, who's going, the bring list and a link.
+- **On the night.** On a night's date, Play tonight uses that night: who's here starts from its going list and guests, and the games are its bring list, plus the host's whole shelf when it's at a member's home. Anything that stayed home gets unticked there, for everyone. A game that turns up unplanned is added the same way as before the night. Fillers, split tables, who goes first and dice all use that pool.
+- **No night planned.** Play tonight works as before, drawing from everything the people here own, and says so.
+- **Changing and deleting.** Whoever planned a night, and co-admins and the owner, edit or delete it. Deleting a night keeps its plays, as plays outside any night.
+- **History.** Past nights appear in the play log with their plays (see "Play log").
+
 ### Picker
+
+On a game night's date the picker draws from that night's pool and who's here starts from its going list (see "Game night"); otherwise it works as below.
 
 Inputs:
 
@@ -229,11 +244,11 @@ The copy's owner can mark it lent to a group member (picked from a list) or to s
 
 For fun, not for rankings anyone takes seriously (D37).
 
-- **Logging.** From a game's page ("Log a play"), or from a game "Play tonight" pulled ("We played this"). Only games on the group's shelf. The form starts from who's here tonight, members and guests; changing the players there leaves tonight's list alone. The date defaults to tonight, with 1 a.m. counting as the evening before.
+- **Logging.** From a game's page ("Log a play"), or from a game "Play tonight" pulled ("We played this"). Only games on the group's shelf, or in the pool of the night the play belongs to (D38), so a guest's game can be logged on its night. A play logged on a night's date from that night's pool belongs to the night. The form starts from who's here tonight, members and guests; changing the players there leaves tonight's list alone. The date defaults to tonight, with 1 a.m. counting as the evening before.
 - **Results.** Places (picking just the winner is enough; anyone left blank shares last place), scores (places follow from them, with "lowest score wins"), or a co-op win or loss for the whole table. Ties share a place.
 - **Points.** A group setting, 3, 2, 1 by default, set by co-admins and the owner as one to five numbers from first place down. A player scores only if someone finished below them, so last place never scores and a draw scores nothing; tied players take their shared place's points. Points are worked out when shown, so changing them rescores every play. Co-op plays score nothing and count as plays.
 - **Leaderboard.** Points, wins and plays per member, for this year or all time. Guests appear in plays but not on it, since one typed name can be two people. A member who leaves drops off it and shows as "a former member" in plays.
-- **Where.** A trophy icon in the group bar, beside "Who goes first?" and "Dice", opens the plays page (`/g/<group>/plays`): the leaderboard, the plays (newest 100), the points setting and the export. A game's page lists its plays, when it was last played and who has won it most.
+- **Where.** A trophy icon in the group bar, beside "Who goes first?" and "Dice", opens the plays page (`/g/<group>/plays`): the leaderboard, the plays (newest 100), the points setting and the export. A game's page lists its plays, when it was last played and who has won it most. The plays page lists past game nights with their plays under them ("Fri 14 Nov, Café: 4 plays"), nights where nothing was logged included, and plays outside any night on their own. The export gains a `game_night` column.
 - **Changing plays.** Whoever logged a play, anyone in it, and co-admins and the owner can edit or delete it. Demo and suspended groups can't log.
 - **Export.** A CSV file, one row per player per play: date, game, where the game's details came from, BGG id, play id, player, member or guest, place, score, won, co-op result, points. Plays you were in, or everyone's; this year or all time. Game names and BGG ids only, nothing from BGG's statistics. BoardGameGeek is named on the rows whose game details came from BGG, and only there, and BGG titles appear exactly as BGG gives them.
 - **Not played lately.** A shelf filter, under More once the group has logged a play: games not played in the last 3 months, including games never logged.

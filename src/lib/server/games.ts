@@ -145,13 +145,18 @@ export async function searchBgg(db: DB, client: BggClient, query: string, userId
 		}));
 }
 
-/** Same rule as the game page: the game is owned or wanted by someone in the group. */
+/**
+ * Same rule as the game page: the game is owned or wanted by someone in the group, or the group sees
+ * it through a night's bring list or its play log (a guest's game, D38).
+ */
 export async function gameVisibleInGroup(db: DB, groupId: string, gameId: number): Promise<boolean> {
 	const row = await one(
 		db,
 		`SELECT 1 AS x FROM games g WHERE g.id = ?2 AND (
 			EXISTS (SELECT 1 FROM copies c JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1 WHERE c.game_id = g.id)
-			OR EXISTS (SELECT 1 FROM wishlist w JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1 WHERE w.game_id = g.id))`,
+			OR EXISTS (SELECT 1 FROM wishlist w JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1 WHERE w.game_id = g.id)
+			OR EXISTS (SELECT 1 FROM night_games ng JOIN game_nights n ON n.id = ng.night_id AND n.group_id = ?1 WHERE ng.game_id = g.id)
+			OR EXISTS (SELECT 1 FROM plays p WHERE p.group_id = ?1 AND p.game_id = g.id))`,
 		groupId,
 		gameId
 	);
@@ -181,7 +186,9 @@ export async function usableGames(db: DB, groupId: string, userId: string, gameI
 			(g.source <> 'manual' AND g.is_manual <> 1 AND (g.bgg_id IS NOT NULL OR g.wikidata_id IS NOT NULL))
 			OR g.created_by = ?2
 			OR EXISTS (SELECT 1 FROM copies c JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1 WHERE c.game_id = g.id)
-			OR EXISTS (SELECT 1 FROM wishlist w JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1 WHERE w.game_id = g.id))`,
+			OR EXISTS (SELECT 1 FROM wishlist w JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1 WHERE w.game_id = g.id)
+			OR EXISTS (SELECT 1 FROM night_games ng JOIN game_nights n ON n.id = ng.night_id AND n.group_id = ?1 WHERE ng.game_id = g.id)
+			OR EXISTS (SELECT 1 FROM plays p WHERE p.group_id = ?1 AND p.game_id = g.id))`,
 		groupId,
 		userId,
 		...ids

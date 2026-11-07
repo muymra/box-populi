@@ -3,6 +3,7 @@
 import { all, one, stmt, type DB } from './db.ts';
 import { bumpCatalogForGroup } from './catalog.ts';
 import { can } from './permissions.ts';
+import { gameOnNight, nightInGroup } from './nights.ts';
 import { cleanGuestName } from '#lib/table/here.ts';
 import {
 	DEFAULT_POINTS,
@@ -19,7 +20,7 @@ import {
 import type { Role } from '#lib/catalog/types.ts';
 
 export type Actor = { id: string; role: Role };
-export type PlayInput = { playedOn: string; coop: Coop | null; lowestWins: boolean; players: PlayPlayer[] };
+export type PlayInput = { playedOn: string; coop: Coop | null; lowestWins: boolean; players: PlayPlayer[]; nightId?: string | null };
 export type Result<T = undefined> = { ok: true; value: T } | { ok: false; error: string };
 export type StoredPlay = Play & { loggedBy: string | null; lowestWins: boolean };
 
@@ -77,8 +78,9 @@ export function parsePlayForm(form: FormData, latest: string): Result<PlayInput>
 	}
 
 	const lowestWins = form.get('lowestWins') === '1';
+	const nightId = String(form.get('nightId') ?? '') || null;
 	if (result === 'won' || result === 'lost') {
-		return { ok: true, value: { playedOn, coop: result, lowestWins: false, players: players.map((p) => ({ ...p, place: null })) } };
+		return { ok: true, value: { playedOn, coop: result, lowestWins: false, nightId, players: players.map((p) => ({ ...p, place: null })) } };
 	}
 	if (result === 'scores') {
 		if (players.every((p) => p.score == null)) return { ok: false, error: 'Enter at least one score, or pick places instead.' };
@@ -86,11 +88,11 @@ export function parsePlayForm(form: FormData, latest: string): Result<PlayInput>
 			players.map((p) => p.score),
 			lowestWins
 		);
-		return { ok: true, value: { playedOn, coop: null, lowestWins, players: players.map((p, i) => ({ ...p, place: places[i] })) } };
+		return { ok: true, value: { playedOn, coop: null, lowestWins, nightId, players: players.map((p, i) => ({ ...p, place: places[i] })) } };
 	}
 	if (players.length > 1 && players.every((p) => p.place == null)) return { ok: false, error: 'Pick at least the winner.' };
 	const places = fillPlaces(players.map((p) => p.place));
-	return { ok: true, value: { playedOn, coop: null, lowestWins: false, players: players.map((p, i) => ({ ...p, score: null, place: places[i] })) } };
+	return { ok: true, value: { playedOn, coop: null, lowestWins: false, nightId, players: players.map((p, i) => ({ ...p, score: null, place: places[i] })) } };
 }
 
 /** The game is on this group's shelf: a member has a copy. Plays are only logged for those (D37). */
@@ -153,14 +155,28 @@ export async function savePlay(db: DB, groupId: string, actor: Actor, gameId: nu
 	const existing = playId ? await playOwnership(db, groupId, playId) : null;
 	if (playId && !existing) return { ok: false, error: 'That play is gone. Reload the page.' };
 	if (existing && !canChangePlay(actor, existing)) return { ok: false, error: 'Only whoever logged it, its players and co-admins can change a play.' };
-	if (existing?.gameId !== gameId && !(await gameOnShelf(db, groupId, gameId))) return { ok: false, error: 'That game isn’t on this group’s shelf.' };
+	const nightId = input.nightId ?? null;
+	if (nightId && !(await nightInGroup(db, groupId, nightId))) return { ok: false, error: 'That game night is gone. Reload the page.' };
+	// A shelf game, or one on the night's bring list, such as a guest's (D38).
+	if (existing?.gameId !== gameId && !(await gameOnShelf(db, groupId, gameId)) && !(nightId && (await gameOnNight(db, groupId, nightId, gameId)))) {
+		return { ok: false, error: 'That game isn’t on this group’s shelf or the night’s list.' };
+	}
 	const already = new Set(existing?.players.map((p) => p.userId) ?? []);
 	const memberIds = input.players.map((p) => p.userId).filter((id): id is string => id != null && !already.has(id));
 	if (!(await allMembers(db, groupId, memberIds))) return { ok: false, error: 'Someone in that play isn’t in this group. Reload and try again.' };
 
 	if (playId) {
 		await db.batch([
-			stmt(db, 'UPDATE plays SET game_id = ?1, played_on = ?2, coop = ?3, lowest_wins = ?4 WHERE id = ?5', gameId, input.playedOn, input.coop, input.lowestWins ? 1 : 0, playId),
+			stmt(
+				db,
+				'UPDATE plays SET game_id = ?1, played_on = ?2, coop = ?3, lowest_wins = ?4, night_id = ?5 WHERE id = ?6',
+				gameId,
+				input.playedOn,
+				input.coop,
+				input.lowestWins ? 1 : 0,
+				nightId,
+				playId
+			),
 			stmt(db, 'DELETE FROM play_players WHERE play_id = ?1', playId),
 			...playerInserts(db, playId, input.players),
 			bumpCatalogForGroup(db, groupId)
@@ -172,7 +188,7 @@ export async function savePlay(db: DB, groupId: string, actor: Actor, gameId: nu
 	await db.batch([
 		stmt(
 			db,
-			'INSERT INTO plays (id, group_id, game_id, played_on, coop, lowest_wins, logged_by, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)',
+			'INSERT INTO plays (id, group_id, game_id, played_on, coop, lowest_wins, logged_by, created_at, night_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)',
 			id,
 			groupId,
 			gameId,
@@ -180,7 +196,8 @@ export async function savePlay(db: DB, groupId: string, actor: Actor, gameId: nu
 			input.coop,
 			input.lowestWins ? 1 : 0,
 			actor.id,
-			now
+			now,
+			nightId
 		),
 		...playerInserts(db, id, input.players),
 		bumpCatalogForGroup(db, groupId)
@@ -200,7 +217,7 @@ export async function deletePlay(db: DB, groupId: string, actor: Actor, playId: 
 	return { ok: true, value: undefined };
 }
 
-export type PlayQuery = { gameId?: number; since?: string; withUser?: string; limit?: number };
+export type PlayQuery = { gameId?: number; since?: string; withUser?: string; nightId?: string; limit?: number };
 
 /** Plays in a group, newest first, with their players in the order entered and the group's name for each game. */
 export async function loadPlays(db: DB, groupId: string, q: PlayQuery = {}): Promise<StoredPlay[]> {
@@ -209,6 +226,7 @@ export async function loadPlays(db: DB, groupId: string, q: PlayQuery = {}): Pro
 	if (q.gameId != null) where.push(`game_id = ?${params.push(q.gameId)}`);
 	if (q.since) where.push(`played_on >= ?${params.push(q.since)}`);
 	if (q.withUser) where.push(`id IN (SELECT play_id FROM play_players WHERE user_id = ?${params.push(q.withUser)})`);
+	if (q.nightId) where.push(`night_id = ?${params.push(q.nightId)}`);
 	const limit = q.limit != null ? ` LIMIT ${Math.max(1, Math.floor(q.limit))}` : '';
 	const rows = await all<{
 		id: string;
@@ -221,6 +239,8 @@ export async function loadPlays(db: DB, groupId: string, q: PlayQuery = {}): Pro
 		coop: Coop | null;
 		lowest_wins: number;
 		logged_by: string | null;
+		night_id: string | null;
+		night_name: string | null;
 		user_id: string | null;
 		guest_name: string | null;
 		place: number | null;
@@ -228,10 +248,12 @@ export async function loadPlays(db: DB, groupId: string, q: PlayQuery = {}): Pro
 	}>(
 		db,
 		`SELECT p.id, p.game_id, COALESCE(gc.name, g.name) AS game_name, g.bgg_id, g.source, g.is_manual, p.played_on, p.coop, p.lowest_wins, p.logged_by,
+		        p.night_id, n.name AS night_name,
 		        pp.user_id, pp.guest_name, pp.place, pp.score
 		 FROM (SELECT * FROM plays WHERE ${where.join(' AND ')} ORDER BY played_on DESC, created_at DESC${limit}) p
 		 JOIN games g ON g.id = p.game_id
 		 LEFT JOIN game_corrections gc ON gc.group_id = p.group_id AND gc.game_id = p.game_id
+		 LEFT JOIN game_nights n ON n.id = p.night_id
 		 JOIN play_players pp ON pp.play_id = p.id
 		 ORDER BY p.played_on DESC, p.created_at DESC, p.id, pp.seat`,
 		...params
@@ -251,6 +273,7 @@ export async function loadPlays(db: DB, groupId: string, q: PlayQuery = {}): Pro
 				coop: r.coop,
 				lowestWins: r.lowest_wins === 1,
 				loggedBy: r.logged_by,
+				night: r.night_id ? { id: r.night_id, name: r.night_name ?? '' } : null,
 				players: []
 			};
 			plays.set(r.id, play);

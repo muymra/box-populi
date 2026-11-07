@@ -15,6 +15,9 @@
 	import { FILLER_MAX_MINUTES, fillerWeight, fitsPlayers, gamesAtHand, isFiller, needsSplit, pick, splitFillers, type TableFiller } from '#lib/catalog/pick.ts';
 	import type { CatalogGame, CatalogPayload } from '#lib/catalog/types.ts';
 	import { cleanGuests } from '#lib/table/here.ts';
+	import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
+	import { goingMembers, nightDate, nightGuests, nightOn, nightPoolIds, tonightSeed } from '#lib/nights.ts';
+	import { nightOf } from '#lib/table/regulars.ts';
 	import { getTable } from '#lib/table/table.svelte.ts';
 	import type { PageProps } from './$types';
 
@@ -52,9 +55,26 @@
 	// Members of a writable group can log what they ended up playing (PRD "Play log").
 	const canLog = $derived(!!data.role && !data.readonly);
 
+	// Game nights (PRD "Game night"): on a night's date, the games are that night's pool.
+	const today = nightOf(Date.now());
+	const tonight = $derived(nightOn(data.nights, today));
+	const upcoming = $derived(data.nights.filter((n) => n.nightOn > today));
+	const tableIds = $derived(new Set(data.tableMembers.map((m) => m.id)));
+	const nameOf = (id: string | null) => data.tableMembers.find((m) => m.id === id)?.name ?? null;
+	/** What's in the room: tonight's bring list and the host's shelf, or with no night, every shelf of the people here. */
+	const pool = $derived.by(() => {
+		if (!payload || !tonight) return null;
+		const ids = nightPoolIds(tonight, payload.games, memberIds);
+		const onShelves = payload.games.filter((g) => ids.has(g.id));
+		const shelfIds = new Set(payload.games.map((g) => g.id));
+		return [...onShelves, ...data.nightGames.filter((g) => ids.has(g.id) && !shelfIds.has(g.id))];
+	});
+
 	const candidates = $derived.by(() => {
 		if (!payload) return [];
 		const weights = ceiling ? WEIGHT_BUCKETS.slice(0, WEIGHT_BUCKETS.indexOf(ceiling) + 1) : [];
+		// Tonight's pool is in the room, so lending and owners don't matter.
+		if (pool) return filterGames(pool, { ...DEFAULT_FILTERS, players, minutes, weights, availableOnly: false }, memberIds);
 		const filtered = filterGames(payload.games, { ...DEFAULT_FILTERS, players, minutes, weights, availableOnly: present.length === 0 }, memberIds);
 		return present.length ? gamesAtHand(filtered, new Set(present)) : filtered;
 	});
@@ -64,8 +84,11 @@
 	// group splits across tables (`splitFillers`).
 	const fillerPool = $derived.by(() => {
 		if (!payload) return [];
-		const filtered = filterGames(payload.games, { ...DEFAULT_FILTERS, availableOnly: present.length === 0 }, memberIds);
-		const atHand = present.length ? gamesAtHand(filtered, new Set(present)) : filtered;
+		const atHand = pool
+			? filterGames(pool, { ...DEFAULT_FILTERS, availableOnly: false }, memberIds)
+			: present.length
+				? gamesAtHand(filterGames(payload.games, { ...DEFAULT_FILTERS, availableOnly: false }, memberIds), new Set(present))
+				: filterGames(payload.games, { ...DEFAULT_FILTERS, availableOnly: true }, memberIds);
 		const main = new Set(suggestions.map((g) => g.id));
 		return atHand.filter((g) => isFiller(g) && !main.has(g.id));
 	});
@@ -100,7 +123,7 @@
 		try {
 			payload = await fetchCatalog(data.group.id);
 			// A shared link wins; otherwise this device's "who's here" for this group, if it's from tonight.
-			table.load(data.group.id);
+			table.load(data.group.id, tonightSeed(nightOn(data.nights, nightOf(Date.now())), new Set(data.tableMembers.map((m) => m.id))));
 			readSetup(page.url.searchParams);
 			restored = true;
 		} catch (e) {
@@ -180,6 +203,48 @@
 </script>
 
 <div class="pick">
+	<section class="nights" aria-labelledby="nights-h">
+		<div class="nights-head">
+			<h2 id="nights-h">Game nights</h2>
+			{#if data.mayPlanNights}<a class="btn" href="/g/{data.group.id}/nights/new"><CalendarPlus size={18} aria-hidden="true" /> Plan a night</a>{/if}
+		</div>
+		{#if tonight}
+			{@const host = nameOf(tonight.hostId)}
+			<a class="night-card tonight" href="/g/{data.group.id}/nights/{tonight.id}">
+				<span class="when">Tonight{tonight.startsAt ? `, ${tonight.startsAt}` : ''}</span>
+				<strong>{tonight.name}</strong>
+				<span class="muted"
+					>{goingMembers(tonight, tableIds).length + nightGuests(tonight).length} going · {tonight.games.filter((g) => !g.stayedHome).length} games brought{host
+						? ` · at ${host}’s`
+						: ''}</span
+				>
+			</a>
+		{/if}
+		{#if upcoming.length}
+			<ul class="upcoming">
+				{#each upcoming as n (n.id)}
+					{@const me = data.myId ? n.people.find((p) => p.userId === data.myId) : undefined}
+					<li>
+						<a class="night-card" href="/g/{data.group.id}/nights/{n.id}">
+							<span class="when">{nightDate(n.nightOn)}{n.startsAt ? `, ${n.startsAt}` : ''}</span>
+							<strong>{n.name}</strong>
+							<span class="muted"
+								>{goingMembers(n, tableIds).length + nightGuests(n).length} going · {n.games.length} to bring{me
+									? me.going
+										? ' · you’re going'
+										: ' · you can’t make it'
+									: ''}</span
+							>
+						</a>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+		{#if !tonight && !upcoming.length}
+			<p class="muted">No nights planned. Plan one to say who's coming and what they'll bring; on the night, Play tonight picks from those games.</p>
+		{/if}
+	</section>
+
 	{#if loadError}
 		<p class="banner error">{loadError}</p>
 	{:else if !payload}
@@ -200,12 +265,19 @@
 	{:else}
 		<section class="setup" aria-label="Who's playing">
 			<div class="who">
-				<h2>Who's here?</h2>
+				<h2>{tonight ? `Play tonight: ${tonight.name}` : 'Play tonight'}</h2>
+				<h3 class="who-h">Who's here?</h3>
 				<WhosHere members={payload.members} {table} />
 				<p class="hint">
-					{present.length
-						? `Only games ${present.length === 1 ? 'they' : 'these members'} brought or borrowed.`
-						: `No members ticked: the whole shelf counts.`}{table.guests.length ? ' Guests count as players.' : ''}
+					{#if tonight}
+						{@const host = nameOf(tonight.hostId)}
+						Picking from tonight’s {pool?.length ?? 0} games: what people brought{host ? ` and ${host}’s shelf` : ''}. Untick anything that stayed home on
+						<a href="/g/{data.group.id}/nights/{tonight.id}">the night’s page</a>.
+					{:else if present.length}
+						No game night today, so this picks from everything {present.length === 1 ? 'they own' : 'these members own'}, as if their shelves were here.
+					{:else}
+						No members ticked: the whole shelf counts.
+					{/if}{table.guests.length ? ' Guests count as players.' : ''}
 				</p>
 			</div>
 
@@ -344,6 +416,58 @@
 </div>
 
 <style>
+	.nights {
+		display: grid;
+		gap: var(--s-3);
+	}
+	.nights-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--s-3);
+	}
+	.nights-head h2 {
+		margin: 0;
+	}
+	.upcoming {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+		gap: var(--s-3);
+	}
+	.night-card {
+		display: grid;
+		gap: 2px;
+		padding: var(--s-3) var(--s-4);
+		background: var(--cube);
+		border: 1px solid var(--rule);
+		border-radius: 10px;
+		color: var(--ink);
+		text-decoration: none;
+	}
+	.night-card:hover {
+		border-color: var(--ink-3);
+	}
+	.night-card strong {
+		font-size: var(--t-lead);
+	}
+	.night-card .when {
+		font-size: var(--t-small);
+		font-weight: 650;
+		color: var(--ink-2);
+	}
+	/* Tonight is the night in use, so it carries the state colour. */
+	.night-card.tonight {
+		border-color: var(--mark);
+		box-shadow: inset 4px 0 0 var(--mark);
+	}
+	.who-h {
+		margin: var(--s-2) 0 var(--s-3);
+		font-size: var(--t-body);
+	}
 	.pick {
 		display: grid;
 		/* One column the width of the screen: without minmax(0, …) the widest result row stretches it. */

@@ -13,7 +13,10 @@ export type GroupAction =
 	| 'delete_group'
 	| 'leave'
 	| 'change_play'
-	| 'set_points';
+	| 'set_points'
+	| 'plan_night'
+	| 'change_night'
+	| 'set_night_planners';
 
 export type PermissionContext = {
 	/** Role of the member being acted on, for member-targeted actions. */
@@ -22,6 +25,8 @@ export type PermissionContext = {
 	targetIsSelf?: boolean;
 	/** Members in the group other than the actor, for `leave`. */
 	otherMembers?: number;
+	/** For `plan_night`: the group lets any member plan nights (its `nights_by` setting). */
+	openToMembers?: boolean;
 };
 
 const RANK: Record<Role, number> = { member: 0, admin: 1, owner: 2 };
@@ -31,13 +36,19 @@ export function atLeast(role: Role, min: Role): boolean {
 }
 
 export function can(actor: Role, action: GroupAction, ctx: PermissionContext = {}): boolean {
-	const { targetRole, targetIsSelf = false, otherMembers = 0 } = ctx;
+	const { targetRole, targetIsSelf = false, otherMembers = 0, openToMembers = true } = ctx;
 	switch (action) {
 		case 'rename':
 		case 'regenerate_code':
 		case 'delete_any_link':
 		case 'set_points':
+		case 'set_night_planners':
 			return atLeast(actor, 'admin');
+		case 'plan_night':
+			return openToMembers || atLeast(actor, 'admin');
+		case 'change_night':
+			// targetIsSelf: the actor planned the night.
+			return targetIsSelf || atLeast(actor, 'admin');
 		case 'change_play':
 			return targetIsSelf || atLeast(actor, 'admin');
 		case 'remove_member':

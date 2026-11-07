@@ -61,13 +61,28 @@ export class Table implements HereSelection {
 		return `bp:regulars:${this.groupId}`;
 	}
 
-	/** Reads this device's table for a group. Called again whenever a view opens, so a stale table expires. */
-	load(groupId: string) {
+	/** Which night's list last seeded this table, so a later change to the night reseeds it. */
+	private seed: string | undefined;
+
+	/**
+	 * Reads this device's table for a group. Called again whenever a view opens, so a stale table
+	 * expires. On a game night's date, `tonight` seeds it from the night's going list (D38) unless the
+	 * device already holds that same list, so ticks made at the table stay until the night changes.
+	 */
+	load(groupId: string, tonight: { key: string; members: string[]; guests: string[] } | null = null) {
 		this.groupId = groupId;
 		const here = parseHere(storage.get(this.key), Date.now());
-		this.members = here.members;
-		this.guests = here.guests;
 		this.regulars = parseRegulars(storage.get(this.regularsKey));
+		if (tonight && here.seed !== tonight.key) {
+			this.members = [...tonight.members];
+			this.guests = [...tonight.guests];
+			this.seed = tonight.key;
+			this.save();
+		} else {
+			this.members = here.members;
+			this.guests = here.guests;
+			this.seed = here.seed;
+		}
 		this.loads += 1;
 	}
 
@@ -101,7 +116,7 @@ export class Table implements HereSelection {
 	}
 
 	private save() {
-		if (this.groupId) storage.set(this.key, serializeHere({ members: this.members, guests: this.guests }, Date.now()));
+		if (this.groupId) storage.set(this.key, serializeHere({ members: this.members, guests: this.guests, seed: this.seed }, Date.now()));
 	}
 
 	private recordNights(ids: readonly string[], here: boolean) {

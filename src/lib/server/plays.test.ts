@@ -85,11 +85,11 @@ describe('play rules', () => {
 			[3, 2, 1],
 			(id) => (id === 'ada' ? 'Ada' : null)
 		);
-		expect(csv.startsWith('﻿date,game,game_data_from,bgg_id,play_id,player,player_type,place,score,won,coop_result,points\r\n')).toBe(true);
+		expect(csv.startsWith('﻿date,game_night,game,game_data_from,bgg_id,play_id,player,player_type,place,score,won,coop_result,points\r\n')).toBe(true);
 		const lines = csv.slice(1).trim().split('\r\n');
-		expect(lines[1]).toBe('2026-11-07,"Alpha, the ""Game""",typed in,,p1,Ada,member,1,40,yes,,3');
-		expect(lines[2]).toBe(`2026-11-07,"Alpha, the ""Game""",typed in,,p1,'=cmd(),guest,2,30,no,,0`);
-		expect(lines[3]).toBe("2026-11-07,'=Typed,typed in,,p2,a former member,former member,,,no,lost,");
+		expect(lines[1]).toBe('2026-11-07,,"Alpha, the ""Game""",typed in,,p1,Ada,member,1,40,yes,,3');
+		expect(lines[2]).toBe(`2026-11-07,,"Alpha, the ""Game""",typed in,,p1,'=cmd(),guest,2,30,no,,0`);
+		expect(lines[3]).toBe("2026-11-07,,'=Typed,typed in,,p2,a former member,former member,,,no,lost,");
 		expect(csvField(-5)).toBe('-5');
 		expect(csvField('-5')).toBe("'-5");
 	});
@@ -104,8 +104,8 @@ describe('play rules', () => {
 			() => 'Ada'
 		);
 		const lines = csv.slice(1).trim().split('\r\n');
-		expect(lines[1].startsWith('2026-11-07,-ism,BoardGameGeek,13,b,')).toBe(true);
-		expect(lines[2].startsWith('2026-11-07,Wiki,Wikidata,13,w,')).toBe(true);
+		expect(lines[1].startsWith('2026-11-07,,-ism,BoardGameGeek,13,b,')).toBe(true);
+		expect(lines[2].startsWith('2026-11-07,,Wiki,Wikidata,13,w,')).toBe(true);
 		expect(playsCsv([play({ players: [p('ada', 1)] })], [3, 2, 1], () => 'Ada')).not.toContain('BoardGameGeek');
 	});
 });
@@ -129,6 +129,7 @@ describe('the log form', () => {
 				playedOn: '2026-11-07',
 				coop: null,
 				lowestWins: false,
+				nightId: null,
 				players: [
 					{ userId: 'ada', guestName: null, score: 12, place: 2 },
 					{ userId: null, guestName: 'Sam', score: 20, place: 1 }

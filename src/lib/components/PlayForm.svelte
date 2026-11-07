@@ -13,13 +13,15 @@
 	import { Selection, type Table } from '#lib/table/table.svelte.ts';
 
 	type Member = { id: string; name: string; colorIndex: number };
-	type Initial = { id: string; playedOn: string; coop: Coop | null; lowestWins: boolean; players: PlayPlayer[] };
+	type Initial = { id: string; playedOn: string; coop: Coop | null; lowestWins: boolean; players: PlayPlayer[]; night?: { id: string } | null };
 	let {
 		action,
 		game,
 		members,
 		table,
 		initial = null,
+		nightId = null,
+		people = null,
 		ondone
 	}: {
 		action: string;
@@ -27,6 +29,10 @@
 		members: Member[];
 		table: Table;
 		initial?: Initial | null;
+		/** The game night a new play belongs to (D38); an edit keeps the play's own. */
+		nightId?: string | null;
+		/** Who to start from instead of tonight's who's here, such as a night's going list. */
+		people?: { members: string[]; guests: string[] } | null;
 		/** Called with true after a save, false on Cancel. */
 		ondone: (saved: boolean) => void;
 	} = $props();
@@ -49,8 +55,8 @@
 						table.regulars
 					)
 				: new Selection(
-						table.members.filter((m) => memberIds.has(m)),
-						table.guests,
+						(people?.members ?? table.members).filter((m) => memberIds.has(m)),
+						people?.guests ?? table.guests,
 						table.regulars
 					),
 			playedOn: initial?.playedOn ?? today,
@@ -107,6 +113,7 @@
 <form method="POST" {action} use:enhance={submit} class="play-form">
 	<input type="hidden" name="gameId" value={game.id} />
 	{#if initial}<input type="hidden" name="playId" value={initial.id} />{/if}
+	{#if (initial ? initial.night?.id : nightId)}<input type="hidden" name="nightId" value={initial ? initial.night?.id : nightId} />{/if}
 
 	<label class="date">
 		<span>Played on</span>

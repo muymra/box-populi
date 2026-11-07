@@ -1,7 +1,7 @@
 // "Who's here" on this device (PRD "Picker" and "At the table"). Pure: the caller supplies storage
 // and the clock. Members are ticked by id; guests are names typed in for people without an account.
 
-export type Here = { members: string[]; guests: string[] };
+export type Here = { members: string[]; guests: string[]; seed?: string };
 
 /** Who's here resets this long after the last change, so last week's table doesn't carry over. */
 export const HERE_TTL_MS = 12 * 60 * 60 * 1000;
@@ -22,13 +22,14 @@ export function parseHere(raw: string | null, now: number): Here {
 		return EMPTY_HERE;
 	}
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return EMPTY_HERE;
-	const { members, guests, at } = value as Record<string, unknown>;
+	const { members, guests, at, seed } = value as Record<string, unknown>;
 	if (typeof at !== 'number' || !(now - at < HERE_TTL_MS) || at > now + HERE_TTL_MS) return EMPTY_HERE;
-	return { members: [...new Set(strings(members))], guests: cleanGuests(strings(guests)) };
+	const here: Here = { members: [...new Set(strings(members))], guests: cleanGuests(strings(guests)) };
+	return typeof seed === 'string' ? { ...here, seed } : here;
 }
 
 export function serializeHere(here: Here, now: number): string {
-	return JSON.stringify({ members: here.members, guests: here.guests, at: now });
+	return JSON.stringify({ members: here.members, guests: here.guests, at: now, ...(here.seed ? { seed: here.seed } : {}) });
 }
 
 /** A guest's name with spaces tidied and the length capped, or null when nothing is left. */

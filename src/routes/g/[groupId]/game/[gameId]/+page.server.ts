@@ -51,13 +51,16 @@ export const load: PageServerLoad = async (event) => {
 	const gameId = Number(event.params.gameId);
 	if (!Number.isInteger(gameId) || gameId <= 0) error(404, 'Game not found');
 
-	// Only games this group owns or wants are visible here: the cache is shared across groups, and
-	// hand-entered titles from other groups shouldn't be readable by guessing ids.
+	// Only games this group owns, wants, brings to a night or has played are visible here: the cache
+	// is shared across groups, and hand-entered titles from other groups shouldn't be readable by
+	// guessing ids (same rule as gameVisibleInGroup).
 	const shared = await one<GameDetail>(
 		db,
 		`SELECT g.* FROM games g WHERE g.id = ?2 AND (
 			EXISTS (SELECT 1 FROM copies c JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1 WHERE c.game_id = g.id)
-			OR EXISTS (SELECT 1 FROM wishlist w JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1 WHERE w.game_id = g.id))`,
+			OR EXISTS (SELECT 1 FROM wishlist w JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1 WHERE w.game_id = g.id)
+			OR EXISTS (SELECT 1 FROM night_games ng JOIN game_nights n ON n.id = ng.night_id AND n.group_id = ?1 WHERE ng.game_id = g.id)
+			OR EXISTS (SELECT 1 FROM plays p WHERE p.group_id = ?1 AND p.game_id = g.id))`,
 		groupId,
 		gameId
 	);
@@ -165,6 +168,8 @@ export const load: PageServerLoad = async (event) => {
 		playCount: plays.length,
 		mostWins: topId ? { name: nameOf(topId) ?? '', wins: topWins } : null,
 		canLog: canEdit && owners.length > 0,
+		// For attaching a play to tonight's game night when the game is in its pool (D38).
+		ownerIds: owners.map((o) => o.user_id),
 		mine,
 		wanted,
 		canEditDetails,

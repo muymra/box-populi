@@ -63,7 +63,8 @@ box-populi/
   vercel.json  netlify.toml     the Vercel and Netlify targets
   package.json  vite.config.ts  tsconfig.json  pnpm-workspace.yaml
   migrations/                   0001_init (schema below), 0002_game_sources, 0003_group_theme,
-                                0004_instance_settings, 0005_game_corrections, 0006_plays
+                                0004_instance_settings, 0005_game_corrections, 0006_plays,
+                                0007_game_nights
   scripts/
     ensure-local-config.ts      creates the two gitignored config files on install
     seed-demo.ts                writes seed/demo.sql
@@ -79,6 +80,7 @@ box-populi/
       project.ts                the source repository's address
       time.ts                   coarse "active 3 weeks ago"
       plays.ts                  play log rules: places, podium points, standings, the CSV
+      nights.ts                 game night rules: tonight's pool, who's going, the chat text, tonight's seed
       catalog/                  pure TS: runs in browser, server and tests
         types.ts                CatalogPayload and friends
         colors.ts               player colours (by join order) and box-front colours
@@ -97,7 +99,7 @@ box-populi/
         random.ts               randomInt(): crypto.getRandomValues without modulo bias
       components/               BoxFront, Cube, OwnerEdge, ListRow (Spines view), CubeMark, CheckList,
                                 BggCredit, PersonalLink, CopyButton, ThemePicker, ImportPanel,
-                                HydrateProgress, ListPanel, Modal, WhosHere, StartPlayer, DiceRoller, PlayForm, PlayList
+                                HydrateProgress, ListPanel, Modal, WhosHere, StartPlayer, DiceRoller, PlayForm, PlayList, NightFields
       server/                   server-only (SvelteKit 3 treats any `server` directory so)
         platform.ts             Cloudflare (Pages and Workers), the only importer of `cloudflare:workers`: getDb(), getConfig(), afterResponse()
         platform.node.ts        the same three for Node and Docker: a SQLite file (BOX_TARGET=node)
@@ -127,6 +129,7 @@ box-populi/
         lending.ts              lending, returns, and the account page's loans
         plays.ts                the play log: form parsing, save, edit, delete, load, podium points
         play-actions.ts         the play log's form actions, shared by the plays and game pages
+        nights.ts               game nights: plan, edit, delete, who's going, guests, bring list, load
         ratelimit.ts            rate_events: take() and giveBack(), cleanup of rows older than a day
         admin.ts                instance admin: key check, signed cookie, totals, groups table, actions
         appearance.ts           the custom theme and logo set on /admin
@@ -200,6 +203,7 @@ Bindings and variables come from `import { env } from 'cloudflare:workers'` (Sve
 - `0004_instance_settings.sql`: the one-row `instance_settings` table (custom colours, whether they're the default, the logo address).
 - `0005_game_corrections.sql`: `game_corrections`, each group's corrections to a non-BGG game (D35; shown after `wishlist` below).
 - `0006_plays.sql`: `plays`, `play_players` and `groups.podium_points`, the play log (D37; shown after `game_links` below).
+- `0007_game_nights.sql`: `game_nights`, `night_people`, `night_games`, `plays.night_id` and `groups.nights_by` (D38; shown after the play log below).
 
 Timestamps are Unix milliseconds. JSON columns hold arrays and are written and read only through helpers in `db.ts`.
 
@@ -321,6 +325,13 @@ CREATE INDEX game_links_lookup ON game_links(group_id, game_id);
 -- played_on (YYYY-MM-DD), coop ('won', 'lost' or NULL for competitive), lowest_wins, logged_by,
 -- created_at. play_players: (play_id, seat) with either user_id or guest_name, place (NULL for
 -- co-op) and score. groups.podium_points: "3,2,1" style, NULL for the default.
+
+-- migrations/0007_game_nights.sql: game nights (D38). game_nights: id (random text), group_id,
+-- name, night_on (YYYY-MM-DD), starts_at (HH:MM or NULL), host_id (a member whose shelf counts, or
+-- NULL for somewhere else), created_by, created_at. night_people: a member (user_id, going 1 or 0)
+-- or a guest (guest_name), unique per night. night_games: (night_id, game_id) with brought_by (a
+-- member) or guest_name, added_by and stayed_home. plays.night_id: the night a play belongs to.
+-- groups.nights_by: 'members' (default) or 'admins'.
 
 -- rate limiting: subject is a user id, or 'ip:<address>' before a person exists
 CREATE TABLE rate_events (
@@ -749,6 +760,20 @@ Two icon-only buttons in the group bar open modals (`Modal.svelte`, a native `<d
 - **Start player:** one person from the ticked members and the guests, with at least two needed. The choice is made first; then a reel of at least 24 names (the table repeated, ending on the pick, plus two after it) scrolls up with the Web Animations API over 2.3 s, overshoots by a fifth of a row and settles. Under reduced motion the pick shows at once.
 - **Dice:** a pool of up to 20 dice from d4, d6, d8, d10, d12 and d20, starting with one d6. Changing the pool starts fresh dice. A rolled die can be held (kept) for the next roll. The total shows once every die has a number. A coin flip sits under the dice. The five newest results, dice and coins together, are listed under "Recent"; they live in memory only.
 
+## Game nights
+
+`src/lib/nights.ts` holds the rules: `nightPoolIds()` (the bring list minus anything that stayed home or whose bringer left the group, plus the host's own copies not lent out), `goingMembers()`, `nightGuests()`, `nightOn()` (the night whose date is the viewer's tonight), `tonightSeed()` and `chatText()`. `src/lib/server/nights.ts` does the writing and reading, every function scoped to the group:
+
+- **Planning:** `createNight` checks `can(role, 'plan_night', { openToMembers })`, with `openToMembers` from `groups.nights_by`; the planner is marked going. `updateNight` and `deleteNight` need `change_night` (the planner, or co-admins and the owner). Deleting a night sets its plays' `night_id` to NULL and removes its people and games.
+- **Who's going:** `setGoing` lets anyone answer for themselves and the planner or co-admins for others. Guests are added and removed by any member; removing a guest takes their games off the list.
+- **The bring list:** `bringCopy` needs the actor going (or the planner or a co-admin), the owner going and holding a copy; one entry per game per night. `bringOther` adds a game by title for a going member or a listed guest: it reuses a game the group already sees under exactly that title (`instr` on `search_text`, since D1 refuses long `LIKE` patterns), or makes a hand-entered game with no copy. `unbring` is for whoever brings or added it, the planner and co-admins. `setStayedHome` is open to any member.
+- **Visibility:** a game on a group's night or in its play log is visible to that group (`gameVisibleInGroup`, `usableGames` and the game page's query), so a guest's game has a page.
+- **Loading:** `loadNights` returns nights with their people and games in three queries. The group layout loads nights from yesterday on, plus `nightOnlyGames()` (games on nights around today that no member owns, shaped like catalog games with one copy owned by "guest"), and whether the viewer may plan. The browser picks tonight with `nightOf(now)`, so the server's timezone doesn't matter.
+
+On a night's date, Play tonight draws from `nightPoolIds()` plus the night-only games, with no ownership or lending filter, and who's here is seeded from the night: `Table.load(groupId, tonightSeed(night))` replaces the device's who's here when the night's going list differs from the one it last seeded from (the `seed` key stored with it), so ticks made at the table survive until the night changes. The game page attaches a play to tonight's night when the game is on its list or the host owns it; the night page's "Log a play" picks from the pool and starts from the going list.
+
+The play log groups plays by night: the plays page loads nights for the period (up to tomorrow) and lists each with its plays, nights with none included, and plays outside any night by date. `savePlay` accepts a `nightId` and lets a play of a game on that night's list through even when no member owns it (D38). The export's `game_night` column holds the night's name.
+
 ## Play log
 
 `src/lib/plays.ts` holds the rules, shared by the pages and the tests: `placesFromScores()` (competition ranking, missing scores last), `fillPlaces()` (unplaced players share the place after the last one given), `playPoints()` (a player scores only if someone finished below), `isWin()`, `standings()` (members only; points, then wins, then fewer plays), `parsePoints()` and `playsCsv()`.
@@ -796,6 +821,8 @@ The demo seed invents 140 plays over 14 months with weighted skill per member, a
 | `/g/[groupId]/game/[gameId]` | Game page: details, owners, links, wishlisters, expansions. | `requireRead` |
 | `/g/[groupId]/add` | BGG search, manual entry, import. | `requireRole(member)` |
 | `/g/[groupId]/pick` | Picker. | `requireRead` |
+| `/g/[groupId]/nights/new` | Plan a game night (name, date, start time, where). | `requireRole(member)` and `can('plan_night')` by the group's `nights_by` |
+| `/g/[groupId]/nights/[nightId]` | One game night: who's going, guests, the bring list, suggestions, what stayed home, its plays. Actions `edit`, `delete`, `going`, `addGuest`, `removeGuest`, `bring`, `bringOther`, `unbring`, `stayedHome`. | `requireRead`; actions `requireRole(member)` plus the night rules in "Game nights" |
 | `/g/[groupId]/plays` | The play log: leaderboard (`?period=all` for all time), plays, points setting, export. Actions `logPlay`, `editPlay`, `deletePlay` (also used by the game page's forms) and `points`. | `requireRead`; plays `requireRole(member)` plus `canChangePlay`; `points` `requireRole(admin)` |
 | `GET /g/[groupId]/plays/export.csv` | The plays as CSV (`who=me|all`, `period=year|all`), a download for people, no CORS. | `requireRead`; `who=me` needs membership |
 | `/g/[groupId]/wanted` | The Wanted tab: games members want that nobody in the group owns, with who wants each and a "Me too" toggle. Wishes are set by the `want` action here, on the game page and on the add page (`on=0` removes). | `requireRead`; `want` needs `requireRole(member)` |

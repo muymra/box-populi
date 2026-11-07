@@ -24,8 +24,8 @@
 	const GETS = [
 		['One shelf for everyone', 'Each member adds the games they own once, and they show in every group they’re in, with who owns which copy.'],
 		['Filters for game night', 'Players, time, complexity, mechanics, themes, owner, and whether a copy is lent out. A filtered view is a link you can share.'],
-		['Play tonight', 'Tick who showed up, guests included, and get three games from what they own, weighted towards ones that play best at that count, plus quick fillers for while others arrive, split across tables when the group is too big for one.'],
-		['A play log', 'Note who played what and how it ended, with scores if you like. Podium points feed a leaderboard for the year, just for fun, and the plays download as a spreadsheet.'],
+		['Game nights', 'Plan a night, say who’s coming and what each person brings, and copy it to the group chat. On the night, Play tonight picks three games from what’s actually there, weighted towards ones that play best at that count, plus quick fillers, split across tables when the group is too big for one.'],
+		['A play log', 'Note who played what and how it ended, with scores if you like, kept with the night it happened. Podium points feed a leaderboard for the year, just for fun, and the plays download as a spreadsheet.'],
 		['At the table', 'Buttons at the top pick who goes first with a slot machine spin, roll any mix of dice (keep some, roll the rest) and flip a coin.'],
 		['Wanted and lending', 'Wishlists, a list of games someone wants and nobody in the group owns yet, and who has whose copy.'],
 		['Rules and tutorials', 'Members add rulebook and video links to each game, so the group stops searching for them every time.'],
@@ -64,7 +64,7 @@
 				<ul class="tries">
 					<li><a href="/demo">Filter the shelf</a> by players, time and complexity</li>
 					<li>Open a game to see who owns it and where its rules are</li>
-					<li>Let <a href="/g/demo/pick">Play tonight</a> pull three games for whoever showed up</li>
+					<li>See the demo group’s <a href="/g/demo/pick">next game night</a>: who’s coming and what they’re bringing</li>
 					<li>See who leads the demo group’s <a href="/g/demo/plays">leaderboard</a>, or spin for who goes first</li>
 					<li>Try another of the twelve colour themes at the bottom of the page</li>
 				</ul>

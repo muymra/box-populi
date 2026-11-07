@@ -14,6 +14,8 @@ export type Play = {
 	playedOn: string;
 	coop: Coop | null;
 	players: PlayPlayer[];
+	/** The game night it belongs to, if any (D38). */
+	night?: { id: string; name: string } | null;
 };
 
 export const DEFAULT_POINTS = [3, 2, 1];
@@ -111,7 +113,7 @@ export function csvField(value: string | number | null, verbatim = false): strin
 
 const SOURCE_LABEL: Record<GameSource, string> = { bgg: 'BoardGameGeek', wikidata: 'Wikidata', manual: 'typed in' };
 
-export const CSV_COLUMNS = ['date', 'game', 'game_data_from', 'bgg_id', 'play_id', 'player', 'player_type', 'place', 'score', 'won', 'coop_result', 'points'];
+export const CSV_COLUMNS = ['date', 'game_night', 'game', 'game_data_from', 'bgg_id', 'play_id', 'player', 'player_type', 'place', 'score', 'won', 'coop_result', 'points'];
 
 /**
  * The export: one row per player per play, newest play first. `nameOf` gives a member's name, or
@@ -131,6 +133,7 @@ export function playsCsv(plays: readonly Play[], scheme: readonly number[], name
 			lines.push(
 				[
 					csvField(play.playedOn),
+					csvField(play.night?.name ?? null),
 					csvField(play.gameName, bgg),
 					// BGG is named on the rows that carry its data, and nowhere else.
 					csvField(SOURCE_LABEL[play.gameSource]),

@@ -19,6 +19,8 @@
 	import PlayForm from '#lib/components/PlayForm.svelte';
 	import PlayList from '#lib/components/PlayList.svelte';
 	import { getTable } from '#lib/table/table.svelte.ts';
+	import { nightOn } from '#lib/nights.ts';
+	import { nightOf } from '#lib/table/regulars.ts';
 	import { guessKind, KIND_LABELS, LINK_KINDS, type LinkKind } from '#lib/link-kinds.ts';
 	import BoxFront from '#lib/components/BoxFront.svelte';
 	import { BUCKET_LABELS, formatPlaytime, formatWeight, weightBucket } from '#lib/catalog/buckets.ts';
@@ -33,6 +35,13 @@
 	// Logging a play (PRD "Play log"). "We played this" in the picker links here with ?log=1.
 	let logOpen = $state(false);
 	let logged = $state(false);
+	// Tonight's game night, when this game is in its pool: on its bring list, or the host's own copy.
+	const tonight = $derived.by(() => {
+		const night = nightOn(data.nights, nightOf(Date.now()));
+		if (!night) return null;
+		const brought = night.games.some((n) => n.gameId === data.game.id && !n.stayedHome);
+		return brought || (night.hostId != null && data.ownerIds.includes(night.hostId)) ? night : null;
+	});
 	onMount(() => {
 		if (page.url.searchParams.get('log') !== '1') return;
 		if (data.canLog) logOpen = true;
@@ -309,6 +318,7 @@
 				game={{ id: g.id, name: g.name }}
 				members={data.tableMembers}
 				{table}
+				nightId={tonight?.id ?? null}
 				ondone={(saved) => {
 					logOpen = false;
 					logged = saved;

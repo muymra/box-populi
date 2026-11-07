@@ -28,7 +28,7 @@ Success means Carlo's own group uses it to choose the game for a real night, ano
 
 Lead claim (confirmed): **one shared shelf.** The whole group's collections are pooled into one catalog that answers "who owns what" and "what fits five players in under an hour." BoardGameGeek shows one person's collection and has no notion of a group catalog.
 
-Supporting claims, in order: the "who's here" picker, which suggests from the games physically at the table; and no accounts with self-hosting, where you join with a code and a name and your group's data stays on your own instance.
+Supporting claims, in order: game nights and the "who's here" picker, which plan who brings what and then suggest from the games actually at the table (D38); and no accounts with self-hosting, where you join with a code and a name and your group's data stays on your own instance.
 
 ## Operating Context
 
@@ -45,10 +45,10 @@ Supporting claims, in order: the "who's here" picker, which suggests from the ga
   - create and join groups, with roles and group settings;
   - catalog with filters;
   - game pages with rules and video links;
-  - the picker, with guests, fillers and split tables;
+  - game nights: who's going and what they'll bring, and on the night the picker, with guests, fillers and split tables, choosing from what's there;
   - adding games through BGG search, collection import, Wikidata search, a pasted list or by hand;
   - wishlist and the Wanted view, and lending;
-  - the play log with a leaderboard and CSV export;
+  - the play log with a leaderboard and CSV export, grouped by game night;
   - who goes first and dice;
   - themes, the instance admin page, and the public demo group.
 - **Planned:** see STATUS.md "Next up" and the PRD's stretch list.
@@ -62,7 +62,7 @@ Supporting claims, in order: the "who's here" picker, which suggests from the ga
   - no AI training on BGG data.
 - **Self-hosted** on Cloudflare Pages and D1 on the free tier, or on Workers, Docker, Vercel or Netlify (D32); open source (MIT) at github.com/muymra/box-populi. Each hoster uses their own BGG application, or none (D28, D31).
 - **Scale per group:** up to 50 members, 1,500 distinct games, 4,000 copies.
-- **Terminology** used in the UI and docs: group, member, owner, co-admin, copy, catalog (the shelf), join code, invite link, personal link, Play tonight (the picker), who's here, guest, filler, Wanted, play, leaderboard.
+- **Terminology** used in the UI and docs: group, member, owner, co-admin, copy, catalog (the shelf), join code, invite link, personal link, game night, bring list, Play tonight (the picker), who's here, guest, filler, Wanted, play, leaderboard.
 
 ## Brand Commitments
 

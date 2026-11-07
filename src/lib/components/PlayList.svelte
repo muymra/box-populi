@@ -20,6 +20,7 @@
 		lowestWins: boolean;
 		players: PlayPlayer[];
 		canChange: boolean;
+		night?: { id: string; name: string } | null;
 	};
 	let {
 		plays,

@@ -10,8 +10,8 @@ A shared shelf for your board game group. Everyone adds the games they own, and 
 
 - **One shelf for everyone's games.** Each box has a coloured line for each friend who owns it.
 - **Finding something to play.** Pick "4 players" and "fits in an hour", add "not too heavy" if you like, and the shelf shows only what fits.
-- **Play tonight.** Tick who showed up, including friends who aren't in the group, and it suggests three games from what those people own. Add quick fillers for while others arrive; if the group is too big for any of them, it splits you across tables.
-- **Play log.** Note who played what and who won, with scores if you like. A leaderboard with points for the podium, just for fun, and a spreadsheet download of your plays.
+- **Game night.** Plan a night, see who's coming and what they'll bring, and copy it all to the group chat. On the night, Play tonight suggests three games from what's actually there, guests' games included, plus quick fillers for while others arrive, split across tables if the group is too big for any of them.
+- **Play log.** Note who played what and who won, with scores if you like, kept with the night you played them. A leaderboard with points for the podium, just for fun, and a spreadsheet download of your plays.
 - **At the table.** Buttons at the top pick who goes first from the people there, guests included, and roll any mix of dice or flip a coin.
 - **Wishlists and lending.** See which games someone wants that nobody in the group has yet, and who borrowed whose copy.
 - **Rulebooks and videos.** Save the links once, next to the game, for everyone.
@@ -22,13 +22,15 @@ A shared shelf for your board game group. Everyone adds the games they own, and 
 |---|---|
 | ![The shelf on a phone, with tabs along the bottom](docs/screenshots/shelf-phone.png) | ![A game's page on a phone in dark mode: players, play time, complexity, who owns it, and a how-to-play link](docs/screenshots/game-phone-dark.png) |
 
-![Play tonight: Ada, Bram and Chen ticked as here, three games suggested from what they own, and a row of quick fillers below](docs/screenshots/picker-desktop.png)
+![The Game night tab: the next planned night at the top, then Play tonight with Ada, Bram and Chen ticked as here, three games suggested from what they own, and quick fillers below](docs/screenshots/picker-desktop.png)
+
+![A planned game night at a café: who's going, a guest, and who's bringing which games](docs/screenshots/game-night-desktop.png)
 
 ![The demo group's leaderboard: members ranked by podium points, with their wins and plays, and the latest plays listed below](docs/screenshots/plays-desktop.png)
 
 | | |
 |---|---|
-| ![Who goes first on a phone: Ada, Bram, Chen and a guest, Sam, are here, and the reel has stopped on Bram](docs/screenshots/start-player-phone.png) | ![The dice on a phone in dark mode: two six-sided dice and a twenty-sided one, one die kept, a total of 11, a coin flip and the recent rolls](docs/screenshots/dice-phone-dark.png) |
+| ![Who goes first on a phone: Ada, Bram, Chen and a guest, Sam, are here, and the reel has stopped on Sam](docs/screenshots/start-player-phone.png) | ![The dice on a phone in dark mode: two six-sided dice and a twenty-sided one, one die kept, the total, a coin flip and the recent rolls](docs/screenshots/dice-phone-dark.png) |
 
 ![The same shelf in a different colour theme, filtered to games for 4 players that fit in an hour](docs/screenshots/themes-desktop.png)
 
