@@ -26,9 +26,9 @@ A shared shelf for your board game group. Everyone adds the games they own, and 
 
 ![The Game night tab: the next planned night at the top, then Play tonight with Ada, Bram and Chen ticked as here, three games suggested from what they own, and quick fillers below](docs/screenshots/picker-desktop.png)
 
-![A planned game night at a café: who's going, a guest, and who's bringing which games](docs/screenshots/game-night-desktop.png)
+![A planned game night at a café: who's going, a guest, and the start of the list of who's bringing which games](docs/screenshots/game-night-desktop.png)
 
-![The demo group's leaderboard: members ranked by podium points, with their wins and plays, and the latest plays listed below](docs/screenshots/plays-desktop.png)
+![The demo group's leaderboard: the top three on a podium with their points, wins and plays, the rest in a table below, then the start of the plays timeline](docs/screenshots/plays-desktop.png)
 
 | | |
 |---|---|
