@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '$app/forms';
 	import { page } from '$app/state';
@@ -50,6 +51,16 @@
 		const q = query.trim().toLocaleLowerCase();
 		return q ? data.members.filter((m) => m.name.toLocaleLowerCase().includes(q)) : data.members;
 	});
+	// Deleting for good (D50): the button waits for the typed name once the page is running; without
+	// JavaScript the server checks it.
+	let deleteOpen = $state(false);
+	$effect(() => {
+		if (form?.deleteError) deleteOpen = true;
+	});
+	let deleteTyped = $state('');
+	let hydrated = $state(false);
+	onMount(() => (hydrated = true));
+	const sameName = (typed: string, name: string) => typed.replace(/\s+/g, ' ').trim().toLocaleLowerCase() === name.toLocaleLowerCase();
 </script>
 
 <div class="group-page">
@@ -132,7 +143,7 @@
 											<span class="sign-in-code num">{codeHere.code}</span>
 											<span class="muted code-note">
 												Works once, until {new Date(codeHere.expiresAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}. Give it to {m.name}
-												yourself: at the group’s link they tap their name and choose “use a code from an admin”.
+												yourself: at the group’s link they tap their name and choose “use a sign-in code”.
 											</span>
 										{:else}
 											<span>{m.noPin ? 'No PIN yet.' : 'Has a PIN.'}</span>
@@ -161,7 +172,7 @@
 										{#if mine === 'role' && m.role === 'member'}
 											<p>
 												Make {m.name} a co-admin? Co-admins can rename the group, make a new join code, remove members, change any play or night, and help
-												members back in. If you’re away for {data.ownerAwayDays} days, they can also archive or restore the group.
+												members back in. If you’re away for {data.ownerAwayDays} days, they can also archive or restore the group, or take over as owner.
 											</p>
 											<div class="cbtns">
 												<form method="POST" action="?/promote" use:enhance={closeAfter}>
@@ -300,16 +311,30 @@
 		{#if form?.themeError}<p class="banner error" role="alert">{form.themeError}</p>{/if}
 	{/snippet}
 	{#snippet deleteBlock()}
-		<details class="confirm" open={!!form?.deleteError}>
-			<summary class="link-button">Delete {data.group.name} for good…</summary>
+		<details class="confirm" bind:open={deleteOpen}>
+			<summary class="link-button danger-link">Delete {data.group.name} for good…</summary>
 			<form method="POST" action="?/delete" class="confirm-body delete" use:enhance>
-				<p>This removes the group, its code and its links for everyone. Members keep their accounts and their games. It can’t be undone.</p>
+				<p>
+					This removes {data.group.name} with its plays, game nights, join code and links, for everyone. Members keep their accounts and their games. It can’t be
+					undone.
+				</p>
+				<p>
+					Nobody is told, so let the group know first. Each member can download the plays and nights they were in from Your account, and you can
+					download everyone’s here.
+				</p>
+				<div class="cbtns">
+					<a class="btn" href="/g/{data.group.id}/plays/export.csv?what=plays&who=all&period=all" download>Download the plays</a>
+					<a class="btn" href="/g/{data.group.id}/plays/export.csv?what=nights&who=all&period=all" download>Download the game nights</a>
+				</div>
 				<label>
 					<span>Type <strong>{data.group.name}</strong> to confirm</span>
-					<input class="field" name="confirmName" required autocomplete="off" />
+					<input class="field" name="confirmName" required autocomplete="off" bind:value={deleteTyped} />
 				</label>
 				{#if form?.deleteError}<p class="banner error" role="alert">{form.deleteError}</p>{/if}
-				<button class="btn small danger">Delete the group</button>
+				<div class="cbtns">
+					<button class="btn small danger" disabled={hydrated && !sameName(deleteTyped, data.group.name)}>Delete {data.group.name} for good</button>
+					<button type="button" class="btn small" onclick={() => ((deleteOpen = false), (deleteTyped = ''))}>Cancel</button>
+				</div>
 			</form>
 		</details>
 	{/snippet}
@@ -337,15 +362,41 @@
 		{#if data.archiveWaits}
 			<div class="form-row">
 				<div class="form-label">
-					<span class="form-q">Archive</span>
+					<span class="form-q">If the owner’s away</span>
 					<span class="hint">
-						The owner archives the group. A co-admin can too once the owner hasn’t been here for {data.ownerAwayDays} days.
+						Once the owner hasn’t been here for {data.ownerAwayDays} days, a co-admin can archive the group or take over as owner.
 						{#if owner}{owner.name} was here {ownerDaysAgo === 0 ? 'today' : ownerDaysAgo === 1 ? 'yesterday' : `${ownerDaysAgo} days ago`}, so that’s in {daysLeft}
 							{daysLeft === 1 ? 'day' : 'days'} if they stay away.{/if}
 					</span>
 				</div>
 			</div>
-		{:else if data.canArchive}
+		{/if}
+		{#if data.canClaim}
+			<div class="form-row">
+				<div class="form-label">
+					<span class="form-q">Owner</span>
+					<span class="hint">
+						{owner ? `${owner.name}, the owner,` : 'The owner'} hasn’t been here for {ownerDaysAgo} days, so a co-admin can take over.
+					</span>
+				</div>
+				<div class="form-body">
+					<details class="confirm" open={!!form?.claimError}>
+						<summary class="link-button">Take over as owner…</summary>
+						<div class="confirm-body">
+							<p>
+								You become the owner of {data.group.name}{#if owner}, and {owner.name} becomes a co-admin{/if}. If {owner?.name ?? 'they'} lost their way in, you can then
+								make them a sign-in code from Manage.
+							</p>
+							<form method="POST" action="?/claim" use:enhance>
+								<button class="btn small">Make me the owner</button>
+							</form>
+							{#if form?.claimError}<p class="banner error" role="alert">{form.claimError}</p>{/if}
+						</div>
+					</details>
+				</div>
+			</div>
+		{/if}
+		{#if data.canArchive}
 			<div class="form-row">
 				<div class="form-label">
 					<span class="form-q">Archive</span>
@@ -354,7 +405,7 @@
 						{#if data.ownerIsAway && owner}
 							You can archive it because {owner.name}, the owner, hasn’t been here for {data.ownerAwayDays} days.
 						{:else}
-							If you’re away for {data.ownerAwayDays} days, a co-admin can archive or restore it too.
+							If you’re away for {data.ownerAwayDays} days, a co-admin can archive or restore it too, or take over as owner.
 						{/if}
 					</span>
 				</div>
@@ -420,6 +471,10 @@
 							{:else}
 								Read-only, and its join link is closed.
 							{/if}
+							{#if data.group.suspended}
+								{data.group.archived ? 'The host has also suspended it, so it can’t be restored until they lift that.' : 'Only the host can lift it:'}
+								<a href={data.contact}>write to them</a>.
+							{/if}
 						</p>
 					</div>
 				</div>
@@ -444,7 +499,7 @@
 					<div class="form-row danger-row">
 						<div class="form-label">
 							<span class="form-q">Delete for good</span>
-							<span class="hint">For everyone. Members keep their games.</span>
+							<span class="hint">Takes its plays and game nights with it. Only the owner can.</span>
 						</div>
 						<div class="form-body">{@render deleteBlock()}</div>
 					</div>

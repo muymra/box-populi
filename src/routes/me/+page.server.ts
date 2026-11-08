@@ -28,6 +28,8 @@ export const load: PageServerLoad = async (event) => {
 		pinSetAt: await pinSetAt(getDb(), user.id),
 		// Signed in just now with a code from the group's owner or a co-admin (D48): time to pick a new PIN.
 		viaCode: event.url.searchParams.has('code'),
+		// Just deleted a group from its Group tab: say so, since it has left every list.
+		deletedGroup: event.url.searchParams.get('deleted')?.slice(0, 60) || null,
 		newLink: token ? `${event.url.origin}/key/${token}` : null
 	};
 };

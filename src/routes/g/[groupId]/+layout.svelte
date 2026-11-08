@@ -152,7 +152,9 @@
 		Archived{data.group.archivedByName ? ` by ${data.group.archivedByName}` : ''}{data.group.archivedAt
 			? ` on ${new Date(data.group.archivedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
 			: ''}. It’s read-only: look back at the shelf, plays and nights, but nothing can change, and its join link is closed.
-		{#if data.role === 'owner' || data.role === 'admin'}<a href="/g/{data.group.id}/group">Restore it or delete it on the Group tab</a>.{/if}
+		{#if data.role === 'owner'}<a href="/g/{data.group.id}/group">Restore it or delete it on the Group tab</a>.{:else if data.role === 'admin'}<a
+				href="/g/{data.group.id}/group">What co-admins can do is on the Group tab</a
+			>.{/if}
 	</p>
 {:else if data.group.suspended}
 	<p class="banner">

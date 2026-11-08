@@ -54,7 +54,9 @@ export const load: PageServerLoad = async (event) => {
 		you: event.locals.user?.name ?? null,
 		// The names on the door, for someone signed out who may already be in the group (D47). A
 		// suspended group still lets its members back in to read it.
-		members: signedOut && refusal !== 'demo' ? await frontDoorMembers(db, target.id) : []
+		members: signedOut && refusal !== 'demo' ? await frontDoorMembers(db, target.id) : [],
+		// Who an owner without a PIN asks for a code (D52): the host, since nobody in the group can.
+		contact: event.locals.config.instanceContact
 	};
 };
 
@@ -122,7 +124,7 @@ export const actions: Actions = {
 		// A code from the group's owner or a co-admin (D48) instead of the PIN: then on to pick a new PIN.
 		if (values.usedCode) {
 			const code = cleanSignInCode(rawCode);
-			if (!code) return fail(400, { ...values, error: 'A code from an admin is eight letters and numbers, like K7M4-P2QX.' });
+			if (!code) return fail(400, { ...values, error: 'A sign-in code is eight letters and numbers, like K7M4-P2QX.' });
 			const result = await redeemSignInCode(db, { groupId: opened.target.id, userId, code, ip: event.getClientAddress(), now });
 			if (!result.ok) {
 				const error = result.reason === 'wrong' ? 'That code doesn’t work. It may have been used, or more than 10 minutes have passed.' : PIN_ERRORS[result.reason];

@@ -4,7 +4,7 @@
 // but a group's owner and co-admins only have a say in their own.
 import { bumpCatalogForGroup, bumpCatalogForUser } from './catalog.ts';
 import { CODE_ALPHABET, generateCode } from './codes.ts';
-import { all, deletePersonStatements, one, run, stmt, type DB } from './db.ts';
+import { all, deletePersonStatements, one, stmt, type DB } from './db.ts';
 import { sha256Hex, type Person } from './identity.ts';
 import type { Actor, AdminResult } from './group-admin.ts';
 import { memberRole } from './group-admin.ts';
@@ -89,20 +89,33 @@ export async function makeSignInCode(
 	);
 	if (!target) return gone;
 	if (target.groups !== 1) return elsewhere(target.name);
+	const made = await signInCodeStatement(db, { userId: targetId, groupId, createdBy: actor.id, now });
+	await db.batch([made.statement]);
+	return { ok: true, code: made.code, name: target.name, expiresAt: made.expiresAt };
+}
+
+/**
+ * A new code for `userId` at `groupId`'s door and the statement that stores it, replacing any earlier
+ * one. Only its SHA-256 is kept. `createdBy` is null when the host made it (D52).
+ */
+export async function signInCodeStatement(
+	db: DB,
+	input: { userId: string; groupId: string; createdBy: string | null; now: number }
+): Promise<{ code: string; expiresAt: number; statement: ReturnType<typeof stmt> }> {
 	const code = generateCode(undefined, SIGN_IN_CODE_LENGTH);
-	const expiresAt = now + SIGN_IN_CODE_MINUTES * 60_000;
-	await run(
+	const expiresAt = input.now + SIGN_IN_CODE_MINUTES * 60_000;
+	const statement = stmt(
 		db,
 		`INSERT INTO sign_in_codes (user_id, group_id, code_hash, created_by, expires_at) VALUES (?1, ?2, ?3, ?4, ?5)
 		 ON CONFLICT (user_id) DO UPDATE SET group_id = excluded.group_id, code_hash = excluded.code_hash,
 		   created_by = excluded.created_by, expires_at = excluded.expires_at`,
-		targetId,
-		groupId,
+		input.userId,
+		input.groupId,
 		await sha256Hex(code),
-		actor.id,
+		input.createdBy,
 		expiresAt
 	);
-	return { ok: true, code, name: target.name, expiresAt };
+	return { code, expiresAt, statement };
 }
 
 export type CodeSignIn = { ok: true; person: Person } | { ok: false; reason: 'wrong' | 'locked_person' | 'locked_address' };

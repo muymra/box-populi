@@ -7,6 +7,8 @@ import { buildSearchText, normalize } from '#lib/catalog/normalize.ts';
 import { MAX_GUESTS, cleanGuestName } from '#lib/table/here.ts';
 import { MAX_NIGHT_NAME, cleanTime, type Night, type NightGame, type NightPerson } from '#lib/nights.ts';
 import type { CatalogGame, Role } from '#lib/catalog/types.ts';
+import type { NightGameInfo } from '#lib/nights-csv.ts';
+import type { GameSource } from '#lib/csv.ts';
 
 export type Actor = { id: string; role: Role };
 export type Result<T = undefined> = { ok: true; value: T } | { ok: false; error: string };
@@ -364,4 +366,19 @@ export async function gameOnNight(db: DB, groupId: string, nightId: string, game
 
 export async function nightInGroup(db: DB, groupId: string, nightId: string): Promise<boolean> {
 	return (await nightRow(db, groupId, nightId)) != null;
+}
+
+/**
+ * Names and sources of the games on this group's bring lists, for the nights export: with the group's
+ * own corrections, as the plays export names them. One query, however many nights.
+ */
+export async function nightGameInfo(db: DB, groupId: string): Promise<Map<number, NightGameInfo>> {
+	const rows = await all<{ id: number; name: string; source: GameSource; bgg_id: number | null }>(
+		db,
+		`SELECT g.id, COALESCE(gc.name, g.name) AS name, g.source, g.bgg_id
+		 FROM games g LEFT JOIN game_corrections gc ON gc.group_id = ?1 AND gc.game_id = g.id
+		 WHERE g.id IN (SELECT ng.game_id FROM night_games ng JOIN game_nights n ON n.id = ng.night_id WHERE n.group_id = ?1)`,
+		groupId
+	);
+	return new Map(rows.map((r) => [r.id, { name: r.name, source: r.source, bggId: r.bgg_id }]));
 }

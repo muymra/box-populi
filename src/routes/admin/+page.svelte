@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { APP_VERSION, CHANGELOG_URL } from '#lib/project.ts';
+	import { onMount, untrack } from 'svelte';
 	import { enhance } from '$app/forms';
+	import CopyButton from '#lib/components/CopyButton.svelte';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Search from '@lucide/svelte/icons/search';
 	import { lastActive } from '#lib/time.ts';
@@ -33,7 +35,52 @@
 	}
 
 	const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-	const ACTION_LABELS: Record<string, string> = { suspend_group: 'Suspended', unsuspend_group: 'Unsuspended', delete_group: 'Deleted' };
+	const ACTION_LABELS: Record<string, string> = {
+		suspend_group: 'Suspended',
+		unsuspend_group: 'Unsuspended',
+		delete_group: 'Deleted',
+		owner_sign_in_code: 'Sign-in code for the owner of'
+	};
+
+	// A group's Manage: one confirmation well open at a time, as on the Group tab. After an action that
+	// failed, its well reopens with the error beside the field; after one that worked, a status line says so.
+	type Kind = 'suspend' | 'unsuspend' | 'ownerCode' | 'delete';
+	let openFor = $state<{ id: string; kind: Kind } | null>(null);
+	// Which group's Manage is open, kept here: Svelte sets `open` again on every update, which would fold
+	// the row shut whenever a well opens.
+	let openGroup = $state<string | null>(null);
+	let typedName = $state('');
+	function toggle(id: string, kind: Kind) {
+		openFor = openFor?.id === id && openFor.kind === kind ? null : { id, kind };
+		typedName = '';
+	}
+	const failure = $derived.by((): { id: string; kind: Kind; error: string } | null => {
+		if (!form || !('action' in form) || !form.action || !form.groupId) return null;
+		return { id: form.groupId, kind: form.action, error: form.error ?? '' };
+	});
+	// Runs when an action's result arrives, not when a well is opened by hand.
+	$effect(() => {
+		const failed = failure;
+		const code = form?.ownerCode;
+		const done = form?.done;
+		untrack(() => {
+			if (failed) openFor = { id: failed.id, kind: failed.kind };
+			else if (code) openFor = { id: code.groupId, kind: 'ownerCode' };
+			else if (done) openFor = null;
+			if (openFor) openGroup = openFor.id;
+		});
+	});
+	const done = $derived.by(() => {
+		const d = form?.done;
+		if (!d) return null;
+		if (d.action === 'suspend') return `Suspended ${d.name}. Its members see your message on its banner.`;
+		if (d.action === 'unsuspend') return `Lifted the suspension on ${d.name}.`;
+		return `Deleted ${d.name} for good. It’s in the admin log.`;
+	});
+	// The delete button waits for the typed name once the page is running; without JavaScript the server checks it.
+	let hydrated = $state(false);
+	onMount(() => (hydrated = true));
+	const sameName = (typed: string, name: string) => typed.replace(/\s+/g, ' ').trim().toLocaleLowerCase() === name.toLocaleLowerCase();
 
 	type SortKey = 'lastActive' | 'members' | 'copies' | 'createdAt' | 'name';
 	const SORTS: Array<[SortKey, string]> = [
@@ -187,12 +234,15 @@
 		</div>
 	{/snippet}
 	{#snippet groupList()}
+		{#if done}<p class="banner" role="status">{done}</p>{/if}
 		{#if data.groups.length === 0}
 			<p class="muted">No groups yet.</p>
 		{:else}
 			<ul class="groups">
 				{#each shown as g (g.id)}
-					{@const failed = form?.groupId === g.id ? form.error : null}
+					{@const here = openFor?.id === g.id ? openFor.kind : null}
+					{@const failed = failure?.id === g.id ? failure : null}
+					{@const ownerCode = form?.ownerCode?.groupId === g.id ? form.ownerCode : null}
 					{#snippet summary()}
 						<span class="g-name">
 							<strong>{g.name}</strong>
@@ -207,48 +257,131 @@
 							<span>created <span class="num">{day(g.createdAt)}</span></span>
 						</span>
 					{/snippet}
+					{#snippet cancel()}
+						<button type="button" class="btn small" onclick={() => (openFor = null)}>Cancel</button>
+					{/snippet}
+					{#snippet reason(label: string, hint: string)}
+						<label>
+							{label}
+							<span class="hint">{hint}</span>
+							<textarea class="field" name="reason" required minlength="3" maxlength="500" rows="2"></textarea>
+						</label>
+					{/snippet}
 					<li>
 						{#if g.isDemo}
 							<div class="row">{@render summary()}</div>
 						{:else}
-							<details class="manage" open={failed != null}>
+							<!-- One group's Manage open at a time, laid out like a member's Manage on the Group tab:
+							     labelled rows, the irreversible one in a ruled foot, one confirmation well under them. -->
+							<details
+								class="manage"
+								name="admin-groups"
+								open={openGroup === g.id}
+								ontoggle={(e) => {
+									if (e.currentTarget.open) openGroup = g.id;
+									else if (openGroup === g.id) openGroup = null;
+								}}
+							>
 								<summary>
 									{@render summary()}
 									<span class="manage-label">Manage <ChevronDown size={16} aria-hidden="true" /></span>
 								</summary>
 								<div class="actions">
-									{#if failed}<p class="banner error" role="alert">{failed}</p>{/if}
-									{#if g.suspendedAt}
-										<p>Suspended on <span class="num">{day(g.suspendedAt)}</span>: {g.suspendedReason}</p>
-										<form method="POST" action="?/unsuspend" class="act" use:enhance>
+									<div class="arow">
+										<span class="alabel">Access</span>
+										<div class="abody">
+											{#if g.suspendedAt}
+												<span>Suspended on <span class="num">{day(g.suspendedAt)}</span>: “{g.suspendedReason}”</span>
+												<button type="button" class="link-button" aria-expanded={here === 'unsuspend'} onclick={() => toggle(g.id, 'unsuspend')}>Unsuspend…</button>
+											{:else}
+												<span>{g.archivedAt ? 'Archived by its owner: read-only for its members.' : 'Open.'}</span>
+												<button type="button" class="link-button" aria-expanded={here === 'suspend'} onclick={() => toggle(g.id, 'suspend')}>Suspend…</button>
+											{/if}
+										</div>
+									</div>
+									<!-- For an owner who lost their PIN and every device (D52): nobody in the group can reach them. -->
+									<div class="arow">
+										<span class="alabel">Owner’s way in</span>
+										<div class="abody">
+											<button type="button" class="btn small" aria-expanded={here === 'ownerCode'} onclick={() => toggle(g.id, 'ownerCode')}>Make a sign-in code</button>
+										</div>
+									</div>
+									<div class="afoot">
+										{#if g.suspendedAt}
+											<button type="button" class="link-button danger-link" aria-expanded={here === 'delete'} onclick={() => toggle(g.id, 'delete')}>Delete {g.name} for good…</button>
+										{:else}
+											<span class="hint"
+												>To delete it, <button type="button" class="link-button" aria-expanded={here === 'suspend'} onclick={() => toggle(g.id, 'suspend')}
+													>suspend it first</button
+												>. Suspending can be undone; deleting can’t.</span
+											>
+										{/if}
+									</div>
+
+									{#if here === 'suspend'}
+										<form method="POST" action="?/suspend" class="well" use:enhance>
 											<input type="hidden" name="groupId" value={g.id} />
-											<label>Reason for lifting it <textarea class="field" name="reason" required minlength="3" maxlength="500" rows="2"></textarea></label>
-											<button class="btn small">Unsuspend</button>
+											<p>
+												{g.name} turns read-only for its members and its join link closes. Unsuspend undoes it.{#if g.archivedAt}{' '}It’s archived, so while
+													it’s suspended its owner can’t restore it.{/if}
+											</p>
+											{@render reason('Message to members', 'On the group’s read-only banner, with your contact address. It goes in the admin log too.')}
+											{#if failed}<p class="banner error" role="alert">{failed.error}</p>{/if}
+											<div class="wbtns"><button class="btn small">Suspend {g.name}</button>{@render cancel()}</div>
 										</form>
-									{:else}
-										<form method="POST" action="?/suspend" class="act" use:enhance>
+									{:else if here === 'unsuspend'}
+										<form method="POST" action="?/unsuspend" class="well" use:enhance>
 											<input type="hidden" name="groupId" value={g.id} />
-											<label>
-												Reason
-												<span class="hint">Members see it on a read-only banner, with your contact address.</span>
-												<textarea class="field" name="reason" required minlength="3" maxlength="500" rows="2"></textarea>
-											</label>
-											<button class="btn small">Suspend the group</button>
+											<p>{g.name} goes back to how it was{g.archivedAt ? ': archived, which its owner can restore' : ', open to its members'}.</p>
+											{@render reason('Reason', 'For the admin log only.')}
+											{#if failed}<p class="banner error" role="alert">{failed.error}</p>{/if}
+											<div class="wbtns"><button class="btn small">Unsuspend {g.name}</button>{@render cancel()}</div>
 										</form>
-									{/if}
-									<details class="confirm">
-										<summary class="link-button">Delete this group…</summary>
-										<form method="POST" action="?/delete" class="act" use:enhance>
+									{:else if here === 'ownerCode' && ownerCode}
+										<div class="well owner-code" role="status">
+											<p>Give this code to the owner:</p>
+											<div class="code-line">
+												<span class="code num">{ownerCode.code}</span>
+												<CopyButton text={ownerCode.code} small />
+											</div>
+											<p class="hint">
+												Works once, until {new Date(ownerCode.expiresAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}. They open their
+												group’s link (it’s in their group chat; you can’t see it here), tap their name, choose “use a sign-in code” and type it, then pick a new PIN.
+												It won’t be shown again.
+											</p>
+											<div class="wbtns"><button type="button" class="btn small" onclick={() => (openFor = null)}>Done</button></div>
+										</div>
+									{:else if here === 'ownerCode'}
+										<form method="POST" action="?/ownerCode" class="well" use:enhance>
 											<input type="hidden" name="groupId" value={g.id} />
-											<p>Removes the group, its code and its links. Members keep their accounts and their games. It can’t be undone.</p>
-											<label>Reason <textarea class="field" name="reason" required minlength="3" maxlength="500" rows="2"></textarea></label>
+											<p>
+												For an owner who forgot their PIN and has no signed-in device: nobody in the group can make them one. You won’t see their name, so make
+												one only when you know who’s asking; the created date and member count above can help you check.
+											</p>
+											{@render reason('Reason', 'For the admin log only.')}
+											{#if failed}<p class="banner error" role="alert">{failed.error}</p>{/if}
+											<div class="wbtns"><button class="btn small">Make a code for the owner</button>{@render cancel()}</div>
+										</form>
+									{:else if here === 'delete'}
+										<form method="POST" action="?/delete" class="well" use:enhance>
+											<input type="hidden" name="groupId" value={g.id} />
+											<p>
+												Removes {g.name} with its <span class="num">{g.plays}</span>
+												{g.plays === 1 ? 'play' : 'plays'} and <span class="num">{g.nights}</span>
+												{g.nights === 1 ? 'game night' : 'game nights'}, its join code, and its rules and video links, for everyone. Members keep their accounts and
+												their games, and nobody is told. It can’t be undone.
+											</p>
+											{@render reason('Reason', 'For the admin log only.')}
 											<label>
 												<span>Type <strong>{g.name}</strong> to confirm</span>
-												<input class="field" name="confirmName" required autocomplete="off" />
+												<input class="field" name="confirmName" required autocomplete="off" bind:value={typedName} />
 											</label>
-											<button class="btn small danger">Delete the group</button>
+											{#if failed}<p class="banner error" role="alert">{failed.error}</p>{/if}
+											<div class="wbtns">
+												<button class="btn small danger" disabled={hydrated && !sameName(typedName, g.name)}>Delete {g.name} for good</button>{@render cancel()}
+											</div>
 										</form>
-									</details>
+									{/if}
 								</div>
 							</details>
 						{/if}
@@ -262,7 +395,7 @@
 
 	{#snippet adminLog()}
 		{#if data.log.length === 0}
-			<p class="muted">Nothing yet. Suspensions and deletions appear here with their reasons.</p>
+			<p class="muted">Nothing yet. What you do to a group appears here with its reason.</p>
 		{:else}
 			<ol class="log">
 				{#each data.log as entry (entry.id)}
@@ -285,7 +418,7 @@
 	</section>
 	<section class="form-panel" aria-labelledby="groups-h">
 		<div class="form-head">
-			<div><h2 id="groups-h">Groups <span class="muted num">{data.groups.length}</span></h2><p>Suspend a group to make it read-only, or delete it. Each needs a reason.</p></div>
+			<div><h2 id="groups-h">Groups <span class="muted num">{data.groups.length}</span></h2><p>Suspend a group to make it read-only, make its owner a sign-in code, or delete a suspended group. Each needs a reason.</p></div>
 			{@render groupTools()}
 		</div>
 		<div class="form-block">{@render groupList()}</div>
@@ -538,28 +671,86 @@
 	.manage[open] .manage-label :global(svg) {
 		transform: rotate(180deg);
 	}
+	/* A group's Manage, as a member's on the Group tab: labelled rows, the irreversible one in a ruled
+	   foot, and the open confirmation in a well under them. */
 	.actions {
-		display: flex;
-		flex-direction: column;
+		display: grid;
 		gap: var(--s-3);
-		padding: 0 var(--s-3) var(--s-4);
-		max-width: 36rem;
+		padding: var(--s-1) var(--s-3) var(--s-4);
 	}
 	.actions p {
 		margin: 0;
 	}
-	.act {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: var(--s-3);
+	.arow {
+		display: grid;
+		grid-template-columns: 8rem minmax(0, 1fr);
+		align-items: center;
+		gap: var(--s-1) var(--s-3);
 	}
-	.act label {
+	.alabel {
+		font-size: var(--t-small);
+		font-weight: 650;
+		color: var(--ink-2);
+	}
+	.abody {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--s-2) var(--s-4);
+		min-width: 0;
+	}
+	.abody .link-button,
+	.afoot .link-button {
+		min-height: 36px;
+		font-weight: 650;
+	}
+	.afoot {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--s-1) var(--s-5);
+		padding-top: var(--s-2);
+		border-top: 1px solid var(--gap);
+	}
+	.afoot .hint {
+		padding: 8px 0;
+	}
+	.danger-link {
+		color: var(--danger);
+	}
+	.well {
+		display: grid;
+		gap: var(--s-3);
+		max-width: 40rem;
+		padding: var(--s-3) var(--s-4);
+		background: var(--laminate);
+		border-radius: var(--r-ctl);
+		box-shadow: inset 0 0 0 1px var(--rule);
+	}
+	.well label {
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
-		align-self: stretch;
 		font-weight: 650;
+	}
+	.wbtns {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--s-2);
+	}
+	.code-line {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--s-3);
+	}
+	.btn.danger:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	@media (max-width: 559px) {
+		.arow {
+			grid-template-columns: minmax(0, 1fr);
+		}
 	}
 	textarea.field {
 		padding: var(--s-2) var(--s-3);
@@ -567,15 +758,11 @@
 		resize: vertical;
 		font: inherit;
 	}
-	.confirm summary {
-		display: inline-block;
-		min-height: 44px;
-		line-height: 44px;
-		font-weight: 650;
-		list-style: none;
-	}
-	.confirm summary::-webkit-details-marker {
-		display: none;
+	/* A fresh code for a group's owner, set like the one on the Group tab. */
+	.owner-code .code {
+		font-size: var(--t-h2);
+		font-weight: 800;
+		letter-spacing: 0.14em;
 	}
 	.btn.danger {
 		border-color: var(--danger);

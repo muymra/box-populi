@@ -105,6 +105,35 @@ export async function ownerAway(db: DB, groupId: string, now: number): Promise<b
 }
 
 /**
+ * A co-admin takes over as owner once the owner has been away OWNER_AWAY_DAYS (D51); the owner becomes
+ * a co-admin. The batch checks again that the owner is still away and that nobody else took over first.
+ */
+export async function claimOwnership(db: DB, groupId: string, actor: Actor, now: number): Promise<AdminResult> {
+	const role = await memberRole(db, groupId, actor.id);
+	if (role !== 'admin') return refused;
+	if (!can(role, 'claim_ownership', { ownerAway: await ownerAway(db, groupId, now) })) {
+		return { ok: false, error: `The owner has been here in the last ${OWNER_AWAY_DAYS} days, so the group stays theirs.` };
+	}
+	const cutoff = now - OWNER_AWAY_DAYS * 86_400_000;
+	// Demote first: the one-owner index is checked statement by statement.
+	await db.batch([
+		stmt(db, "UPDATE memberships SET role = 'admin' WHERE group_id = ?1 AND role = 'owner' AND last_seen_at < ?2", groupId, cutoff),
+		stmt(
+			db,
+			// The new owner is here now, so the 60 days start again from today.
+			`UPDATE memberships SET role = 'owner', last_seen_at = MAX(last_seen_at, ?3) WHERE group_id = ?1 AND user_id = ?2 AND role = 'admin'
+			   AND NOT EXISTS (SELECT 1 FROM memberships o WHERE o.group_id = ?1 AND o.role = 'owner')`,
+			groupId,
+			actor.id,
+			now
+		),
+		bumpCatalogForGroup(db, groupId)
+	]);
+	if ((await memberRole(db, groupId, actor.id)) !== 'owner') return { ok: false, error: 'The owner is back, or someone else took over first.' };
+	return { ok: true };
+}
+
+/**
  * Archives the group (D50): read-only for its members and its join link closed, until it's restored
  * or deleted. The owner can, and a co-admin once the owner has been away OWNER_AWAY_DAYS.
  */

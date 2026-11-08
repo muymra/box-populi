@@ -109,14 +109,15 @@
 							<div class="form-block">
 								<p class="note">
 									{pickedMember.name} hasn’t set a PIN yet. On a device where you’re signed in, Your account sets one. From here, ask the group’s owner or a
-									co-admin for a sign-in code, or open your sign-in link if you saved one.
+									co-admin for a sign-in code, or open your sign-in link if you saved one. The owner asks
+									<a href={data.contact}>whoever runs this site</a>.
 								</p>
 							</div>
 						{/if}
 						<div class="form-row">
 							<div class="form-label">
-								<label class="form-q" for="adminCode">Code from an admin</label>
-								<span class="hint">Eight letters and numbers. It works once; next you pick a new PIN.</span>
+								<label class="form-q" for="adminCode">Sign-in code</label>
+								<span class="hint">Eight letters and numbers, from the group’s owner or a co-admin. It works once; next you pick a new PIN.</span>
 							</div>
 							<div class="form-body">
 								<input id="adminCode" class="field code" name="adminCode" required maxlength="9" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K7M4-P2QX" />
@@ -139,7 +140,8 @@
 									<button type="button" class="link-button" onclick={() => (useCode = false)}>Use my PIN</button>
 								{:else}
 									Forgot it? Your account sets a new one on a signed-in device, or
-									<button type="button" class="link-button" onclick={() => (useCode = true)}>use a code from an admin</button>.
+									<button type="button" class="link-button" onclick={() => (useCode = true)}>use a sign-in code</button>. The owner gets one from
+									<a href={data.contact}>whoever runs this site</a>.
 								{/if}
 							</p>
 						{/if}

@@ -8,6 +8,8 @@
 	let { data, form }: PageProps = $props();
 	const ROLE_LABELS = { owner: 'Owner', admin: 'Co-admin', member: 'Member' } as const;
 	const loanCount = $derived(data.loans.lent.length + data.loans.borrowed.length);
+	// Groups with plays to download from Your data: every group you're in except the demo.
+	const playGroups = $derived(data.groups.filter((g) => !g.isDemo));
 </script>
 
 <svelte:head><title>Your account · {data.instanceName}</title></svelte:head>
@@ -18,6 +20,7 @@
 		<p class="muted">A name and the devices you use. There’s no email or password.</p>
 	</header>
 
+	{#if data.deletedGroup}<p class="banner" role="status">{data.deletedGroup} is deleted. Its members keep their accounts and their games.</p>{/if}
 	<section class="form-panel" aria-labelledby="you-h">
 		<div class="form-head">
 			<div>
@@ -38,7 +41,7 @@
 		</div>
 		{#if data.viaCode && !form?.pinSaved}
 			<div class="form-block">
-				<p class="banner" role="status">You’re in with a code from your group’s admin. Pick a new PIN now, so next time you can get back in on your own.</p>
+				<p class="banner" role="status">You’re in with a sign-in code. Pick a new PIN now, so next time you can get back in on your own.</p>
 			</div>
 		{/if}
 		<div class="form-row" id="pin-row">
@@ -170,6 +173,42 @@
 		</section>
 	{/if}
 
+	<!-- What's yours to download (PRD "Account"), gathered here; each group's own exports stay on its pages. -->
+	<section class="form-panel" id="your-data" aria-labelledby="data-h">
+		<div class="form-head">
+			<div>
+				<h2 id="data-h">Your data</h2>
+				<p>Download what’s yours, to keep or to take to another Box Populi.</p>
+			</div>
+		</div>
+		<div class="form-row">
+			<div class="form-label">
+				<span class="form-q">Your games</span>
+				<span class="hint">Your shelf and wishlist as a spreadsheet (CSV). Its first three columns paste into Paste a list on any Box Populi.</span>
+			</div>
+			<div class="form-body"><div><a class="btn" href="/me/games.csv" download>Download your games</a></div></div>
+		</div>
+		{#if playGroups.length}
+			<div class="form-row">
+				<div class="form-label">
+					<span class="form-q">Your plays and nights</span>
+					<span class="hint">Every play you were in and every game night you answered, all time, a file each per group.</span>
+				</div>
+				<div class="form-body">
+					<ul class="downloads">
+						{#each playGroups as g (g.id)}
+							<li>
+								<span class="dl-group">{g.name}</span>
+								<a href="/g/{g.id}/plays/export.csv?what=plays&who=me&period=all" download>Plays<span class="visually-hidden"> in {g.name}</span></a>
+								<a href="/g/{g.id}/plays/export.csv?what=nights&who=me&period=all" download>Nights<span class="visually-hidden"> in {g.name}</span></a>
+							</li>
+						{/each}
+					</ul>
+				</div>
+			</div>
+		{/if}
+	</section>
+
 	<!-- Deleting: its own panel at the end, edged in the danger colour, so it never reads as one more setting. -->
 	<section class="form-panel delete" aria-labelledby="delete-h">
 		<div class="form-head">
@@ -177,7 +216,7 @@
 				<h2 id="delete-h">Delete your account</h2>
 				<p>
 					Removes your name, shelf, wishlist and group memberships, and the games you typed in unless another member has them too. Links you added stay,
-					credited to “former member.”
+					credited to “former member.” Before you go, <a href="#your-data">download your games and plays</a>.
 				</p>
 			</div>
 		</div>
@@ -242,6 +281,29 @@
 		background: none;
 	}
 	/* Groups and loans: one ruled list in the panel, the name first, the action at the right. */
+	/* One download link per group, as a short list beside its question. */
+	.downloads {
+		display: grid;
+		gap: 0;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.downloads li {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0 var(--s-4);
+	}
+	.dl-group {
+		min-width: 8rem;
+		color: var(--ink-2);
+	}
+	.downloads a {
+		display: inline-block;
+		padding: 10px 0;
+		font-weight: 650;
+	}
 	.list {
 		list-style: none;
 		margin: 0;

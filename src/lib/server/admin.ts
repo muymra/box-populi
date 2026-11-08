@@ -3,6 +3,7 @@
 // collections, links or wishlists. Adding one needs a DECISIONS.md entry approved by Carlo.
 import { sha256Hex } from './identity.ts';
 import { all, deleteGroupStatements, one, stmt, type DB } from './db.ts';
+import { signInCodeStatement } from './recovery.ts';
 
 export const ADMIN_COOKIE = 'bp_admin';
 export const ADMIN_HOURS = 12;
@@ -60,6 +61,9 @@ export type AdminGroup = {
 	createdAt: number;
 	members: number;
 	copies: number;
+	/** How much history deleting would take with it: counts only, never the plays or nights themselves. */
+	plays: number;
+	nights: number;
 	lastActive: number | null;
 	isDemo: boolean;
 	suspendedAt: number | null;
@@ -74,6 +78,8 @@ export async function listGroups(db: DB): Promise<AdminGroup[]> {
 		created_at: number;
 		members: number;
 		copies: number;
+		plays: number;
+		nights: number;
 		last_active: number | null;
 		is_demo: number;
 		suspended_at: number | null;
@@ -84,6 +90,8 @@ export async function listGroups(db: DB): Promise<AdminGroup[]> {
 		`SELECT g.id, g.name, g.created_at, g.is_demo, g.suspended_at, g.suspended_reason, g.archived_at,
 		        (SELECT COUNT(*) FROM memberships m WHERE m.group_id = g.id) AS members,
 		        (SELECT COUNT(*) FROM copies c JOIN memberships m ON m.user_id = c.user_id WHERE m.group_id = g.id) AS copies,
+		        (SELECT COUNT(*) FROM plays p WHERE p.group_id = g.id) AS plays,
+		        (SELECT COUNT(*) FROM game_nights n WHERE n.group_id = g.id) AS nights,
 		        (SELECT MAX(m.last_seen_at) FROM memberships m WHERE m.group_id = g.id) AS last_active
 		 FROM groups g
 		 ORDER BY last_active DESC, g.created_at DESC`
@@ -94,6 +102,8 @@ export async function listGroups(db: DB): Promise<AdminGroup[]> {
 		createdAt: r.created_at,
 		members: r.members,
 		copies: r.copies,
+		plays: r.plays,
+		nights: r.nights,
 		lastActive: r.last_active,
 		isDemo: r.is_demo === 1,
 		suspendedAt: r.suspended_at,
@@ -156,17 +166,44 @@ export async function unsuspendGroup(db: DB, groupId: string, rawReason: unknown
 	return { ok: true };
 }
 
-/** Same cascade as an owner deleting the group: members keep their accounts and copies. */
+/**
+ * Same cascade as an owner deleting the group: members keep their accounts and copies. Only a
+ * suspended group (D53): suspending is the host's undoable first step, as archiving is the owner's.
+ */
 export async function adminDeleteGroup(db: DB, groupId: string, typedName: unknown, rawReason: unknown, now: number): Promise<AdminResult> {
 	const reason = cleanReason(rawReason);
 	if (!reason) return { ok: false, error: REASON_ERROR };
 	const group = await target(db, groupId);
 	if (!group) return { ok: false, error: 'That group no longer exists.' };
 	if (group.is_demo) return { ok: false, error: 'The demo group can’t be deleted from here.' };
+	if (group.suspended_at == null) return { ok: false, error: 'Suspend the group first; then it can be deleted for good.' };
 	const typed = typeof typedName === 'string' ? typedName.replace(/\s+/g, ' ').trim() : '';
 	if (typed.toLocaleLowerCase() !== group.name.toLocaleLowerCase()) {
 		return { ok: false, error: 'Type the group’s name exactly as it’s shown to delete it.' };
 	}
 	await db.batch([logStatement(db, 'delete_group', groupId, group.name, reason, now), ...deleteGroupStatements(db, groupId)]);
 	return { ok: true };
+}
+
+/**
+ * A one-time sign-in code for a group's owner who has lost their PIN and every device (D52), made by
+ * the host and logged with its reason. It works at that group's door, for the owner only, for ten
+ * minutes. The owner's id is read and never returned: the host sees no names.
+ */
+export async function ownerSignInCode(
+	db: DB,
+	groupId: string,
+	rawReason: unknown,
+	now: number
+): Promise<{ ok: true; code: string; expiresAt: number } | { ok: false; error: string }> {
+	const reason = cleanReason(rawReason);
+	if (!reason) return { ok: false, error: REASON_ERROR };
+	const group = await target(db, groupId);
+	if (!group) return { ok: false, error: 'That group no longer exists.' };
+	if (group.is_demo) return { ok: false, error: 'The demo group has no owner to sign in.' };
+	const owner = await one<{ user_id: string }>(db, "SELECT user_id FROM memberships WHERE group_id = ?1 AND role = 'owner'", groupId);
+	if (!owner) return { ok: false, error: 'That group has no owner.' };
+	const made = await signInCodeStatement(db, { userId: owner.user_id, groupId, createdBy: null, now });
+	await db.batch([made.statement, logStatement(db, 'owner_sign_in_code', groupId, group.name, reason, now)]);
+	return { ok: true, code: made.code, expiresAt: made.expiresAt };
 }

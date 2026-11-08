@@ -3,6 +3,7 @@ import { createTestDb } from './testing/d1.ts';
 import { all, one, run } from './db.ts';
 import {
 	archiveGroup,
+	claimOwnership,
 	deleteGroup,
 	ownerAway,
 	restoreGroup,
@@ -128,6 +129,28 @@ describe('archiving the group', () => {
 		// Back, the owner takes the decision again.
 		await run(db, "UPDATE memberships SET last_seen_at = ?1 WHERE user_id = 'ada'", 62 * day);
 		expect((await archiveGroup(db, 'g1', admin, 63 * day)).ok).toBe(false);
+	});
+});
+
+describe('taking over as owner', () => {
+	const day = 86_400_000;
+	it('lets a co-admin take over once the owner has been away 60 days; the owner becomes a co-admin', async () => {
+		expect((await claimOwnership(db, 'g1', member, 61 * day)).ok).toBe(false);
+		expect((await claimOwnership(db, 'g1', owner, 61 * day)).ok).toBe(false);
+		expect(await claimOwnership(db, 'g1', admin, 59 * day)).toMatchObject({ ok: false, error: expect.stringContaining('60 days') });
+		expect(await roles()).toMatchObject({ ada: 'owner', cy: 'admin' });
+		const before = await version();
+		expect(await claimOwnership(db, 'g1', admin, 61 * day)).toEqual({ ok: true });
+		expect(await roles()).toEqual({ ada: 'admin', bo: 'member', cy: 'owner', di: 'member' });
+		expect(await version()).toBeGreaterThan(before!);
+		expect(await one(db, "SELECT last_seen_at FROM memberships WHERE group_id = 'g1' AND user_id = 'cy'")).toEqual({ last_seen_at: 61 * day });
+	});
+
+	it('leaves a second co-admin to wait 60 days from the first one taking over', async () => {
+		await run(db, "UPDATE memberships SET role = 'admin' WHERE user_id = 'di'");
+		expect(await claimOwnership(db, 'g1', admin, 61 * day)).toEqual({ ok: true });
+		expect((await claimOwnership(db, 'g1', { id: 'di', role: 'admin' }, 62 * day)).ok).toBe(false);
+		expect(await roles()).toMatchObject({ cy: 'owner', di: 'admin' });
 	});
 });
 

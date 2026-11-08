@@ -29,6 +29,8 @@
 		};
 	}
 	let who = $state<'me' | 'all'>('me');
+	// The export's two files: the plays, or the game nights (who came and what they brought).
+	let what = $state<'plays' | 'nights'>('plays');
 	$effect.pre(() => {
 		if (!data.isMember) who = 'all';
 	});
@@ -145,13 +147,25 @@
 		<div class="form-row">
 			<div class="form-label">
 				<span class="form-q">Export</span>
-				<span class="hint">A CSV file: one row per player per play, with places, scores, wins and points.</span>
+				<span class="hint">
+					{what === 'plays'
+						? 'A CSV file: one row per player per play, with places, scores, wins and points.'
+						: 'A CSV file: one row per person per night, with their answer and each game they brought.'}
+				</span>
 			</div>
 			<div class="form-body">
 				<form method="GET" action="{base}/plays/export.csv" class="export">
+					<div class="which-file">
+						<div class="segments" role="radiogroup" aria-label="Which file">
+							<label><input type="radio" name="what" value="plays" bind:group={what} /><span>Plays</span></label>
+							<label><input type="radio" name="what" value="nights" bind:group={what} /><span>Game nights</span></label>
+						</div>
+					</div>
 					<fieldset>
-						<legend class="visually-hidden">Whose plays</legend>
-						{#if data.isMember}<label><input type="radio" name="who" value="me" bind:group={who} /> Plays I was in</label>{/if}
+						<legend class="visually-hidden">Whose {what === 'plays' ? 'plays' : 'nights'}</legend>
+						{#if data.isMember}<label
+								><input type="radio" name="who" value="me" bind:group={who} /> {what === 'plays' ? 'Plays I was in' : 'Nights I was on'}</label
+							>{/if}
 						<label><input type="radio" name="who" value="all" bind:group={who} /> Everyone’s</label>
 					</fieldset>
 					<label class="period">
@@ -163,7 +177,7 @@
 					</label>
 					<button class="btn"><Download size={18} aria-hidden="true" /> Download CSV</button>
 				</form>
-				<p class="hint">The file names everyone in those plays, guests included.</p>
+				<p class="hint">The file names everyone in those {what === 'plays' ? 'plays' : 'nights'}, guests included.</p>
 			</div>
 		</div>
 	</section>
@@ -396,6 +410,10 @@
 		flex-wrap: wrap;
 		align-items: flex-end;
 		gap: var(--s-4);
+	}
+	/* Which file first, on a line of its own, then whose and when beside the button. */
+	.export .which-file {
+		flex-basis: 100%;
 	}
 	.export fieldset {
 		display: flex;

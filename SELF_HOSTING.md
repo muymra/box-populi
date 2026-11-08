@@ -23,7 +23,8 @@ The steps follow Cloudflare Pages, the main path and the one tested end to end. 
   - running the instance for a business or event, such as a game store, café or convention, even a non-profit one.
 
   Don't remove the BGG credit in the footer, and don't build anything that gives other programs access to BGG data through your instance. BGG announces API policy changes in its Geek Tools News forum.
-- **Abuse.** You get an admin page at `/admin/login` to suspend or delete groups. There are no accounts to ban (people are just display names), and the page deliberately doesn't show who is in a group or what they own.
+- **Abuse.** You get an admin page at `/admin/login` to suspend groups, and to delete a group once it's suspended (suspending can be undone; deleting can't). There are no accounts to ban (people are just display names), and the page deliberately doesn't show who is in a group or what they own.
+- **Locked-out owners.** A group's owner who forgot their PIN and has no signed-in device will ask you, at your `INSTANCE_CONTACT`. On the admin page, a group's Manage has "Sign-in code for the owner…": it makes a one-time code that works for 10 minutes, for that group's owner only. You won't see their name, so make one only for someone you know owns that group. Each one goes in the admin log with your reason.
 
 ## What you need
 

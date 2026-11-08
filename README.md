@@ -11,11 +11,13 @@ A shared shelf for your board game group. Everyone adds the games they own, and 
 - **One shelf for everyone's games.** Each box has a coloured line for each friend who owns it.
 - **Finding something to play.** Pick "4 players" and "fits in an hour", add "not too heavy" if you like, and the shelf shows only what fits.
 - **Game night.** Plan a night, see who's coming and what they'll bring, and copy it all to the group chat. On the night, Play tonight suggests three games from what's actually there, guests' games included, or lets you choose and keep your own, plus quick fillers for while others arrive, split across tables if the group is too big for any of them.
-- **Play log.** Note who played what and who won, with scores if you like, kept with the night you played them. A leaderboard with points for the podium, just for fun, and a spreadsheet download of your plays.
+- **Play log.** Note who played what and who won, with scores if you like, kept with the night you played them. A leaderboard with points for the podium, just for fun.
 - **At the table.** Buttons at the top pick who goes first from the people there, guests included, and roll any mix of dice or flip a coin.
 - **Wishlists and lending.** See which games someone wants that nobody in the group has yet, and who borrowed whose copy.
 - **Rulebooks and videos.** Save the links once, next to the game, for everyone.
-- **No accounts.** You join with the group's five-character code and your name. No email, no password.
+- **No accounts.** You join with the group's five-character code, your name and a six-digit PIN, which gets you back in on any device. No email, no password.
+- **Your data stays yours.** Download your games, your plays and your game nights as spreadsheets whenever you like. Your games paste straight into another Box Populi.
+- **Several groups, one shelf.** In two or more groups, switch between them from the top of the page; your games show in each.
 - **Made for phones.** It's a website, so there's nothing to install, and it works on any phone or computer.
 
 | | |
@@ -38,7 +40,7 @@ A shared shelf for your board game group. Everyone adds the games they own, and 
 
 Box Populi isn't an app you download or a website you sign up to. One person runs a copy of it for the group, and everyone else just uses the link they share.
 
-**If someone already runs one,** ask them for your group's code or invite link, open it, and type your name. That's all.
+**If someone already runs one,** ask them for your group's code or invite link, open it, and type your name and a PIN. That's all.
 
 **If you'd like to run one,** you don't need to be a programmer. You'll create a free Cloudflare account and copy some commands into a terminal; the [setup guide](./SELF_HOSTING.md) writes out every step. Set aside 30 minutes to an hour. If you'd rather keep it on your own machine, it also runs in Docker on a home server, and it works on Vercel or Netlify too.
 
@@ -71,6 +73,8 @@ Keep one group when it's the same people on different days or in different moods
 ### What if I get a new phone or clear my browser?
 
 When you join you pick a six-digit PIN. On another device, open your group's link, tap your name and type it. Your account can also make a sign-in link to keep in a password manager.
+
+Forgot your PIN and have no device that's still signed in? Ask your group's owner or a co-admin for a one-time sign-in code. If you're the owner, ask whoever runs the site. If the owner stops coming for 60 days, a co-admin can take over the group.
 
 ### Can we change how it looks?
 

@@ -3,7 +3,10 @@
 
 export type Coop = 'won' | 'lost';
 export type PlayPlayer = { userId: string | null; guestName: string | null; place: number | null; score: number | null };
-export type GameSource = 'bgg' | 'wikidata' | 'manual';
+import { csvField, csvFile, SOURCE_LABEL, type GameSource } from './csv.ts';
+
+export type { GameSource } from './csv.ts';
+export { csvField } from './csv.ts';
 export type Play = {
 	id: string;
 	gameId: number;
@@ -97,22 +100,6 @@ export function ordinal(n: number): string {
 	return `${n}${{ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] ?? 'th'}`;
 }
 
-const FORMULA_START = /^[=+\-@\t\r]/;
-
-/**
- * One CSV field, quoted when needed. Text people typed that a spreadsheet would run as a formula is
- * defused with a leading apostrophe; `verbatim` skips that for BGG titles, which are shown as BGG
- * gives them (TECH.md "Access and terms").
- */
-export function csvField(value: string | number | null, verbatim = false): string {
-	if (value == null) return '';
-	if (typeof value === 'number') return String(value);
-	const safe = !verbatim && FORMULA_START.test(value) ? `'${value}` : value;
-	return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
-}
-
-const SOURCE_LABEL: Record<GameSource, string> = { bgg: 'BoardGameGeek', wikidata: 'Wikidata', manual: 'typed in' };
-
 export const CSV_COLUMNS = ['date', 'game_night', 'game', 'game_data_from', 'bgg_id', 'play_id', 'player', 'player_type', 'place', 'score', 'won', 'coop_result', 'points'];
 
 /**
@@ -150,6 +137,5 @@ export function playsCsv(plays: readonly Play[], scheme: readonly number[], name
 			);
 		});
 	}
-	// CRLF line ends and a byte-order mark, so spreadsheet apps read accents and line breaks right.
-	return '﻿' + lines.join('\r\n') + '\r\n';
+	return csvFile(lines);
 }

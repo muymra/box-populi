@@ -316,3 +316,24 @@ Carlo asked for archiving and wondered whether to archive before deleting, and w
 **Why:** groups wind down rather than end; keeping the record costs nothing, and losing it by one tap would.
 **Trade-offs accepted:** an owner who stops visiting for 60 days lets co-admins archive and restore (the owner, back, takes the decision again); an archived group's shelf shows its members' current games, not a snapshot; there's no timed purge, so archived groups stay until someone deletes them.
 **Revisit if:** groups want an archive that's hidden from members, or a purge after a set time.
+
+## D51. A co-admin can take over from an owner who's gone (2026-11-08)
+
+An owner who forgets their PIN and has no signed-in device, or who simply stops coming, left a group with nobody able to make co-admins, hand over ownership or delete it: co-admins can't act on the owner, and only the owner transfers. Of three options Claude laid out (co-admins take over after 60 days; the host makes the owner a code; co-admins make the owner a code at once), Carlo took the first two together. Here, the first: once the owner hasn't been in the group for 60 days (`OWNER_AWAY_DAYS`, the archiving rule of D50), any co-admin can make themselves the owner, and the owner becomes a co-admin. The new owner can then make the old one a sign-in code if they lost their way in. The 60 days start again from the new owner, so a second co-admin can't take it straight back. The Group tab says the rule to the owner and to co-admins, with the days left, as for archiving.
+**Why:** it needs no trust beyond what the owner gave by making someone a co-admin, and it also covers the owner who has left, which is likelier than a lost PIN.
+**Trade-offs accepted:** a locked-out owner may wait up to 60 days (D52 is the fast way); an owner who is only on a long break comes back as a co-admin.
+**Revisit if:** groups want the owner to name a successor, or a shorter wait.
+
+## D52. The host can make a sign-in code for a group's owner (2026-11-08)
+
+The fast way back for an owner who forgot their PIN and has no signed-in device, whom nobody in the group can reach (D48 codes don't reach the owner). Carlo approved it together with D51. Per group on `/admin`, "Sign-in code for the owner…" takes a reason, writes the admin log, and shows an eight-character code once; it works for 10 minutes at that group's door, for the owner only. The host never sees the owner's name: the owner says which group is theirs. Unlike a group's own codes, it also works for an owner in several groups, since the host isn't one group's admin. The front door tells members without a PIN, and the "Forgot it?" line, that the owner asks whoever runs the site, linking `INSTANCE_CONTACT`; the privacy page says the host can do this and that it's logged. Migration 0011 adds the log action.
+**Why:** a lost PIN is fixed in minutes instead of 60 days, by the one person who can vouch for the instance anyway.
+**Trade-offs accepted:** this is the one place the instance admin acts inside a group, breaking "admin grants nothing inside groups" (PRD "Instance administration"); the host can't check who's asking from the app, so it rests on knowing the person; it's a reachable path into a group for whoever holds `ADMIN_KEY`, though the host can already read and change the database directly.
+**Revisit if:** hosters run instances for strangers, where they can't vouch for an owner.
+
+## D53. The host suspends before deleting (2026-11-08)
+
+A design review of the admin page found that the host could delete a group in one step, from a fold next to suspend, with a warning that left out plays and game nights. Carlo chose to give the host the same two steps owners have (D50): `/admin` deletes only a suspended group, and suspending, which members see and the host can undo, is the first step. The delete warning names the plays and game nights it takes, with counts (counts only, as the rest of the page).
+**Why:** a deleted group can't come back, and the host can't see inside it to judge what's lost; suspending already stops whatever prompted the delete.
+**Trade-offs accepted:** clearing out abuse takes two actions instead of one.
+**Revisit if:** hosters need to remove illegal content immediately, where suspending first leaves it in the database a moment longer (it's already hidden from everyone but members).

@@ -4,6 +4,15 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+- The Plays page exports game nights too: who came, their answers and each game they brought, as a second CSV beside the plays. Your account links both per group, and deleting a group offers both first. On the admin page, "suspend it first" opens the Suspend form.
+- The admin page's group Manage is laid out like a member's on the Group tab: Access, the owner's way in, and delete at the foot, one confirmation at a time. The host can delete only a suspended group, the warning names the plays and game nights it takes, and the suspend message is labelled as the one members read. Each action says when it's done. **Upgrading:** to delete a group from the admin page, suspend it first.
+- An owner deleting a group is told that nobody is notified, can download everyone's plays from the confirmation, and sees "… is deleted" on Your account afterwards. The delete button waits for the typed name.
+- The group's link says "use a sign-in code" instead of "use a code from an admin".
+- Fixed: the archived banner told co-admins they could delete the group.
+- Your account has a "Your data" panel: download your games and wishlist as a spreadsheet that pastes into any Box Populi, and the plays you were in for each group. Deleting your account or a group points to the downloads first.
+- Once a group's owner hasn't been in it for 60 days, a co-admin can take over as owner, and the owner becomes a co-admin. The Group tab says so to both.
+- The host can make a one-time sign-in code for a group's owner who forgot their PIN and has no signed-in device, from `/admin`, with a reason in the admin log. The group's link tells owners to ask the host. Needs migration 0011.
+- A suspended group no longer shows its join code, since nobody can join it while it's suspended.
 - In two or more groups, the group name at the top opens a list of your groups to switch between; you stay on the same tab. Create a group explains what a group is for, and the README answers when to start a second one.
 - The owner can archive a group they've stopped using (a co-admin can too once the owner hasn't been in the group for 60 days, and the Group tab says so): it turns read-only, its join link closes, and it moves to an "Archived" list at the end of Your groups, ready to restore. Deleting a group is now only possible once it's archived. Needs migration 0010.
 - Fixed: the next game night on a Your groups card showed as a boxed card on three lines.

@@ -8,10 +8,12 @@ import {
 	instanceTotals,
 	isAdminKey,
 	listGroups,
+	ownerSignInCode,
 	suspendGroup,
 	unsuspendGroup,
 	verifyAdminCookie
 } from './admin.ts';
+import { redeemSignInCode } from './recovery.ts';
 
 let db: ReturnType<typeof createTestDb>;
 const NOW = 1_800_000_000_000;
@@ -58,14 +60,17 @@ describe('what the admin sees', () => {
 	});
 
 	it('lists groups with counts and activity, and nothing about members', async () => {
+		await run(db, `INSERT INTO plays (id, group_id, game_id, played_on, logged_by, created_at) VALUES ('p1', 'g1', 1, '2026-11-01', 'ada', 0)`);
+		await run(db, `INSERT INTO game_nights (id, group_id, name, night_on, created_at) VALUES ('n1', 'g1', 'Café', '2026-11-20', 0), ('n2', 'g1', 'Café', '2026-11-27', 0)`);
 		const groups = await listGroups(db);
-		expect(groups.map((g) => [g.id, g.members, g.copies, g.lastActive])).toEqual([
-			['g1', 2, 3, 900],
-			['g2', 1, 2, 100],
-			['demo', 0, 0, null]
+		expect(groups.map((g) => [g.id, g.members, g.copies, g.plays, g.nights, g.lastActive])).toEqual([
+			['g1', 2, 3, 1, 2, 900],
+			['g2', 1, 2, 0, 0, 100],
+			['demo', 0, 0, 0, 0, null]
 		]);
+		// Counts only: no names, codes, games or contents (PRD "Instance administration").
 		expect(Object.keys(groups[0]).sort()).toEqual(
-			['archivedAt', 'copies', 'createdAt', 'id', 'isDemo', 'lastActive', 'members', 'name', 'suspendedAt', 'suspendedReason'].sort()
+			['archivedAt', 'copies', 'createdAt', 'id', 'isDemo', 'lastActive', 'members', 'name', 'nights', 'plays', 'suspendedAt', 'suspendedReason'].sort()
 		);
 	});
 });
@@ -85,12 +90,31 @@ describe('admin actions', () => {
 		]);
 	});
 
-	it('deletes a group by its typed name, keeps people and copies, and logs it', async () => {
+	it('deletes only a suspended group, by its typed name, keeps people and copies, and logs it', async () => {
+		expect(await adminDeleteGroup(db, 'g1', 'thursday club', 'Abandoned', NOW)).toMatchObject({ ok: false, error: expect.stringContaining('Suspend') });
+		expect(await suspendGroup(db, 'g1', 'Abandoned', NOW)).toEqual({ ok: true });
 		expect((await adminDeleteGroup(db, 'g1', 'Thursday', 'Abandoned', NOW)).ok).toBe(false);
 		expect((await adminDeleteGroup(db, 'demo', 'Demo', 'Abandoned', NOW)).ok).toBe(false);
 		expect(await adminDeleteGroup(db, 'g1', 'thursday club', 'Abandoned', NOW)).toEqual({ ok: true });
 		expect(await all(db, `SELECT id FROM groups ORDER BY id`)).toEqual([{ id: 'demo' }, { id: 'g2' }]);
 		expect((await all(db, 'SELECT * FROM copies')).length).toBe(3);
 		expect((await adminLog(db))[0]).toMatchObject({ action: 'delete_group', targetLabel: 'Thursday Club', reason: 'Abandoned' });
+	});
+});
+
+describe('a sign-in code for a group\'s owner (D52)', () => {
+	it('needs a reason, names nobody, works only for that owner at that door, and is logged', async () => {
+		expect((await ownerSignInCode(db, 'g2', '', NOW)).ok).toBe(false);
+		expect((await ownerSignInCode(db, 'demo', 'testing', NOW)).ok).toBe(false);
+		// Bo owns g2 and is in g1 too: the host isn't held to one group, as a group's admins are.
+		const made = await ownerSignInCode(db, 'g2', 'Bo lost their PIN and phone', NOW);
+		if (!made.ok) throw new Error(made.error);
+		expect(Object.keys(made).sort()).toEqual(['code', 'expiresAt', 'ok']);
+		expect(await one(db, "SELECT created_by FROM sign_in_codes WHERE user_id = 'bo'")).toEqual({ created_by: null });
+		const ip = '203.0.113.9';
+		expect(await redeemSignInCode(db, { groupId: 'g1', userId: 'bo', code: made.code, ip, now: NOW + 1 })).toEqual({ ok: false, reason: 'wrong' });
+		expect(await redeemSignInCode(db, { groupId: 'g2', userId: 'ada', code: made.code, ip, now: NOW + 2 })).toEqual({ ok: false, reason: 'wrong' });
+		expect(await redeemSignInCode(db, { groupId: 'g2', userId: 'bo', code: made.code, ip, now: NOW + 3 })).toEqual({ ok: true, person: { id: 'bo', name: 'Bo' } });
+		expect((await adminLog(db))[0]).toMatchObject({ action: 'owner_sign_in_code', targetLabel: 'Quiet', reason: 'Bo lost their PIN and phone' });
 	});
 });

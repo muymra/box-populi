@@ -136,6 +136,7 @@ Every group has exactly one owner, who starts as the creator. The owner promotes
 | Promote or demote co-admins | no | no | yes |
 | Transfer ownership | no | no | yes |
 | Archive or restore the group (D50) | no | once the owner has been away 60 days | yes |
+| Take over as owner (D51) | no | once the owner has been away 60 days | no |
 | Delete the group, once archived | no | no | yes |
 
 Rules that follow from the table:
@@ -146,10 +147,12 @@ Rules that follow from the table:
 - Removing a member doesn't block them from rejoining with the same code. To lock someone out, remove them and regenerate the code.
 - Sign-in codes and merging reach only people in this group and no other (D48): a person is one identity across all their groups, and a group's owner and co-admins have a say only in their own. The owner and co-admins also see who hasn't set a PIN yet ("No PIN yet" on the Group tab).
 - Transferring ownership asks the owner to pick a current member and confirm. The previous owner becomes a co-admin.
+- **Taking over** (D51): once the owner hasn't been in the group for 60 days, any co-admin can make themselves the owner, and the owner becomes a co-admin. It covers an owner who has left and one who has lost their way in (the new owner can then make them a sign-in code, if they're in this group only). The Group tab tells the owner (on the Archive row and when making someone a co-admin) and co-admins (an "If the owner's away" row with the days left, then an "Owner" row with "Take over as owner…"). The 60 days start again from the new owner.
+- An owner who forgot their PIN and has no signed-in device can ask the host for a sign-in code (D52, "Instance administration"); the front door says so.
 - The owner can't leave or delete their account while other members remain. They transfer ownership first, or archive and then delete the group.
 - **Archiving** (D50): the owner archives a group they've stopped using; a co-admin can too, once the owner hasn't been in the group for 60 days, so a group whose owner has gone can still be wound down. The Group tab says so to the owner (on the Archive row and when making someone a co-admin) and to co-admins (with how many days are left, or why it's open to them now). It stays for its members to look back at (shelf, plays, leaderboard, past nights) but is read-only, its join link is closed (members can still sign in through it), and it moves to a folded "Archived" list at the end of Your groups. The owner restores it with the same code, or a co-admin under the same 60-day rule. Deleting for good is the owner's, only for an archived group (or one the host suspended), with the group's name typed.
 - Leaving a group you're the only member of deletes it, with its code and links. The account page warns before it happens.
-- Deleting a group asks the owner to type the group name.
+- Deleting a group asks the owner to type the group name; the button waits for it. The confirmation says nobody is told, so the owner should let the group know first, and offers everyone's plays and game nights as downloads. Afterwards Your account says the group is deleted.
 - Role changes take effect on the next request. There is no activity log in the first version.
 
 ### Adding games
@@ -270,7 +273,7 @@ For fun, not for rankings anyone takes seriously (D37).
 - **Leaderboard.** Points, wins and plays per member, for this year or all time. Guests appear in plays but not on it, since one typed name can be two people. A member who leaves drops off it and shows as "a former member" in plays.
 - **Where.** A trophy icon in the group bar, beside "Who goes first?" and "Dice", opens the plays page (`/g/<group>/plays`): the leaderboard, the plays (newest 100), the points setting and the export. A game's page lists its plays, when it was last played and who has won it most. The plays page lists past game nights with their plays under them ("Fri 14 Nov, Café: 4 plays"), nights where nothing was logged included, and plays outside any night on their own. The export gains a `game_night` column.
 - **Changing plays.** Whoever logged a play, anyone in it, and co-admins and the owner can edit or delete it. Demo and suspended groups can't log.
-- **Export.** A CSV file, one row per player per play: date, game, where the game's details came from, BGG id, play id, player, member or guest, place, score, won, co-op result, points. Plays you were in, or everyone's; this year or all time. Game names and BGG ids only, nothing from BGG's statistics. BoardGameGeek is named on the rows whose game details came from BGG, and only there, and BGG titles appear exactly as BGG gives them.
+- **Export.** A CSV file, one row per player per play: date, game, where the game's details came from, BGG id, play id, player, member or guest, place, score, won, co-op result, points. Plays you were in, or everyone's; this year or all time. Beside it, the game nights as a second file: one row per person per night (date, start, night, host, person, member or guest, going or not), and one more for each further game they brought (the game, where its details came from, BGG id, whether it stayed home); nights you were on, or everyone's. Game names and BGG ids only, nothing from BGG's statistics. BoardGameGeek is named on the rows whose game details came from BGG, and only there, and BGG titles appear exactly as BGG gives them.
 - **Not played lately.** A shelf filter, under More once the group has logged a play: games not played in the last 3 months, including games never logged.
 - **Deleting.** Deleting an account removes that person's results; the plays stay for the others in them.
 
@@ -291,9 +294,9 @@ On Carlo's instance, `/demo` shows a read-only group of about 430 invented games
 
 Hosters need to deal with abuse and keep the instance within its free tier without reading people's groups.
 
-- **What the admin page shows:** totals (users, groups, games, copies), and a table of groups with name, created date, member count, copy count, last activity and status.
-- **What it never shows:** member names, join codes, collections, links or wishlists. Without join codes, the admin can't enter a group uninvited. Being the instance admin grants nothing inside groups.
-- **Actions:** suspend a group (members see it read-only with the reason and the hoster's contact), unsuspend, delete a group. Each needs a written reason and goes in the action log. There are no user-level actions, since the app knows nothing about people beyond a display name.
+- **What the admin page shows:** totals (users, groups, games, copies), and a table of groups with name, created date, member count, copy count, last activity and status, and in a group's Manage its play and game night counts.
+- **What it never shows:** member names, join codes, collections, links or wishlists. Without join codes, the admin can't enter a group uninvited. Being the instance admin grants nothing inside groups, with one exception: a sign-in code for a group's owner (below).
+- **Actions:** suspend a group (members see it read-only with the reason and the hoster's contact, and its join code is hidden, since nobody can join it), unsuspend, delete a suspended group (D53: suspend first, as owners archive first; the warning names the plays and game nights it takes), and make a one-time sign-in code for a group's owner who forgot their PIN and has no signed-in device (D52; shown once, works for 10 minutes at that group's door for the owner only, the owner's name never shown). Each needs a written reason and goes in the action log. There are no user-level actions, since the app knows nothing about people beyond a display name.
 - **Honesty about limits:** the hoster runs the database and could read it directly. The privacy page says so. What the app promises is that its admin screens don't expose group contents and that admin actions are logged.
 
 ### Account
@@ -301,8 +304,9 @@ Hosters need to deal with abuse and keep the instance within its free tier witho
 - People choose a display name when they create or join a group and can change it on the account page.
 - **PIN** (D47). Six digits, chosen when joining or creating a group; with any of your groups' links it gets you back in on any device. Your account sets or changes it from a signed-in device. Five wrong PINs for a person lock their name for 15 minutes; a network and the whole instance have limits too. Members' names show on a group's join page to anyone with its code, so they can tap theirs.
 - **Sign-in link** (the personal link of D25; named for what it does since D46). A backup way in: Your account makes one, for a password manager, and it works without a group's link. Making a new one stops the last and signs out every other device. Nobody is shown one when joining any more.
-- **Losing every device** is fine with your PIN: open a group's link, tap your name, type it. Without the PIN, the group's owner or a co-admin makes a one-time sign-in code (it works once, for 10 minutes), which you type at the door instead, then pick a new PIN (D48). Someone who joined again as a new person is merged back: the owner or a co-admin moves the old entry's games, plays, nights and wishlist onto the new one, which keeps the old colour. Both only for people in that group alone. Nobody signs in as anyone without that person's PIN, link or a code an admin hands them.
+- **Losing every device** is fine with your PIN: open a group's link, tap your name, type it. Without the PIN, the group's owner or a co-admin makes a one-time sign-in code (it works once, for 10 minutes), which you type at the door instead, then pick a new PIN (D48). An owner asks the host for one instead (D52). Someone who joined again as a new person is merged back: the owner or a co-admin moves the old entry's games, plays, nights and wishlist onto the new one, which keeps the old colour. Both only for people in that group alone. Nobody signs in as anyone without that person's PIN, link or a code an admin hands them.
 - **Setting a PIN:** members without one see a note on the shelf ("Set a PIN so you can get back in on any device") until they set one or choose "Not now" on that device for two weeks.
+- **Your data.** Your account downloads your shelf and wishlist as a CSV whose first three columns (game, players, minutes) paste into "Paste a list" on any Box Populi, and links to the plays and game nights you were in for each of your groups. BGG games carry their name, year and BGG id only. Deleting your account points there first, and deleting a group offers everyone's plays and game nights first, since they go with it.
 - A user can delete their account, which removes their copies, wishlist entries, memberships and sessions. Links they added stay, attributed to "former member." An owner of a group with other members must transfer ownership or delete the group first.
 
 ## Access and privacy

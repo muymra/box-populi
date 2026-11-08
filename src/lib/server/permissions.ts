@@ -19,7 +19,8 @@ export type GroupAction =
 	| 'set_night_planners'
 	| 'make_sign_in_code'
 	| 'merge_member'
-	| 'archive_group';
+	| 'archive_group'
+	| 'claim_ownership';
 
 export type PermissionContext = {
 	/** Role of the member being acted on, for member-targeted actions. */
@@ -30,11 +31,11 @@ export type PermissionContext = {
 	otherMembers?: number;
 	/** For `plan_night`: the group lets any member plan nights (its `nights_by` setting). */
 	openToMembers?: boolean;
-	/** For `archive_group`: the owner hasn't been seen in the group for OWNER_AWAY_DAYS. */
+	/** For `archive_group` and `claim_ownership`: the owner hasn't been seen in the group for OWNER_AWAY_DAYS. */
 	ownerAway?: boolean;
 };
 
-/** After this long without the owner, a co-admin may archive or restore the group (D50). */
+/** After this long without the owner, a co-admin may archive or restore the group (D50) or take over as owner (D51). */
 export const OWNER_AWAY_DAYS = 60;
 
 const RANK: Record<Role, number> = { member: 0, admin: 1, owner: 2 };
@@ -79,6 +80,10 @@ export function can(actor: Role, action: GroupAction, ctx: PermissionContext = {
 		// a group whose owner has gone can still be wound down. Deleting for good stays the owner's.
 		case 'archive_group':
 			return actor === 'owner' || (actor === 'admin' && ownerAway);
+		// Taking over (D51): a co-admin, once the owner has been away, so a group isn't stuck without one.
+		// The owner becomes a co-admin.
+		case 'claim_ownership':
+			return actor === 'admin' && ownerAway;
 		case 'leave':
 			return actor !== 'owner' || otherMembers === 0;
 	}

@@ -58,12 +58,13 @@
 		['Lending', 'who has whose copy, so lent games don’t go missing'],
 		['Rules and tutorials', 'rulebook and video links on every game'],
 		['At the table', 'who goes first, any mix of dice, and a coin, a tap away'],
+		['Your data', 'download your games, plays and game nights as spreadsheets, and take your games to another Box Populi'],
 		['Twelve colour themes', 'try one at the bottom of this page']
 	] as const;
 	const HOSTING = [
 		['Where it runs', 'Cloudflare on the free plan, Docker with a SQLite file at home, or Vercel or Netlify with Turso.'],
 		['Where games come from', 'BoardGameGeek with your own BGG application, or Wikidata, pasted lists and hand entry.'],
-		['What you manage', 'Suspend or delete groups without seeing inside them, and set the colours and logo.']
+		['What you manage', 'Who creates groups, suspending and deleting groups without seeing inside them, a way back in for a locked-out owner, and the colours and logo.']
 	] as const;
 </script>
 

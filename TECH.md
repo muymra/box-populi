@@ -64,7 +64,8 @@ box-populi/
   package.json  vite.config.ts  tsconfig.json  pnpm-workspace.yaml
   migrations/                   0001_init (schema below), 0002_game_sources, 0003_group_theme,
                                 0004_instance_settings, 0005_game_corrections, 0006_plays,
-                                0007_game_nights, 0008_pins, 0009_sign_in_codes, 0010_archive
+                                0007_game_nights, 0008_pins, 0009_sign_in_codes, 0010_archive,
+                                0011_owner_sign_in_codes
   scripts/
     ensure-local-config.ts      creates the two gitignored config files on install
     seed-demo.ts                writes seed/demo.sql
@@ -214,6 +215,8 @@ Bindings and variables come from `import { env } from 'cloudflare:workers'` (Sve
 - `0008_pins.sql`: `users.pin_hash`, `pin_salt` and `pin_set_at`, the front door's PIN (D47).
 - `0009_sign_in_codes.sql`: `sign_in_codes`, one-time codes an owner or co-admin makes for a member (D48; shown after `personal_links` below).
 - `0010_archive.sql`: `groups.archived_at` and `archived_by` (D50). Archiving and restoring are `can(role, 'archive_group', { ownerAway })`: the owner, or a co-admin when `ownerAway()` finds the owner's `last_seen_at` older than `OWNER_AWAY_DAYS` (60, in `permissions.ts`). The Group tab gets `canArchive`, `archiveWaits`, `canRestore`, `restoreWaits` and `ownerAwayDays` to show the right action or the rule with the days left. `authz.ts` treats an archived group like a suspended one: `requireRead` returns it `readonly`, and `requireRole` refuses it unless `allowArchived` (restoring, and deleting); `requireActiveMember` skips archived groups. `joinRefusal` gives `archived`, though members still sign in at its door. The layout drops the join code while archived. `deleteGroup` refuses a group that is neither archived nor suspended. Deleting a person clears `archived_by`.
+- Taking over as owner (D51) needs no migration: `claimOwnership` in `group-admin.ts` checks `can(role, 'claim_ownership', { ownerAway })` (a co-admin only), then one batch demotes the owner only if their `last_seen_at` is still past the cutoff, and promotes the actor only if no owner is left, setting their `last_seen_at` to now; it reads the actor's role back to tell whether it happened. So an owner who came back in the meantime keeps the group, and a second co-admin can't take it from the first. The Group tab gets `canClaim`, and its `claim` action.
+- `0011_owner_sign_in_codes.sql`: rebuilds `admin_actions` (SQLite can't change a CHECK in place) to allow `owner_sign_in_code` (D52).
 
 Timestamps are Unix milliseconds. JSON columns hold arrays and are written and read only through helpers in `db.ts`.
 
@@ -242,7 +245,7 @@ CREATE TABLE sign_in_codes (
   user_id     TEXT PRIMARY KEY REFERENCES users(id),
   group_id    TEXT NOT NULL REFERENCES groups(id),
   code_hash   TEXT NOT NULL,
-  created_by  TEXT REFERENCES users(id),
+  created_by  TEXT REFERENCES users(id),   -- null when the host made it for the group's owner (D52)
   expires_at  INTEGER NOT NULL
 );
 
@@ -374,7 +377,7 @@ INSERT INTO bgg_pace (id, next_at) VALUES (1, 0);
 -- instance administration log
 CREATE TABLE admin_actions (
   id            INTEGER PRIMARY KEY,
-  action        TEXT NOT NULL CHECK (action IN ('suspend_group','unsuspend_group','delete_group')),
+  action        TEXT NOT NULL CHECK (action IN ('suspend_group','unsuspend_group','delete_group','owner_sign_in_code')), -- the last since 0011
   target_id     TEXT NOT NULL,
   target_label  TEXT NOT NULL,   -- the group's name at the time
   reason        TEXT NOT NULL,
@@ -460,7 +463,7 @@ No accounts (D25). A person is a display name; a device proves who it is with a 
 
 **PINs (D47).** `src/lib/server/pins.ts`. Six digits (`cleanPin`), stored as `pin_hash` = SHA-256 of `<salt>:<pin>` with a 32-byte random `pin_salt` per person. A slow hash would be the textbook choice, but six digits fall to an offline search whatever the hash, and Workers' CPU limit on the free plan rules out a deliberately slow one; what protects a PIN is that it's only ever tried online, through a group's front door, under limits. `/join/[code]` lists the members (`frontDoorMembers`: names, colours, whether each has a PIN; alphabetical) to a signed-out device. Its `signin` action takes `userId` and `pin`: `signInWithPin` checks the person is a member of that group, takes a try from `pin_fail` (per address, 10 per 10 minutes), `pin_fail_person` (`pin:<userId>`, 5 per 15 minutes, so a name can't be worked through from many addresses) and `pin_fail_all` (instance, 200 per hour), and gives them back when the PIN is right. A right PIN creates a session (ending another person's session on that device) and redirects to the group. `/me` action `setPin` sets or replaces the PIN from a signed-in device; no old PIN is asked for, as with making a new sign-in link.
 
-**Helping someone back in (D48).** `src/lib/server/recovery.ts`, for the owner and co-admins, and only for a member who is in this group and no other (`memberReach` gives each member's group count, PIN status and join date in one query). `makeSignInCode` checks `can(role, 'make_sign_in_code')` (whom `remove_member` reaches) and makes eight characters of the join-code alphabet, shown as `K7M4-P2QX`, stored as SHA-256 in `sign_in_codes` with a 10-minute expiry, replacing any earlier one. At the front door "Use a code from an admin" (forced for a name without a PIN) posts `adminCode` to `signin`; `redeemSignInCode` takes from the PIN limits, matches person, group, hash and expiry, deletes the code and gives the tries back; the device is signed in and sent to `/me?code=1#pin-row`, which asks for a new PIN. `mergeMember` (`can(role, 'merge_member')`; never into the actor) moves an old entry's rows to the new one in one batch: copies and wishlist the new one lacks, loans, play seats and nights the new one isn't in, plays logged, nights hosted and planned, bring lists, games typed in and edited, links and corrections; the membership keeps the earlier `joined_at` (so the old colour), the later `last_seen_at` and the higher role; then `deletePersonStatements(old)` removes what's left, and the group's and the new person's catalogs are bumped. The Group tab shows "No PIN yet" to the owner and co-admins, and the shelf nudges a member without a PIN (`myPinSet` from the group layout; "Not now" stored as `bp:pin-nudge` for 14 days).
+**Helping someone back in (D48).** `src/lib/server/recovery.ts`, for the owner and co-admins, and only for a member who is in this group and no other (`memberReach` gives each member's group count, PIN status and join date in one query). `makeSignInCode` checks `can(role, 'make_sign_in_code')` (whom `remove_member` reaches) and makes eight characters of the join-code alphabet, shown as `K7M4-P2QX`, stored as SHA-256 in `sign_in_codes` with a 10-minute expiry, replacing any earlier one. At the front door "Use a sign-in code" (forced for a name without a PIN) posts `adminCode` to `signin`; `redeemSignInCode` takes from the PIN limits, matches person, group, hash and expiry, deletes the code and gives the tries back; the device is signed in and sent to `/me?code=1#pin-row`, which asks for a new PIN. `mergeMember` (`can(role, 'merge_member')`; never into the actor) moves an old entry's rows to the new one in one batch: copies and wishlist the new one lacks, loans, play seats and nights the new one isn't in, plays logged, nights hosted and planned, bring lists, games typed in and edited, links and corrections; the membership keeps the earlier `joined_at` (so the old colour), the later `last_seen_at` and the higher role; then `deletePersonStatements(old)` removes what's left, and the group's and the new person's catalogs are bumped. The Group tab shows "No PIN yet" to the owner and co-admins, and the shelf nudges a member without a PIN (`myPinSet` from the group layout; "Not now" stored as `bp:pin-nudge` for 14 days).
 
 **Sessions.** 32 random bytes, base64url, in the cookie `bp_session` (`HttpOnly; Secure; SameSite=Lax; Path=/`, `Max-Age` 400 days, the browser maximum). `sessions.id` holds its hex SHA-256, so a leaked database holds no usable sessions. Expiry is 400 days and slides: a request finding under 200 days left extends it. `hooks.server.ts` resolves the cookie into `event.locals.user = { id, name }` and deletes the row when it finds it expired. In local dev over http, the cookie drops `Secure`.
 
@@ -513,10 +516,11 @@ The instance admin is whoever holds `ADMIN_KEY` (see "Identity and sessions"). `
 The admin page shows:
 
 - Totals: people, groups, cached games, copies, sessions and `rate_events` rows, for spotting runaway growth against the free tier.
-- A groups table: name, created date, member count, copy count, last activity (the latest `last_seen_at` among members), and status. Sortable by each column.
+- A groups table: name, created date, member count, copy count, last activity (the latest `last_seen_at` among members), and status. Sortable by each column. Each row's Manage also has the group's play and game night counts, for the delete warning: counts only, never the plays or nights.
+- Each action answers with what happened: a failure (`{ groupId, action, error }`) reopens that action's confirmation with the error beside its fields, and a success (`{ done: { action, name } }`) shows a status line over the list, which is how a deleted group's row says it's gone.
 - The admin log, newest first.
 
-It never shows member names or lists, join codes, collections, links or wishlists. Without codes, an admin can't join a group they haven't been invited to. There are no emails anywhere, so there's no user lookup and no user bans; abuse is handled per group.
+It never shows member names or lists, join codes, collections, links or wishlists (the owner's code below reads the owner's id and shows nothing about them). Without codes, an admin can't join a group they haven't been invited to. There are no emails anywhere, so there's no user lookup and no user bans; abuse is handled per group.
 
 Actions. Each requires a written reason and writes a row to `admin_actions`.
 
@@ -524,7 +528,8 @@ Actions. Each requires a written reason and writes a row to `admin_actions`.
 |---|---|
 | Suspend group | Members can still open it read-only, with a banner showing the reason and `INSTANCE_CONTACT`. Joins and every change made through the group are refused, including BGG search and import sent from its add page. Members can leave, and the owner can delete the group. Members' shelves are their own, so one who is also in an active group can still change it there, and the change shows here too (see "Authorization"). |
 | Unsuspend group | Back to normal. |
-| Delete group | Requires typing the group name. Same cascade as an owner deleting it. Members' copies stay on their accounts. |
+| Delete group | Only a suspended group (D53): suspending is the host's undoable first step, as archiving is the owner's. Requires typing the group name; the button waits for it in the browser. The warning names the plays and game nights it takes, with their counts. Same cascade as an owner deleting it. Members' copies stay on their accounts. |
+| Sign-in code for the owner (D52) | For an owner who forgot their PIN and has no signed-in device, whom nobody in the group can reach. `ownerSignInCode` in `admin.ts` reads the owner's id (never returned, so no name reaches the page) and stores a code through `signInCodeStatement` in `recovery.ts` with `created_by` null, in the same batch as the log row. Shown once, as on the Group tab; it works for 10 minutes at that group's door for the owner only. Unlike the group's own codes it isn't limited to people in one group, since the host isn't one group's admin. |
 
 The hoster operates the database and can read all of it with `wrangler d1 execute`. The app can't prevent that, and the privacy page says so plainly. What the app guarantees is that its admin screens don't expose group contents and that every admin action is logged.
 
@@ -845,7 +850,7 @@ Dates: the server accepts plays up to its own date plus a day, because people ea
 
 The catalog payload carries `lastPlayed` per game (one `MAX(played_on)` query per group); the shelf's `stale=1` filter keeps games last played before `staleCutoff()` (90 days ago) or never. Deleting a group clears its plays; deleting a person clears their `play_players` rows and their `logged_by`, and a game a play still names is no longer an orphan, so it stays.
 
-The CSV: one row per player per play, CRLF line ends and a byte-order mark for spreadsheet apps. `game_data_from` names where each game's details came from ("BoardGameGeek", "Wikidata" or "typed in"), so BGG is credited by name on the rows that carry its data and nowhere else. A game counts as BGG data by the footer's test (`holdsBggData`): a BGG id and not typed in; the demo's invented games say "typed in". Text people typed (names, guests, typed-in and Wikidata titles) starting with `=`, `+`, `-`, `@`, a tab or a return gets a leading apostrophe, so a guest called `=cmd()` can't run as a formula; BGG titles are written as BGG gives them. Numbers stay numbers.
+The CSV: one row per player per play, CRLF line ends and a byte-order mark for spreadsheet apps (`src/lib/csv.ts` holds the field quoting, the formula guard, the source labels and the download response, shared with "your games"). `game_data_from` names where each game's details came from ("BoardGameGeek", "Wikidata" or "typed in"), so BGG is credited by name on the rows that carry its data and nowhere else. A game counts as BGG data by the footer's test (`holdsBggData`): a BGG id and not typed in; the demo's invented games say "typed in". Text people typed (names, guests, typed-in and Wikidata titles) starting with `=`, `+`, `-`, `@`, a tab or a return gets a leading apostrophe, so a guest called `=cmd()` can't run as a formula; BGG titles are written as BGG gives them. Numbers stay numbers.
 
 Form fields: each player's score and place are named after them (`score:m:<id>`, `place:g:<name>`), not paired with `player` by position, because a select whose bound value has no option sends nothing and would shift every later player's place. An edit keeps players who have since left the group (shown as "a former member", removable) and works after the game leaves the shelf; only new plays need the game on the shelf and every player in the group. Deleting an account also deletes any play left with no players.
 
@@ -894,11 +899,12 @@ A writable local group with invented data, for trying the app as a member sees i
 | `/g/[groupId]/nights/new` | Plan a game night (name, date, start time, where). The Game night tab's Plan a night tab posts its form here; the page itself shows the form again when there's something to fix. | `requireRole(member)` and `can('plan_night')` by the group's `nights_by` |
 | `/g/[groupId]/nights/[nightId]` | One game night: who's going, guests, the bring list, suggestions, what stayed home, its plays. Actions `edit`, `delete`, `going`, `addGuest`, `removeGuest`, `bring`, `bringOther`, `unbring`, `stayedHome`. | `requireRead`; actions `requireRole(member)` plus the night rules in "Game nights" |
 | `/g/[groupId]/plays` | The play log: leaderboard (`?period=all` for all time), plays, points setting, export. Actions `logPlay`, `editPlay`, `deletePlay` (also used by the game page's forms) and `points`. | `requireRead`; plays `requireRole(member)` plus `canChangePlay`; `points` `requireRole(admin)` |
-| `GET /g/[groupId]/plays/export.csv` | The plays as CSV (`who=me|all`, `period=year|all`), a download for people, no CORS. | `requireRead`; `who=me` needs membership |
+| `GET /g/[groupId]/plays/export.csv` | The plays as CSV (`who=me|all`, `period=year|all`), or with `what=nights` the game nights (`nightsCsv` in `src/lib/nights-csv.ts`, game names from `nightGameInfo` with the group's corrections), a download for people, no CORS. | `requireRead`; `who=me` needs membership |
 | `/g/[groupId]/wanted` | The Wanted tab: games members want that nobody in the group owns, with who wants each and a "Me too" toggle. Wishes are set by the `want` action here, on the game page and on the add page (`on=0` removes). | `requireRead`; `want` needs `requireRole(member)` |
 | `/g/[groupId]/ready` | After creating a group: the invite card, then "Add your games". | `requireRead`, members only (others go to the group) |
 | `/g/[groupId]/group` | The Group tab: invite code, members list, and the settings actions (`rename`, `newCode`, `promote`, `demote`, `transfer` (with `confirmName`, the new owner's name, checked by `transferOwnership`), `remove`, `signInCode`, `merge`, `archive`, `restore` (with `allowArchived`), `delete` (once archived or suspended)). Members see the code and the list; co-admins and the owner see the controls their role allows. | `requireRead`; each action `requireRole(admin)` or `requireRole(owner)` |
-| `/me` | Display name, PIN (`setPin`), groups, loans (what you lent, with "Mark as returned", and what you borrowed), a new sign-in link (backup), sign out of this device or everywhere, account deletion. Later: my games and wishlist. | `requireUser` |
+| `/me` | Display name, PIN (`setPin`), groups, loans (what you lent, with "Mark as returned", and what you borrowed), a new sign-in link (backup), sign out of this device or everywhere, Your data (the games file and a plays link per group), account deletion. | `requireUser` |
+| `GET /me/games.csv` | Your shelf and wishlist as CSV (`loadYourGames` in `src/lib/server/your-data.ts`, `gamesCsv` in `src/lib/games-csv.ts`), a download for people, no CORS. Columns `game, players, minutes` first, the order "Paste a list" reads, so copying them from a spreadsheet adds the games on another instance; then `list` (shelf or wishlist), `year`, `game_data_from`, `bgg_id`, `wikidata_id`, `added`, `lent_to`, `note`. BGG games get name, year and BGG id only: players and minutes stay empty for them. Games as stored, not any group's corrections. | signed in, else 401 |
 | `GET /api/g/[groupId]/catalog` | Catalog payload with ETag. | `requireRead` |
 | `GET /api/bgg/search` | BGG search proxy. | `requireActiveMember` (optional `groupId`), rate-limited per person |
 | `POST /api/bgg/import`, `/api/bgg/import/confirm`, `/api/bgg/hydrate` | Import flow. | `requireActiveMember` with the page's `groupId`, rate-limited per person |

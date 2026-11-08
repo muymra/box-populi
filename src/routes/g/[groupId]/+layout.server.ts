@@ -12,9 +12,9 @@ export const load: LayoutServerLoad = async (event) => {
 	const db = getDb();
 	const access = await requireRead(event, db, event.params.groupId);
 	// Members see the join code so they can invite people; demo visitors never do, and nobody does
-	// while the group is archived (D50), since the code is closed then.
+	// while the group is archived (D50) or suspended, since joining is refused then.
 	const code =
-		access.role && !access.group.isDemo && !access.group.archived
+		access.role && !access.group.isDemo && !access.group.archived && !access.group.suspended
 			? ((await one<{ code: string }>(db, 'SELECT code FROM groups WHERE id = ?1', access.group.id))?.code ?? null)
 			: null;
 	// Imported games still waiting for BGG details; the note offers to finish loading them.

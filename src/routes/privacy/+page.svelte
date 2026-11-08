@@ -46,8 +46,8 @@
 			it, never the digits.
 		</li>
 		<li>
-			If your group's owner or a co-admin makes you a one-time sign-in code, its fingerprint, until you use it or ten minutes
-			pass.
+			If your group's owner or a co-admin makes you a one-time sign-in code (or the host does, for a group's owner), its
+			fingerprint, until you use it or ten minutes pass.
 		</li>
 		<li>A cookie that keeps this device signed in. The server stores only a scrambled fingerprint of it, and the same for your sign-in link.</li>
 		<li>
@@ -64,17 +64,23 @@
 	<h2 id="who">Who can see it</h2>
 	<p>
 		Members of a group see each other's names, games, loans and wishlists, the links added to games, the group's game nights and its plays.
-		Any member can download the plays as a spreadsheet file, which names everyone in them. Anyone with a group's code sees
+		Any member can download the plays and game nights as spreadsheet files, which name everyone in them. Anyone with a group's code sees
 		its members' names on its join page, so they can tap their own. A group's owner and co-admins see who hasn't set a PIN yet.
 		Nobody outside a group can see inside it. The demo group is the exception: it's public and contains no real people.
 	</p>
 	<p>
-		The host's admin page shows totals and, per group, its name, number of members and games, and last activity. It
-		doesn't show who is in a group, join codes or collections. The host can suspend or delete a group, giving a reason,
-		and every such action is logged. The host does run the database, though, and could read it directly.
+		The host's admin page shows totals and, per group, its name, the number of members, games, plays and game nights, and
+		last activity. It doesn't show who is in a group, join codes or collections. The host can suspend a group, and delete one
+		they have suspended, giving a reason,
+		and every such action is logged. The host can also make a one-time sign-in code for a group's owner who has lost their
+		way in, without seeing their name; that is logged with its reason too. The host does run the database, though, and could read it directly.
 	</p>
 
-	<h2 id="deleting">Deleting your data</h2>
+	<h2 id="deleting">Taking and deleting your data</h2>
+	<p>
+		Your account page downloads your games and wishlist, and the plays and game nights you were in for each of your groups, as spreadsheet files. The games file
+		pastes into any other Box Populi.
+	</p>
 	<p>
 		You can delete your account from your account page. That removes your name, your shelf, wishlist, memberships and
 		sessions, your results in logged plays, your answers and bring lists on game nights, and the games you typed in yourself. A typed-in game that another member also
@@ -108,7 +114,7 @@
 	<ul>
 		<li><a href="#stored">What's stored</a></li>
 		<li><a href="#who">Who can see it</a></li>
-		<li><a href="#deleting">Deleting your data</a></li>
+		<li><a href="#deleting">Taking and deleting your data</a></li>
 		<li><a href="#games">Game data</a></li>
 	</ul>
 </nav>

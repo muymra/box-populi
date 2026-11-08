@@ -4,6 +4,7 @@ import { OWNER_AWAY_DAYS } from '#lib/server/permissions.ts';
 import { loadMembers } from '#lib/server/catalog.ts';
 import {
 	archiveGroup,
+	claimOwnership,
 	deleteGroup,
 	ownerAway,
 	restoreGroup,
@@ -47,6 +48,8 @@ export const load: PageServerLoad = async (event) => {
 		// 60 days; the owner deletes, once archived. A co-admin who may not is told why.
 		canArchive: actor != null && (actor.role === 'owner' || (actor.role === 'admin' && away)) && !access.group.isDemo,
 		archiveWaits: actor != null && actor.role === 'admin' && !away && !access.group.isDemo,
+		// Taking over as owner (D51): a co-admin, once the owner has been away 60 days.
+		canClaim: actor != null && actor.role === 'admin' && away && !access.group.isDemo,
 		restoreWaits: me != null && access.role === 'admin' && access.group.archived && !access.group.suspended && !away,
 		/** For saying the 60-day rule out loud wherever it applies. */
 		ownerAwayDays: OWNER_AWAY_DAYS,
@@ -159,6 +162,11 @@ export const actions: Actions = {
 		return result.ok ? { memberChanged: true } : fail(400, { memberError: result.error });
 	},
 
+	claim: async (event) => {
+		const result = await act(event, 'admin', (db, id, actor) => claimOwnership(db, id, actor, Date.now()));
+		return result.ok ? { claimed: true } : fail(400, { claimError: result.error });
+	},
+
 	archive: async (event) => {
 		const result = await act(event, 'admin', (db, id, actor) => archiveGroup(db, id, actor, Date.now()));
 		return result.ok ? { archived: true } : fail(400, { archiveError: result.error });
@@ -171,11 +179,13 @@ export const actions: Actions = {
 
 	delete: async (event) => {
 		// The owner can delete a suspended group (TECH.md "Authorization").
+		const name = (await one<{ name: string }>(getDb(), 'SELECT name FROM groups WHERE id = ?1', event.params.groupId))?.name ?? '';
 		const result = await act(event, 'owner', (db, id, actor, form) => deleteGroup(db, id, actor, form.get('confirmName')), {
 			allowSuspended: true,
 			allowArchived: true
 		});
 		if (!result.ok) return fail(400, { deleteError: result.error });
-		redirect(303, '/me');
+		// Your account says it's done, by name, since the group is gone from every list.
+		redirect(303, `/me?deleted=${encodeURIComponent(name)}`);
 	}
 };
