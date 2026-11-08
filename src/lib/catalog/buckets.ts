@@ -1,4 +1,4 @@
-// Box Populi's own complexity labels over BGG's 1–5 weight (DECISIONS D15). The UI shows these
+// Box Populi's own complexity labels over BGG's 1–5 weight (DECISIONS D15, D56: heavy from 4). The UI shows these
 // next to BGG's own value, never instead of it (TECH.md "No modification").
 
 export type WeightBucket = 'light' | 'medium' | 'heavy';
@@ -13,14 +13,14 @@ export const BUCKET_LABELS: Record<WeightBucket, string> = {
 
 /**
  * What a member's complexity stores, on the same 1–5 scale as BGG's weight so the two sort together:
- * the middle of each band (D55).
+ * the middle of each band (D55, D56).
  */
-export const BUCKET_WEIGHTS: Record<WeightBucket, number> = { light: 1.5, medium: 2.5, heavy: 4 };
+export const BUCKET_WEIGHTS: Record<WeightBucket, number> = { light: 1.5, medium: 3, heavy: 4.5 };
 
 export function weightBucket(weight: number | null): WeightBucket | null {
 	if (weight == null) return null;
 	if (weight < 2) return 'light';
-	if (weight < 3) return 'medium';
+	if (weight < 4) return 'medium';
 	return 'heavy';
 }
 

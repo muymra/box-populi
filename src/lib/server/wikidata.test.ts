@@ -63,6 +63,20 @@ describe('parsing Wikidata', () => {
 		]);
 	});
 
+	it('names a game by its English label, then the label for every language, then any', () => {
+		const bgg = { P2339: [{ rank: 'normal', mainsnak: { snaktype: 'value', datavalue: { value: '9900104' } } }] };
+		const entities = {
+			entities: {
+				Q4: { labels: { pl: { value: 'Skok' }, mul: { value: 'Jump Grid' } }, claims: bgg },
+				Q5: { labels: { mul: { value: 'Jump Grid' }, en: { value: 'Jump Grid: Deluxe' } }, claims: bgg }
+			}
+		};
+		expect(parseEntities(entities, ['Q4', 'Q5']).map((g) => [g.name, g.aliases])).toEqual([
+			['Jump Grid', ['Skok']],
+			['Jump Grid: Deluxe', ['Jump Grid']]
+		]);
+	});
+
 	it('ranks exact titles and aliases first, then prefixes', () => {
 		const g = (name: string, aliases: string[] = []): WikidataGame => ({ wikidataId: name, bggId: 1, name, aliases, year: null, minPlayers: null, maxPlayers: null });
 		const games = [g('My Lantern'), g('Lantern Harbour: Night'), g('Lantern Harbour', ['Lantern Harbor'])];
@@ -99,6 +113,7 @@ describe('the live client', () => {
 		expect(games.map((g) => g.wikidataId)).toEqual(['Q1']);
 		expect(seen[0].searchParams.get('action')).toBe('wbsearchentities');
 		expect(seen[1].searchParams.get('ids')).toBe('Q2|Q1');
+		expect(seen[1].searchParams.get('languages')?.split('|').slice(0, 2)).toEqual(['mul', 'en']);
 		expect(seen[1].searchParams.get('maxlag')).toBeNull();
 	});
 

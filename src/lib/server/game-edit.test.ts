@@ -57,14 +57,14 @@ describe('details are shared, pictures stay with the group (D54)', () => {
 		expect(await shelfNames('g1')).toContain('Lantern Harbour (2nd edition)');
 		expect(await shelfNames('g2')).toContain('Lantern Harbour (2nd edition)');
 		const [here, there] = [(await loadCatalog(db, 'g1', 1)).games, (await loadCatalog(db, 'g2', 1)).games].map((games) => games.find((g) => g.id === 2)!);
-		expect(here).toMatchObject({ minPlayers: 2, maxPlayers: 5, maxPlaytime: 45, weight: 4, thumbUrl: 'https://example.com/box.jpg' });
-		expect(there).toMatchObject({ minPlayers: 2, maxPlayers: 5, maxPlaytime: 45, weight: 4, thumbUrl: null });
+		expect(here).toMatchObject({ minPlayers: 2, maxPlayers: 5, maxPlaytime: 45, weight: 4.5, thumbUrl: 'https://example.com/box.jpg' });
+		expect(there).toMatchObject({ minPlayers: 2, maxPlayers: 5, maxPlaytime: 45, weight: 4.5, thumbUrl: null });
 		expect(there.search).toContain('port des lanternes'); // the old titles still find it
 		expect(await one(db, 'SELECT name, max_players, image_url, weight, edited_by, edited_at FROM games WHERE id = 2')).toEqual({
 			name: 'Lantern Harbour (2nd edition)',
 			max_players: 5,
 			image_url: null,
-			weight: 4,
+			weight: 4.5,
 			edited_by: 'ada',
 			edited_at: NOW
 		});
@@ -75,10 +75,10 @@ describe('details are shared, pictures stay with the group (D54)', () => {
 		expect(await version('g2')).toBe(g2 + 1);
 	});
 
-	it('stores a level as the middle of its band, and keeps a finer value when the level is the same (D55)', async () => {
-		await run(db, 'UPDATE games SET weight = 3.2 WHERE id = 2');
+	it('stores a level as the middle of its band, and keeps a finer value when the level is the same (D55, D56)', async () => {
+		await run(db, 'UPDATE games SET weight = 4.3 WHERE id = 2');
 		await editGame(db, 'g1', owner, 2, form({ name: 'Lantern Harbour', complexity: 'heavy' }), NOW);
-		expect(await one(db, 'SELECT weight, edited_by FROM games WHERE id = 2')).toEqual({ weight: 3.2, edited_by: null });
+		expect(await one(db, 'SELECT weight, edited_by FROM games WHERE id = 2')).toEqual({ weight: 4.3, edited_by: null });
 		await editGame(db, 'g1', owner, 2, form({ name: 'Lantern Harbour', complexity: 'light' }), NOW);
 		expect(await one(db, 'SELECT weight FROM games WHERE id = 2')).toEqual({ weight: 1.5 });
 	});

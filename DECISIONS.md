@@ -70,7 +70,7 @@ Copies appear at once; the client calls `/api/bgg/hydrate` for 20 games at a tim
 
 ## D14. Expansions are hidden by default and listed under their base game (2026-11-06)
 
-## D15. Complexity buckets: light under 2, medium 2 to under 3, heavy 3 and up (2026-11-06)
+## D15. Complexity buckets: light under 2, medium 2 to under 3, heavy 3 and up (2026-11-06). Superseded by D56: heavy starts at 4.
 
 ## D16. A copy lent to a group member stays available (2026-11-06)
 
@@ -351,3 +351,10 @@ The edit form offered 1 to 5, labelled 1 light, 2 medium, 3 and 4 heavy, 5 very 
 **Why:** the form matches the only levels the shelf, the picker and the spines show.
 **Trade-offs accepted:** a member can't say "very heavy"; two heavy games rated by members sort as equals.
 **Revisit if:** the shelf gets the complexity range slider (PRD cut order item 3), which would want finer values.
+
+## D56. Heavy starts at 4 (2026-11-08)
+
+Replaces D15's thresholds. Complexity is light under 2, medium from 2 to under 4, and heavy from 4. Carlo found "3 and up" too broad: heavy should mean really heavy, and BGG's own vote labels call a 3 "Medium" and a 4 "Medium Heavy". A member's rating (D55) is stored as the middle of its band: 1.5, 3 or 4.5. Carlo picked this over heavy from 3.5 and over a fourth level (medium-heavy).
+**Why:** "not too heavy" in the picker and the Heavy button on the shelf now leave out only the long, dense games.
+**Trade-offs accepted:** Medium covers most of a typical shelf, so the Medium button narrows less. Games from 3 to 4 that were heavy are medium now, and a member's earlier rating of 3 (before D55) reads as medium.
+**Revisit if:** the Medium button stops being useful on real shelves; a fourth level is the next step.

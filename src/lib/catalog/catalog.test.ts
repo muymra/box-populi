@@ -82,9 +82,10 @@ describe('weight and time', () => {
 	it('closes the gaps between buckets', () => {
 		expect(weightBucket(1.99)).toBe('light');
 		expect(weightBucket(2)).toBe('medium');
-		expect(weightBucket(2.99)).toBe('medium');
-		expect(weightBucket(3)).toBe('heavy');
-		expect(weightBucket(3.2)).toBe('heavy');
+		expect(weightBucket(3)).toBe('medium'); // BGG's own word for a 3 is "Medium" (D56)
+		expect(weightBucket(3.99)).toBe('medium');
+		expect(weightBucket(4)).toBe('heavy');
+		expect(weightBucket(4.2)).toBe('heavy');
 		expect(weightBucket(null)).toBeNull();
 	});
 	it('shows weight at BGG precision', () => {
@@ -163,7 +164,7 @@ describe('filterGames', () => {
 
 	it('filters by weight bucket', () => {
 		const light = game({ weight: 1.5 });
-		const heavy = game({ weight: 3.4 });
+		const heavy = game({ weight: 4.4 });
 		expect(filterGames([light, heavy], f({ weights: ['heavy'] }), members)).toEqual([heavy]);
 	});
 
@@ -357,7 +358,7 @@ describe('keeping and choosing (PRD "Picker")', () => {
 	});
 
 	it('says why a game falls outside the setup, and lets unknown details through', () => {
-		const long = game({ minPlayers: 2, maxPlayers: 4, maxPlaytime: 120, weight: 3.4 });
+		const long = game({ minPlayers: 2, maxPlayers: 4, maxPlaytime: 120, weight: 4.4 });
 		const limits = { players: 6, minutes: 60, ceiling: 'medium' as const };
 		expect(misfits(long, limits, false)).toEqual(['Not at the table', 'Not for 6 players', 'Over 60 min', 'Too heavy']);
 		expect(misfits(long, { players: 1, minutes: null, ceiling: null }, true)).toEqual(['Not for 1 player']);

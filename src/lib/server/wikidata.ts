@@ -69,7 +69,9 @@ export function parseEntities(json: unknown, ids: string[]): WikidataGame[] {
 		if (!entity) continue;
 		const rawBgg = claimValue(entity, P.bggId);
 		const bggId = typeof rawBgg === 'string' && /^\d{1,9}$/.test(rawBgg) ? Number(rawBgg) : null;
-		const name = entity.labels?.en?.value ?? Object.values(entity.labels ?? {})[0]?.value;
+		// English, then the "mul" label Wikidata uses for a name that's the same in every language: many
+		// titles keep their English name only there (The Manhattan Project, Jump Drive).
+		const name = entity.labels?.en?.value ?? entity.labels?.mul?.value ?? Object.values(entity.labels ?? {})[0]?.value;
 		if (bggId == null || !name) continue;
 		// Titles in other languages count as aliases, so "Die Siedler von Catan" matches Catan exactly.
 		const otherNames = [
@@ -156,8 +158,9 @@ export class LiveWikidataClient implements WikidataClient {
 		};
 		const ids = (found.search ?? []).map((s) => s.id).filter((id): id is string => typeof id === 'string' && /^Q\d+$/.test(id));
 		if (ids.length === 0) return [];
-		// Common languages of edition titles; the display name stays English when there is one.
-		const entities = await this.call({ action: 'wbgetentities', ids: ids.join('|'), props: 'labels|aliases|claims', languages: 'en|nl|de|fr|es|it|pt|sv|da|pl' });
+		// "mul" (the same in every language) and common languages of edition titles; the display name
+		// stays English when there is one.
+		const entities = await this.call({ action: 'wbgetentities', ids: ids.join('|'), props: 'labels|aliases|claims', languages: 'mul|en|nl|de|fr|es|it|pt|sv|da|pl' });
 		return rankGames(parseEntities(entities, ids), query);
 	}
 }
