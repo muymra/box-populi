@@ -4,6 +4,7 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+- The version in the footer sits on the line with Privacy and Source again, not on a third line of its own.
 - The landing page shows the app: the example shelf, then finding what fits, planning a night, keeping score and joining without an account, each beside a small piece of the app with invented games. A visitor to a private instance sees the new hero.
 - Signing in looks like the rest of the app: "Not signed in" leads with your sign-in link, a link's page says whose it is and which groups it opens, and after "Sign out everywhere" one button signs this device back in.
 - Filters set under More show as chips in the filter strip that remove with a tap, and on a phone More is a sheet with "Show 11 games" at the bottom.

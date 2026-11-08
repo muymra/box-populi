@@ -63,7 +63,13 @@
 		align-items: center;
 		gap: 4px 8px;
 	}
+	/* The credit's lines aren't reading text, so they drop app.css's 65ch cap on paragraphs, which
+	   broke the version onto a third line of its own. */
+	p {
+		max-width: none;
+	}
 	.small {
+		display: block;
 		font-size: var(--t-small);
 	}
 	.theme {
