@@ -4,10 +4,12 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+## 0.3.2 (2026-11-08)
+
+**Upgrading:** nothing to do: no migrations and no new settings. Deploy as usual.
+
 - A demo instance's home page shows a preview when its link is pasted in Discord, Messenger, Instagram and the like: the headline, a line about Box Populi and a picture of the example shelf.
-
 - Heavy now starts at a complexity of 4 instead of 3, so the Heavy button and the picker's "not too heavy" set apart only the really heavy games. Games from 3 to 4 count as Medium.
-
 - Fixed: some games from Wikidata showed another language's name ("Projekt Manhattan") or didn't turn up in search at all (Jump Drive). Wikidata keeps their English name as a name for every language, which Box Populi didn't read.
 
 ## 0.3.1 (2026-11-08)
