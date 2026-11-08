@@ -4,6 +4,10 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+## 0.3.1 (2026-11-08)
+
+**Upgrading:** nothing to do: no migrations and no new settings. Deploy as usual.
+
 - Filling in a game's details now fixes it for every group that has the game, not only yours. The picture still shows only in the group that set it, and an editor's name shows only to groups they're in. What a group corrected for itself earlier moves onto the game the next time someone saves its details.
 - A game's complexity is now set as Light, Medium or Heavy, the same three levels the shelf filters on. The form used to offer 1 to 5 with "heavy" twice.
 - Fixed: building for Docker, Vercel or Netlify failed in every release so far, because the play log loaded the Cloudflare-only database module.
