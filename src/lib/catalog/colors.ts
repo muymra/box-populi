@@ -1,6 +1,6 @@
 // Colour roles of the cube-shelf world (DESIGN.md). Pure, shared by server and browser.
 
-/** Wooden-cube player colours. Each member gets one by join order, so it never changes. */
+/** Wooden-cube player colours. Each member gets one by join order, so it never changes; see playerColor(). */
 export const PLAYER_COLORS = [
 	{ name: 'red', bg: '#c8402e', ink: '#ffffff' },
 	{ name: 'blue', bg: '#2f62b0', ink: '#ffffff' },
@@ -12,10 +12,28 @@ export const PLAYER_COLORS = [
 	{ name: 'black', bg: '#2b2a28', ink: '#ffffff' }
 ] as const;
 
-export type PlayerColor = (typeof PLAYER_COLORS)[number];
+export type PlayerColor = (typeof PLAYER_COLORS)[number] & {
+	/** The CSS background to paint: the colour itself, or hatched for a member's second round. */
+	fill: string;
+	/** True for members 9 to 16, 25 to 32, and so on. */
+	hatched: boolean;
+};
 
+/**
+ * A member's colour by join order. The eight colours go round once solid, then once hatched, so the
+ * first sixteen members all look different; from the seventeenth the pattern repeats. The hatch's
+ * stripe is a darker shade (a lighter grey for black), so white ink on it reads at least as well as on
+ * the solid colour.
+ */
 export function playerColor(index: number): PlayerColor {
-	return PLAYER_COLORS[((index % PLAYER_COLORS.length) + PLAYER_COLORS.length) % PLAYER_COLORS.length];
+	const n = PLAYER_COLORS.length;
+	const i = ((index % n) + n) % n;
+	const base = PLAYER_COLORS[i];
+	const round = Math.floor((((index % (2 * n)) + 2 * n) % (2 * n)) / n);
+	const hatched = round === 1;
+	const stripe = base.name === 'black' ? `color-mix(in srgb, ${base.bg} 75%, white)` : `color-mix(in srgb, ${base.bg} 62%, black)`;
+	const fill = hatched ? `repeating-linear-gradient(135deg, ${base.bg} 0 3px, ${stripe} 3px 5px)` : base.bg;
+	return { ...base, fill, hatched };
 }
 
 /**

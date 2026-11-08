@@ -1,15 +1,19 @@
 <script lang="ts">
 	// Logging or editing a play (PRD "Play log"). Players start from who's here tonight; picking them
 	// here doesn't change tonight's list. Results are places (just the winner is enough), scores
-	// (places follow from them), or a co-op win or loss.
-	import { untrack } from 'svelte';
+	// (places follow from them), or a co-op win or loss. Who played comes first, then the result as a
+	// scoresheet right under it; the date folds to "Played today · Change" beside the buttons, and
+	// "Change" opens the last seven days as chips above them, with "Earlier…" for a grid of weeks.
+	import { tick, untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '$app/forms';
 	import X from '@lucide/svelte/icons/x';
 	import WhosHere from './WhosHere.svelte';
+	import DayGrid from './DayGrid.svelte';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { ordinal, placesFromScores, type Coop, type PlayPlayer } from '#lib/plays.ts';
 	import { nightOf } from '#lib/table/regulars.ts';
+	import { addDays, dayName, shortDay } from '#lib/days.ts';
 	import { Selection, type Table } from '#lib/table/table.svelte.ts';
 
 	type Member = { id: string; name: string; colorIndex: number };
@@ -73,6 +77,44 @@
 	let scores = $state<Record<string, string>>(start.scores);
 	let places = $state<Record<string, string>>(start.places);
 	let error = $state<string | null>(null);
+	// Places, Scores or Co-op; co-op then says won or lost.
+	const mode = $derived(result === 'won' || result === 'lost' ? 'coop' : result);
+	function setMode(next: 'places' | 'scores' | 'coop') {
+		result = next === 'coop' ? (result === 'lost' ? 'lost' : 'won') : next;
+	}
+	// The date folds away while it's today; an edit of an older play shows its date. Opened, it offers
+	// the last seven days, since most plays are logged that night or soon after; "Earlier…" swaps them
+	// for the day grid (one or the other: both would be the same radio group twice).
+	let dateOpen = $state(false);
+	let earlier = $state(false);
+	let dateBox = $state<HTMLElement>();
+	const recentDays = Array.from({ length: 7 }, (_, i) => addDays(today, -i));
+	const chipLabel = (day: string) => (day === today ? 'Today' : day === addDays(today, -1) ? 'Yesterday' : shortDay(day));
+	async function toggleDate() {
+		dateOpen = !dateOpen;
+		earlier = dateOpen && !recentDays.includes(playedOn);
+		if (!dateOpen) return;
+		await tick();
+		dateBox?.scrollIntoView({ block: 'nearest' });
+	}
+	async function showEarlier() {
+		earlier = true;
+		// The grid draws its days once mounted; then focus the chosen day, as the button that was focused is gone.
+		await tick();
+		await tick();
+		dateBox?.scrollIntoView({ block: 'nearest' });
+		(dateBox?.querySelector<HTMLElement>('.day-grid input:checked') ?? dateBox?.querySelector<HTMLElement>('.day-grid .page:not(:disabled)'))?.focus();
+	}
+	const dateWords = $derived(
+		playedOn === today
+			? 'today'
+			: new Date(`${playedOn}T12:00:00`).toLocaleDateString('en-GB', {
+					weekday: 'short',
+					day: 'numeric',
+					month: 'short',
+					year: playedOn.slice(0, 4) === today.slice(0, 4) ? undefined : 'numeric'
+				})
+	);
 	let sending = $state(false);
 
 	const memberById = $derived(new Map(members.map((m) => [m.id, m])));
@@ -80,7 +122,7 @@
 		...selection.members.map((mid) => {
 			const m = memberById.get(mid);
 			return m
-				? { key: `m:${mid}`, id: mid, name: m.name, color: playerColor(m.colorIndex).bg as string | null, former: false }
+				? { key: `m:${mid}`, id: mid, name: m.name, color: playerColor(m.colorIndex).fill as string | null, former: false }
 				: { key: `m:${mid}`, id: mid, name: 'a former member', color: null, former: true };
 		}),
 		...selection.guests.map((name) => ({ key: `g:${name}`, id: null, name, color: null as string | null, former: false }))
@@ -114,11 +156,7 @@
 	<input type="hidden" name="gameId" value={game.id} />
 	{#if initial}<input type="hidden" name="playId" value={initial.id} />{/if}
 	{#if (initial ? initial.night?.id : nightId)}<input type="hidden" name="nightId" value={initial ? initial.night?.id : nightId} />{/if}
-
-	<label class="date">
-		<span>Played on</span>
-		<input class="field" type="date" name="playedOn" bind:value={playedOn} max={today} required />
-	</label>
+	<input type="hidden" name="result" value={result} />
 
 	<fieldset>
 		<legend>Who played</legend>
@@ -126,62 +164,100 @@
 	</fieldset>
 
 	<fieldset class="ending">
-		<legend>How it ended</legend>
-		<div class="choices">
-			{#each [['places', 'Places'], ['scores', 'Scores'], ['won', 'Co-op: won'], ['lost', 'Co-op: lost']] as [value, label] (value)}
-				<label class="choice"><input type="radio" name="result" {value} bind:group={result} /> {label}</label>
-			{/each}
+		<legend>Result</legend>
+		<div class="modes">
+			<div class="segments" role="radiogroup" aria-label="How it ended">
+				{#each [['places', 'Places'], ['scores', 'Scores'], ['coop', 'Co-op']] as [value, label] (value)}
+					<label><input type="radio" name="{id}-mode" checked={mode === value} onchange={() => setMode(value as 'places' | 'scores' | 'coop')} /><span>{label}</span></label>
+				{/each}
+			</div>
+			{#if mode === 'coop'}
+				<div class="segments" role="radiogroup" aria-label="Did the group win?">
+					<label><input type="radio" name="{id}-coop" checked={result === 'won'} onchange={() => (result = 'won')} /><span>Won</span></label>
+					<label><input type="radio" name="{id}-coop" checked={result === 'lost'} onchange={() => (result = 'lost')} /><span>Lost</span></label>
+				</div>
+			{/if}
 		</div>
-		{#if result === 'scores'}
+
+		<!-- The scoresheet: everyone who played, with their place or score beside them. -->
+		<div class="sheet">
+			{#if rows.length}
+				<ol class="rows">
+					{#each rows as row, i (row.key)}
+						<li>
+							<!-- Scores and places are named after the player, so a field that sends nothing can't shift the rest. -->
+							<input type="hidden" name="player" value={row.key} />
+							<span class="who">
+								<span class="dot" class:guest={!row.color} style:background={row.color}></span>
+								<span class="name">{row.name}</span>
+								{#if row.former && row.id}
+									<button type="button" class="remove" aria-label="Take the former member out of this play" onclick={() => selection.toggleMember(row.id!)}
+										><X size={16} aria-hidden="true" /></button
+									>
+								{/if}
+							</span>
+							{#if result === 'scores'}
+								<span class="place num" aria-hidden="true">{(scores[row.key] ?? '').trim() ? ordinal(scorePlaces[i]) : ''}</span>
+								<input
+									class="field score num"
+									type="text"
+									inputmode="numeric"
+									pattern="-?[0-9]*"
+									name="score:{row.key}"
+									aria-label="{row.name}’s score"
+									placeholder="Score"
+									bind:value={scores[row.key]}
+								/>
+							{:else if result === 'places'}
+								{@const most = Math.max(rows.length, Number(places[row.key]) || 0)}
+								<select class="field place-pick" name="place:{row.key}" aria-label="{row.name}’s place" bind:value={places[row.key]}>
+									<option value="">–</option>
+									{#each { length: most } as _, n (n)}<option value={String(n + 1)}>{ordinal(n + 1)}</option>{/each}
+								</select>
+							{:else}
+								<span class="coop muted">{result === 'won' ? 'Won' : 'Lost'}</span>
+							{/if}
+						</li>
+					{/each}
+				</ol>
+			{:else}
+				<p class="empty">Tick who played, or add a guest.</p>
+			{/if}
+		</div>
+		{#if rows.length && result === 'places'}<p class="hint">Picking just the winner is enough; anyone left blank shares last place.</p>{/if}
+		{#if rows.length && result === 'scores'}
 			<label class="check"><input type="checkbox" name="lowestWins" value="1" bind:checked={lowestWins} /> Lowest score wins</label>
 		{/if}
 	</fieldset>
 
-	{#if rows.length}
-		<ol class="rows">
-			{#each rows as row, i (row.key)}
-				<li>
-					<!-- Scores and places are named after the player, so a field that sends nothing can't shift the rest. -->
-					<input type="hidden" name="player" value={row.key} />
-					<span class="who">
-						<span class="dot" class:guest={!row.color} style:background={row.color}></span>{row.name}
-						{#if row.former && row.id}
-							<button type="button" class="remove" aria-label="Take the former member out of this play" onclick={() => selection.toggleMember(row.id!)}
-								><X size={16} aria-hidden="true" /></button
-							>
-						{/if}
-					</span>
-					{#if result === 'scores'}
-						<input
-							class="field score num"
-							type="text"
-							inputmode="numeric"
-							pattern="-?[0-9]*"
-							name="score:{row.key}"
-							aria-label="{row.name}’s score"
-							placeholder="Score"
-							bind:value={scores[row.key]}
-						/>
-						<span class="place num">{(scores[row.key] ?? '').trim() ? ordinal(scorePlaces[i]) : ''}</span>
-					{:else if result === 'places'}
-						{@const most = Math.max(rows.length, Number(places[row.key]) || 0)}
-						<select class="field place-pick" name="place:{row.key}" aria-label="{row.name}’s place" bind:value={places[row.key]}>
-							<option value="">–</option>
-							{#each { length: most } as _, n (n)}<option value={String(n + 1)}>{ordinal(n + 1)}</option>{/each}
-						</select>
-					{/if}
-				</li>
-			{/each}
-		</ol>
-		{#if result === 'places'}<p class="hint">Picking just the winner is enough; anyone left blank shares last place.</p>{/if}
-	{:else}
-		<p class="hint">Tick who played, or add a guest.</p>
+	{#if dateOpen}
+		<fieldset class="date" bind:this={dateBox}>
+			<legend>Played on</legend>
+			{#if earlier}
+				<DayGrid name="playedOn" bind:value={playedOn} max="today" look="back" label="Day of the play" required />
+			{:else}
+				<div class="choice-chips">
+					{#each recentDays as day (day)}
+						<label><input type="radio" name="playedOn" value={day} bind:group={playedOn} aria-label={chipLabel(day) === shortDay(day) ? dayName(day, today) : `${chipLabel(day)}, ${dayName(day, today)}`} />{chipLabel(day)}</label>
+					{/each}
+					<button type="button" onclick={showEarlier}>Earlier…</button>
+				</div>
+			{/if}
+		</fieldset>
 	{/if}
-
 	{#if error}<p class="banner error" role="alert">{error}</p>{/if}
-	<div class="actions">
-		<button type="submit" class="btn primary" disabled={sending || rows.length === 0}>{initial ? 'Save changes' : `Log ${game.name}`}</button>
-		<button type="button" class="btn" onclick={() => ondone(false)}>Cancel</button>
+	<div class="foot">
+		<div class="when">
+			{#if !dateOpen}<input type="hidden" name="playedOn" value={playedOn} />{/if}
+			<span class="muted">Played {dateWords}</span>
+			<button type="button" class="link-button" aria-expanded={dateOpen} onclick={toggleDate}>
+				{dateOpen ? 'Done' : 'Change'}<span class="visually-hidden"> the date</span>
+			</button>
+		</div>
+		<div class="actions">
+			<button type="button" class="btn" onclick={() => ondone(false)}>Cancel</button>
+			<button type="submit" class="btn primary" disabled={sending || rows.length === 0}>{initial ? 'Save changes' : 'Log it'}</button>
+		</div>
 	</div>
 	<p class="visually-hidden" id="{id}-status" role="status">{sending ? 'Saving…' : ''}</p>
 </form>
@@ -190,15 +266,6 @@
 	.play-form {
 		display: grid;
 		gap: var(--s-5);
-	}
-	.date {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		max-width: 14rem;
-		font-size: var(--t-small);
-		font-weight: 650;
-		color: var(--ink-2);
 	}
 	fieldset {
 		margin: 0;
@@ -209,61 +276,40 @@
 	legend {
 		padding: 0;
 		margin-bottom: var(--s-2);
-		font-size: var(--t-small);
-		font-weight: 650;
-		color: var(--ink-2);
+		font-size: var(--t-lead);
+		font-weight: 780;
+		font-stretch: 88%;
 	}
-	.choices {
+	.ending {
+		display: grid;
+		gap: var(--s-3);
+	}
+	.modes {
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--s-2);
 	}
-	.choice {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		min-height: 40px;
-		padding: 0 14px 0 10px;
-		border: 1.5px solid var(--rule);
-		border-radius: 999px;
+	/* The scoresheet: a laminate well with a row per player, the place or score at the right. */
+	.sheet {
+		border-radius: 10px;
 		background: var(--laminate);
-		font-weight: 650;
-		cursor: pointer;
-	}
-	.choice:has(input:checked) {
-		background: var(--mark);
-		border-color: var(--mark);
-		color: var(--mark-ink);
-	}
-	.choice input {
-		accent-color: var(--ink);
-		margin: 0;
-	}
-	.check {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--s-2);
-		margin-top: var(--s-3);
-		font-size: var(--t-small);
-	}
-	.check input {
-		width: 18px;
-		height: 18px;
-		accent-color: var(--ink);
+		box-shadow: inset 0 0 0 1px var(--rule);
 	}
 	.rows {
 		list-style: none;
 		margin: 0;
 		padding: 0;
-		display: grid;
-		gap: var(--s-2);
 	}
 	.rows li {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto auto;
 		align-items: center;
 		gap: var(--s-2);
-		min-height: 46px;
+		min-height: 56px;
+		padding: 6px var(--s-3) 6px var(--s-4);
+	}
+	.rows li + li {
+		border-top: 1px solid var(--gap);
 	}
 	.who {
 		display: flex;
@@ -271,6 +317,9 @@
 		gap: var(--s-2);
 		min-width: 0;
 		font-weight: 650;
+	}
+	.name {
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -280,6 +329,9 @@
 		width: 14px;
 		height: 14px;
 		border-radius: 4px;
+	}
+	.dot.guest {
+		box-shadow: inset 0 0 0 2px var(--ink-3);
 	}
 	.remove {
 		display: grid;
@@ -296,15 +348,13 @@
 		background: var(--gap);
 		color: var(--ink);
 	}
-	.dot.guest {
-		box-shadow: inset 0 0 0 2px var(--ink-3);
-	}
 	.score {
 		width: 6.5rem;
 		text-align: right;
 	}
 	.place {
 		min-width: 3ch;
+		text-align: right;
 		font-weight: 650;
 		color: var(--ink-2);
 	}
@@ -312,12 +362,55 @@
 		grid-column: 2 / -1;
 		width: 6.5rem;
 	}
+	.coop {
+		grid-column: 2 / -1;
+		font-weight: 650;
+	}
+	.empty {
+		margin: 0;
+		padding: var(--s-5) var(--s-4);
+		color: var(--ink-2);
+	}
 	.hint {
 		margin: 0;
+	}
+	.check {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--s-2);
+		font-size: var(--t-small);
+	}
+	.check input {
+		width: 18px;
+		height: 18px;
+		accent-color: var(--ink);
+	}
+	/* The date and the buttons share the last line: the date as a quiet note, the buttons at the right. */
+	.foot {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--s-3);
+		padding-top: var(--s-4);
+		border-top: 1px solid var(--rule);
+	}
+	.when {
+		display: flex;
+		align-items: center;
+		gap: var(--s-2);
+	}
+	.when .link-button {
+		min-height: 44px;
+	}
+	.date {
+		display: grid;
+		gap: var(--s-2);
 	}
 	.actions {
 		display: flex;
 		flex-wrap: wrap;
-		gap: var(--s-3);
+		gap: var(--s-2);
+		margin-left: auto;
 	}
 </style>

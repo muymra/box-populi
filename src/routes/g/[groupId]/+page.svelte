@@ -1,17 +1,32 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
+	import { goto, snapshot } from '$app/navigation';
 	import Search from '@lucide/svelte/icons/search';
 	import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
 	import LayoutGrid from '@lucide/svelte/icons/layout-grid';
 	import Rows3 from '@lucide/svelte/icons/rows-3';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import ChevronUp from '@lucide/svelte/icons/chevron-up';
+	import X from '@lucide/svelte/icons/x';
+	import Modal from '#lib/components/Modal.svelte';
 	import Cube from '#lib/components/Cube.svelte';
 	import ListRow from '#lib/components/ListRow.svelte';
 	import CheckList from '#lib/components/CheckList.svelte';
-	import { fetchCatalog, storage } from '#lib/catalog/client.ts';
+	import { cachedCatalog, fetchCatalog, storage } from '#lib/catalog/client.ts';
+	import { playerColor } from '#lib/catalog/colors.ts';
+	import { foldMembers } from '#lib/table/regulars.ts';
 	import { BUCKET_LABELS, WEIGHT_BUCKETS, type WeightBucket } from '#lib/catalog/buckets.ts';
-	import { STALE_DAYS, filterGames, parseFilters, passedOnUnknown, serializeFilters, tagOptions, type SortKey } from '#lib/catalog/filter.ts';
+	import {
+		STALE_DAYS,
+		filterGames,
+		hiddenByDefault,
+		parseFilters,
+		passedOnUnknown,
+		serializeFilters,
+		tagOptions,
+		type SortKey
+	} from '#lib/catalog/filter.ts';
 	import { PLAYER_CHOICES, playerChoiceLabel } from '#lib/catalog/players.ts';
 	import type { CatalogPayload } from '#lib/catalog/types.ts';
 	import type { PageProps } from './$types';
@@ -28,7 +43,8 @@
 		{ value: 'owned', label: 'Most owned' }
 	];
 
-	let payload = $state<CatalogPayload | null>(null);
+	// Coming back from a game, the shelf this tab already loaded draws at once; onMount revalidates it.
+	let payload = $state<CatalogPayload | null>(cachedCatalog(page.params.groupId ?? ''));
 	// The "not played lately" filter appears once the group has logged a play (PRD "Play log").
 	const hasPlays = $derived(payload?.games.some((g) => g.lastPlayed != null) ?? false);
 	let loadError = $state<string | null>(null);
@@ -43,28 +59,104 @@
 	const results = $derived(payload ? filterGames(payload.games, filters, memberIds) : []);
 	const mechanicOptions = $derived(payload ? tagOptions(payload.games, 'mechanics').map((t) => ({ value: t, label: t })) : []);
 	const categoryOptions = $derived(payload ? tagOptions(payload.games, 'categories').map((t) => ({ value: t, label: t })) : []);
-	const ownerOptions = $derived(payload?.members.map((m) => ({ value: m.id, label: m.name })) ?? []);
+	// Owners in join order, which is colour order, so the row reads as the shelf's colour key. Members
+	// with nothing on the shelf have no colour on it and are left out, unless the URL picked them.
+	const ownerChoices = $derived.by(() => {
+		if (!payload) return [];
+		const owning = new Set(payload.games.flatMap((g) => g.copies.map((c) => c.ownerId)));
+		return payload.members.filter((m) => owning.has(m.id) || filters.owners.includes(m.id)).sort((a, b) => a.colorIndex - b.colorIndex);
+	});
+	let ownersExpanded = $state(false);
+	// Anyone tapped while folded stays in view, so unticking someone past the fold doesn't hide them.
+	let ownersTouched = $state<string[]>([]);
+	const ownerFold = $derived(foldMembers(ownerChoices, new Set([...filters.owners, ...ownersTouched])));
+	const ownersShown = $derived(ownersExpanded ? ownerChoices : ownerFold.shown);
+	const hidden = $derived(payload ? hiddenByDefault(payload.games, filters, memberIds) : { lent: 0, expansions: 0 });
+	const hiddenText = $derived(
+		[
+			hidden.lent && `${hidden.lent} lent-out ${hidden.lent === 1 ? 'game' : 'games'}`,
+			hidden.expansions && `${hidden.expansions} ${hidden.expansions === 1 ? 'expansion' : 'expansions'}`
+		]
+			.filter(Boolean)
+			.join(' and ')
+	);
 	const moreCount = $derived(
 		filters.mechanics.length + filters.categories.length + filters.owners.length + (filters.availableOnly ? 0 : 1) + (filters.expansions ? 1 : 0) + (filters.stale ? 1 : 0)
 	);
 	const anyFilter = $derived(serializeFilters({ ...filters, sort: 'title' }).toString() !== '');
 
+	// Filters set in More, as removable chips in the strip, so a leftover one never hides games unseen.
+	type Active = { key: string; label: string; color?: string; remove: () => void };
+	const activeMore = $derived.by((): Active[] => {
+		const list: Active[] = [];
+		for (const id of filters.owners) {
+			const m = memberMap.get(id);
+			list.push({ key: `own:${id}`, label: m?.name ?? 'Someone', color: m ? playerColor(m.colorIndex).fill : undefined, remove: () => (filters.owners = filters.owners.filter((o) => o !== id)) });
+		}
+		for (const t of filters.mechanics) list.push({ key: `mech:${t}`, label: t, remove: () => (filters.mechanics = filters.mechanics.filter((x) => x !== t)) });
+		for (const t of filters.categories) list.push({ key: `cat:${t}`, label: t, remove: () => (filters.categories = filters.categories.filter((x) => x !== t)) });
+		if (filters.matchAll && filters.mechanics.length + filters.categories.length > 1) list.push({ key: 'all', label: 'Every tag', remove: () => (filters.matchAll = false) });
+		if (!filters.availableOnly) list.push({ key: 'avail', label: 'Lent-out games', remove: () => (filters.availableOnly = true) });
+		if (filters.expansions) list.push({ key: 'exp', label: 'Expansions', remove: () => (filters.expansions = false) });
+		if (filters.stale) list.push({ key: 'stale', label: 'Not played lately', remove: () => (filters.stale = false) });
+		return list;
+	});
+
+	// On a phone More is a sheet from the bottom, with the count at hand; from 760px it opens under the strip.
+	let phone = $state(false);
+	onMount(() => {
+		const query = matchMedia('(max-width: 759px)');
+		phone = query.matches;
+		const change = () => (phone = query.matches);
+		query.addEventListener('change', change);
+		return () => query.removeEventListener('change', change);
+	});
+
 	onMount(async () => {
 		const saved = storage.get('bp:view');
 		if (saved === 'list' || saved === 'cubes') view = saved;
-		moreOpen = moreCount > 0;
+		moreOpen = moreCount > 0 && !matchMedia('(max-width: 759px)').matches;
 		try {
-			payload = await fetchCatalog(data.group.id);
+			const fresh = await fetchCatalog(data.group.id);
+			if (fresh.version !== payload?.version) payload = fresh;
+			restoreScroll();
 		} catch (e) {
-			loadError = e instanceof Error ? e.message : "Couldn't load the shelf.";
+			// A shelf already on screen stays there (a dropped connection at the table), unless the
+			// server said this tab may no longer see it.
+			if (!payload || cachedCatalog(data.group.id) == null) {
+				payload = null;
+				loadError = e instanceof Error ? e.message : "Couldn't load the shelf.";
+			}
 		}
 	});
 
+	// Back from a game: how far down the shelf you were. SvelteKit restores the scroll before this
+	// page has drawn that far, so the shelf puts back its length and then the scroll itself.
+	let pendingScroll: number | null = null;
+	snapshot({
+		capture: () => ({ limit, y: Math.round(window.scrollY) }),
+		restore: (saved) => {
+			limit = Math.max(PAGE_SIZE, saved.limit);
+			pendingScroll = saved.y;
+			if (payload) restoreScroll();
+		}
+	});
+	async function restoreScroll() {
+		const y = pendingScroll;
+		pendingScroll = null;
+		if (y == null) return;
+		await tick();
+		window.scrollTo({ top: y, behavior: 'instant' });
+	}
+
 	// The URL follows the filters, so a filtered shelf can be shared in the group chat.
 	let syncTimer: ReturnType<typeof setTimeout> | undefined;
+	let lastQs: string | null = null;
 	$effect(() => {
 		const qs = serializeFilters(filters).toString();
-		limit = PAGE_SIZE;
+		// A new filter starts the shelf from the top; the first run keeps a length put back from history.
+		if (lastQs != null && qs !== lastQs) limit = PAGE_SIZE;
+		lastQs = qs;
 		clearTimeout(syncTimer);
 		syncTimer = setTimeout(() => {
 			const search = qs ? `?${qs}` : '';
@@ -92,6 +184,16 @@
 
 	function resetFilters() {
 		filters = parseFilters(new URLSearchParams());
+	}
+
+	function toggleOwner(id: string) {
+		if (!ownersTouched.includes(id)) ownersTouched = [...ownersTouched, id];
+		filters.owners = filters.owners.includes(id) ? filters.owners.filter((o) => o !== id) : [...filters.owners, id];
+	}
+
+	function showHidden() {
+		filters.availableOnly = false;
+		filters.expansions = true;
 	}
 </script>
 
@@ -124,13 +226,39 @@
 			More{#if moreCount}<span class="count num">{moreCount}</span>{/if}
 		</button>
 	</div>
+	{#if activeMore.length}
+		<div class="active" role="group" aria-label="Filters set in More">
+			{#each activeMore as f (f.key)}
+				<button type="button" class="chip on remove" aria-label="Remove filter: {f.label}" onclick={f.remove}>
+					{#if f.color}<i style:background={f.color}></i>{/if}{f.label}<X size={14} aria-hidden="true" />
+				</button>
+			{/each}
+		</div>
+	{/if}
 </section>
 
-{#if moreOpen}
-	<section id="more-filters" class="more-panel" aria-label="More filters">
+{#snippet moreFilters()}
+		{#if ownerChoices.length > 1}
+			<fieldset class="owners">
+				<legend>Owners{#if filters.owners.length}<span class="muted">{' · '}{filters.owners.length} selected</span>{/if}</legend>
+				<p class="hint">Each colour on the edge under a box is someone who owns it. Pick people to see only their games.</p>
+				<div class="people">
+					{#each ownersShown as m (m.id)}
+						<button type="button" class="person" aria-pressed={filters.owners.includes(m.id)} onclick={() => toggleOwner(m.id)}>
+							<span class="dot" style:background={playerColor(m.colorIndex).fill}></span>{m.name}
+						</button>
+					{/each}
+					{#if ownerFold.hidden > 0}
+						<button type="button" class="person fold" aria-expanded={ownersExpanded} onclick={() => (ownersExpanded = !ownersExpanded)}>
+							{#if ownersExpanded}<ChevronUp size={18} aria-hidden="true" /> Fewer{:else}<ChevronDown size={18} aria-hidden="true" /> {ownerFold.hidden} more{/if}
+						</button>
+					{/if}
+				</div>
+				{#if filters.owners.length}<button type="button" class="link-button clear-owners" onclick={() => (filters.owners = [])}>Clear owners</button>{/if}
+			</fieldset>
+		{/if}
 		<CheckList label="Mechanics" options={mechanicOptions} bind:selected={filters.mechanics} />
 		<CheckList label="Themes and categories" options={categoryOptions} bind:selected={filters.categories} />
-		<CheckList label="Owners" options={ownerOptions} bind:selected={filters.owners} visible={8} />
 		<div class="toggles">
 			{#if filters.mechanics.length + filters.categories.length > 1}
 				<label><input type="checkbox" bind:checked={filters.matchAll} /> Match every selected tag, not any</label>
@@ -139,6 +267,22 @@
 			<label><input type="checkbox" bind:checked={filters.expansions} /> Include expansions</label>
 			{#if hasPlays}<label><input type="checkbox" bind:checked={filters.stale} /> Not played in the last {STALE_DAYS / 30} months</label>{/if}
 		</div>
+{/snippet}
+
+{#if phone}
+	<Modal bind:open={moreOpen} title="More filters">
+		<div class="more-sheet" id="more-filters">
+			{@render moreFilters()}
+			<div class="sheet-foot">
+				<button type="button" class="btn primary" onclick={() => (moreOpen = false)}>
+					{payload ? `Show ${results.length} ${results.length === 1 ? 'game' : 'games'}` : 'Done'}
+				</button>
+			</div>
+		</div>
+	</Modal>
+{:else if moreOpen}
+	<section id="more-filters" class="more-panel" aria-label="More filters">
+		{@render moreFilters()}
 	</section>
 {/if}
 
@@ -150,6 +294,9 @@
 			Loading the shelf…
 		{/if}
 	</p>
+	{#if hiddenText}
+		<p class="hidden-note">Hiding <span class="num">{hiddenText}</span>. <button type="button" class="link-button" onclick={showHidden}>Show them</button></p>
+	{/if}
 	<div class="bar-actions">
 		<select bind:value={filters.sort} class="sort" aria-label="Sort">
 			{#each SORTS as s (s.value)}<option value={s.value}>{s.label}</option>{/each}
@@ -267,8 +414,33 @@
 		.controls select {
 			flex: none;
 		}
+		/* More stays at the strip's right edge while the chips scroll under it. */
 		.chip.more {
 			margin-left: 0;
+			position: sticky;
+			right: 0;
+			background: var(--label);
+		}
+		.chip.more::before {
+			content: '';
+			position: absolute;
+			top: -2px;
+			bottom: -2px;
+			right: calc(100% + 1.5px);
+			width: 18px;
+			background: linear-gradient(to right, transparent, var(--label));
+			pointer-events: none;
+		}
+		/* the strip's padding beside it, covered, so no chip shows through on its right */
+		.chip.more::after {
+			content: '';
+			position: absolute;
+			top: -2px;
+			bottom: -2px;
+			left: calc(100% + 1.5px);
+			width: calc(var(--s-3) + 2px);
+			background: var(--label);
+			pointer-events: none;
 		}
 	}
 	.controls select,
@@ -316,6 +488,26 @@
 	.chip.more[aria-expanded='true'] {
 		border-color: var(--label-ink-2);
 	}
+	/* Filters set in More, each removable; on their own row so a phone shows them without scrolling. */
+	.active {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	.chip.remove {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		background: var(--mark);
+		border-color: var(--mark);
+		color: var(--mark-ink);
+	}
+	.chip.remove i {
+		width: 10px;
+		height: 10px;
+		border-radius: 3px;
+		box-shadow: 0 0 0 1px var(--mark-ink);
+	}
 	.chip .count {
 		background: var(--mark);
 		color: var(--mark-ink);
@@ -333,6 +525,22 @@
 		display: grid;
 		gap: var(--s-4);
 	}
+	/* The sheet: the same filters, with the count as the button that closes it, kept in reach at the bottom. */
+	.more-sheet {
+		display: grid;
+		gap: var(--s-4);
+	}
+	.sheet-foot {
+		position: sticky;
+		bottom: calc(-1 * var(--s-5));
+		margin: 0 calc(-1 * var(--s-5)) calc(-1 * var(--s-5));
+		padding: var(--s-3) var(--s-5) var(--s-4);
+		background: var(--cube);
+		border-top: 1px solid var(--rule);
+	}
+	.sheet-foot .btn {
+		width: 100%;
+	}
 	.toggles {
 		display: flex;
 		flex-direction: column;
@@ -349,24 +557,106 @@
 		width: 18px;
 		height: 18px;
 	}
-
-	.result-bar {
+	/* Owners: the person toggles from Who's here, so the row doubles as the shelf's colour key. */
+	.owners {
+		border: 0;
+		padding: 0;
+		margin: 0;
+		min-width: 0;
+	}
+	.owners legend {
+		font-weight: 700;
+		padding: 0;
+	}
+	.owners .hint {
+		margin: 2px 0 var(--s-3);
+	}
+	.people {
 		display: flex;
 		flex-wrap: wrap;
-		align-items: center;
-		justify-content: space-between;
 		gap: var(--s-2);
+	}
+	.person {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--s-2);
+		min-height: 40px;
+		padding: 0 14px 0 10px;
+		border-radius: 999px;
+		border: 1.5px solid var(--rule);
+		background: var(--laminate);
+		color: var(--ink);
+		font-weight: 650;
+		cursor: pointer;
+	}
+	.person .dot {
+		width: 14px;
+		height: 14px;
+		border-radius: 4px;
+		flex: none;
+	}
+	.person[aria-pressed='true'] {
+		background: var(--mark);
+		border-color: var(--mark);
+		color: var(--mark-ink);
+	}
+	.person.fold {
+		gap: 4px;
+		border-style: dashed;
+		background: none;
+		color: var(--ink-2);
+	}
+	.person.fold:hover {
+		border-color: var(--ink-3);
+		color: var(--ink);
+	}
+	.clear-owners {
+		margin-top: var(--s-2);
+		font-size: var(--t-small);
+		font-weight: 600;
+		min-height: 32px;
+	}
+
+	/* The count and the view controls on one line; what the default hides leave out goes under them
+	   on phones and between them from 760px. */
+	.result-bar {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		gap: var(--s-1) var(--s-3);
 		margin: var(--s-4) 0 var(--s-3);
 	}
 	.result-bar .count {
+		grid-area: 1 / 1;
 		margin: 0;
 		color: var(--ink-2);
+	}
+	.hidden-note {
+		grid-area: 2 / 1 / 3 / -1;
+		margin: 0;
+		font-size: var(--t-small);
+		color: var(--ink-2);
+	}
+	.hidden-note .link-button {
+		font-weight: 650;
+		/* a 44px target without raising the line */
+		padding: 12px 0;
+		margin: -12px 0;
+	}
+	@media (min-width: 760px) {
+		.result-bar {
+			grid-template-columns: auto minmax(0, 1fr) auto;
+		}
+		.hidden-note {
+			grid-area: 1 / 2;
+		}
 	}
 	.result-bar .count strong {
 		color: var(--ink);
 		font-size: var(--t-lead);
 	}
 	.bar-actions {
+		grid-area: 1 / -2;
 		display: flex;
 		align-items: center;
 		gap: var(--s-3);
@@ -380,9 +670,6 @@
 		padding: 0 30px 0 10px;
 		font-size: var(--t-small);
 		font-weight: 600;
-	}
-	.result-bar {
-		flex-wrap: nowrap;
 	}
 	.seg {
 		display: inline-flex;
@@ -447,7 +734,8 @@
 			padding: 8px;
 			gap: 8px;
 		}
-		.shelf :global(.cube) {
+		/* The cube cell only: BoxFront's own size class is also "cube". */
+		.shelf > li > :global(a.cube) {
 			padding: 12px 12px 0;
 		}
 	}

@@ -597,15 +597,15 @@
 					<div class="form-label"><span id="whose-q" class="form-q">Whose games</span></div>
 					<div class="form-body">
 						<!-- Two choices that always fit one line; which home is a dropdown of the people here (D43). -->
-						<div class="whose">
-							<div class="seg" role="radiogroup" aria-labelledby="whose-q" aria-describedby="venue-hint">
+						<div class="segments-row">
+							<div class="segments" role="radiogroup" aria-labelledby="whose-q" aria-describedby="venue-hint">
 								<label><input type="radio" name="whose" checked={!host} onchange={() => ((venue = null), saveLineup())} /><span>Everything they own</span></label>
 								<label class:off={!present.length && !host}
 									><input type="radio" name="whose" checked={!!host} disabled={!present.length && !host} onchange={chooseHome} /><span>At someone’s home</span></label
 								>
 							</div>
 							{#if host}
-								<label class="host">
+								<label class="segments-pick">
 									<span>Whose?</span>
 									<select class="field" bind:value={venue} onchange={saveLineup}>
 										{#each venueChoices as m (m.id)}<option value={m.id}>{m.name}’s</option>{/each}
@@ -695,7 +695,7 @@
 							<span class="meta num">{factsOf(game)}</span>
 							<span class="owners">
 								{#if owners.length}
-									<span class="squares" aria-hidden="true">{#each owners.slice(0, 3) as o (o.name)}<i style:background={playerColor(o.colorIndex).bg}></i>{/each}</span>
+									<span class="squares" aria-hidden="true">{#each owners.slice(0, 3) as o (o.name)}<i style:background={playerColor(o.colorIndex).fill}></i>{/each}</span>
 									{ownerText(owners)}
 								{/if}
 								{#if label}<span class="tag best num">{label}</span>{/if}
@@ -855,7 +855,7 @@
 						<p>Pick when and where first. Next you’ll mark who’s going and what they’ll bring; everyone in the group sees the plan.</p>
 					</div>
 				</div>
-				<NightFields members={data.tableMembers} values={{ name: 'Game night', nightOn: today }} />
+				<NightFields members={data.tableMembers} values={{ name: 'Game night', nightOn: today }} planned={data.nights} me={data.myId} />
 				<div class="form-foot indent">
 					<div><button class="btn primary" disabled={planning}>Next: who’s going <ArrowRight size={18} aria-hidden="true" /></button></div>
 				</div>
@@ -1030,97 +1030,6 @@
 		gap: var(--s-2);
 	}
 
-	/* Whose games: two segments that always fit one line, and a "Whose?" dropdown once it's someone's
-	   home. The chosen segment lifts onto the cube; it's a setting rather than a pick, so no marigold. */
-	.whose {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: var(--s-2) var(--s-3);
-	}
-	.seg {
-		display: inline-flex;
-		gap: 4px;
-		padding: 4px;
-		background: var(--gap);
-		border-radius: calc(var(--r-ctl) + 4px);
-	}
-	.seg label {
-		position: relative;
-		cursor: pointer;
-	}
-	.seg input {
-		position: absolute;
-		inset: 0;
-		margin: 0;
-		opacity: 0;
-		cursor: pointer;
-	}
-	.seg span {
-		display: flex;
-		align-items: center;
-		min-height: 40px;
-		padding: 0 14px;
-		border-radius: var(--r-ctl);
-		font-weight: 650;
-		color: var(--ink-2);
-		white-space: nowrap;
-	}
-	.seg label:hover span {
-		color: var(--ink);
-	}
-	.seg input:checked + span {
-		background: var(--cube);
-		color: var(--ink);
-		box-shadow: inset 0 0 0 1px var(--rule);
-	}
-	.seg input:focus-visible + span {
-		outline: 2px solid var(--ink);
-		outline-offset: 2px;
-	}
-	.seg .off,
-	.seg .off input {
-		cursor: not-allowed;
-	}
-	.seg .off span {
-		opacity: 0.5;
-	}
-	.host {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--s-2);
-		font-size: var(--t-small);
-		font-weight: 650;
-		color: var(--ink-2);
-	}
-	.host .field {
-		width: auto;
-		min-width: 10rem;
-		font-size: var(--t-body);
-		color: var(--ink);
-	}
-	.whose + .hint {
-		margin: 0;
-	}
-	/* On a phone the two segments split the width and may take two lines each, rather than run off the panel. */
-	@media (max-width: 560px) {
-		.seg {
-			display: flex;
-			width: 100%;
-		}
-		.seg label {
-			flex: 1 1 0;
-			min-width: 0;
-		}
-		.seg span {
-			justify-content: center;
-			height: 100%;
-			padding: 6px 10px;
-			text-align: center;
-			white-space: normal;
-			line-height: 1.2;
-		}
-	}
 	/* Limits on one line: each select carries its own label inside the box. */
 	.limits {
 		display: flex;

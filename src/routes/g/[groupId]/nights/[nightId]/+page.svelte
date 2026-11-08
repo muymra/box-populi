@@ -50,7 +50,7 @@
 			const key = g.guestName ? `g:${g.guestName}` : `m:${g.broughtBy}`;
 			const m = g.broughtBy ? memberById.get(g.broughtBy) : undefined;
 			const label = g.guestName ?? m?.name ?? 'a former member';
-			const entry = groups.get(key) ?? { label, color: m ? playerColor(m.colorIndex).bg : null, games: [] };
+			const entry = groups.get(key) ?? { label, color: m ? playerColor(m.colorIndex).fill : null, games: [] };
 			entry.games = [...entry.games, g];
 			groups.set(key, entry);
 		}
@@ -181,11 +181,11 @@
 									<input type="hidden" name="userId" value={m.id} />
 									<input type="hidden" name="going" value={a === true ? '0' : '1'} />
 									<button class="person" class:going={a === true} class:no={a === false} title={a === true ? `Mark ${m.name} not going` : `Mark ${m.name} going`}>
-										<span class="dot" style:background={c.bg}></span>{m.name}
+										<span class="dot" style:background={c.fill}></span>{m.name}
 									</button>
 								</form>
 							{:else}
-								<span class="person" class:going={a === true} class:no={a === false}><span class="dot" style:background={c.bg}></span>{m.name}</span>
+								<span class="person" class:going={a === true} class:no={a === false}><span class="dot" style:background={c.fill}></span>{m.name}</span>
 							{/if}
 						</li>
 					{/each}
@@ -384,7 +384,7 @@
 							if (result.type === 'success') editing = false;
 						}}
 				>
-					<NightFields {members} values={{ name: night.name, nightOn: night.nightOn, startsAt: night.startsAt, host: night.hostId }} />
+					<NightFields {members} values={{ name: night.name, nightOn: night.nightOn, startsAt: night.startsAt, host: night.hostId }} planned={data.nights} editing={night.id} me={data.myId} />
 					<div class="form-foot indent"><div><button class="btn primary">Save</button></div></div>
 				</form>
 			</details>
@@ -401,7 +401,7 @@
 	{/if}
 </article>
 
-<Modal bind:open={logOpen} title="Log a play">
+<Modal bind:open={logOpen} title={logGame != null ? `Log ${gameName(logGame)}` : 'Log a play'}>
 	{#if logOpen}
 		<div class="log">
 			<label class="pick-game">

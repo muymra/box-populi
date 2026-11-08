@@ -11,7 +11,7 @@ import {
 	playerChoiceLabel
 } from './players.ts';
 import { formatPlaytime, formatWeight, weightBucket } from './buckets.ts';
-import { DEFAULT_FILTERS, filterGames, parseFilters, passedOnUnknown, serializeFilters, type Filters } from './filter.ts';
+import { DEFAULT_FILTERS, filterGames, hiddenByDefault, parseFilters, passedOnUnknown, serializeFilters, type Filters } from './filter.ts';
 import {
 	MAX_CHOSEN,
 	SPREAD_BANDS,
@@ -36,6 +36,7 @@ import {
 	tableSizes
 } from './pick.ts';
 import { copy, game } from './testing.ts';
+import { playerColor } from './colors.ts';
 
 const members = new Set(['u1', 'u2', 'u3']);
 const f = (over: Partial<Filters>): Filters => ({ ...DEFAULT_FILTERS, ...over });
@@ -110,6 +111,18 @@ describe('URL filters', () => {
 	});
 });
 
+describe('player colours', () => {
+	it('go round solid, then hatched, so sixteen members all differ', () => {
+		const fills = Array.from({ length: 16 }, (_, i) => playerColor(i).fill);
+		expect(new Set(fills).size).toBe(16);
+		expect(playerColor(0).hatched).toBe(false);
+		expect(playerColor(8)).toMatchObject({ name: 'red', hatched: true });
+		expect(playerColor(8).fill).toContain('repeating-linear-gradient');
+		expect(playerColor(16)).toMatchObject({ name: 'red', hatched: false, fill: playerColor(0).bg });
+		expect(playerColor(-1)).toMatchObject({ name: 'black' });
+	});
+});
+
 describe('filterGames', () => {
 	it('matches player counts and lets unknown counts pass', () => {
 		const solo = game({ minPlayers: 1, maxPlayers: 1 });
@@ -174,6 +187,23 @@ describe('filterGames', () => {
 		const result = filterGames([lentOut, lentToMember, lentToStranger], DEFAULT_FILTERS, members);
 		expect(result).toEqual([lentToMember]);
 		expect(filterGames([lentOut], f({ availableOnly: false }), members)).toEqual([lentOut]);
+	});
+
+	it('counts what the default hides leave out, so the parts add up', () => {
+		const shelf = [
+			game(),
+			game({ copies: [copy('u1', { lentOut: true })] }),
+			game({ copies: [copy('u1', { lentOut: true })] }),
+			game({ isExpansion: true }),
+			game({ isExpansion: true, copies: [copy('u1', { lentOut: true })] })
+		];
+		const hidden = hiddenByDefault(shelf, DEFAULT_FILTERS, members);
+		expect(hidden).toEqual({ lent: 2, expansions: 2 });
+		expect(filterGames(shelf, DEFAULT_FILTERS, members).length + hidden.lent + hidden.expansions).toBe(shelf.length);
+		expect(hiddenByDefault(shelf, f({ availableOnly: false }), members)).toEqual({ lent: 0, expansions: 2 });
+		expect(hiddenByDefault(shelf, f({ availableOnly: false, expansions: true }), members)).toEqual({ lent: 0, expansions: 0 });
+		// Other filters still apply: a 6-player filter hides everything here, so nothing is left out by default.
+		expect(hiddenByDefault(shelf, f({ players: 6 }), members)).toEqual({ lent: 0, expansions: 0 });
 	});
 
 	it('filters by owner', () => {

@@ -44,7 +44,7 @@
 						<span class="count num">{g.wantedBy.length}</span>
 						<span class="who">
 							<span class="squares">
-								{#each g.wantedBy as w (w.id)}<span style:background={playerColor(w.colorIndex).bg}></span>{/each}
+								{#each g.wantedBy as w (w.id)}<span style:background={playerColor(w.colorIndex).fill}></span>{/each}
 							</span>
 							<span class="names">{names}</span>
 						</span>

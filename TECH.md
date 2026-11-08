@@ -79,6 +79,7 @@ box-populi/
       link-kinds.ts             rulebook / video / other, guessed from an address
       project.ts                the source repository's address
       time.ts                   coarse "active 3 weeks ago"
+      days.ts                   calendar days as YYYY-MM-DD in UTC: weeks, the day grid's window, month and day names, start times
       plays.ts                  play log rules: places, podium points, standings, the CSV
       nights.ts                 game night rules: tonight's pool, who's going, the chat text, tonight's seed
       catalog/                  pure TS: runs in browser, server and tests
@@ -100,7 +101,8 @@ box-populi/
         random.ts               randomInt(): crypto.getRandomValues without modulo bias
       components/               BoxFront, Cube, OwnerEdge, ListRow (Spines view), CubeMark, CheckList,
                                 BggCredit, PersonalLink, CopyButton, ThemePicker, ImportPanel,
-                                HydrateProgress, ListPanel, Modal, WhosHere, StartPlayer, DiceRoller, PlayForm, PlayList, NightFields, ChooseList
+                                HydrateProgress, ListPanel, Modal, WhosHere, StartPlayer, DiceRoller, PlayForm, PlayList, NightFields, ChooseList,
+                                DayGrid (picks a day; the app's own, not the browser's date input)
       server/                   server-only (SvelteKit 3 treats any `server` directory so)
         platform.ts             Cloudflare (Pages and Workers), the only importer of `cloudflare:workers`: getDb(), getConfig(), afterResponse()
         platform.node.ts        the same three for Node and Docker: a SQLite file (BOX_TARGET=node)
@@ -429,13 +431,17 @@ Filtering, sorting and the picker run in the browser through pure functions in `
 - `normalize(s)` lowercases, applies NFD, strips combining marks, and collapses whitespace. The server uses the same function to build `search_text`, and the text filter is `game.search.includes(normalize(q))`.
 - Weight buckets live in `buckets.ts`: light `< 2`, medium `>= 2 && < 3`, heavy `>= 3`.
 
+- `hiddenByDefault(games, filters, groupMemberIds)` counts what the two default hides leave out under the other filters: `lent` (shown with availability off) and `expansions` (shown with both off, minus `lent`), so the parts add up to everything hidden.
+
 Rendering: show the count, render the first 60 results, and append 60 more when a sentinel element scrolls into view (`IntersectionObserver`). Thumbnails use `loading="lazy"` with fixed width and height to avoid layout shift.
+
+Coming back to the shelf: `fetchCatalog()` keeps the last payload per group in memory for the tab's life (browser only; `cachedCatalog(groupId)` reads it), so the shelf draws at once and revalidates in `onMount`, replacing the payload only when `version` changed. A 401, 403 or 404 drops the cached copy; any other failure keeps a shelf that's already on screen. The page's `snapshot()` (from `$app/navigation`) saves how many results were rendered and `scrollY`. SvelteKit restores the scroll before the page has drawn that far and runs the snapshot's `restore` after, so `restore` puts back the length, waits a tick and scrolls itself. The filter effect resets the length only when the filters change, not on its first run.
 
 ## Identity and sessions
 
 No accounts (D25). A person is a display name; a device proves who it is with a session cookie.
 
-**Creating or joining.** `/groups/new` and `/join/[code]` ask for a display name when the device has no session. The action creates the `users` row, the membership, a session and a personal link in one batch. The next page shows the personal link once, with a copy button and the advice to keep it like a password.
+**Creating or joining.** `/groups/new` and `/join/[code]` ask for a display name when the device has no session. The action creates the `users` row, the membership, a session and a personal link in one batch. The next page shows the personal link once, with a copy button and the advice to keep it like a password: `/welcome` after joining, `/g/[groupId]/ready` after creating, beside the group's invite. People see the personal link as the **sign-in link** (D46); the code and the older docs keep "personal link".
 
 **Sessions.** 32 random bytes, base64url, in the cookie `bp_session` (`HttpOnly; Secure; SameSite=Lax; Path=/`, `Max-Age` 400 days, the browser maximum). `sessions.id` holds its hex SHA-256, so a leaked database holds no usable sessions. Expiry is 400 days and slides: a request finding under 200 days left extends it. `hooks.server.ts` resolves the cookie into `event.locals.user = { id, name }` and deletes the row when it finds it expired. In local dev over http, the cookie drops `Secure`.
 
@@ -445,7 +451,7 @@ No accounts (D25). A person is a display name; a device proves who it is with a 
 - Failed redemptions record `link_fail` rate events by IP: 10 per hour.
 - Nobody can create a link for someone else, admins included. Recovery after losing every device is rejoining as a new person (D25).
 
-**Signed-out visitors** to a non-demo group page land on `/signin`. It explains that they're not signed in on this device, and offers "open your personal link" or "join with a code". `returnTo` is carried through join and link redemption, and accepted only when it starts with `/` and not `//` or `/\` (`return-to.ts`).
+**Signed-out visitors** to a non-demo group page land on `/signin`. It explains that they're not signed in on this device, and offers "open your sign-in link" first, then joining with a code, creating a group or the demo. `returnTo` is carried through join and link redemption, and accepted only when it starts with `/` and not `//` or `/\` (`return-to.ts`).
 
 **Instance admin.** `/admin/login` takes `ADMIN_KEY`. It compares SHA-256 digests in constant time, and on success sets `bp_admin` (`HttpOnly; Secure; SameSite=Strict; Path=/`, 12 hours). The path is `/`, not `/admin`, because `GROUP_CREATION=admins` checks the cookie on `/groups/new`. The cookie value is an HMAC of its expiry time keyed with `ADMIN_KEY`, so changing the key signs every admin out. Failures are rate-limited by IP: 5 per 15 minutes. `locals.isAdmin` reflects a valid cookie. Admin status grants nothing inside groups.
 
@@ -851,16 +857,16 @@ A writable local group with invented data, for trying the app as a member sees i
 
 | Route | Purpose | Guard |
 |---|---|---|
-| `/` | Landing with "Create a group", "Join with a code" and "See a demo group"; a device with a session also sees its groups. | none |
+| `/` | Landing with "Create a group", "Join with a code" and "See a demo group". A device with a session in a group sees Your groups instead: cards from `groupGlances()` (games, the members' colours, nights from yesterday on, three queries for all groups) and a join-by-code form posting to `/join`. | none |
 | `/privacy` | What's stored, why, how to delete it. | none |
 | `/demo` | Redirect to `/g/demo`. | none |
-| `/join` and `/join/[code]` | Join form, code prefilled from the URL. Asks for a display name when the device has no session. | none; rate-limited by IP |
-| `/groups/new` | Create a group. Asks for a display name when the device has no session. | `GROUP_CREATION`, `MAX_GROUPS_PER_USER`, rate limit by IP |
-| `/welcome` | Shown once after creating or joining: the personal link with a copy button. | `requireUser` |
-| `/signin` | "You're not signed in on this device": open your personal link, or join with a code. | none |
-| `/signed-out` | After "Sign out everywhere": the new personal link, once, so this device can sign back in. | none (reads the new-link cookie) |
+| `/join` and `/join/[code]` | Join form, code prefilled from the URL, with the sign-in link as the other way in (D46). `/join/[code]` shows the group's member and game counts (`groupGameCount()`), asks for a display name when the device has no session, and offers "Join as <name>" when it has one. | none; rate-limited by IP |
+| `/groups/new` | Create a group. Asks for a display name when the device has no session. Redirects to the group's ready page. | `GROUP_CREATION`, `MAX_GROUPS_PER_USER`, rate limit by IP |
+| `/welcome` | Shown once after joining: the personal link with a copy button. | `requireUser` |
+| `/signin` | "You're not signed in on this device": open your sign-in link (the main door), or join with a code, create a group, or look at the demo. | none |
+| `/signed-out` | After "Sign out everywhere": the new personal link, once, with "Sign in again on this device" opening it. | none (reads the new-link cookie) |
 | `/robots.txt` | Allows everything, or disallows everything when `SEARCH_ENGINES=block`. | none |
-| `/key/[token]` | GET confirms "Sign in as <name> on this device?"; POST signs in. | rate-limited by IP |
+| `/key/[token]` | GET confirms "Sign in as <name> on this device?", naming the person's groups (`listMyGroups`, demo left out); POST signs in. | rate-limited by IP |
 | `/admin/login`, `/admin` | Key sign-in; then totals, groups table, admin log and the group actions. | `requireAdmin` (except the login form) |
 | `/g/[groupId]` | Catalog. | `requireRead` |
 | `/g/[groupId]/game/[gameId]` | Game page: details, owners, links, wishlisters, expansions. | `requireRead` |
@@ -871,6 +877,7 @@ A writable local group with invented data, for trying the app as a member sees i
 | `/g/[groupId]/plays` | The play log: leaderboard (`?period=all` for all time), plays, points setting, export. Actions `logPlay`, `editPlay`, `deletePlay` (also used by the game page's forms) and `points`. | `requireRead`; plays `requireRole(member)` plus `canChangePlay`; `points` `requireRole(admin)` |
 | `GET /g/[groupId]/plays/export.csv` | The plays as CSV (`who=me|all`, `period=year|all`), a download for people, no CORS. | `requireRead`; `who=me` needs membership |
 | `/g/[groupId]/wanted` | The Wanted tab: games members want that nobody in the group owns, with who wants each and a "Me too" toggle. Wishes are set by the `want` action here, on the game page and on the add page (`on=0` removes). | `requireRead`; `want` needs `requireRole(member)` |
+| `/g/[groupId]/ready` | After creating a group: the invite card and, read once from the new-link cookie, the creator's sign-in link; no-store, same-origin referrer. | `requireRead`, members only (others go to the group) |
 | `/g/[groupId]/group` | The Group tab: invite code, members list, and the settings actions (`rename`, `newCode`, `promote`, `demote`, `transfer`, `remove`, `delete`). Members see the code and the list; co-admins and the owner see the controls their role allows. | `requireRead`; each action `requireRole(admin)` or `requireRole(owner)` |
 | `/me` | Display name, groups, loans (what you lent, with "Mark as returned", and what you borrowed), new personal link, sign out of this device or everywhere, account deletion. Later: my games and wishlist. | `requireUser` |
 | `GET /api/g/[groupId]/catalog` | Catalog payload with ETag. | `requireRead` |

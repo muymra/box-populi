@@ -36,7 +36,7 @@ Supporting claims, in order: game nights and the "who's here" picker, which plan
 - Collections usually come in through a BoardGameGeek collection import; anything missing is added by hand.
 - Copies get lent within the group or outside it. A loan to a member keeps the game available to the group.
 - Rules and video links are added by members per group.
-- Each person is a display name on a device. A personal link moves them to another device; losing every device means rejoining with the group code.
+- Each person is a display name on a device. A sign-in link moves them to another device; losing every device means rejoining with the group code.
 
 ## Capabilities and Constraints
 
@@ -62,7 +62,7 @@ Supporting claims, in order: game nights and the "who's here" picker, which plan
   - no AI training on BGG data.
 - **Self-hosted** on Cloudflare Pages and D1 on the free tier, or on Workers, Docker, Vercel or Netlify (D32); open source (MIT) at github.com/muymra/box-populi. Each hoster uses their own BGG application, or none (D28, D31).
 - **Scale per group:** up to 50 members, 1,500 distinct games, 4,000 copies.
-- **Terminology** used in the UI and docs: group, member, owner, co-admin, copy, catalog (the shelf), join code, invite link, personal link, game night, bring list, Play tonight (the picker), who's here, guest, filler, Wanted, play, leaderboard.
+- **Terminology** used in the UI and docs: group, member, owner, co-admin, copy, catalog (the shelf), join code, invite link (the group's, to share), sign-in link (yours, private; "personal link" in older docs and the code), game night, bring list, Play tonight (the picker), who's here, guest, filler, Wanted, play, leaderboard.
 
 ## Brand Commitments
 

@@ -1,13 +1,31 @@
 <script lang="ts">
+	// The home page. Signed in with groups: Your groups. Otherwise the landing, which shows the app
+	// rather than describing it (Carlo's pick, 2026-11-08): the headline beside an example shelf, then on a
+	// demo instance four moments, each a claim beside a small piece built from the app's own parts with
+	// invented games, a short list of the rest, and running your own.
+	import { onMount } from 'svelte';
+	import ArrowRight from '@lucide/svelte/icons/arrow-right';
+	import Code from '@lucide/svelte/icons/code';
+	import KeyRound from '@lucide/svelte/icons/key-round';
 	import BoxFront from '#lib/components/BoxFront.svelte';
 	import OwnerEdge from '#lib/components/OwnerEdge.svelte';
-	import Code from '@lucide/svelte/icons/code';
+	import { playerColor } from '#lib/catalog/colors.ts';
+	import { whenLabel } from '#lib/days.ts';
+	import { nightOf } from '#lib/table/regulars.ts';
 	import { SELF_HOSTING_URL, SOURCE_URL } from '#lib/project.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
-	// An illustrative shelf: invented titles, labelled as an example, never real data.
+	const ROLE_LABELS = { owner: 'Owner', admin: 'Co-admin', member: null } as const;
+	const SQUARES = 16;
+	// Which night is next depends on the viewer's clock, so the line fills in once the page is in the browser.
+	let today = $state<string | null>(null);
+	onMount(() => (today = nightOf(Date.now())));
+
+	// Invented titles and people, labelled as examples, never real data.
+	const NAMES = ['Ada', 'Bram', 'Chen', 'Dewi', 'Eli', 'Fen'];
+	const owners = (ids: number[]) => ids.map((o) => ({ name: NAMES[o], colorIndex: o }));
 	const EXAMPLE = [
 		{ name: 'Copper Harbor', owners: [0] },
 		{ name: 'Lantern Valley', owners: [1, 3] },
@@ -18,23 +36,32 @@
 		{ name: 'Quill Expedition', owners: [1] },
 		{ name: 'Ember Tavern', owners: [5] }
 	];
-	const NAMES = ['Ada', 'Bram', 'Chen', 'Dewi', 'Eli', 'Fen'];
-
-	// What the demo page tells someone deciding whether to run their own (PRD "Demo group").
-	const GETS = [
-		['One shelf for everyone', 'Each member adds the games they own once, and they show in every group they’re in, with who owns which copy.'],
-		['Filters for game night', 'Players, time, complexity, mechanics, themes, owner, and whether a copy is lent out. A filtered view is a link you can share.'],
-		['Game nights', 'Plan a night, say who’s coming and what each person brings, and copy it to the group chat. On the night, Play tonight picks three games from what’s actually there, weighted towards ones that play best at that count, plus quick fillers, split across tables when the group is too big for one.'],
-		['A play log', 'Note who played what and how it ended, with scores if you like, kept with the night it happened. Podium points feed a leaderboard for the year, just for fun, and the plays download as a spreadsheet.'],
-		['At the table', 'Buttons at the top pick who goes first with a slot machine spin, roll any mix of dice (keep some, roll the rest) and flip a coin.'],
-		['Wanted and lending', 'Wishlists, a list of games someone wants and nobody in the group owns yet, and who has whose copy.'],
-		['Rules and tutorials', 'Members add rulebook and video links to each game, so the group stops searching for them every time.'],
-		['No accounts', 'Join with a group code and a name. A personal link signs you in on another device; there are no passwords or emails.']
+	const FITS = [
+		{ name: 'Lantern Valley', facts: '2–5p · 45 min', owners: [1, 3] },
+		{ name: 'Quill Expedition', facts: '3–4p · 60 min', owners: [1] },
+		{ name: 'Ember Tavern', facts: '2–6p · 30 min', owners: [5] }
+	];
+	const BRINGING = [
+		{ who: 0, game: 'Copper Harbor' },
+		{ who: 2, game: 'Saffron Bazaar' },
+		{ who: 3, game: 'Moss Citadel' }
+	];
+	const PODIUM = [
+		{ place: 2, who: 1, points: 41 },
+		{ place: 1, who: 0, points: 47 },
+		{ place: 3, who: 4, points: 32 }
+	];
+	const ALSO = [
+		['Wanted', 'games someone wants and nobody in the group owns yet'],
+		['Lending', 'who has whose copy, so lent games don’t go missing'],
+		['Rules and tutorials', 'rulebook and video links on every game'],
+		['At the table', 'who goes first, any mix of dice, and a coin, a tap away'],
+		['Twelve colour themes', 'try one at the bottom of this page']
 	] as const;
 	const HOSTING = [
-		['Where it runs', 'Cloudflare Pages or Workers on the free plan, Docker with a SQLite file on a home server, or Vercel or Netlify with a Turso database.'],
-		['Where games come from', 'BoardGameGeek search and collection import with your own BGG application. Without one: Wikidata search, a pasted list, and hand entry, which each group can correct for itself.'],
-		['What you manage', 'An admin page to suspend or delete groups without seeing inside them, twelve colour themes, and your own colours and logo.']
+		['Where it runs', 'Cloudflare on the free plan, Docker with a SQLite file at home, or Vercel or Netlify with Turso.'],
+		['Where games come from', 'BoardGameGeek with your own BGG application, or Wikidata, pasted lists and hand entry.'],
+		['What you manage', 'Suspend or delete groups without seeing inside them, and set the colours and logo.']
 	] as const;
 </script>
 
@@ -44,11 +71,11 @@
 			{#each EXAMPLE as game, i (game.name)}
 				<li class="cube" style:--i={i}>
 					<span class="slot"><BoxFront name={game.name} /></span>
-					<OwnerEdge owners={game.owners.map((o) => ({ name: NAMES[o], colorIndex: o }))} />
+					<OwnerEdge owners={owners(game.owners)} />
 				</li>
 			{/each}
 		</ul>
-		<figcaption class="muted">Example shelf. Each colour along a cube's edge is the friend who owns it.</figcaption>
+		<figcaption class="muted">Example shelf. Each colour along a cube’s edge is the friend who owns it.</figcaption>
 	</figure>
 {/snippet}
 
@@ -57,83 +84,201 @@
 		<div class="pitch">
 			<h1>Every game your group owns, on one shelf</h1>
 			<p class="lede">
-				Box Populi pools a board game group's collections into one searchable shelf. This copy runs a demo group of invented
-				games and people, so you can look around without joining anything.
+				Box Populi pools a board game group’s collections into one shelf you can search. This copy runs a demo group of invented games and people, so
+				you can look around without joining anything.
 			</p>
-			{#if data.demoExists}
-				<ul class="tries">
-					<li><a href="/demo">Filter the shelf</a> by players, time and complexity</li>
-					<li>Open a game to see who owns it and where its rules are</li>
-					<li>See the demo group’s <a href="/g/demo/pick">next game night</a>: who’s coming and what they’re bringing</li>
-					<li>See who leads the demo group’s <a href="/g/demo/plays">leaderboard</a>, or spin for who goes first</li>
-					<li>Try another of the twelve colour themes at the bottom of the page</li>
-				</ul>
-			{/if}
 			<div class="actions">
-				{#if data.demoExists}<a class="btn primary" href="/demo">Browse the demo shelf</a>{/if}
+				{#if data.demoExists}<a class="btn primary" href="/demo">Browse the demo shelf <ArrowRight size={18} aria-hidden="true" /></a>{/if}
 				<a class="btn" href={SOURCE_URL} rel="noopener"><Code size={18} aria-hidden="true" /> Code on GitHub</a>
 			</div>
-			<p class="lede small open-source">
-				Free and open source. Run it for your own group on Cloudflare, Docker, Vercel or Netlify with
-				<a href={SELF_HOSTING_URL} rel="noopener">the self-hosting guide</a>.
-			</p>
-			{#if !data.demoExists}<p class="banner">The demo group isn't loaded on this instance yet.</p>{/if}
+			<p class="small muted">Free and open source. Run it for your own group with <a href={SELF_HOSTING_URL} rel="noopener">the self-hosting guide</a>.</p>
+			{#if !data.demoExists}<p class="banner">The demo group isn’t loaded on this instance yet.</p>{/if}
 		</div>
 		{@render exampleShelf()}
 	</section>
 
-	<section class="more" aria-labelledby="gets-h">
-		<h2 id="gets-h">What a group gets</h2>
-		<dl class="points">
-			{#each GETS as [term, detail] (term)}
-				<div><dt>{term}</dt><dd>{detail}</dd></div>
-			{/each}
-		</dl>
+	<!-- Four moments: what it's like, each beside a small piece of the app with invented games. -->
+	<section class="moment" aria-labelledby="fits-h">
+		<div class="say">
+			<h2 id="fits-h">Find what fits tonight</h2>
+			<p>Four players and an hour? Two taps take a shelf of four hundred games down to the ones that fit, and the colour along each box’s edge says whose copy it is.</p>
+			{#if data.demoExists}<a class="go" href="/g/demo?n=4&t=60">Filter the demo shelf <ArrowRight size={16} aria-hidden="true" /></a>{/if}
+		</div>
+		<figure class="piece" aria-label="Example: the shelf filtered to 4 players and 60 minutes">
+			<div class="strip" aria-hidden="true">
+				<span class="chip on">4 players</span>
+				<span class="chip on">Fits in 60 min</span>
+				<span class="chip">Light</span>
+				<span class="chip">Medium</span>
+			</div>
+			<ul class="shelf small" aria-hidden="true">
+				{#each FITS as game, i (game.name)}
+					<li class="cube" style:--i={i}>
+						<span class="slot"><BoxFront name={game.name} /></span>
+						<span class="caption num">{game.facts}</span>
+						<OwnerEdge owners={owners(game.owners)} />
+					</li>
+				{/each}
+			</ul>
+		</figure>
 	</section>
 
-	<section class="more" aria-labelledby="own-h">
-		<h2 id="own-h">Running your own</h2>
-		<dl class="points">
-			{#each HOSTING as [term, detail] (term)}
-				<div><dt>{term}</dt><dd>{detail}</dd></div>
-			{/each}
-		</dl>
-		<div class="actions">
-			<a class="btn primary" href={SELF_HOSTING_URL} rel="noopener">Read the self-hosting guide</a>
-			<a class="btn" href={SOURCE_URL} rel="noopener"><Code size={18} aria-hidden="true" /> Code on GitHub</a>
+	<section class="moment flip" aria-labelledby="night-h">
+		<div class="say">
+			<h2 id="night-h">Plan the night</h2>
+			<p>Say when and where, who’s coming and who brings what, then copy it to the group chat. On the night, Play tonight picks from what’s actually on the table.</p>
+			{#if data.demoExists}<a class="go" href="/g/demo/pick">See the demo’s next night <ArrowRight size={16} aria-hidden="true" /></a>{/if}
 		</div>
+		<figure class="piece" aria-label="Example: a game night with who brings what">
+			<div class="night" aria-hidden="true">
+				<span class="when">Friday · 20:00</span>
+				<strong class="night-name">At Bram’s</strong>
+				<span class="muted">5 going · 3 to bring</span>
+				<ul class="brings">
+					{#each BRINGING as b (b.game)}
+						<li><i style:background={playerColor(b.who).fill}></i><span>{NAMES[b.who]}</span> brings <strong>{b.game}</strong></li>
+					{/each}
+				</ul>
+			</div>
+		</figure>
+	</section>
+
+	<section class="moment" aria-labelledby="score-h">
+		<div class="say">
+			<h2 id="score-h">Keep score, for fun</h2>
+			<p>Log who played what and how it ended. Podium points add up to a leaderboard for the year, and the plays download as a spreadsheet.</p>
+			{#if data.demoExists}<a class="go" href="/g/demo/plays">See the demo’s leaderboard <ArrowRight size={16} aria-hidden="true" /></a>{/if}
+		</div>
+		<figure class="piece" aria-label="Example: a podium of the year's top three">
+			<ol class="podium" aria-hidden="true">
+				{#each PODIUM as p (p.place)}
+					{@const c = playerColor(p.who)}
+					<li class="step p{p.place}">
+						<span class="who">{NAMES[p.who]}</span>
+						<span class="pts num">{p.points} pts</span>
+						<span class="block num" style:background={c.fill} style:color={c.ink}>{p.place}</span>
+					</li>
+				{/each}
+			</ol>
+		</figure>
+	</section>
+
+	<section class="moment flip" aria-labelledby="accounts-h">
+		<div class="say">
+			<h2 id="accounts-h">No accounts</h2>
+			<p>Join with the group’s code and a name. Your own sign-in link opens it on your other devices. There are no emails or passwords.</p>
+		</div>
+		<figure class="piece pair" aria-label="Example: a group's join code, and a sign-in link only for you">
+			<div class="code-card" aria-hidden="true">
+				<span class="muted">Join code</span>
+				<span class="code num">K7M4P</span>
+			</div>
+			<div class="link-card" aria-hidden="true">
+				<span class="link-label"><KeyRound size={16} /> Your sign-in link <span class="tag">Only for you</span></span>
+				<span class="fake-link">…/key/••••••••••••</span>
+			</div>
+		</figure>
+	</section>
+
+	<section class="also" aria-labelledby="also-h">
+		<h2 id="also-h">Also in the box</h2>
+		<ul>
+			{#each ALSO as [term, detail] (term)}<li><strong>{term}:</strong> {detail}</li>{/each}
+		</ul>
+	</section>
+
+	<section class="own" aria-labelledby="own-h">
+		<div class="own-say">
+			<h2 id="own-h">Run your own</h2>
+			<p>It’s free, open source, and light enough for one group or a few on a free plan.</p>
+			<div class="actions">
+				<a class="btn primary" href={SELF_HOSTING_URL} rel="noopener">Read the self-hosting guide</a>
+				<a class="btn" href={SOURCE_URL} rel="noopener"><Code size={18} aria-hidden="true" /> Code on GitHub</a>
+			</div>
+		</div>
+		<dl>
+			{#each HOSTING as [term, detail] (term)}<div><dt>{term}</dt><dd>{detail}</dd></div>{/each}
+		</dl>
 	</section>
 {:else if data.groups.length}
-	<section class="mine">
+	<div class="mine">
 		<h1>Your groups</h1>
 		<ul class="groups">
 			{#each data.groups as g (g.id)}
+				{@const next = today ? g.nights.find((n) => n.nightOn >= today!) : null}
 				<li>
 					<a class="group" href="/g/{g.id}">
-						<strong>{g.name}</strong>
-						<span class="muted num">{g.memberCount} {g.memberCount === 1 ? 'member' : 'members'}</span>
+						<span class="top">
+							<strong class="name">{g.name}</strong>
+							{#if ROLE_LABELS[g.role]}<span class="tag">{ROLE_LABELS[g.role]}</span>{/if}
+						</span>
+						<span class="people">
+							<span class="squares" aria-hidden="true">
+								{#each g.colors.slice(0, SQUARES) as c, i (i)}<i style:background={playerColor(c).fill}></i>{/each}
+							</span>
+							<span class="num">
+								{g.memberCount} {g.memberCount === 1 ? 'member' : 'members'} · {g.games} {g.games === 1 ? 'game' : 'games'}
+							</span>
+						</span>
+						<span class="night">
+							{#if !today}
+								&nbsp;
+							{:else if next}
+								<strong>{whenLabel(next.nightOn, today)}:</strong> {next.name}{#if next.startsAt}{' · '}<span class="num">{next.startsAt}</span>{/if}
+							{:else}
+								<span class="muted">No game night planned</span>
+							{/if}
+						</span>
 					</a>
 				</li>
 			{/each}
 		</ul>
-		<div class="actions">
-			<a class="btn" href="/join">Join another group</a>
-			{#if data.canCreate}<a class="btn" href="/groups/new">Create a group</a>{/if}
-		</div>
-	</section>
+
+		<section class="form-panel another" aria-labelledby="another-h">
+			<div class="form-head"><div><h2 id="another-h">Another group</h2></div></div>
+			<div class="form-row">
+				<div class="form-label">
+					<label class="form-q" for="code">Join with a code</label>
+					<span class="hint">Someone in that group finds it on its Group tab.</span>
+				</div>
+				<div class="form-body">
+					<form method="POST" action="/join" class="inline">
+						<input
+							id="code"
+							class="field code-input"
+							name="code"
+							required
+							maxlength="9"
+							autocomplete="off"
+							autocapitalize="characters"
+							spellcheck="false"
+							placeholder="K7M4P"
+						/>
+						<button class="btn">Join</button>
+					</form>
+				</div>
+			</div>
+			{#if data.canCreate}
+				<div class="form-row">
+					<div class="form-label"><span class="form-q">Start one</span></div>
+					<div class="form-body"><div><a class="btn" href="/groups/new">Create a group</a></div></div>
+				</div>
+			{/if}
+		</section>
+	</div>
 {:else}
 	<section class="hero">
 		<div class="pitch">
 			<h1>Every game your group owns, on one shelf</h1>
 			<p class="lede">
-				Everyone adds the games on their own shelf. Then anyone in the group can find what fits five players in an
-				hour, see who owns it, and pull three suggestions for whoever showed up tonight.
+				Everyone adds the games on their own shelf. Then anyone in the group can find what fits five players in an hour, see who owns it, and pull
+				three suggestions for whoever showed up tonight.
 			</p>
-			<p class="lede small">No accounts or passwords. Join with a code and your name.</p>
 			<div class="actions">
 				<a class="btn primary" href="/join">Join with a code</a>
 				{#if data.canCreate}<a class="btn" href="/groups/new">Create a group</a>{/if}
 			</div>
+			<p class="small muted">There are no accounts or passwords: a code and your name. Already in a group? Open your sign-in link on this device.</p>
 			{#if data.demoExists}<p class="demo"><a href="/demo">Or look around a demo shelf first</a></p>{/if}
 		</div>
 		{@render exampleShelf()}
@@ -141,75 +286,40 @@
 {/if}
 
 <style>
-	.open-source {
-		margin-top: var(--s-4);
-	}
-	.more {
-		padding: var(--s-6) 0;
-		border-top: 1px solid var(--rule);
-	}
-	.more h2 {
-		margin: 0 0 var(--s-5);
-	}
-	.points {
-		display: grid;
-		gap: var(--s-5) var(--s-6);
-		margin: 0;
-	}
-	@media (min-width: 640px) {
-		.points {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-		}
-	}
-	@media (min-width: 900px) {
-		.points {
-			grid-template-columns: repeat(3, minmax(0, 1fr));
-		}
-	}
-	.points dt {
-		font-weight: 750;
-		margin-bottom: var(--s-1);
-	}
-	.points dd {
-		margin: 0;
-		color: var(--ink-2);
-		max-width: 38ch;
-	}
-	.tries {
-		margin: 0 0 var(--s-4);
-		padding-left: 1.2em;
-		color: var(--ink-2);
-		display: grid;
-		gap: var(--s-1);
-	}
+	/* The hero: the headline beside the example shelf, whose boxes rise into place one after another. */
 	.hero {
 		display: grid;
 		gap: var(--s-6);
-		padding: var(--s-6) 0 var(--s-4);
+		padding: var(--s-6) 0 var(--s-6);
 		align-items: center;
 	}
 	@media (min-width: 900px) {
 		.hero {
-			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-			padding-top: var(--s-7);
+			grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+			gap: var(--s-7);
+			padding: var(--s-7) 0;
 		}
 	}
 	h1 {
-		font-size: clamp(2rem, 6vw, 3.25rem);
+		font-size: var(--t-display);
 		font-weight: 800;
 		font-stretch: 82%;
 		letter-spacing: -0.02em;
 		line-height: 1.02;
 		max-width: 14ch;
-		margin-bottom: var(--s-4);
+		margin: 0 0 var(--s-4);
+		text-wrap: balance;
 	}
 	.lede {
 		font-size: var(--t-lead);
 		color: var(--ink-2);
 		max-width: 34rem;
+		margin: 0;
 	}
-	.lede.small {
+	.small {
 		font-size: var(--t-body);
+		max-width: 34rem;
+		margin: var(--s-4) 0 0;
 	}
 	.actions {
 		display: flex;
@@ -233,11 +343,10 @@
 		gap: 8px;
 		background: var(--gap);
 		border-radius: 6px;
-		max-width: 34rem;
 	}
 	.cube {
 		background: var(--cube);
-		padding: 10px 10px 0;
+		padding: 12px 12px 0;
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
@@ -246,45 +355,411 @@
 		display: block;
 		aspect-ratio: 1 / 1.04;
 		padding: 0 6%;
+		animation: rise 0.6s var(--ease-out) both;
+		animation-delay: calc(120ms + var(--i) * 70ms);
 	}
-	.cube:nth-child(3) .slot {
-		transform: rotate(-4deg) translateY(2px);
+	.example .cube:nth-child(3) .slot {
+		rotate: -4deg;
+		translate: 0 2px;
 	}
-	.cube:nth-child(6) .slot {
-		transform: rotate(3deg);
+	.example .cube:nth-child(6) .slot {
+		rotate: 3deg;
+	}
+	@keyframes rise {
+		from {
+			opacity: 0;
+			transform: translateY(14px);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.slot {
+			animation: none;
+		}
 	}
 	figcaption {
 		margin-top: var(--s-3);
 		font-size: var(--t-small);
 	}
 
+	/* Moments: a claim beside a small piece of the app, alternating sides from 900px. */
+	.moment {
+		display: grid;
+		gap: var(--s-5);
+		align-items: center;
+		padding: var(--s-7) 0;
+		border-top: 1px solid var(--rule);
+	}
+	@media (min-width: 900px) {
+		.moment {
+			grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+			gap: var(--s-7);
+		}
+		.moment.flip .say {
+			order: 2;
+		}
+	}
+	.say h2 {
+		font-size: var(--t-h1);
+		font-weight: 800;
+		font-stretch: 88%;
+		letter-spacing: -0.01em;
+		line-height: 1.08;
+		margin: 0 0 var(--s-3);
+	}
+	.say p {
+		margin: 0;
+		max-width: 32rem;
+		font-size: var(--t-lead);
+		color: var(--ink-2);
+	}
+	.go {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		margin-top: var(--s-4);
+		font-weight: 650;
+	}
+	.piece {
+		margin: 0;
+		max-width: 34rem;
+		width: 100%;
+	}
+	/* 1: the filter strip as on the shelf, set to four players and an hour, over three cubes. */
+	.strip {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		padding: var(--s-3);
+		background: var(--label);
+		border-radius: 10px 10px 0 0;
+	}
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		min-height: 34px;
+		padding: 0 12px;
+		border-radius: 4px;
+		border: 1.5px solid var(--label-line);
+		color: var(--label-ink);
+		font-size: var(--t-small);
+		font-weight: 650;
+	}
+	.chip.on {
+		background: var(--mark);
+		border-color: var(--mark);
+		color: var(--mark-ink);
+	}
+	.shelf.small {
+		grid-template-columns: repeat(3, 1fr);
+		border-radius: 0 0 6px 6px;
+	}
+	.caption {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--ink-2);
+		text-align: center;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	/* 2: a game night card, as on the Game night tab. */
+	.night {
+		display: grid;
+		gap: 4px;
+		padding: var(--s-4) var(--s-5);
+		background: var(--cube);
+		border: 1px solid var(--rule);
+		border-radius: 10px;
+	}
+	.when {
+		font-size: var(--t-small);
+		font-weight: 650;
+		color: var(--ink-2);
+	}
+	.night-name {
+		font-size: var(--t-h2);
+		font-weight: 800;
+	}
+	.brings {
+		list-style: none;
+		margin: var(--s-3) 0 0;
+		padding: var(--s-3) 0 0;
+		border-top: 1px solid var(--gap);
+		display: grid;
+		gap: var(--s-2);
+	}
+	.brings li {
+		display: flex;
+		align-items: center;
+		gap: var(--s-2);
+		color: var(--ink-2);
+	}
+	.brings li span {
+		color: var(--ink);
+		font-weight: 650;
+	}
+	.brings strong {
+		color: var(--ink);
+	}
+	.brings i {
+		flex: none;
+		width: 12px;
+		height: 12px;
+		border-radius: 3px;
+	}
+	/* 3: the podium, as on the plays page. */
+	.podium {
+		list-style: none;
+		margin: 0;
+		padding: var(--s-5) var(--s-4) 0;
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 9rem));
+		justify-content: center;
+		align-items: end;
+		gap: var(--s-3);
+		background: var(--cube);
+		border: 1px solid var(--rule);
+		border-radius: 10px;
+	}
+	.step {
+		display: grid;
+		justify-items: center;
+		gap: 2px;
+		min-width: 0;
+	}
+	.step .who {
+		font-size: var(--t-lead);
+		font-weight: 780;
+		font-stretch: 88%;
+	}
+	.pts {
+		font-size: var(--t-small);
+		color: var(--ink-2);
+		margin-bottom: var(--s-2);
+	}
+	.block {
+		display: grid;
+		place-items: center;
+		width: 100%;
+		border-radius: var(--r-ctl) var(--r-ctl) 0 0;
+		box-shadow: var(--shadow-lift);
+		font-size: var(--t-h1);
+		font-weight: 800;
+	}
+	.p1 .block {
+		height: 112px;
+	}
+	.p2 .block {
+		height: 84px;
+	}
+	.p3 .block {
+		height: 64px;
+	}
+	/* 4: the group's code on the dark label beside a sign-in link on the cube, as on the ready page. */
+	.pair {
+		display: grid;
+		gap: var(--s-3);
+	}
+	@media (min-width: 560px) {
+		.pair {
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+			align-items: stretch;
+		}
+	}
+	.code-card,
+	.link-card {
+		display: grid;
+		align-content: center;
+		gap: var(--s-2);
+		padding: var(--s-4) var(--s-5);
+		border-radius: 10px;
+	}
+	.code-card {
+		background: var(--label);
+		color: var(--label-ink);
+	}
+	.code-card .muted {
+		color: var(--label-ink-2);
+		font-size: var(--t-small);
+	}
+	.code {
+		font-size: var(--t-h1);
+		font-weight: 800;
+		letter-spacing: 0.22em;
+	}
+	.link-card {
+		background: var(--cube);
+		border: 1px solid var(--rule);
+	}
+	.link-label {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+		font-weight: 700;
+	}
+	.fake-link {
+		padding: 8px var(--s-3);
+		border: 1.5px solid var(--rule);
+		border-radius: var(--r-ctl);
+		background: var(--laminate);
+		color: var(--ink-2);
+		font-size: var(--t-small);
+	}
+
+	/* The rest, said once in a list. */
+	.also {
+		padding: var(--s-7) 0;
+		border-top: 1px solid var(--rule);
+	}
+	.also h2,
+	.own h2 {
+		font-size: var(--t-h2);
+		margin: 0 0 var(--s-4);
+	}
+	.also ul {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		display: grid;
+		gap: var(--s-2) var(--s-6);
+		color: var(--ink-2);
+	}
+	.also strong {
+		color: var(--ink);
+	}
+	@media (min-width: 760px) {
+		.also ul {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+	/* Running your own: the closing band on the label colours, like the filter strip and the invite. */
+	.own {
+		display: grid;
+		gap: var(--s-6);
+		margin-bottom: var(--s-6);
+		padding: var(--s-6);
+		background: var(--label);
+		color: var(--label-ink);
+		border-radius: 10px;
+	}
+	.own p {
+		margin: 0;
+		color: var(--label-ink-2);
+		max-width: 30rem;
+	}
+	.own .actions {
+		margin-top: var(--s-4);
+	}
+	/* On the dark band the primary button turns light, as the invite card's button does. */
+	.own :global(.btn.primary) {
+		background: var(--label-ink);
+		border-color: var(--label-ink);
+		color: var(--label);
+	}
+	.own :global(.btn:not(.primary)) {
+		background: transparent;
+		color: var(--label-ink);
+		border-color: var(--label-line);
+	}
+	.own :focus-visible {
+		outline-color: var(--mark);
+	}
+	.own dl {
+		display: grid;
+		gap: var(--s-4);
+		margin: 0;
+	}
+	.own dt {
+		font-weight: 750;
+	}
+	.own dd {
+		margin: 2px 0 0;
+		color: var(--label-ink-2);
+	}
+	@media (min-width: 900px) {
+		.own {
+			grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+		}
+	}
+
+	/* Your groups: a card per group (its people as colour squares, the shelf's size, the next night),
+	   then joining or creating another (D46). */
+	.mine {
+		display: grid;
+		gap: var(--s-5);
+		max-width: 46rem;
+		padding: var(--s-5) 0 var(--s-6);
+	}
 	.mine h1 {
 		font-size: var(--t-h1);
-		margin-top: var(--s-5);
+		margin: 0;
 	}
 	.groups {
 		list-style: none;
 		padding: 0;
-		margin: var(--s-4) 0 0;
+		margin: 0;
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
-		gap: var(--s-2);
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+		gap: var(--s-3);
 	}
 	.group {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		padding: var(--s-4);
+		display: grid;
+		gap: var(--s-2);
+		padding: var(--s-4) var(--s-5);
 		background: var(--cube);
 		border: 1px solid var(--rule);
 		border-radius: 10px;
 		color: var(--ink);
 		text-decoration: none;
 	}
-	.group strong {
-		font-size: var(--t-lead);
-	}
 	.group:hover {
 		border-color: var(--ink-3);
+	}
+	.group:hover .name {
+		text-decoration: underline;
+		text-decoration-thickness: 2px;
+		text-underline-offset: 0.15em;
+	}
+	.top {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--s-2);
+	}
+	.name {
+		font-size: var(--t-h2);
+		font-weight: 800;
+		line-height: 1.15;
+	}
+	.people {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px var(--s-2);
+		color: var(--ink-2);
+	}
+	.squares {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 3px;
+	}
+	.squares i {
+		width: 12px;
+		height: 12px;
+		border-radius: 3px;
+	}
+	.night {
+		padding-top: var(--s-2);
+		border-top: 1px solid var(--gap);
+		min-height: 1.5em;
+	}
+	.another .inline {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--s-2);
+	}
+	.another .code-input {
+		width: 10rem;
 	}
 </style>

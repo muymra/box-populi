@@ -19,6 +19,8 @@
 	<form method="POST" class="form-panel" onsubmit={() => (sending = true)}>
 		<NightFields
 			members={data.tableMembers}
+			planned={data.nights}
+			me={data.myId}
 			values={form?.entered
 				? { name: form.entered.name, nightOn: form.entered.nightOn, startsAt: form.entered.startsAt, host: form.entered.host }
 				: { name: 'Game night', nightOn: nightOf(Date.now()) }}

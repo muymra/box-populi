@@ -2,7 +2,7 @@
 // preview links can't sign anyone in; the POST does the work.
 import { fail, redirect } from '@sveltejs/kit';
 import { getDb } from '#lib/server/platform.ts';
-import { createSession, endSession, findPersonByLink, SESSION_COOKIE } from '#lib/server/identity.ts';
+import { createSession, endSession, findPersonByLink, listMyGroups, SESSION_COOKIE } from '#lib/server/identity.ts';
 import { giveBack, ipSubject, LIMITS, take } from '#lib/server/ratelimit.ts';
 import { SECRET_PAGE_HEADERS, setSessionCookie } from '#lib/server/cookies.ts';
 import { safeReturnTo } from '#lib/server/return-to.ts';
@@ -22,6 +22,8 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		state: 'ok' as const,
 		name: person.name,
+		// Whose link this is, so the right person signs in: their groups' names, which the link already opens.
+		groups: (await listMyGroups(db, person.id)).filter((g) => !g.isDemo).map((g) => g.name),
 		alreadyYou: current?.id === person.id,
 		switchingFrom: current && current.id !== person.id ? current.name : null
 	};

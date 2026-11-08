@@ -1,7 +1,8 @@
 <script lang="ts">
 	// "Who goes first?" (PRD "At the table"): one person drawn at random from who's here, members and
 	// guests. The pick is made first; a slot machine reel then rolls through the names and stops on it.
-	import { tick } from 'svelte';
+	// The answer leads the sheet; who's here folds into one line, since Play tonight has usually set it.
+	import { tick, untrack } from 'svelte';
 	import Crown from '@lucide/svelte/icons/crown';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import WhosHere from './WhosHere.svelte';
@@ -14,16 +15,32 @@
 	let { members, table }: { members: Member[]; table: Table } = $props();
 
 	/** Height of one name on the reel, in px; the CSS uses the same value. */
-	const ROW = 64;
+	const ROW = 72;
 	/** Names that roll past before the reel stops, whatever the size of the table. */
 	const SPIN_ROWS = 24;
 
 	const people = $derived<Person[]>([
-		...members.filter((m) => table.members.includes(m.id)).map((m) => ({ key: `m:${m.id}`, name: m.name, color: playerColor(m.colorIndex).bg })),
+		...members.filter((m) => table.members.includes(m.id)).map((m) => ({ key: `m:${m.id}`, name: m.name, color: playerColor(m.colorIndex).fill })),
 		...table.guests.map((name) => ({ key: `g:${name}`, name, color: null }))
 	]);
 
 	let winner = $state<Person | null>(null);
+	// Who's here, folded to one line. Each load opens it when there aren't two people to pick from and
+	// folds it otherwise; dropping below two opens it; only "Done" folds it, so ticking the second
+	// person doesn't snap the list shut mid-choice.
+	let showPeople = $state(false);
+	$effect(() => {
+		void table.loads;
+		showPeople = untrack(() => people.length) < 2;
+	});
+	$effect(() => {
+		if (people.length < 2) showPeople = true;
+	});
+	/** "Ada, Chen, Kai, Bram and 2 more" */
+	const summary = $derived(
+		people.length <= 5 ? people.map((p) => p.name).join(', ') : `${people.slice(0, 4).map((p) => p.name).join(', ')} and ${people.length - 4} more`
+	);
+	const id = $props.id();
 	// The names on the reel, top to bottom: the pick, then two more for the overshoot to show.
 	let reel = $state<Person[]>([]);
 	let settled = $state(false);
@@ -94,63 +111,74 @@
 </script>
 
 <div class="start">
-	<WhosHere {members} {table} />
-
-	<div class="go">
-		<button type="button" class="btn primary big" disabled={people.length < 2} onclick={choose}>
-			{#if winner}<RotateCcw size={20} aria-hidden="true" /> Pick again{:else}<Crown size={20} aria-hidden="true" /> Pick who goes first{/if}
-		</button>
-		{#if people.length < 2}<p class="hint">Tick or add at least two people.</p>{/if}
-	</div>
-
-	{#if winner}
-		<div class="result" class:settled>
+	<div class="stage" class:settled class:idle={!winner}>
+		{#if winner}
 			<div class="window" aria-hidden="true">
 				<div class="strip" bind:this={strip}>
 					{#each reel as p, i (i)}
 						<div class="row">
-							<span class="dot" class:guest={!p.color} style:background={p.color}></span>
+							<span class="cube" class:guest={!p.color} style:background={p.color}></span>
 							<span class="name">{p.name}</span>
 						</div>
 					{/each}
 				</div>
 			</div>
 			<p class="goes">goes first</p>
+		{:else if people.length >= 2}
+			<div class="cubes" aria-hidden="true">
+				{#each people as p (p.key)}<span class="cube small" class:guest={!p.color} style:background={p.color}></span>{/each}
+			</div>
+			<p class="ask">One of these {people.length} goes first.</p>
+		{:else}
+			<p class="ask">Tick or add at least two people below.</p>
+		{/if}
+	</div>
+
+	<button type="button" class="btn primary big" disabled={people.length < 2} onclick={choose}>
+		{#if winner}<RotateCcw size={20} aria-hidden="true" /> Pick again{:else}<Crown size={20} aria-hidden="true" /> Pick who goes first{/if}
+	</button>
+
+	<section class="people" aria-labelledby="{id}-here">
+		<div class="here">
+			<p id="{id}-here">
+				{#if people.length}<strong class="num">{people.length} here</strong><span class="muted">: {summary}</span>{:else}<strong>Nobody ticked yet</strong>{/if}
+			</p>
+			{#if people.length >= 2}
+				<button type="button" class="link-button" aria-expanded={showPeople} aria-controls="{id}-who" onclick={() => (showPeople = !showPeople)}
+					>{showPeople ? 'Done' : 'Change'}</button
+				>
+			{/if}
 		</div>
-	{/if}
+		{#if showPeople}<div id="{id}-who"><WhosHere {members} {table} /></div>{/if}
+	</section>
 	<p class="visually-hidden" role="status">{settled && winner ? `${winner.name} goes first` : ''}</p>
 </div>
 
 <style>
 	.start {
 		display: grid;
-		gap: var(--s-5);
+		gap: var(--s-4);
 	}
-	.go {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: var(--s-3);
-	}
-	.go p {
-		margin: 0;
-	}
-	.big {
-		min-height: 52px;
-		padding: 0 var(--s-5);
-		font-size: var(--t-lead);
-	}
-	.result {
-		padding: var(--s-2) var(--s-5) var(--s-4);
-		border: 1px solid var(--rule);
+	/* The answer leads: a well on the laminate holding the reel, or before a pick the people in the draw. */
+	.stage {
+		display: grid;
+		align-content: center;
+		min-height: 136px;
+		padding: var(--s-3) var(--s-5) var(--s-4);
 		border-radius: 10px;
 		background: var(--laminate);
+		box-shadow: inset 0 0 0 1px var(--rule);
+	}
+	.stage.idle {
+		gap: var(--s-3);
+		padding-block: var(--s-5);
 	}
 	/* The reel: one name in the middle, its neighbours fading out above and below. */
 	.window {
-		height: 104px;
+		height: 112px;
 		overflow: hidden;
-		mask-image: linear-gradient(transparent, #000 32%, #000 68%, transparent);
+		/* a mask only reads opacity, so any opaque colour does */
+		mask-image: linear-gradient(transparent, var(--ink) 30%, var(--ink) 70%, transparent);
 	}
 	.strip {
 		padding-top: 20px;
@@ -159,36 +187,83 @@
 	.row {
 		display: flex;
 		align-items: center;
-		gap: var(--s-3);
-		height: 64px;
+		gap: var(--s-4);
+		height: 72px;
 	}
-	.dot {
+	/* Each person as a wooden cube in their colour; a guest, with no colour, as an outlined one. */
+	.cube {
 		flex: none;
-		width: 28px;
-		height: 28px;
-		border-radius: 6px;
+		width: 56px;
+		height: 56px;
+		border-radius: var(--r-ctl);
 	}
-	.dot.guest {
+	.cube.small {
+		width: 22px;
+		height: 22px;
+		border-radius: 4px;
+	}
+	.cube.guest {
 		box-shadow: inset 0 0 0 3px var(--ink-3);
+	}
+	.cube.small.guest {
+		box-shadow: inset 0 0 0 2px var(--ink-3);
 	}
 	.name {
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-size: var(--t-h1);
-		font-weight: 780;
-		font-stretch: 88%;
-		line-height: 1.15;
+		font-size: var(--t-display);
+		font-weight: 800;
+		font-stretch: 82%;
+		line-height: 1.1;
 	}
 	.goes {
-		margin: -12px 0 0;
-		padding-left: calc(28px + var(--s-3));
+		margin: -14px 0 0;
+		padding-left: calc(56px + var(--s-4));
 		color: var(--ink-2);
+		font-size: var(--t-lead);
 		font-weight: 650;
 		visibility: hidden;
 	}
 	.settled .goes {
 		visibility: visible;
+	}
+	.cubes {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	.ask {
+		margin: 0;
+		color: var(--ink-2);
+		font-weight: 650;
+	}
+	.big {
+		justify-self: start;
+		min-height: 52px;
+		padding: 0 var(--s-5);
+		font-size: var(--t-lead);
+	}
+	/* Who's here, folded to one line under the answer. */
+	.people {
+		display: grid;
+		gap: var(--s-3);
+		padding-top: var(--s-4);
+		border-top: 1px solid var(--rule);
+	}
+	.here {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--s-3);
+	}
+	.here p {
+		margin: 0;
+		min-width: 0;
+	}
+	.here .link-button {
+		flex: none;
+		min-height: 44px;
 	}
 </style>

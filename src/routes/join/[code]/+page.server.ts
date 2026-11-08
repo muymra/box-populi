@@ -2,7 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import { getDb } from '#lib/server/platform.ts';
 import { normalizeCode } from '#lib/server/codes.ts';
 import { cleanDisplayName, newPersonStatements } from '#lib/server/identity.ts';
-import { findGroupByCode, isMember, joinGroup, joinRefusal } from '#lib/server/groups.ts';
+import { findGroupByCode, groupGameCount, isMember, joinGroup, joinRefusal } from '#lib/server/groups.ts';
 import { giveBack, INSTANCE, ipSubject, LIMITS, take, type Limit } from '#lib/server/ratelimit.ts';
 import { setNewLinkCookie, setSessionCookie } from '#lib/server/cookies.ts';
 import type { Actions, PageServerLoad } from './$types';
@@ -43,7 +43,9 @@ export const load: PageServerLoad = async (event) => {
 		refusal: refusal ? REFUSALS[refusal] : null,
 		groupName: target.name,
 		memberCount: target.memberCount,
-		needsName: !event.locals.user
+		gameCount: refusal ? 0 : await groupGameCount(db, target.id),
+		/** Signed in on this device: they join as this person, with no name to type. */
+		you: event.locals.user?.name ?? null
 	};
 };
 

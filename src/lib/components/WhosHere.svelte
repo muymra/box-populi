@@ -73,7 +73,7 @@
 		{#each shown as m (m.id)}
 			{@const c = playerColor(m.colorIndex)}
 			<button type="button" class="person" aria-pressed={table.members.includes(m.id)} onclick={() => toggle(m.id)}>
-				<span class="dot" style:background={c.bg}></span>{m.name}
+				<span class="dot" style:background={c.fill}></span>{m.name}
 			</button>
 		{/each}
 		{#each table.guests as name (name)}

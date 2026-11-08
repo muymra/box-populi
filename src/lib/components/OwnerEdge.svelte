@@ -14,7 +14,7 @@
 <div class="edge-row" role="img" aria-label={label} title={label}>
 	<div class="edge">
 		{#each shown as o, i (i)}
-			<span style:background={playerColor(o.colorIndex).bg}></span>
+			<span style:background={playerColor(o.colorIndex).fill}></span>
 		{/each}
 	</div>
 	{#if extra}<span class="more num" aria-hidden="true">+{extra}</span>{/if}

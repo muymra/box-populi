@@ -37,7 +37,7 @@
 		</div>
 		<div class="form-row text-row" id="personal-link">
 			<div class="form-label">
-				<span class="form-q">Personal link</span>
+				<span class="form-q">Sign-in link</span>
 				<span class="hint">Signs you in on another device.</span>
 			</div>
 			<div class="form-body">
@@ -49,7 +49,7 @@
 						signed out; use the new link to sign them back in.
 					</p>
 					<form method="POST" action="?/newLink">
-						<button class="btn">Make a new personal link</button>
+						<button class="btn">Make a new sign-in link</button>
 					</form>
 				{/if}
 			</div>
@@ -57,7 +57,7 @@
 		<div class="form-row">
 			<div class="form-label">
 				<span class="form-q">Sign out</span>
-				<span class="hint">Have your personal link first, or you’ll need to rejoin your groups.</span>
+				<span class="hint">Have your sign-in link first, or you’ll need to rejoin your groups.</span>
 			</div>
 			<div class="form-body">
 				<div class="row">

@@ -43,6 +43,7 @@
 	--t-lead: 1.125rem; /* 18 */
 	--t-h2: 1.375rem; /* 22 */
 	--t-h1: clamp(1.625rem, 4.5vw, 2.25rem); /* 26–36 */
+	--t-display: clamp(2rem, 6vw, 3.25rem); /* 32–52: the landing headline, the join code, who goes first */
 
 	color-scheme: light;
 }
@@ -255,6 +256,9 @@ select.field {
 	border: 1.5px solid var(--rule);
 	background: var(--cube);
 	color: var(--ink);
+	/* Set here, not inherited: a field inside a small bold label (`.form-sub`) would take its 13px at 650. */
+	font-size: var(--t-body);
+	font-weight: 400;
 }
 
 .field::placeholder {
@@ -445,6 +449,231 @@ select.field {
 	}
 	.form-foot.indent {
 		padding-left: calc(var(--form-pad) + 11rem + var(--s-5));
+	}
+}
+
+/* One column for the short sign-in pages (welcome, signed out, a sign-in link's confirm): the heading
+   and its line, then the panel, then what's next. */
+.page-col {
+	display: grid;
+	gap: var(--s-5);
+	max-width: 36rem;
+	padding: var(--s-5) 0 var(--s-6);
+}
+.page-col > header h1 {
+	margin: 0;
+}
+.page-col > header p {
+	margin: 6px 0 0;
+}
+.page-col .next {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--s-3);
+}
+
+/* Doors: a form, and beside it in plain text the other way in (joining a group, beside "already in
+   it on another device? use your sign-in link", D46). Stacked on phones, side by side from 900px. */
+.doors-page {
+	display: grid;
+	gap: var(--s-5);
+	max-width: 60rem;
+	padding: var(--s-5) 0 var(--s-6);
+}
+.doors-page > header h1 {
+	margin: 0;
+}
+.doors-page > header p {
+	margin: 6px 0 0;
+}
+.doors {
+	display: grid;
+	gap: var(--s-5);
+	align-items: start;
+}
+.doors .form-head p {
+	margin: 0;
+}
+.other-door {
+	display: grid;
+	gap: var(--s-2);
+	color: var(--ink-2);
+}
+.other-door h2 {
+	margin: 0;
+	font-size: var(--t-lead);
+	color: var(--ink);
+}
+.other-door p {
+	margin: 0;
+	max-width: 38ch;
+}
+.other-door strong {
+	color: var(--ink);
+}
+.other-door > section {
+	display: grid;
+	gap: var(--s-2);
+}
+.other-door:has(> section) {
+	gap: var(--s-5);
+}
+@media (min-width: 900px) {
+	.doors {
+		grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+		gap: var(--s-6);
+	}
+	.other-door {
+		padding-top: var(--form-pad);
+	}
+}
+
+/* Choice chips: one pick from a short row (the day of a play, a night's start time). Each pill holds a
+   radio; the picked one fills marigold, as a pick does. A dashed pill at the end opens the rest. */
+.choice-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--s-2);
+}
+.choice-chips > label,
+.choice-chips > button {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 40px;
+	padding: 0 14px;
+	border-radius: 999px;
+	border: 1.5px solid var(--rule);
+	background: var(--laminate);
+	color: var(--ink);
+	font-size: var(--t-body);
+	font-weight: 650;
+	cursor: pointer;
+}
+.choice-chips > label > input {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	margin: 0;
+	pointer-events: none;
+}
+.choice-chips > label:hover:not(:has(:checked)) {
+	border-color: var(--ink-3);
+}
+.choice-chips > label:has(:checked) {
+	background: var(--mark);
+	border-color: var(--mark);
+	color: var(--mark-ink);
+}
+.choice-chips > label:has(:focus-visible) {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+}
+.choice-chips > button {
+	border-style: dashed;
+	background: none;
+	color: var(--ink-2);
+	font-weight: 600;
+}
+.choice-chips > button:hover {
+	border-color: var(--ink-3);
+	color: var(--ink);
+}
+
+/* Segments: one choice from two to four, on a gap-coloured track; the chosen one sits on the cube with a
+   rule ring. A setting rather than a pick, so never marigold (DESIGN.md "Segments"). Each option is a
+   label holding a radio input and a span. */
+.segments {
+	display: inline-flex;
+	gap: 4px;
+	padding: 4px;
+	background: var(--gap);
+	border-radius: calc(var(--r-ctl) + 4px);
+	max-width: 100%;
+}
+.segments label {
+	position: relative;
+	cursor: pointer;
+}
+.segments input {
+	position: absolute;
+	inset: 0;
+	margin: 0;
+	opacity: 0;
+	cursor: pointer;
+}
+.segments span {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 40px;
+	padding: 0 14px;
+	border-radius: var(--r-ctl);
+	font-weight: 650;
+	color: var(--ink-2);
+	white-space: nowrap;
+}
+.segments label:hover span {
+	color: var(--ink);
+}
+.segments input:checked + span {
+	background: var(--cube);
+	color: var(--ink);
+	box-shadow: inset 0 0 0 1px var(--rule);
+}
+.segments input:focus-visible + span {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+}
+.segments .off,
+.segments .off input {
+	cursor: not-allowed;
+}
+.segments .off span {
+	opacity: 0.5;
+}
+
+/* Segments with a follow-up: two choices, then a labelled dropdown beside them when the second needs
+   one ("Whose games" in Play tonight, a night's "Where"). On a phone the segments split the width and
+   may take two lines each, rather than run off the panel. */
+.segments-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--s-2) var(--s-3);
+}
+.segments-pick {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--s-2);
+	font-size: var(--t-small);
+	font-weight: 650;
+	color: var(--ink-2);
+}
+.segments-pick .field {
+	width: auto;
+	min-width: 10rem;
+}
+.segments-row + .hint {
+	margin: 0;
+}
+@media (max-width: 560px) {
+	.segments-row .segments {
+		display: flex;
+		width: 100%;
+	}
+	.segments-row .segments label {
+		flex: 1 1 0;
+		min-width: 0;
+	}
+	.segments-row .segments span {
+		height: 100%;
+		padding: 6px 10px;
+		text-align: center;
+		white-space: normal;
+		line-height: 1.2;
 	}
 }
 

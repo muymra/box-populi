@@ -27,8 +27,17 @@
 		members,
 		table,
 		groupId,
-		showGame = false
-	}: { plays: ListedPlay[]; members: Member[]; table: Table; groupId: string; showGame?: boolean } = $props();
+		showGame = false,
+		showDate = true
+	}: {
+		plays: ListedPlay[];
+		members: Member[];
+		table: Table;
+		groupId: string;
+		showGame?: boolean;
+		/** Off where the date is already said once for the group, as in the plays page's timeline. */
+		showDate?: boolean;
+	} = $props();
 
 	const memberById = $derived(new Map(members.map((m) => [m.id, m])));
 	let editing = $state<ListedPlay | null>(null);
@@ -46,7 +55,7 @@
 	function nameOf(p: PlayPlayer): { name: string; color: string | null; guest: boolean } {
 		if (p.guestName) return { name: p.guestName, color: null, guest: true };
 		const m = p.userId ? memberById.get(p.userId) : undefined;
-		return m ? { name: m.name, color: playerColor(m.colorIndex).bg, guest: false } : { name: 'a former member', color: null, guest: false };
+		return m ? { name: m.name, color: playerColor(m.colorIndex).fill, guest: false } : { name: 'a former member', color: null, guest: false };
 	}
 
 	/** Players in finishing order for a competitive play; as entered for co-op. */
@@ -58,7 +67,7 @@
 		{@const places = play.players.map((p) => p.place)}
 		<li>
 			<div class="head">
-				<span class="when num">{dateLabel(play.playedOn)}</span>
+				{#if showDate}<span class="when num">{dateLabel(play.playedOn)}</span>{/if}
 				{#if showGame}<a class="game" href="/g/{groupId}/game/{play.gameId}">{play.gameName}</a>{/if}
 				{#if play.coop}<span class="tag">Co-op, {play.coop}</span>{/if}
 				{#if play.canChange}
@@ -108,7 +117,7 @@
 	{/each}
 </ol>
 
-<Modal bind:open={editOpen} title="Edit play">
+<Modal bind:open={editOpen} title={editing ? `Edit ${editing.gameName}` : 'Edit play'}>
 	{#if editOpen && editing}
 		<PlayForm
 			action="/g/{groupId}/plays?/editPlay"

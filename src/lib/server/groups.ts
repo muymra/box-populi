@@ -2,7 +2,8 @@
 // new person whose statements are passed in) so these run as one batch.
 import { generateCode } from './codes.ts';
 import { bumpCatalogForGroup } from './catalog.ts';
-import { one, stmt, type DB } from './db.ts';
+import { colorIndexesByJoinOrder } from '#lib/catalog/colors.ts';
+import { all, one, stmt, type DB } from './db.ts';
 
 export function cleanGroupName(raw: unknown): string | null {
 	if (typeof raw !== 'string') return null;
@@ -96,4 +97,63 @@ export async function touchLastSeen(db: DB, groupId: string, userId: string, now
 		.prepare('UPDATE memberships SET last_seen_at = ?1 WHERE group_id = ?2 AND user_id = ?3 AND last_seen_at < ?4')
 		.bind(now, groupId, userId, now - 3_600_000)
 		.run();
+}
+
+/** How many games are on a group's shelf (each game once, however many members own it). */
+export async function groupGameCount(db: DB, groupId: string): Promise<number> {
+	const row = await one<{ n: number }>(
+		db,
+		'SELECT COUNT(DISTINCT c.game_id) AS n FROM memberships m JOIN copies c ON c.user_id = m.user_id WHERE m.group_id = ?1',
+		groupId
+	);
+	return row?.n ?? 0;
+}
+
+export type GroupGlance = {
+	games: number;
+	/** The members' colour indexes in join order, which is colour order. */
+	colors: number[];
+	/** Nights from `from` on, soonest first; the page picks the next one by the viewer's clock. */
+	nights: Array<{ name: string; nightOn: string; startsAt: string | null }>;
+};
+
+/**
+ * What the home page shows on each of a person's group cards: shelf size, the members' colours and
+ * the coming nights. Three queries for all the groups together, never one per group.
+ */
+export async function groupGlances(db: DB, groupIds: string[], from: string): Promise<Map<string, GroupGlance>> {
+	const ids = groupIds.slice(0, 90);
+	const glances = new Map<string, GroupGlance>(ids.map((id) => [id, { games: 0, colors: [], nights: [] }]));
+	if (!ids.length) return glances;
+	const marks = ids.map((_, i) => `?${i + 1}`).join(', ');
+	const [games, members, nights] = await Promise.all([
+		all<{ group_id: string; n: number }>(
+			db,
+			`SELECT m.group_id, COUNT(DISTINCT c.game_id) AS n FROM memberships m JOIN copies c ON c.user_id = m.user_id
+			 WHERE m.group_id IN (${marks}) GROUP BY m.group_id`,
+			...ids
+		),
+		all<{ group_id: string; user_id: string; joined_at: number }>(
+			db,
+			`SELECT group_id, user_id, joined_at FROM memberships WHERE group_id IN (${marks})`,
+			...ids
+		),
+		all<{ group_id: string; name: string; night_on: string; starts_at: string | null }>(
+			db,
+			`SELECT group_id, name, night_on, starts_at FROM game_nights
+			 WHERE group_id IN (${marks}) AND night_on >= ?${ids.length + 1} ORDER BY night_on, starts_at`,
+			...ids,
+			from
+		)
+	]);
+	for (const row of games) glances.get(row.group_id)!.games = row.n;
+	for (const id of ids) {
+		const order = colorIndexesByJoinOrder(members.filter((m) => m.group_id === id).map((m) => ({ id: m.user_id, joinedAt: m.joined_at })));
+		glances.get(id)!.colors = [...order.values()].sort((a, b) => a - b);
+	}
+	for (const n of nights) {
+		const g = glances.get(n.group_id)!;
+		if (g.nights.length < 3) g.nights.push({ name: n.name, nightOn: n.night_on, startsAt: n.starts_at });
+	}
+	return glances;
 }

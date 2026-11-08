@@ -1,4 +1,4 @@
-<!-- A searchable list of checkboxes, built for lists of 50+ (members, mechanics, themes). -->
+<!-- A checkbox list for long tag lists (mechanics, themes). From 17 options it shows the first 12, with a search and "Show all"; shorter lists show everything. -->
 <script lang="ts">
 	let {
 		label,
@@ -12,13 +12,17 @@
 		visible?: number;
 	} = $props();
 
+	// Fold only when it hides enough to be worth a click: 14 options show all 14, not 12 and "Show all 14".
+	const MIN_FOLDED = 5;
+	const folds = $derived(options.length >= visible + MIN_FOLDED);
+
 	let query = $state('');
 	let showAll = $state(false);
 
 	const matches = $derived(
 		query.trim() ? options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase())) : options
 	);
-	const shown = $derived(showAll || query.trim() ? matches : matches.slice(0, visible));
+	const shown = $derived(!folds || showAll || query.trim() ? matches : matches.slice(0, visible));
 
 	function toggle(value: string, on: boolean) {
 		selected = on ? [...selected, value] : selected.filter((v) => v !== value);
@@ -27,7 +31,7 @@
 
 <fieldset>
 	<legend>{label}{#if selected.length}<span class="muted">{' · '}{selected.length} selected</span>{/if}</legend>
-	{#if options.length > visible}
+	{#if folds}
 		<input type="search" placeholder="Search {label.toLowerCase()}" bind:value={query} aria-label="Search {label}" />
 	{/if}
 	<div class="items">
@@ -44,7 +48,7 @@
 			<p class="muted">No matches.</p>
 		{/each}
 	</div>
-	{#if !query.trim() && matches.length > visible}
+	{#if folds && !query.trim()}
 		<button type="button" class="link" onclick={() => (showAll = !showAll)}>
 			{showAll ? 'Show fewer' : `Show all ${matches.length}`}
 		</button>

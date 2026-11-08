@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Search from '@lucide/svelte/icons/search';
-	import CopyButton from '#lib/components/CopyButton.svelte';
+	import InviteCard from '#lib/components/InviteCard.svelte';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { lastActive } from '#lib/time.ts';
 	import { invalidateAll } from '$app/navigation';
@@ -30,11 +30,6 @@
 </script>
 
 <div class="group-page">
-	{#snippet inviteCode()}<div class="code num" aria-label="Join code {data.code?.split('').join(' ')}">{data.code}</div>{/snippet}
-	{#snippet inviteLinkBlock()}
-		<p class="link">{inviteLink}</p>
-		<div><CopyButton text={inviteLink ?? ''} label="Copy invite link" /></div>
-	{/snippet}
 	{#snippet newCode()}
 		<details class="confirm">
 			<summary class="link-button">Make a new code…</summary>
@@ -62,11 +57,11 @@
 			{#each shown as m (m.id)}
 				{@const c = playerColor(m.colorIndex)}
 				{#snippet person()}
-					<span class="cube-chip" style:background={c.bg} style:color={c.ink} aria-hidden="true">{m.name.slice(0, 1).toUpperCase()}</span>
+					<span class="cube-chip" style:background={c.fill} style:color={c.ink} aria-hidden="true">{m.name.slice(0, 1).toUpperCase()}</span>
 					<span class="who">
 						<strong>{m.name}{#if m.isMe}<span class="muted">{' (you)'}</span>{/if}</strong>
 						<span class="muted">
-							{ROLE[m.role]}{' · '}<span class="num">{m.games}</span> {m.games === 1 ? 'game' : 'games'}{' · '}{c.name.toLowerCase()}{' · '}<span class="nowrap">{lastActive(m.lastSeenAt, data.now)}</span>
+							{ROLE[m.role]}{' · '}<span class="num">{m.games}</span> {m.games === 1 ? 'game' : 'games'}{' · '}{c.hatched ? 'striped ' : ''}{c.name.toLowerCase()}{' · '}<span class="nowrap">{lastActive(m.lastSeenAt, data.now)}</span>
 						</span>
 					</span>
 				{/snippet}
@@ -224,13 +219,11 @@
 	<!-- From 900px: the invite and the settings in a left column, the people filling the right. On phones: invite, people, settings. -->
 	<div class="two">
 		{#if data.code && inviteLink}
-			<section class="invite-card" aria-labelledby="invite-h">
-				<h2 id="invite-h">Invite people</h2>
-				<p class="muted">Anyone with the code can join with just a name.</p>
-				{@render inviteCode()}
-				{@render inviteLinkBlock()}
-				{#if data.canManage}{@render newCode()}{/if}
-			</section>
+			<div class="invite-slot">
+				<InviteCard code={data.code} link={inviteLink}>
+					{#if data.canManage}{@render newCode()}{/if}
+				</InviteCard>
+			</div>
 		{/if}
 		<section class="people" aria-labelledby="members-h">
 			<h2 id="members-h">Members <span class="muted num">{data.members.length}</span></h2>
@@ -280,7 +273,7 @@
 			align-items: start;
 			column-gap: var(--s-6);
 		}
-		.invite-card {
+		.invite-slot {
 			grid-area: invite;
 		}
 		.people {
@@ -290,31 +283,6 @@
 		.side-settings {
 			grid-area: settings;
 		}
-	}
-	.invite-card {
-		display: grid;
-		gap: var(--s-2);
-		padding: var(--s-5);
-		background: var(--label);
-		color: var(--label-ink);
-		border-radius: 10px;
-	}
-	.invite-card h2,
-	.invite-card p {
-		margin: 0;
-	}
-	.invite-card .muted,
-	.invite-card .link {
-		color: var(--label-ink-2);
-	}
-	.invite-card .code {
-		margin: var(--s-2) 0;
-	}
-	.invite-card :global(.link-button) {
-		color: var(--label-ink);
-	}
-	.invite-card :focus-visible {
-		outline-color: var(--mark);
 	}
 	/* The settings in the narrow column: every question above its controls. */
 	.side-settings .form-row {
@@ -328,20 +296,6 @@
 		margin-bottom: var(--s-2);
 	}
 
-	.code {
-		font-size: clamp(2rem, 6vw, 3.25rem);
-		font-weight: 800;
-		letter-spacing: 0.22em;
-		margin: var(--s-2) 0 var(--s-1);
-	}
-	.link {
-		font-size: var(--t-small);
-		color: var(--ink-2);
-		overflow-wrap: anywhere;
-	}
-	.invite-card :global(.confirm) {
-		margin-top: var(--s-4);
-	}
 	h2 .num {
 		font-weight: 600;
 		margin-left: 4px;

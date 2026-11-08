@@ -48,11 +48,11 @@ export const actions: Actions = {
 
 		const { groupId } = await createGroup(db, { userId, name: groupName, now, before: newPerson?.statements });
 
+		// The ready page shows the invite, and for someone new, their sign-in link (D46).
 		if (newPerson) {
 			setSessionCookie(cookies, url, newPerson.sessionToken);
 			setNewLinkCookie(cookies, url, newPerson.linkToken);
-			redirect(303, `/welcome?next=${encodeURIComponent(`/g/${groupId}`)}`);
 		}
-		redirect(303, `/g/${groupId}`);
+		redirect(303, `/g/${groupId}/ready`);
 	}
 };

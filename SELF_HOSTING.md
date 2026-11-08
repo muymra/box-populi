@@ -95,7 +95,7 @@ pnpm exec wrangler pages deploy
 
 1. Open your site. On a new project the address can answer with error 522 for about a minute after the first deploy; wait and reload. If a setting is missing, the page names it.
 2. Open `/admin/login` and enter your admin key. The admin page should show zero groups. Its "Look of this site" section sets a custom theme from five colours and a logo, without redeploying.
-3. Create a group with your name, save the personal link it shows you, add a game, and open the catalog.
+3. Create a group with your name, save the sign-in link it shows you, add a game, and open the catalog.
 4. Open `/privacy` and check that it shows your instance name and contact.
 
 ## Optional: a demo group

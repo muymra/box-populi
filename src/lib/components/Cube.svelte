@@ -28,17 +28,18 @@
 	const caption = $derived([players, time].filter(Boolean).join(' · '));
 	// One flag fits on a box: lent out first, then the filter note, then expansion.
 	const flag = $derived(unavailable ? 'Lent out' : unknown ? 'Info missing' : game.isExpansion ? 'Expansion' : null);
+	// The link is named by its contents, so a screen reader hears the caption and the owners too. The
+	// name leads, with every flag that applies (only one fits on the box).
+	const lead = $derived(
+		[game.name, game.year, unavailable && 'lent out', unknown && 'info missing', game.isExpansion && 'expansion'].filter(Boolean).join(', ') + '.'
+	);
 </script>
 
-<a
-	class="cube"
-	class:out={unavailable}
-	{href}
-	aria-label="{game.name}{game.year ? `, ${game.year}` : ''}{unavailable ? ', lent out' : ''}{unknown ? ', info missing' : ''}"
->
+<a class="cube" class:out={unavailable} {href}>
+	<span class="visually-hidden">{lead}</span>
 	<div class="slot">
 		<BoxFront name={game.name} src={game.thumbUrl} />
-		{#if flag}<span class="flag">{flag}</span>{/if}
+		{#if flag}<span class="flag" aria-hidden="true">{flag}</span>{/if}
 	</div>
 	<div class="caption num">{caption || (game.isManual ? 'Hand-entered' : ' ')}</div>
 	<OwnerEdge {owners} />

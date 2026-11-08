@@ -161,6 +161,25 @@ export function passedOnUnknown(game: CatalogGame, f: Filters): boolean {
 	return (f.mechanics.length > 0 && game.mechanics.length === 0) || (f.categories.length > 0 && game.categories.length === 0);
 }
 
+/**
+ * How many more games the shelf would show with its two default hides off (PRD "Filters": lent
+ * outside the group, and expansions), so the count line can say what it leaves out. An expansion
+ * that is also lent out counts as an expansion, so the two add up to everything hidden.
+ */
+export function hiddenByDefault(
+	games: CatalogGame[],
+	f: Filters,
+	memberIds: ReadonlySet<string>,
+	now = Date.now()
+): { lent: number; expansions: number } {
+	const cutoff = staleCutoff(now);
+	const count = (filters: Filters) => games.reduce((n, g) => n + (matchesFilters(g, filters, memberIds, cutoff) ? 1 : 0), 0);
+	const shown = count(f);
+	const withLent = f.availableOnly ? count({ ...f, availableOnly: false }) : shown;
+	const withAll = f.expansions ? withLent : count({ ...f, availableOnly: false, expansions: true });
+	return { lent: withLent - shown, expansions: withAll - withLent };
+}
+
 const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
 
 function nullsLast(a: number | null, b: number | null): number {

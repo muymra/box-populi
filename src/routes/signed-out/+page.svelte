@@ -1,4 +1,5 @@
 <script lang="ts">
+	// After "Sign out everywhere": the replacement sign-in link once, and the way back in on this device.
 	import PersonalLink from '#lib/components/PersonalLink.svelte';
 	import type { PageProps } from './$types';
 
@@ -7,8 +8,14 @@
 
 <svelte:head><title>Signed out · {data.instanceName}</title></svelte:head>
 
-<section class="narrow">
-	<h1>Signed out everywhere</h1>
-	<p>Every device is signed out and your old personal link no longer works. Here's your new one. Open it to sign back in on any device, this one included.</p>
+<div class="page-col">
+	<header>
+		<h1>Signed out everywhere</h1>
+		<p class="muted">Every device is signed out, and your old sign-in link no longer works. Here’s your new one.</p>
+	</header>
 	<PersonalLink link={data.link} />
-</section>
+	<div class="next">
+		<a class="btn primary" href={data.link}>Sign in again on this device</a>
+		<span class="muted">Or open the link on any other device.</span>
+	</div>
+</div>

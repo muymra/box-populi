@@ -49,7 +49,7 @@
 		{#if unknown}<span class="flag">Info missing</span>{/if}
 	</span>
 	<span class="end" role="img" aria-label={ownerLabel} title={ownerLabel}>
-		{#each shown as o (o.id)}<span style:background={playerColor(o.colorIndex).bg}></span>{/each}
+		{#each shown as o (o.id)}<span style:background={playerColor(o.colorIndex).fill}></span>{/each}
 		{#if owners.length > 4}<span class="rest"></span>{/if}
 	</span>
 </a>

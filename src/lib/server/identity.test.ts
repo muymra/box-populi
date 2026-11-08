@@ -15,7 +15,7 @@ import {
 	sha256Hex,
 	signOutEverywhere
 } from './identity.ts';
-import { createGroup, findGroupByCode, joinGroup, joinRefusal, ownedGroupCount, touchLastSeen } from './groups.ts';
+import { createGroup, findGroupByCode, groupGameCount, groupGlances, joinGroup, joinRefusal, ownedGroupCount, touchLastSeen } from './groups.ts';
 import { giveBack, INSTANCE, ipSubject, KEEP_MS, LIMITS, take, type Limit } from './ratelimit.ts';
 import { SECRET_PAGE_HEADERS } from './cookies.ts';
 
@@ -145,6 +145,34 @@ describe('groups', () => {
 		expect((await one<{ last_seen_at: number }>(db, 'SELECT last_seen_at FROM memberships'))?.last_seen_at).toBe(NOW);
 		await touchLastSeen(db, groupId, ada.person.id, NOW + 3_700_000);
 		expect((await one<{ last_seen_at: number }>(db, 'SELECT last_seen_at FROM memberships'))?.last_seen_at).toBe(NOW + 3_700_000);
+	});
+});
+
+describe('group glances', () => {
+	it('counts each game once, colours in join order, and the coming nights soonest first', async () => {
+		const ada = await newPerson('Ada');
+		const { groupId } = await createGroup(db, { userId: ada.person.id, name: 'G', now: NOW });
+		const bram = await newPersonStatements(db, 'Bram', NOW);
+		await joinGroup(db, { groupId, userId: bram.person.id, now: NOW + 1, before: bram.statements });
+		const other = await createGroup(db, { userId: bram.person.id, name: 'Empty', now: NOW });
+		await run(db, `INSERT INTO games (id, name, search_text, is_manual) VALUES (1, 'A', 'a', 1), (2, 'B', 'b', 1)`);
+		await run(db, 'INSERT INTO copies (user_id, game_id, added_at) VALUES (?1, 1, 0), (?2, 1, 0), (?2, 2, 0)', ada.person.id, bram.person.id);
+		for (const [id, name, on] of [['n1', 'Later', '2026-12-01'], ['n2', 'Soon', '2026-11-20'], ['n0', 'Gone', '2026-11-01']] as const) {
+			await run(db, 'INSERT INTO game_nights (id, group_id, name, night_on, created_at) VALUES (?1, ?2, ?3, ?4, 0)', id, groupId, name, on);
+		}
+
+		expect(await groupGameCount(db, groupId)).toBe(2);
+		const glances = await groupGlances(db, [groupId, other.groupId], '2026-11-08');
+		expect(glances.get(groupId)).toEqual({
+			games: 2,
+			colors: [0, 1],
+			nights: [
+				{ name: 'Soon', nightOn: '2026-11-20', startsAt: null },
+				{ name: 'Later', nightOn: '2026-12-01', startsAt: null }
+			]
+		});
+		expect(glances.get(other.groupId)).toEqual({ games: 2, colors: [0], nights: [] });
+		expect((await groupGlances(db, [], '2026-11-08')).size).toBe(0);
 	});
 });
 

@@ -4,7 +4,26 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
-Nothing yet.
+- The landing page shows the app: the example shelf, then finding what fits, planning a night, keeping score and joining without an account, each beside a small piece of the app with invented games. A visitor to a private instance sees the new hero.
+- Signing in looks like the rest of the app: "Not signed in" leads with your sign-in link, a link's page says whose it is and which groups it opens, and after "Sign out everywhere" one button signs this device back in.
+- Filters set under More show as chips in the filter strip that remove with a tap, and on a phone More is a sheet with "Show 11 games" at the bottom.
+- The privacy page starts with a short version and has section links; the error page and admin sign-in are redone.
+- Your groups shows each group as a card: its people in their colours, how many games, your role and the next game night. Join another group with a code right there.
+- Joining tells the two ways in apart: "New to the group?" joins with your name, "Already in it on another device?" points to your sign-in link instead of joining twice. Signed in, it's one tap: "Join as Ada".
+- After creating a group, a ready page shows the code and invite link to share, your sign-in link beside it ("Only for you"), then "Add your games".
+- The personal link is now called the sign-in link everywhere, so it reads apart from the group's invite link.
+- Dates are picked in the app instead of the browser's calendar popup. Planning a night shows the next five weeks with nights already planned marked, and the start time is one tap for 19:00, 19:30 or 20:00 ("Other…" for the rest). Logging a play offers today and the six days before, with "Earlier…" for a grid of weeks. Fields inside small labels show at full size again.
+- A night's Where is now "Somewhere else" or "At someone's home", then "Whose?", like Play tonight's "Whose games".
+- Going back to the shelf from a game returns to the same place in it, however far down you were.
+- More filters opens with Owners as a row of people in their colours, so it's also the key to the coloured edge under each box. Screen readers now hear who owns each game on the shelf.
+- Members 9 to 16 get the eight colours again with diagonal stripes, so two people no longer share a plain blue.
+- Mechanics and Themes in More show in full unless folding would hide five or more.
+- The shelf's count says what it leaves out by default ("Hiding 6 lent-out games and 32 expansions") with "Show them".
+- Logging or editing a play is titled with the game and goes: who played, the result (Places, Scores or Co-op) and a scoresheet right under it; the date folds to "Played today · Change" beside the buttons.
+- The plays page leads with a podium for the top three in their colours, then the plays as a timeline by night with each date said once; points and the export share one panel at the end.
+- Dice lead with the dice, the total and the coin's last result; Roll and "Flip a coin" sit side by side under them, "Reset" goes back to one d6, and the dice to roll are always in view as slim steppers ("2d6", "d20"). The sheet keeps its height as you roll, keep, flip or reset.
+- "Who goes first?" leads with the answer: the people in the draw, then the name in their colour once picked. Who's here folds into one line with "Change".
+- The game page has two columns: the game, its rules and tutorials, and About on the left; who owns it and its plays in a side rail. On a phone the rules come right after the game, and the plays show the latest three with a link to the rest.
 
 ## 0.2.0 (2026-11-08)
 

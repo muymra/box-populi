@@ -6,6 +6,7 @@
 
 <svelte:head><title>Privacy · {data.instanceName}</title></svelte:head>
 
+<div class="privacy">
 <article class="prose">
 	<h1>Privacy</h1>
 	<p>
@@ -13,7 +14,18 @@
 		is run by its host, who you can reach at <a href={data.contact}>{data.contactLabel}</a>.
 	</p>
 
-	<h2>What's stored</h2>
+	<!-- The short version: the four things people ask, each answered in full below. -->
+	<section class="short" aria-labelledby="short-h">
+		<h2 id="short-h">The short version</h2>
+		<ul>
+			<li>No accounts, emails or passwords: a name you choose, and a cookie on each device you use.</li>
+			<li>The people in your groups see your name, games, loans, wishlist, plays and game nights. Nobody else does.</li>
+			<li>The host's admin page shows counts, not people or collections. The host runs the database, though.</li>
+			<li>You can delete your account at any time from your account page.</li>
+		</ul>
+	</section>
+
+	<h2 id="stored">What's stored</h2>
 	<ul>
 		<li>The display name you choose. Members of your groups see it, and you can change it.</li>
 		<li>
@@ -29,7 +41,7 @@
 			Game nights planned in a group: the date and place, who's going or not, guests' names, and which games each person
 			is bringing, including titles typed in for games that aren't on anyone's shelf.
 		</li>
-		<li>A cookie that keeps this device signed in. The server stores only a scrambled fingerprint of it, and the same for your personal link.</li>
+		<li>A cookie that keeps this device signed in. The server stores only a scrambled fingerprint of it, and the same for your sign-in link.</li>
 		<li>
 			Network addresses that tried a wrong join code, sign-in link or admin key, or created a group, and how often you searched
 			for games, matched a pasted list or imported from BoardGameGeek. These are kept for about a day, to slow down guessing
@@ -41,7 +53,7 @@
 			lookup and not stored.{/if}
 	</p>
 
-	<h2>Who can see it</h2>
+	<h2 id="who">Who can see it</h2>
 	<p>
 		Members of a group see each other's names, games, loans and wishlists, the links added to games, the group's game nights and its plays.
 		Any member can download the plays as a spreadsheet file, which names everyone in them. Nobody outside a group can see
@@ -53,7 +65,7 @@
 		and every such action is logged. The host does run the database, though, and could read it directly.
 	</p>
 
-	<h2>Deleting your data</h2>
+	<h2 id="deleting">Deleting your data</h2>
 	<p>
 		You can delete your account from your account page. That removes your name, your shelf, wishlist, memberships and
 		sessions, your results in logged plays, your answers and bring lists on game nights, and the games you typed in yourself. A typed-in game that another member also
@@ -61,7 +73,7 @@
 		from a device where you're signed in.
 	</p>
 
-	<h2>Game data</h2>
+	<h2 id="games">Game data</h2>
 	{#if data.bggOn}
 		<p>
 			Game information and images come from <a href="https://boardgamegeek.com">BoardGameGeek</a> and are shown as BGG
@@ -82,17 +94,80 @@
 		address a member typed in. That server sees your network address, as any website you visit does.
 	</p>
 </article>
+<nav class="contents" aria-label="On this page">
+	<p>On this page</p>
+	<ul>
+		<li><a href="#stored">What's stored</a></li>
+		<li><a href="#who">Who can see it</a></li>
+		<li><a href="#deleting">Deleting your data</a></li>
+		<li><a href="#games">Game data</a></li>
+	</ul>
+</nav>
+</div>
 
 <style>
+	/* Read mode: one column of text at about 65 characters, the contents beside it from 900px. */
+	.privacy {
+		display: grid;
+		gap: var(--s-5);
+		padding: var(--s-5) 0 var(--s-6);
+	}
 	.prose {
 		max-width: 42rem;
-		padding-top: 1.5rem;
+	}
+	h1 {
+		margin: 0 0 var(--s-3);
 	}
 	h2 {
-		margin-top: 1.75rem;
+		margin: var(--s-6) 0 var(--s-2);
 		font-size: var(--t-lead);
+		scroll-margin-top: var(--s-5);
 	}
 	li {
 		margin: 0.35rem 0;
+	}
+	/* The short version: a laminate well, the same answers in a sentence each. */
+	.short {
+		margin-top: var(--s-5);
+		padding: var(--s-4) var(--s-5);
+		background: var(--cube);
+		border: 1px solid var(--rule);
+		border-radius: 10px;
+	}
+	.short h2 {
+		margin: 0 0 var(--s-1);
+	}
+	.short ul {
+		margin: 0;
+		padding-left: 1.1rem;
+	}
+	.contents {
+		display: none;
+	}
+	@media (min-width: 900px) {
+		.privacy {
+			grid-template-columns: minmax(0, 42rem) 12rem;
+			column-gap: var(--s-7);
+			align-items: start;
+		}
+		.contents {
+			display: block;
+			position: sticky;
+			top: var(--s-5);
+			padding-top: 3.5rem;
+			font-size: var(--t-small);
+		}
+		.contents p {
+			margin: 0 0 var(--s-2);
+			font-weight: 700;
+			color: var(--ink-2);
+		}
+		.contents ul {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+			display: grid;
+			gap: var(--s-1);
+		}
 	}
 </style>
