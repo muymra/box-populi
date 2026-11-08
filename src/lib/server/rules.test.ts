@@ -74,7 +74,10 @@ describe('permissions', () => {
 		['admin', 'merge_member', 'member', false, true],
 		['admin', 'merge_member', 'admin', false, false],
 		['admin', 'merge_member', 'member', true, false],
-		['member', 'merge_member', 'member', false, false]
+		['member', 'merge_member', 'member', false, false],
+		['member', 'archive_group', undefined, false, false],
+		['admin', 'archive_group', undefined, false, false], // only once the owner is away, below
+		['owner', 'archive_group', undefined, false, true]
 	];
 	it.each(cases)('%s %s on %s (self=%s) → %s', (actor, action, targetRole, targetIsSelf, expected) => {
 		expect(can(actor, action, { targetRole, targetIsSelf })).toBe(expected);
@@ -85,7 +88,13 @@ describe('permissions', () => {
 		expect(can('admin', 'plan_night', { openToMembers: false })).toBe(true);
 		expect(can('owner', 'plan_night', { openToMembers: false })).toBe(true);
 	});
-		it('lets anyone leave except an owner with other members', () => {
+		it('lets a co-admin archive only while the owner is away', () => {
+		expect(can('admin', 'archive_group', { ownerAway: true })).toBe(true);
+		expect(can('admin', 'archive_group', { ownerAway: false })).toBe(false);
+		expect(can('member', 'archive_group', { ownerAway: true })).toBe(false);
+		expect(can('owner', 'archive_group', { ownerAway: false })).toBe(true);
+	});
+	it('lets anyone leave except an owner with other members', () => {
 		for (const role of roles) expect(can(role, 'leave', { otherMembers: 3 })).toBe(role !== 'owner');
 		expect(can('owner', 'leave', { otherMembers: 0 })).toBe(true);
 	});

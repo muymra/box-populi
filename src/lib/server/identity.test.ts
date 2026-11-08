@@ -135,6 +135,7 @@ describe('groups', () => {
 		expect(joinRefusal(base, 10)).toBeNull();
 		expect(joinRefusal({ ...base, isDemo: true }, 10)).toBe('demo');
 		expect(joinRefusal({ ...base, suspended: true }, 10)).toBe('suspended');
+		expect(joinRefusal({ ...base, archived: true }, 10)).toBe('archived');
 		expect(joinRefusal(base, 3)).toBe('full');
 	});
 

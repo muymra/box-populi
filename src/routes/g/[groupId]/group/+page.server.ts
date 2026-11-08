@@ -1,8 +1,12 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { requireRead, requireRole } from '#lib/server/authz.ts';
+import { OWNER_AWAY_DAYS } from '#lib/server/permissions.ts';
 import { loadMembers } from '#lib/server/catalog.ts';
 import {
+	archiveGroup,
 	deleteGroup,
+	ownerAway,
+	restoreGroup,
 	gameCounts,
 	memberActions,
 	regenerateCode,
@@ -31,6 +35,7 @@ export const load: PageServerLoad = async (event) => {
 		memberReach(db, groupId)
 	]);
 	const me = event.locals.user;
+	const away = access.role === 'admin' ? await ownerAway(db, groupId, Date.now()) : false;
 	// Controls only for members of a writable group; the server checks every action again anyway.
 	const actor: Actor | null = me && access.role && !access.readonly ? { id: me.id, role: access.role } : null;
 	return {
@@ -38,7 +43,21 @@ export const load: PageServerLoad = async (event) => {
 		nightsBy: settings?.nights_by ?? 'members',
 		canManage: actor != null && actor.role !== 'member',
 		// Deleting stays open to the owner of a suspended group.
-		canDelete: me != null && access.role === 'owner' && !access.group.isDemo,
+		// Archiving (D50): the owner archives and restores, and a co-admin once the owner has been away
+		// 60 days; the owner deletes, once archived. A co-admin who may not is told why.
+		canArchive: actor != null && (actor.role === 'owner' || (actor.role === 'admin' && away)) && !access.group.isDemo,
+		archiveWaits: actor != null && actor.role === 'admin' && !away && !access.group.isDemo,
+		restoreWaits: me != null && access.role === 'admin' && access.group.archived && !access.group.suspended && !away,
+		/** For saying the 60-day rule out loud wherever it applies. */
+		ownerAwayDays: OWNER_AWAY_DAYS,
+		ownerIsAway: away,
+		canRestore:
+			me != null &&
+			(access.role === 'owner' || (access.role === 'admin' && away)) &&
+			access.group.archived &&
+			!access.group.suspended &&
+			!access.group.isDemo,
+		canDelete: me != null && access.role === 'owner' && (access.group.archived || access.group.suspended) && !access.group.isDemo,
 		members: members.map((m) => ({
 			id: m.id,
 			name: m.name,
@@ -70,7 +89,7 @@ async function act(
 	event: RequestEvent,
 	min: 'admin' | 'owner',
 	run: (db: DB, groupId: string, actor: Actor, form: FormData) => Promise<AdminResult>,
-	opts: { allowSuspended?: boolean } = {}
+	opts: { allowSuspended?: boolean; allowArchived?: boolean } = {}
 ): Promise<AdminResult> {
 	const db = getDb();
 	const { groupId } = event.params;
@@ -140,10 +159,21 @@ export const actions: Actions = {
 		return result.ok ? { memberChanged: true } : fail(400, { memberError: result.error });
 	},
 
+	archive: async (event) => {
+		const result = await act(event, 'admin', (db, id, actor) => archiveGroup(db, id, actor, Date.now()));
+		return result.ok ? { archived: true } : fail(400, { archiveError: result.error });
+	},
+
+	restore: async (event) => {
+		const result = await act(event, 'admin', (db, id, actor) => restoreGroup(db, id, actor, Date.now()), { allowArchived: true });
+		return result.ok ? { restored: true } : fail(400, { archiveError: result.error });
+	},
+
 	delete: async (event) => {
 		// The owner can delete a suspended group (TECH.md "Authorization").
 		const result = await act(event, 'owner', (db, id, actor, form) => deleteGroup(db, id, actor, form.get('confirmName')), {
-			allowSuspended: true
+			allowSuspended: true,
+			allowArchived: true
 		});
 		if (!result.ok) return fail(400, { deleteError: result.error });
 		redirect(303, '/me');

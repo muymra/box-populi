@@ -13,6 +13,10 @@ export type GroupInfo = {
 	isDemo: boolean;
 	suspendedReason: string | null;
 	suspended: boolean;
+	/** Archived by an owner or co-admin (D50): read-only for its members, its join link closed. */
+	archived: boolean;
+	archivedAt: number | null;
+	archivedByName: string | null;
 };
 
 export type GroupAccess = {
@@ -32,9 +36,18 @@ export function requireUser(event: RequestEvent): NonNullable<App.Locals['user']
 }
 
 async function loadGroup(db: DB, groupId: string) {
-	return one<{ id: string; name: string; is_demo: number; suspended_at: number | null; suspended_reason: string | null }>(
+	return one<{
+		id: string;
+		name: string;
+		is_demo: number;
+		suspended_at: number | null;
+		suspended_reason: string | null;
+		archived_at: number | null;
+		archived_by_name: string | null;
+	}>(
 		db,
-		'SELECT id, name, is_demo, suspended_at, suspended_reason FROM groups WHERE id = ?1',
+		`SELECT g.id, g.name, g.is_demo, g.suspended_at, g.suspended_reason, g.archived_at, u.name AS archived_by_name
+		 FROM groups g LEFT JOIN users u ON u.id = g.archived_by WHERE g.id = ?1`,
 		groupId
 	);
 }
@@ -50,7 +63,10 @@ function info(row: NonNullable<Awaited<ReturnType<typeof loadGroup>>>): GroupInf
 		name: row.name,
 		isDemo: row.is_demo === 1,
 		suspended: row.suspended_at != null,
-		suspendedReason: row.suspended_reason
+		suspendedReason: row.suspended_reason,
+		archived: row.archived_at != null,
+		archivedAt: row.archived_at,
+		archivedByName: row.archived_by_name
 	};
 }
 
@@ -69,23 +85,25 @@ export async function requireRead(event: RequestEvent, db: DB, groupId: string):
 	const role = await memberRole(db, groupId, user.id);
 	if (!role) error(404, 'Group not found');
 	await touchLastSeen(db, groupId, user.id, Date.now());
-	return { group, role, readonly: group.suspended };
+	return { group, role, readonly: group.suspended || group.archived };
 }
 
 /**
- * Members with at least `minRole`. Always refuses the demo group, and refuses suspended groups
- * unless `allowSuspended` is set (leaving, and the owner deleting the group).
+ * Members with at least `minRole`. Always refuses the demo group, refuses suspended groups unless
+ * `allowSuspended` is set (leaving, and the owner deleting the group), and archived ones unless
+ * `allowArchived` is set (restoring, and deleting for good).
  */
 export async function requireRole(
 	event: RequestEvent,
 	db: DB,
 	groupId: string,
 	minRole: Role,
-	opts: { allowSuspended?: boolean } = {}
+	opts: { allowSuspended?: boolean; allowArchived?: boolean } = {}
 ): Promise<GroupAccess & { role: Role }> {
 	const access = await requireRead(event, db, groupId);
 	if (access.group.isDemo) error(403, 'The demo group is read-only');
 	if (access.group.suspended && !opts.allowSuspended) error(403, 'This group is suspended');
+	if (access.group.archived && !opts.allowArchived) error(403, 'This group is archived');
 	if (!access.role || !atLeast(access.role, minRole)) error(403, 'You do not have permission to do that');
 	return { ...access, role: access.role };
 }
@@ -106,7 +124,7 @@ export async function requireActiveMember(event: RequestEvent, db: DB, groupId: 
 	const row = await one(
 		db,
 		`SELECT 1 AS x FROM memberships m JOIN groups g ON g.id = m.group_id
-		 WHERE m.user_id = ?1 AND g.suspended_at IS NULL AND g.is_demo = 0 LIMIT 1`,
+		 WHERE m.user_id = ?1 AND g.suspended_at IS NULL AND g.archived_at IS NULL AND g.is_demo = 0 LIMIT 1`,
 		user.id
 	);
 	if (!row) error(403, 'Only members of a group that isn’t suspended can do that.');

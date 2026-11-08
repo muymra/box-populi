@@ -4,8 +4,8 @@
 import { generateCode } from './codes.ts';
 import { bumpCatalogForGroup } from './catalog.ts';
 import { cleanGroupName } from './groups.ts';
-import { all, deleteGroupStatements, one, stmt, type DB } from './db.ts';
-import { can, type GroupAction } from './permissions.ts';
+import { all, deleteGroupStatements, one, run, stmt, type DB } from './db.ts';
+import { can, OWNER_AWAY_DAYS, type GroupAction } from './permissions.ts';
 import type { Role } from '#lib/catalog/types.ts';
 import { isThemeId } from '#lib/themes.ts';
 
@@ -98,11 +98,49 @@ export async function transferOwnership(db: DB, groupId: string, actor: Actor, t
 	return { ok: true };
 }
 
-/** Deletes the group and everything that belongs only to it. People and their games stay. */
+/** Whether the group's owner hasn't been seen in it for OWNER_AWAY_DAYS (D50). */
+export async function ownerAway(db: DB, groupId: string, now: number): Promise<boolean> {
+	const owner = await one<{ last_seen_at: number }>(db, "SELECT last_seen_at FROM memberships WHERE group_id = ?1 AND role = 'owner'", groupId);
+	return owner == null || now - owner.last_seen_at > OWNER_AWAY_DAYS * 86_400_000;
+}
+
+/**
+ * Archives the group (D50): read-only for its members and its join link closed, until it's restored
+ * or deleted. The owner can, and a co-admin once the owner has been away OWNER_AWAY_DAYS.
+ */
+export async function archiveGroup(db: DB, groupId: string, actor: Actor, now: number): Promise<AdminResult> {
+	if (!can(actor.role, 'archive_group', { ownerAway: actor.role === 'admin' && (await ownerAway(db, groupId, now)) })) return refused;
+	const group = await one<{ archived_at: number | null }>(db, 'SELECT archived_at FROM groups WHERE id = ?1', groupId);
+	if (!group) return { ok: false, error: 'This group no longer exists.' };
+	if (group.archived_at != null) return { ok: false, error: 'This group is already archived.' };
+	await run(db, 'UPDATE groups SET archived_at = ?1, archived_by = ?2 WHERE id = ?3', now, actor.id, groupId);
+	return { ok: true };
+}
+
+/** Brings an archived group back into use, with the same join code. Who may: as for archiving. */
+export async function restoreGroup(db: DB, groupId: string, actor: Actor, now: number): Promise<AdminResult> {
+	if (!can(actor.role, 'archive_group', { ownerAway: actor.role === 'admin' && (await ownerAway(db, groupId, now)) })) return refused;
+	const group = await one<{ archived_at: number | null }>(db, 'SELECT archived_at FROM groups WHERE id = ?1', groupId);
+	if (!group) return { ok: false, error: 'This group no longer exists.' };
+	if (group.archived_at == null) return { ok: false, error: 'This group isn’t archived.' };
+	await run(db, 'UPDATE groups SET archived_at = NULL, archived_by = NULL WHERE id = ?1', groupId);
+	return { ok: true };
+}
+
+/**
+ * Deletes the group and everything that belongs only to it. People and their games stay. Only the
+ * owner, only an archived (or host-suspended) group (D50), and only with its name typed.
+ */
 export async function deleteGroup(db: DB, groupId: string, actor: Actor, typedName: unknown): Promise<AdminResult> {
 	if (!can(actor.role, 'delete_group')) return refused;
-	const group = await one<{ name: string }>(db, 'SELECT name FROM groups WHERE id = ?1', groupId);
+	const group = await one<{ name: string; archived_at: number | null; suspended_at: number | null }>(
+		db,
+		'SELECT name, archived_at, suspended_at FROM groups WHERE id = ?1',
+		groupId
+	);
 	if (!group) return { ok: false, error: 'This group no longer exists.' };
+	// A group the host suspended is already closed and read-only, so its owner can delete it too.
+	if (group.archived_at == null && group.suspended_at == null) return { ok: false, error: 'Archive the group first; then it can be deleted for good.' };
 	const typed = typeof typedName === 'string' ? typedName.replace(/\s+/g, ' ').trim() : '';
 	if (typed.toLocaleLowerCase() !== group.name.toLocaleLowerCase()) {
 		return { ok: false, error: 'Type the group’s name exactly as it’s shown to delete it.' };

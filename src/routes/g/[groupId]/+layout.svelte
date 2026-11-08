@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { page } from '$app/state';
+	import { afterNavigate } from '$app/navigation';
 	import LayoutGrid from '@lucide/svelte/icons/layout-grid';
 	import Dices from '@lucide/svelte/icons/dices';
 	import Plus from '@lucide/svelte/icons/plus';
@@ -9,6 +10,8 @@
 	import Crown from '@lucide/svelte/icons/crown';
 	import Dice5 from '@lucide/svelte/icons/dice-5';
 	import Trophy from '@lucide/svelte/icons/trophy';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import Check from '@lucide/svelte/icons/check';
 	import CubeMark from '#lib/components/CubeMark.svelte';
 	import Modal from '#lib/components/Modal.svelte';
 	import StartPlayer from '#lib/components/StartPlayer.svelte';
@@ -36,6 +39,28 @@
 			? current === base || current.startsWith(`${base}/game/`)
 			: current.startsWith(href) || (href === `${base}/pick` && current.startsWith(`${base}/nights`));
 
+	// The group switcher (PRD "Groups and codes"): for someone in two or more live groups, the group
+	// name opens a list of them. Switching keeps the tab you're on, so Game night leads to Game night.
+	let switchOpen = $state(false);
+	let switchEl = $state<HTMLElement>();
+	let switchButton = $state<HTMLButtonElement>();
+	const TABS = ['pick', 'wanted', 'add', 'group', 'plays'];
+	const keepTab = $derived.by(() => {
+		const first = current.slice(base.length).split('/')[1] ?? '';
+		if (first === 'nights') return '/pick';
+		return TABS.includes(first) ? `/${first}` : '';
+	});
+	afterNavigate(() => (switchOpen = false));
+	function closeOutside(e: PointerEvent) {
+		if (switchOpen && switchEl && !switchEl.contains(e.target as Node)) switchOpen = false;
+	}
+	function closeOnEscape(e: KeyboardEvent) {
+		if (switchOpen && e.key === 'Escape') {
+			switchOpen = false;
+			switchButton?.focus();
+		}
+	}
+
 	// Who's here on this device, shared with the picker (PRD "At the table").
 	const table = setTable(new Table());
 	let startOpen = $state(false);
@@ -50,12 +75,39 @@
 </script>
 
 <svelte:head><title>{data.group.name} · {data.instanceName}</title></svelte:head>
+<svelte:window onpointerdown={closeOutside} onkeydown={closeOnEscape} />
 
 <header class="group-bar">
 	<a class="home" href="/" aria-label="{data.instanceName}: all your groups">
 		{#if data.logoUrl}<img class="logo" src={data.logoUrl} alt="" />{:else}<CubeMark size={24} />{/if}
 	</a>
-	<h1 title={data.group.name}>{data.group.name}</h1>
+	<div class="title" bind:this={switchEl}>
+		{#if data.myGroups.length}
+			<h1 class="switchable">
+				<button type="button" class="switch" aria-expanded={switchOpen} aria-controls="group-switch" title={data.group.name} bind:this={switchButton} onclick={() => (switchOpen = !switchOpen)}>
+					<span class="name">{data.group.name}</span><span class="visually-hidden">, switch group</span>
+					<ChevronDown size={18} strokeWidth={2.25} aria-hidden="true" />
+				</button>
+			</h1>
+			{#if switchOpen}
+				<nav class="switch-menu" id="group-switch" aria-label="Your groups">
+					<ul>
+						{#each data.myGroups as g (g.id)}
+							<li>
+								<a href="/g/{g.id}{keepTab}" aria-current={g.id === data.group.id ? 'true' : undefined}>
+									<span class="name">{g.name}</span>
+									{#if g.id === data.group.id}<Check size={18} strokeWidth={2.25} aria-hidden="true" />{/if}
+								</a>
+							</li>
+						{/each}
+					</ul>
+					<div class="foot"><a href="/">All your groups</a></div>
+				</nav>
+			{/if}
+		{:else}
+			<h1 title={data.group.name}>{data.group.name}</h1>
+		{/if}
+	</div>
 	<nav class="tabbar" aria-label="Group">
 		{#each tabs as t (t.href)}
 			<a href={t.href} aria-current={isCurrent(t.href) ? 'page' : undefined}>
@@ -95,6 +147,13 @@
 		Demo shelf: invented games and people, read-only. Box Populi is free and open source;
 		<a href={SOURCE_URL} rel="noopener">run your own from GitHub</a>.
 	</p>
+{:else if data.group.archived && !data.group.suspended}
+	<p class="banner">
+		Archived{data.group.archivedByName ? ` by ${data.group.archivedByName}` : ''}{data.group.archivedAt
+			? ` on ${new Date(data.group.archivedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
+			: ''}. It’s read-only: look back at the shelf, plays and nights, but nothing can change, and its join link is closed.
+		{#if data.role === 'owner' || data.role === 'admin'}<a href="/g/{data.group.id}/group">Restore it or delete it on the Group tab</a>.{/if}
+	</p>
 {:else if data.group.suspended}
 	<p class="banner">
 		The host has suspended this group{data.group.suspendedReason ? `: ${data.group.suspendedReason}` : ''}. It's read-only.
@@ -122,6 +181,7 @@
 		object-fit: contain;
 	}
 	.group-bar {
+		position: relative;
 		display: flex;
 		align-items: center;
 		gap: var(--s-3);
@@ -136,14 +196,112 @@
 		color: var(--ink);
 		flex: none;
 	}
-	h1 {
+	.title {
 		flex: 1;
+		min-width: 0;
+		align-self: stretch;
+		display: flex;
+		align-items: center;
+	}
+	h1 {
 		min-width: 0;
 		margin: 0;
 		font-size: var(--t-lead);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+	/* The switcher: the group name is the button, with a chevron after it. Its focus ring needs room,
+	   so the heading doesn't clip; the name inside it shortens instead. */
+	h1.switchable {
+		overflow: visible;
+		display: flex;
+		margin-left: -8px;
+	}
+	.switch {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		min-width: 0;
+		max-width: 100%;
+		min-height: 40px;
+		padding: 0 6px 0 8px;
+		border: 0;
+		border-radius: var(--r-ctl);
+		background: none;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+	}
+	.switch:hover,
+	.switch[aria-expanded='true'] {
+		background: var(--gap);
+	}
+	.switch :global(svg) {
+		flex: none;
+		color: var(--ink-2);
+		transition: transform 0.15s var(--ease-out);
+	}
+	.switch[aria-expanded='true'] :global(svg) {
+		transform: rotate(180deg);
+	}
+	.name {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	/* A card under the bar: cube white, 1px rule, 10px corners, flat. Below 900px it hangs from the bar's
+	   left gutter, since the name can sit too far right for it to fit under it on a small phone. */
+	.switch-menu {
+		position: absolute;
+		z-index: 30;
+		top: 100%;
+		left: var(--s-4);
+		width: max-content;
+		min-width: 14rem;
+		max-width: calc(100% - 2 * var(--s-4));
+		margin-top: 6px;
+		padding: 6px;
+		background: var(--cube);
+		border: 1px solid var(--rule);
+		border-radius: 10px;
+	}
+	.switch-menu ul {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.switch-menu a {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--s-3);
+		min-height: 44px;
+		padding: 0 12px;
+		border-radius: var(--r-ctl);
+		color: var(--ink);
+		font-weight: 650;
+		text-decoration: none;
+	}
+	.switch-menu a:hover {
+		background: var(--gap);
+	}
+	.switch-menu a[aria-current='true'] {
+		background: var(--mark);
+		color: var(--mark-ink);
+	}
+	.switch-menu a :global(svg) {
+		flex: none;
+	}
+	.switch-menu .foot {
+		margin-top: 6px;
+		padding-top: 6px;
+		border-top: 1px solid var(--rule);
+	}
+	.switch-menu .foot a {
+		color: var(--ink-2);
+		font-weight: 600;
 	}
 	/* Start player and dice: icon-only buttons that open modals, beside the person's name. */
 	.tools {
@@ -252,9 +410,17 @@
 		.group-bar {
 			min-height: 64px;
 		}
-		h1 {
+		.title {
 			flex: 0 1 auto;
+			position: relative;
+		}
+		h1 {
 			font-size: 1.375rem;
+		}
+		.switch-menu {
+			left: 0;
+			max-width: 22rem;
+			margin-top: 2px;
 		}
 		/* The tabs keep their width; the group name is what shortens when the bar is full. */
 		.tabbar {

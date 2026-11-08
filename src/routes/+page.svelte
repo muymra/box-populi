@@ -17,6 +17,9 @@
 	let { data }: PageProps = $props();
 
 	const ROLE_LABELS = { owner: 'Owner', admin: 'Co-admin', member: null } as const;
+	// Archived groups (D50) leave the cards for a folded list at the end; they're read-only to look back on.
+	const active = $derived(data.groups.filter((g) => !g.archivedAt));
+	const archived = $derived(data.groups.filter((g) => g.archivedAt));
 	const SQUARES = 16;
 	// Which night is next depends on the viewer's clock, so the line fills in once the page is in the browser.
 	let today = $state<string | null>(null);
@@ -129,7 +132,7 @@
 			{#if data.demoExists}<a class="go" href="/g/demo/pick">See the demo’s next night <ArrowRight size={16} aria-hidden="true" /></a>{/if}
 		</div>
 		<figure class="piece" aria-label="Example: a game night with who brings what">
-			<div class="night" aria-hidden="true">
+			<div class="night-card" aria-hidden="true">
 				<span class="when">Friday · 20:00</span>
 				<strong class="night-name">At Bram’s</strong>
 				<span class="muted">5 going · 3 to bring</span>
@@ -205,8 +208,9 @@
 {:else if data.groups.length}
 	<div class="mine">
 		<h1>Your groups</h1>
+		{#if !active.length}<p class="muted">All your groups are archived. Join another with a code below, or open one from the archive to look back.</p>{/if}
 		<ul class="groups">
-			{#each data.groups as g (g.id)}
+			{#each active as g (g.id)}
 				{@const next = today ? g.nights.find((n) => n.nightOn >= today!) : null}
 				<li>
 					<a class="group" href="/g/{g.id}">
@@ -235,6 +239,22 @@
 				</li>
 			{/each}
 		</ul>
+
+		{#if archived.length}
+			<details class="archived">
+				<summary>Archived <span class="muted num">{archived.length}</span></summary>
+				<ul>
+					{#each archived as g (g.id)}
+						<li>
+							<a href="/g/{g.id}">{g.name}</a>
+							<span class="muted">
+								archived {new Date(g.archivedAt!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · read-only
+							</span>
+						</li>
+					{/each}
+				</ul>
+			</details>
+		{/if}
 
 		<section class="form-panel another" aria-labelledby="another-h">
 			<div class="form-head"><div><h2 id="another-h">Another group</h2></div></div>
@@ -464,8 +484,8 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
-	/* 2: a game night card, as on the Game night tab. */
-	.night {
+	/* 2: a game night card, as on the Game night tab. (Not `.night`: Your groups uses that name.) */
+	.night-card {
 		display: grid;
 		gap: 4px;
 		padding: var(--s-4) var(--s-5);
@@ -781,6 +801,39 @@
 		padding-top: var(--s-2);
 		border-top: 1px solid var(--gap);
 		min-height: 1.5em;
+	}
+	/* Archived groups: a quiet fold of plain rows, so they don't compete with the groups in use. */
+	.archived summary {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		min-height: 44px;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.archived ul {
+		list-style: none;
+		margin: var(--s-1) 0 0;
+		padding: 0;
+		display: grid;
+		gap: 2px;
+		background: var(--gap);
+		border-radius: var(--r-ctl);
+		overflow: hidden;
+	}
+	.archived li {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 2px var(--s-3);
+		padding: var(--s-3) var(--s-4);
+		background: var(--cube);
+	}
+	.archived li a {
+		font-weight: 700;
+	}
+	.archived li .muted {
+		font-size: var(--t-small);
 	}
 	.another .inline {
 		display: flex;

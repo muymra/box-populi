@@ -64,7 +64,7 @@ box-populi/
   package.json  vite.config.ts  tsconfig.json  pnpm-workspace.yaml
   migrations/                   0001_init (schema below), 0002_game_sources, 0003_group_theme,
                                 0004_instance_settings, 0005_game_corrections, 0006_plays,
-                                0007_game_nights, 0008_pins, 0009_sign_in_codes
+                                0007_game_nights, 0008_pins, 0009_sign_in_codes, 0010_archive
   scripts/
     ensure-local-config.ts      creates the two gitignored config files on install
     seed-demo.ts                writes seed/demo.sql
@@ -213,6 +213,7 @@ Bindings and variables come from `import { env } from 'cloudflare:workers'` (Sve
 - `0007_game_nights.sql`: `game_nights`, `night_people`, `night_games`, `plays.night_id` and `groups.nights_by` (D38; shown after the play log below).
 - `0008_pins.sql`: `users.pin_hash`, `pin_salt` and `pin_set_at`, the front door's PIN (D47).
 - `0009_sign_in_codes.sql`: `sign_in_codes`, one-time codes an owner or co-admin makes for a member (D48; shown after `personal_links` below).
+- `0010_archive.sql`: `groups.archived_at` and `archived_by` (D50). Archiving and restoring are `can(role, 'archive_group', { ownerAway })`: the owner, or a co-admin when `ownerAway()` finds the owner's `last_seen_at` older than `OWNER_AWAY_DAYS` (60, in `permissions.ts`). The Group tab gets `canArchive`, `archiveWaits`, `canRestore`, `restoreWaits` and `ownerAwayDays` to show the right action or the rule with the days left. `authz.ts` treats an archived group like a suspended one: `requireRead` returns it `readonly`, and `requireRole` refuses it unless `allowArchived` (restoring, and deleting); `requireActiveMember` skips archived groups. `joinRefusal` gives `archived`, though members still sign in at its door. The layout drops the join code while archived. `deleteGroup` refuses a group that is neither archived nor suspended. Deleting a person clears `archived_by`.
 
 Timestamps are Unix milliseconds. JSON columns hold arrays and are written and read only through helpers in `db.ts`.
 
@@ -896,7 +897,7 @@ A writable local group with invented data, for trying the app as a member sees i
 | `GET /g/[groupId]/plays/export.csv` | The plays as CSV (`who=me|all`, `period=year|all`), a download for people, no CORS. | `requireRead`; `who=me` needs membership |
 | `/g/[groupId]/wanted` | The Wanted tab: games members want that nobody in the group owns, with who wants each and a "Me too" toggle. Wishes are set by the `want` action here, on the game page and on the add page (`on=0` removes). | `requireRead`; `want` needs `requireRole(member)` |
 | `/g/[groupId]/ready` | After creating a group: the invite card, then "Add your games". | `requireRead`, members only (others go to the group) |
-| `/g/[groupId]/group` | The Group tab: invite code, members list, and the settings actions (`rename`, `newCode`, `promote`, `demote`, `transfer` (with `confirmName`, the new owner's name, checked by `transferOwnership`), `remove`, `signInCode`, `merge`, `delete`). Members see the code and the list; co-admins and the owner see the controls their role allows. | `requireRead`; each action `requireRole(admin)` or `requireRole(owner)` |
+| `/g/[groupId]/group` | The Group tab: invite code, members list, and the settings actions (`rename`, `newCode`, `promote`, `demote`, `transfer` (with `confirmName`, the new owner's name, checked by `transferOwnership`), `remove`, `signInCode`, `merge`, `archive`, `restore` (with `allowArchived`), `delete` (once archived or suspended)). Members see the code and the list; co-admins and the owner see the controls their role allows. | `requireRead`; each action `requireRole(admin)` or `requireRole(owner)` |
 | `/me` | Display name, PIN (`setPin`), groups, loans (what you lent, with "Mark as returned", and what you borrowed), a new sign-in link (backup), sign out of this device or everywhere, account deletion. Later: my games and wishlist. | `requireUser` |
 | `GET /api/g/[groupId]/catalog` | Catalog payload with ETag. | `requireRead` |
 | `GET /api/bgg/search` | BGG search proxy. | `requireActiveMember` (optional `groupId`), rate-limited per person |

@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
 import { all, one, run } from './db.ts';
 import {
+	archiveGroup,
 	deleteGroup,
+	ownerAway,
+	restoreGroup,
 	memberActions,
 	regenerateCode,
 	removeMember,
@@ -102,14 +105,47 @@ describe('removing members', () => {
 	});
 });
 
+describe('archiving the group', () => {
+	it('lets the owner archive and restore, and records who and when', async () => {
+		expect((await archiveGroup(db, 'g1', member, 5)).ok).toBe(false);
+		expect(await archiveGroup(db, 'g1', owner, 5)).toEqual({ ok: true });
+		expect(await one(db, "SELECT archived_at, archived_by FROM groups WHERE id = 'g1'")).toEqual({ archived_at: 5, archived_by: 'ada' });
+		expect((await archiveGroup(db, 'g1', owner, 6)).ok).toBe(false);
+		expect((await restoreGroup(db, 'g1', member, 7)).ok).toBe(false);
+		expect(await restoreGroup(db, 'g1', owner, 7)).toEqual({ ok: true });
+		expect(await one(db, "SELECT archived_at, archived_by FROM groups WHERE id = 'g1'")).toEqual({ archived_at: null, archived_by: null });
+		expect((await restoreGroup(db, 'g1', owner, 8)).ok).toBe(false);
+	});
+
+	it('lets a co-admin archive and restore only once the owner has been away 60 days', async () => {
+		const day = 86_400_000;
+		// The owner was last seen at 0.
+		expect(await ownerAway(db, 'g1', 59 * day)).toBe(false);
+		expect((await archiveGroup(db, 'g1', admin, 59 * day)).ok).toBe(false);
+		expect(await ownerAway(db, 'g1', 61 * day)).toBe(true);
+		expect(await archiveGroup(db, 'g1', admin, 61 * day)).toEqual({ ok: true });
+		expect(await restoreGroup(db, 'g1', admin, 62 * day)).toEqual({ ok: true });
+		// Back, the owner takes the decision again.
+		await run(db, "UPDATE memberships SET last_seen_at = ?1 WHERE user_id = 'ada'", 62 * day);
+		expect((await archiveGroup(db, 'g1', admin, 63 * day)).ok).toBe(false);
+	});
+});
+
 describe('deleting the group', () => {
 	it('needs the owner and the typed name, and takes the group’s links with it', async () => {
 		await run(db, `INSERT INTO games (id, name, search_text, is_manual) VALUES (1, 'G', 'g', 1)`);
 		await run(db, `INSERT INTO copies (user_id, game_id, added_at) VALUES ('bo', 1, 0)`);
 		await run(db, `INSERT INTO game_links (group_id, game_id, kind, url, added_by, added_at) VALUES ('g1', 1, 'rules', 'https://example.com/', 'bo', 0)`);
 		expect((await deleteGroup(db, 'g1', admin, 'Thursday Club')).ok).toBe(false);
+		// Only once it's archived (D50).
+		expect(await deleteGroup(db, 'g1', owner, 'Thursday Club')).toMatchObject({ ok: false, error: expect.stringContaining('Archive') });
+		expect(await archiveGroup(db, 'g1', owner, 5)).toEqual({ ok: true });
+		expect((await deleteGroup(db, 'g1', admin, 'Thursday Club')).ok).toBe(false);
 		expect((await deleteGroup(db, 'g1', owner, 'Thursday')).ok).toBe(false);
 		expect(await deleteGroup(db, 'g1', owner, ' thursday  club ')).toEqual({ ok: true });
+		// A group the host suspended can be deleted without archiving.
+		await run(db, `INSERT INTO groups (id, name, code, created_at, suspended_at) VALUES ('g9', 'Closed', 'ZZZZZ', 0, 1)`);
+		expect(await deleteGroup(db, 'g9', owner, 'Closed')).toEqual({ ok: true });
 		expect(await all(db, 'SELECT id FROM groups')).toEqual([]);
 		expect(await all(db, 'SELECT * FROM memberships')).toEqual([]);
 		expect(await all(db, 'SELECT * FROM game_links')).toEqual([]);

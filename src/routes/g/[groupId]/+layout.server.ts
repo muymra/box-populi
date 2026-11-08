@@ -5,14 +5,16 @@ import { loadMembers } from '#lib/server/catalog.ts';
 import { canPlanNights, loadNights, nightOnlyGames } from '#lib/server/nights.ts';
 import { getDb } from '#lib/server/platform.ts';
 import { pinSetAt } from '#lib/server/pins.ts';
+import { listMyGroups } from '#lib/server/identity.ts';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async (event) => {
 	const db = getDb();
 	const access = await requireRead(event, db, event.params.groupId);
-	// Members see the join code so they can invite people; demo visitors never do.
+	// Members see the join code so they can invite people; demo visitors never do, and nobody does
+	// while the group is archived (D50), since the code is closed then.
 	const code =
-		access.role && !access.group.isDemo
+		access.role && !access.group.isDemo && !access.group.archived
 			? ((await one<{ code: string }>(db, 'SELECT code FROM groups WHERE id = ?1', access.group.id))?.code ?? null)
 			: null;
 	// Imported games still waiting for BGG details; the note offers to finish loading them.
@@ -32,8 +34,15 @@ export const load: LayoutServerLoad = async (event) => {
 		nightOnlyGames(db, access.group.id, near),
 		access.role && !access.readonly ? canPlanNights(db, access.group.id, access.role) : Promise.resolve(false)
 	]);
+	// The switcher in the top bar (PRD "Groups and codes"): a member's live groups, this one included,
+	// by name so they keep their places. Empty unless there's somewhere else to go.
+	const live = access.role && event.locals.user
+		? (await listMyGroups(db, event.locals.user.id)).filter((g) => !g.isDemo && (g.archivedAt == null || g.id === access.group.id))
+		: [];
+	const myGroups = live.length > 1 ? live.map((g) => ({ id: g.id, name: g.name })).sort((a, b) => a.name.localeCompare(b.name)) : [];
 	return {
 		...access,
+		myGroups,
 		code,
 		groupTheme,
 		tableMembers,

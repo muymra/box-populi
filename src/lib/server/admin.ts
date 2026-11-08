@@ -63,6 +63,7 @@ export type AdminGroup = {
 	lastActive: number | null;
 	isDemo: boolean;
 	suspendedAt: number | null;
+	archivedAt: number | null;
 	suspendedReason: string | null;
 };
 
@@ -77,9 +78,10 @@ export async function listGroups(db: DB): Promise<AdminGroup[]> {
 		is_demo: number;
 		suspended_at: number | null;
 		suspended_reason: string | null;
+		archived_at: number | null;
 	}>(
 		db,
-		`SELECT g.id, g.name, g.created_at, g.is_demo, g.suspended_at, g.suspended_reason,
+		`SELECT g.id, g.name, g.created_at, g.is_demo, g.suspended_at, g.suspended_reason, g.archived_at,
 		        (SELECT COUNT(*) FROM memberships m WHERE m.group_id = g.id) AS members,
 		        (SELECT COUNT(*) FROM copies c JOIN memberships m ON m.user_id = c.user_id WHERE m.group_id = g.id) AS copies,
 		        (SELECT MAX(m.last_seen_at) FROM memberships m WHERE m.group_id = g.id) AS last_active
@@ -95,7 +97,8 @@ export async function listGroups(db: DB): Promise<AdminGroup[]> {
 		lastActive: r.last_active,
 		isDemo: r.is_demo === 1,
 		suspendedAt: r.suspended_at,
-		suspendedReason: r.suspended_reason
+		suspendedReason: r.suspended_reason,
+		archivedAt: r.archived_at
 	}));
 }
 

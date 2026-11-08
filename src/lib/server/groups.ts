@@ -48,24 +48,32 @@ export async function createGroup(
 	throw new Error('Could not generate a unique group code');
 }
 
-export type JoinTarget = { id: string; name: string; memberCount: number; isDemo: boolean; suspended: boolean };
+export type JoinTarget = { id: string; name: string; memberCount: number; isDemo: boolean; suspended: boolean; archived?: boolean };
 
 export async function findGroupByCode(db: DB, code: string): Promise<JoinTarget | null> {
-	const row = await one<{ id: string; name: string; is_demo: number; suspended_at: number | null; member_count: number }>(
+	const row = await one<{ id: string; name: string; is_demo: number; suspended_at: number | null; archived_at: number | null; member_count: number }>(
 		db,
-		`SELECT g.id, g.name, g.is_demo, g.suspended_at, (SELECT COUNT(*) FROM memberships m WHERE m.group_id = g.id) AS member_count
+		`SELECT g.id, g.name, g.is_demo, g.suspended_at, g.archived_at, (SELECT COUNT(*) FROM memberships m WHERE m.group_id = g.id) AS member_count
 		 FROM groups g WHERE g.code = ?1`,
 		code
 	);
 	if (!row) return null;
-	return { id: row.id, name: row.name, isDemo: row.is_demo === 1, suspended: row.suspended_at != null, memberCount: row.member_count };
+	return {
+		id: row.id,
+		name: row.name,
+		isDemo: row.is_demo === 1,
+		suspended: row.suspended_at != null,
+		archived: row.archived_at != null,
+		memberCount: row.member_count
+	};
 }
 
-export type JoinRefusal = 'demo' | 'suspended' | 'full';
+export type JoinRefusal = 'demo' | 'suspended' | 'archived' | 'full';
 
 export function joinRefusal(target: JoinTarget, maxMembers: number): JoinRefusal | null {
 	if (target.isDemo) return 'demo';
 	if (target.suspended) return 'suspended';
+	if (target.archived) return 'archived';
 	if (target.memberCount >= maxMembers) return 'full';
 	return null;
 }

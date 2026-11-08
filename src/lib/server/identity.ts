@@ -139,19 +139,19 @@ export async function renamePerson(db: DB, userId: string, name: string): Promis
 	await db.batch([stmt(db, 'UPDATE users SET name = ?1 WHERE id = ?2', name, userId), bumpCatalogForUser(db, userId)]);
 }
 
-export type MyGroup = { id: string; name: string; role: Role; isDemo: boolean; memberCount: number };
+export type MyGroup = { id: string; name: string; role: Role; isDemo: boolean; memberCount: number; archivedAt: number | null };
 
 export async function listMyGroups(db: DB, userId: string): Promise<MyGroup[]> {
-	const rows = await all<{ id: string; name: string; role: Role; is_demo: number; member_count: number }>(
+	const rows = await all<{ id: string; name: string; role: Role; is_demo: number; member_count: number; archived_at: number | null }>(
 		db,
-		`SELECT g.id, g.name, m.role, g.is_demo,
+		`SELECT g.id, g.name, m.role, g.is_demo, g.archived_at,
 			(SELECT COUNT(*) FROM memberships m2 WHERE m2.group_id = g.id) AS member_count
 		 FROM memberships m JOIN groups g ON g.id = m.group_id
 		 WHERE m.user_id = ?1
 		 ORDER BY m.last_seen_at DESC, g.name`,
 		userId
 	);
-	return rows.map((r) => ({ id: r.id, name: r.name, role: r.role, isDemo: r.is_demo === 1, memberCount: r.member_count }));
+	return rows.map((r) => ({ id: r.id, name: r.name, role: r.role, isDemo: r.is_demo === 1, memberCount: r.member_count, archivedAt: r.archived_at }));
 }
 
 export type DeleteResult = { ok: true } | { ok: false; blockingGroups: string[] };

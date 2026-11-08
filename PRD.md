@@ -113,6 +113,8 @@ Ratings and reviews, a trading marketplace, chat, notifications, a native app, c
 - The code is five characters from an alphabet without lookalikes (no 0/O, 1/I/L), shown uppercase and matched case-insensitively. Example: `K7M4P`.
 - Join flow: open `/join/K7M4P` (or type the code): the group's front door, which serves joining and coming back alike (D47). It shows the group's name, members and games, then "New to the group?", which takes a display name and a six-digit PIN and goes straight into the group, and "Already in it?", the members' names in their colours: tap yours and type your PIN, on any device. A member who hasn't set a PIN is told to set one on a signed-in device or open a sign-in link. A device that's already signed in joins in one tap, "Join as Ada", with "Not Ada?" beside it.
 - Creating a group asks someone new for their name and a PIN too, then leads to a ready page: the group's code and invite link to share, then "Add your games" (D46, D47).
+- A group is the people who play together: one shelf, one play history, one leaderboard. Different nights with the same people are game nights in one group; a different crowd is a second group, and a few people can be in both. Create a group says so under the name field, and the README answers "When should we start a second group?".
+- Someone in two or more live groups switches between them from the group name in the top bar: it opens a list of their groups, the current one marked, and "All your groups". Switching keeps the tab, so Game night leads to Game night (a night's page leads to Game night, a game's page to the shelf). Archived groups aren't listed; the home page keeps them in their fold.
 - Signed in, the home page is Your groups: a card per group with its members' colours, its member and game counts, your role when you're the owner or a co-admin, and its next game night ("Friday: At Bram's · 20:00"). Under the cards, "Another group": join with a code, or create one.
 - The code is a shared secret, so failed join attempts are rate-limited per network address (an IPv6 /64 counts as one address) and across the whole instance.
 - The owner or a co-admin can regenerate the code, which invalidates the old one. Existing members are unaffected.
@@ -133,7 +135,8 @@ Every group has exactly one owner, who starts as the creator. The owner promotes
 | Make a sign-in code for a member, or merge a member's old entry (D48) | no | for members | for anyone but themselves |
 | Promote or demote co-admins | no | no | yes |
 | Transfer ownership | no | no | yes |
-| Delete the group | no | no | yes |
+| Archive or restore the group (D50) | no | once the owner has been away 60 days | yes |
+| Delete the group, once archived | no | no | yes |
 
 Rules that follow from the table:
 
@@ -143,7 +146,8 @@ Rules that follow from the table:
 - Removing a member doesn't block them from rejoining with the same code. To lock someone out, remove them and regenerate the code.
 - Sign-in codes and merging reach only people in this group and no other (D48): a person is one identity across all their groups, and a group's owner and co-admins have a say only in their own. The owner and co-admins also see who hasn't set a PIN yet ("No PIN yet" on the Group tab).
 - Transferring ownership asks the owner to pick a current member and confirm. The previous owner becomes a co-admin.
-- The owner can't leave or delete their account while other members remain. They transfer ownership first, or delete the group.
+- The owner can't leave or delete their account while other members remain. They transfer ownership first, or archive and then delete the group.
+- **Archiving** (D50): the owner archives a group they've stopped using; a co-admin can too, once the owner hasn't been in the group for 60 days, so a group whose owner has gone can still be wound down. The Group tab says so to the owner (on the Archive row and when making someone a co-admin) and to co-admins (with how many days are left, or why it's open to them now). It stays for its members to look back at (shelf, plays, leaderboard, past nights) but is read-only, its join link is closed (members can still sign in through it), and it moves to a folded "Archived" list at the end of Your groups. The owner restores it with the same code, or a co-admin under the same 60-day rule. Deleting for good is the owner's, only for an archived group (or one the host suspended), with the group's name typed.
 - Leaving a group you're the only member of deletes it, with its code and links. The account page warns before it happens.
 - Deleting a group asks the owner to type the group name.
 - Role changes take effect on the next request. There is no activity log in the first version.

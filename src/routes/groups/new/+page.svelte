@@ -20,9 +20,12 @@
 	{:else}
 		<form method="POST" class="form-panel">
 			<div class="form-row">
-				<div class="form-label"><label class="form-q" for="groupName">Group name</label></div>
+				<div class="form-label">
+					<label class="form-q" for="groupName">Group name</label>
+					<span class="hint">A group is the people who play together. Same people on different nights? Keep one group and plan each night in it.</span>
+				</div>
 				<div class="form-body">
-					<input id="groupName" class="field" name="groupName" required maxlength="60" autocomplete="off" placeholder="Thursday board game night" value={form?.groupName ?? ''} />
+					<input id="groupName" class="field" name="groupName" required maxlength="60" autocomplete="off" placeholder="The Thursday regulars" value={form?.groupName ?? ''} />
 				</div>
 			</div>
 			{#if data.needsName}

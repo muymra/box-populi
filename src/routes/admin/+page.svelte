@@ -198,6 +198,7 @@
 							<strong>{g.name}</strong>
 							{#if g.isDemo}<span class="tag">Demo</span>{/if}
 							{#if g.suspendedAt}<span class="tag suspended">Suspended</span>{/if}
+							{#if g.archivedAt}<span class="tag">Archived</span>{/if}
 						</span>
 						<span class="g-meta">
 							<span><span class="num">{g.members}</span> {g.members === 1 ? 'member' : 'members'}</span>

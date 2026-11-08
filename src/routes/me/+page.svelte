@@ -105,7 +105,7 @@
 						<li>
 							<div class="item">
 								<a class="name" href="/g/{g.id}">{g.name}</a>
-								<span class="muted">{ROLE_LABELS[g.role]} · {g.memberCount} {g.memberCount === 1 ? 'member' : 'members'}</span>
+								<span class="muted">{ROLE_LABELS[g.role]} · {g.memberCount} {g.memberCount === 1 ? 'member' : 'members'}{g.archivedAt ? ' · archived' : ''}</span>
 							</div>
 							<details class="confirm">
 								<summary class="link-button">Leave<span class="visually-hidden"> {g.name}</span>…</summary>

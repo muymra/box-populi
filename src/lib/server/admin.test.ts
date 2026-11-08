@@ -65,7 +65,7 @@ describe('what the admin sees', () => {
 			['demo', 0, 0, null]
 		]);
 		expect(Object.keys(groups[0]).sort()).toEqual(
-			['copies', 'createdAt', 'id', 'isDemo', 'lastActive', 'members', 'name', 'suspendedAt', 'suspendedReason'].sort()
+			['archivedAt', 'copies', 'createdAt', 'id', 'isDemo', 'lastActive', 'members', 'name', 'suspendedAt', 'suspendedReason'].sort()
 		);
 	});
 });

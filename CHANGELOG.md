@@ -4,6 +4,9 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+- In two or more groups, the group name at the top opens a list of your groups to switch between; you stay on the same tab. Create a group explains what a group is for, and the README answers when to start a second one.
+- The owner can archive a group they've stopped using (a co-admin can too once the owner hasn't been in the group for 60 days, and the Group tab says so): it turns read-only, its join link closes, and it moves to an "Archived" list at the end of Your groups, ready to restore. Deleting a group is now only possible once it's archived. Needs migration 0010.
+- Fixed: the next game night on a Your groups card showed as a boxed card on three lines.
 - A member's Manage panel on the Group tab is grouped: role as Member | Co-admin with "Make owner…", getting in (PIN status, sign-in code, or why not), and merge and remove at the foot, one confirmation at a time. Opening it no longer moves the settings panel. Making someone a co-admin asks first, and handing over ownership asks you to type their name.
 - Members without a PIN see a note on the shelf to set one; the owner and co-admins see "No PIN yet" beside them on the Group tab.
 - An owner or co-admin can make a one-time sign-in code for a member who lost their PIN and every device, and merge someone's old entry into the new one they joined as. Both only for people in that group alone. Needs migration 0009.

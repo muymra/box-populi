@@ -14,7 +14,7 @@ web
 - **Two moments of use, weighted equally** (confirmed 2026-11-06):
   - at the table, on a phone, deciding what to play with the people who showed up;
   - at home, planning: checking who owns what and lining up a game night.
-- **Roles inside a group:** one owner, any number of co-admins, and members.
+- **Roles inside a group:** one owner, any number of co-admins, and members. Archiving a group is the owner's; a co-admin can too once the owner hasn't been in the group for 60 days. Deleting is the owner's, once archived.
 - **Demo visitors** arriving from Carlo's portfolio, who see a read-only sample group without joining.
 - **Hosters** who run their own instance from the open-source code and keep it within Cloudflare's free tier.
 

@@ -15,6 +15,10 @@
 	const ROLE = { owner: 'Owner', admin: 'Co-admin', member: 'Member' } as const;
 	const inviteLink = $derived(data.code ? `${page.url.origin}/join/${data.code}` : null);
 	let query = $state('');
+	// The owner, and how long since they were last here, for the 60-day rule on archiving (D50).
+	const owner = $derived(data.members.find((m) => m.role === 'owner') ?? null);
+	const ownerDaysAgo = $derived(owner ? Math.floor((data.now - owner.lastSeenAt) / 86_400_000) : 0);
+	const daysLeft = $derived(Math.max(1, data.ownerAwayDays - ownerDaysAgo));
 	// Which Manage panels are open, kept here so an action's reload doesn't fold them shut.
 	let openRows = $state<string[]>([]);
 	function keepOpen(id: string, open: boolean) {
@@ -157,7 +161,7 @@
 										{#if mine === 'role' && m.role === 'member'}
 											<p>
 												Make {m.name} a co-admin? Co-admins can rename the group, make a new join code, remove members, change any play or night, and help
-												members back in.
+												members back in. If you’re away for {data.ownerAwayDays} days, they can also archive or restore the group.
 											</p>
 											<div class="cbtns">
 												<form method="POST" action="?/promote" use:enhance={closeAfter}>
@@ -297,7 +301,7 @@
 	{/snippet}
 	{#snippet deleteBlock()}
 		<details class="confirm" open={!!form?.deleteError}>
-			<summary class="link-button">Delete {data.group.name}…</summary>
+			<summary class="link-button">Delete {data.group.name} for good…</summary>
 			<form method="POST" action="?/delete" class="confirm-body delete" use:enhance>
 				<p>This removes the group, its code and its links for everyone. Members keep their accounts and their games. It can’t be undone.</p>
 				<label>
@@ -330,13 +334,45 @@
 			</div>
 			<div class="form-body">{@render themeForm()}</div>
 		</div>
-		{#if data.canDelete}
-			<div class="form-row danger-row">
+		{#if data.archiveWaits}
+			<div class="form-row">
 				<div class="form-label">
-					<span class="form-q">Delete</span>
-					<span class="hint">For everyone, for good. Members keep their games.</span>
+					<span class="form-q">Archive</span>
+					<span class="hint">
+						The owner archives the group. A co-admin can too once the owner hasn’t been here for {data.ownerAwayDays} days.
+						{#if owner}{owner.name} was here {ownerDaysAgo === 0 ? 'today' : ownerDaysAgo === 1 ? 'yesterday' : `${ownerDaysAgo} days ago`}, so that’s in {daysLeft}
+							{daysLeft === 1 ? 'day' : 'days'} if they stay away.{/if}
+					</span>
 				</div>
-				<div class="form-body">{@render deleteBlock()}</div>
+			</div>
+		{:else if data.canArchive}
+			<div class="form-row">
+				<div class="form-label">
+					<span class="form-q">Archive</span>
+					<span class="hint">
+						Stop using it and keep its history. Only the owner can delete it, once it’s archived.
+						{#if data.ownerIsAway && owner}
+							You can archive it because {owner.name}, the owner, hasn’t been here for {data.ownerAwayDays} days.
+						{:else}
+							If you’re away for {data.ownerAwayDays} days, a co-admin can archive or restore it too.
+						{/if}
+					</span>
+				</div>
+				<div class="form-body">
+					<details class="confirm" open={!!form?.archiveError}>
+						<summary class="link-button">Archive {data.group.name}…</summary>
+						<div class="confirm-body">
+							<p>
+								{data.group.name} becomes read-only for everyone: its shelf, plays and nights stay to look back on, nothing can change, and its join link
+								closes. It moves to Archived in everyone’s list of groups. Restore it any time.
+							</p>
+							<form method="POST" action="?/archive" use:enhance>
+								<button class="btn small">Archive {data.group.name}</button>
+							</form>
+							{#if form?.archiveError}<p class="banner error" role="alert">{form.archiveError}</p>{/if}
+						</div>
+					</details>
+				</div>
 			</div>
 		{/if}
 	{/snippet}
@@ -359,6 +395,60 @@
 			<section class="form-panel side-settings" aria-labelledby="settings-h">
 				<div class="form-head"><div><h2 id="settings-h">Settings</h2></div></div>
 				{@render settingsRows()}
+			</section>
+		{:else if data.restoreWaits}
+			<section class="form-panel side-settings" aria-labelledby="closed-h">
+				<div class="form-head">
+					<div>
+						<h2 id="closed-h">Archived</h2>
+						<p>
+							{owner ? `${owner.name}, the owner,` : 'The owner'} restores or deletes it. A co-admin can restore it once the owner hasn’t been here for
+							{data.ownerAwayDays} days{#if owner}: that’s in {daysLeft} {daysLeft === 1 ? 'day' : 'days'} if they stay away{/if}.
+						</p>
+					</div>
+				</div>
+			</section>
+		{:else if data.canRestore || data.canDelete}
+			<!-- An archived (or host-suspended) group: bring it back, or delete it for good (D50). -->
+			<section class="form-panel side-settings" aria-labelledby="closed-h">
+				<div class="form-head">
+					<div>
+						<h2 id="closed-h">{data.group.archived ? 'Archived' : 'Suspended by the host'}</h2>
+						<p>
+							{#if data.group.archived && data.group.archivedAt}
+								Read-only since {new Date(data.group.archivedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}. Its join link is closed.
+							{:else}
+								Read-only, and its join link is closed.
+							{/if}
+						</p>
+					</div>
+				</div>
+				{#if data.canRestore}
+					<div class="form-row">
+						<div class="form-label">
+							<span class="form-q">Restore</span>
+							<span class="hint">
+								Back into use, with the same join code.{#if data.ownerIsAway && owner}{' '}You can, as {owner.name}, the owner, hasn’t been here for {data.ownerAwayDays}
+									days.{/if}
+							</span>
+						</div>
+						<div class="form-body">
+							<form method="POST" action="?/restore" use:enhance>
+								<button class="btn small">Restore {data.group.name}</button>
+							</form>
+							{#if form?.archiveError}<p class="banner error" role="alert">{form.archiveError}</p>{/if}
+						</div>
+					</div>
+				{/if}
+				{#if data.canDelete}
+					<div class="form-row danger-row">
+						<div class="form-label">
+							<span class="form-q">Delete for good</span>
+							<span class="hint">For everyone. Members keep their games.</span>
+						</div>
+						<div class="form-body">{@render deleteBlock()}</div>
+					</div>
+				{/if}
 			</section>
 		{/if}
 	</div>

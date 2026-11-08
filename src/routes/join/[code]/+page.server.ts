@@ -14,6 +14,7 @@ import type { Actions, PageServerLoad, RequestEvent } from './$types';
 const REFUSALS = {
 	demo: 'The demo group is read-only and can’t be joined. Open it from the home page instead.',
 	suspended: 'This group has been suspended by the host and isn’t taking new members.',
+	archived: 'This group is archived, so it isn’t taking new members. Its members can still sign in to look back.',
 	full: 'This group is full.'
 } as const;
 
@@ -53,7 +54,7 @@ export const load: PageServerLoad = async (event) => {
 		you: event.locals.user?.name ?? null,
 		// The names on the door, for someone signed out who may already be in the group (D47). A
 		// suspended group still lets its members back in to read it.
-		members: signedOut && (!refusal || refusal === 'suspended' || refusal === 'full') ? await frontDoorMembers(db, target.id) : []
+		members: signedOut && refusal !== 'demo' ? await frontDoorMembers(db, target.id) : []
 	};
 };
 

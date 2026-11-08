@@ -18,7 +18,8 @@ export type GroupAction =
 	| 'change_night'
 	| 'set_night_planners'
 	| 'make_sign_in_code'
-	| 'merge_member';
+	| 'merge_member'
+	| 'archive_group';
 
 export type PermissionContext = {
 	/** Role of the member being acted on, for member-targeted actions. */
@@ -29,7 +30,12 @@ export type PermissionContext = {
 	otherMembers?: number;
 	/** For `plan_night`: the group lets any member plan nights (its `nights_by` setting). */
 	openToMembers?: boolean;
+	/** For `archive_group`: the owner hasn't been seen in the group for OWNER_AWAY_DAYS. */
+	ownerAway?: boolean;
 };
+
+/** After this long without the owner, a co-admin may archive or restore the group (D50). */
+export const OWNER_AWAY_DAYS = 60;
 
 const RANK: Record<Role, number> = { member: 0, admin: 1, owner: 2 };
 
@@ -38,7 +44,7 @@ export function atLeast(role: Role, min: Role): boolean {
 }
 
 export function can(actor: Role, action: GroupAction, ctx: PermissionContext = {}): boolean {
-	const { targetRole, targetIsSelf = false, otherMembers = 0, openToMembers = true } = ctx;
+	const { targetRole, targetIsSelf = false, otherMembers = 0, openToMembers = true, ownerAway = false } = ctx;
 	switch (action) {
 		case 'rename':
 		case 'regenerate_code':
@@ -69,6 +75,10 @@ export function can(actor: Role, action: GroupAction, ctx: PermissionContext = {
 			return actor === 'owner' && !targetIsSelf && targetRole != null && targetRole !== 'owner';
 		case 'delete_group':
 			return actor === 'owner';
+		// Archiving and restoring (D50): the owner, or a co-admin once the owner has been away a while, so
+		// a group whose owner has gone can still be wound down. Deleting for good stays the owner's.
+		case 'archive_group':
+			return actor === 'owner' || (actor === 'admin' && ownerAway);
 		case 'leave':
 			return actor !== 'owner' || otherMembers === 0;
 	}

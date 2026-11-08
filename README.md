@@ -60,7 +60,13 @@ Only the people in your group. The person running the copy can pause or delete a
 
 ### Can I be in more than one group?
 
-Yes. Add your games once and they show in every group you're in.
+Yes. Add your games once and they show in every group you're in. In two or more groups, the group name at the top of the page switches between them.
+
+### When should we start a second group?
+
+A group is the people who play together. They share one shelf, one play history and one leaderboard. Start another group when the people are different, such as a lunch crowd at work next to your Friday friends. A few people can be in both.
+
+Keep one group when it's the same people on different days or in different moods. Plan each evening as a game night, and use the shelf's filters (players, time, weight) to find the long heavy games or the quick ones. Splitting the same people into two groups splits their history too, since plays and game nights each belong to one group.
 
 ### What if I get a new phone or clear my browser?
 
