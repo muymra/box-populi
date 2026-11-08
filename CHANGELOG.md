@@ -4,6 +4,10 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+## 0.3.0 (2026-11-08)
+
+**Upgrading:** apply migrations 0008 to 0011 (PINs, sign-in codes, archiving, the admin log's new action). `GROUP_CREATION` now defaults to `admins`: set it to `anyone` if everyone should keep creating groups. On the admin page, a group must be suspended before it can be deleted.
+
 - The Plays page exports game nights too: who came, their answers and each game they brought, as a second CSV beside the plays. Your account links both per group, and deleting a group offers both first. On the admin page, "suspend it first" opens the Suspend form.
 - The admin page's group Manage is laid out like a member's on the Group tab: Access, the owner's way in, and delete at the foot, one confirmation at a time. The host can delete only a suspended group, the warning names the plays and game nights it takes, and the suspend message is labelled as the one members read. Each action says when it's done. **Upgrading:** to delete a group from the admin page, suspend it first.
 - An owner deleting a group is told that nobody is notified, can download everyone's plays from the confirmation, and sees "… is deleted" on Your account afterwards. The delete button waits for the typed name.
