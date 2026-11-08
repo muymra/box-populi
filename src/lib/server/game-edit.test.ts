@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
 import { all, deleteGroupStatements, deletePersonStatements, one, run } from './db.ts';
 import { canEditGame, editGame } from './game-edit.ts';
-import { applyCorrection, groupCorrections } from './corrections.ts';
 import { loadCatalog } from './catalog.ts';
 import { matchLines } from './game-list.ts';
 import { cacheWikidataGames, FakeWikidataClient } from './wikidata.ts';
@@ -49,75 +48,103 @@ describe('who can edit', () => {
 	});
 });
 
-describe('corrections belong to the group that makes them', () => {
-	it('changes the game for this group only, and leaves the shared row alone', async () => {
+describe('details are shared, pictures stay with the group (D54)', () => {
+	it('edits the shared game for every group, and keeps the picture in this one', async () => {
 		const [g1, g2] = [await version('g1'), await version('g2')];
-		const edit = form({ name: 'Lantern Harbour (2nd edition)', minPlayers: '2', maxPlayers: '5', maxPlaytime: '45', complexity: '3', imageUrl: 'https://example.com/box.jpg' });
+		const edit = form({ name: 'Lantern Harbour (2nd edition)', minPlayers: '2', maxPlayers: '5', maxPlaytime: '45', complexity: 'heavy', imageUrl: 'https://example.com/box.jpg' });
 		expect(await editGame(db, 'g1', owner, 2, edit, NOW)).toEqual({ ok: true });
 
 		expect(await shelfNames('g1')).toContain('Lantern Harbour (2nd edition)');
-		expect(await shelfNames('g2')).toContain('Lantern Harbour');
-		const mine = (await loadCatalog(db, 'g1', 1)).games.find((g) => g.id === 2)!;
-		expect(mine).toMatchObject({ minPlayers: 2, maxPlayers: 5, maxPlaytime: 45, weight: 3, thumbUrl: 'https://example.com/box.jpg' });
-		expect(mine.search).toContain('port des lanternes'); // the old titles still find it
-		expect(await one(db, 'SELECT name, max_players, image_url, weight, edited_by FROM games WHERE id = 2')).toEqual({
-			name: 'Lantern Harbour',
-			max_players: 4,
-			image_url: null,
-			weight: null,
-			edited_by: null
-		});
-		// Only what differs from the shared row is stored, so the rest keeps following it.
-		expect(await one(db, `SELECT name, min_players, max_players, edited_by FROM game_corrections WHERE group_id = 'g1' AND game_id = 2`)).toEqual({
+		expect(await shelfNames('g2')).toContain('Lantern Harbour (2nd edition)');
+		const [here, there] = [(await loadCatalog(db, 'g1', 1)).games, (await loadCatalog(db, 'g2', 1)).games].map((games) => games.find((g) => g.id === 2)!);
+		expect(here).toMatchObject({ minPlayers: 2, maxPlayers: 5, maxPlaytime: 45, weight: 4, thumbUrl: 'https://example.com/box.jpg' });
+		expect(there).toMatchObject({ minPlayers: 2, maxPlayers: 5, maxPlaytime: 45, weight: 4, thumbUrl: null });
+		expect(there.search).toContain('port des lanternes'); // the old titles still find it
+		expect(await one(db, 'SELECT name, max_players, image_url, weight, edited_by, edited_at FROM games WHERE id = 2')).toEqual({
 			name: 'Lantern Harbour (2nd edition)',
-			min_players: null,
 			max_players: 5,
-			edited_by: 'ada'
+			image_url: null,
+			weight: 4,
+			edited_by: 'ada',
+			edited_at: NOW
 		});
-		expect(await version('g1')).toBe(g1 + 1);
-		expect(await version('g2')).toBe(g2);
+		expect(await all(db, 'SELECT group_id, name, max_players, image_url, edited_by FROM game_corrections')).toEqual([
+			{ group_id: 'g1', name: null, max_players: null, image_url: 'https://example.com/box.jpg', edited_by: 'ada' }
+		]);
+		expect(await version('g1')).toBeGreaterThan(g1);
+		expect(await version('g2')).toBe(g2 + 1);
 	});
 
-	it('removes the correction when the form matches the shared row again', async () => {
-		await editGame(db, 'g1', member, 1, form({ name: 'Kitchen Table Classic' }), NOW);
-		await editGame(db, 'g1', member, 1, form({ name: 'Kitchen Table Game' }), NOW + 1);
+	it('stores a level as the middle of its band, and keeps a finer value when the level is the same (D55)', async () => {
+		await run(db, 'UPDATE games SET weight = 3.2 WHERE id = 2');
+		await editGame(db, 'g1', owner, 2, form({ name: 'Lantern Harbour', complexity: 'heavy' }), NOW);
+		expect(await one(db, 'SELECT weight, edited_by FROM games WHERE id = 2')).toEqual({ weight: 3.2, edited_by: null });
+		await editGame(db, 'g1', owner, 2, form({ name: 'Lantern Harbour', complexity: 'light' }), NOW);
+		expect(await one(db, 'SELECT weight FROM games WHERE id = 2')).toEqual({ weight: 1.5 });
+	});
+
+	it('leaves a detail as it is when its field is empty', async () => {
+		await editGame(db, 'g1', owner, 2, form({ name: 'Lantern Harbour', minPlayers: '', maxPlayers: '6' }), NOW);
+		expect(await one(db, 'SELECT min_players, max_players FROM games WHERE id = 2')).toEqual({ min_players: 2, max_players: 6 });
+	});
+
+	it('keeps who set the picture until it changes, and drops it when the field is cleared', async () => {
+		await editGame(db, 'g1', owner, 2, form({ name: 'Lantern Harbour', imageUrl: 'https://example.com/a.jpg' }), NOW);
+		await editGame(db, 'g1', member, 2, form({ name: 'Lantern Harbour', imageUrl: 'https://example.com/a.jpg', maxPlayers: '6' }), NOW + 1);
+		expect(await one(db, 'SELECT edited_by, edited_at FROM game_corrections')).toEqual({ edited_by: 'ada', edited_at: NOW });
+		await editGame(db, 'g1', member, 2, form({ name: 'Lantern Harbour' }), NOW + 2);
 		expect(await all(db, 'SELECT * FROM game_corrections')).toEqual([]);
 	});
 
-	it('survives a Wikidata refresh, and is ignored once the game has BGG data', async () => {
-		await editGame(db, 'g1', owner, 2, form({ name: 'Our Harbour', maxPlayers: '6' }), NOW);
-		await cacheWikidataGames(db, [{ ...FakeWikidataClient.GAMES[0], maxPlayers: 5 }], NOW + 1);
-		const correction = (await groupCorrections(db, 'g1')).get(2);
-		const shared = await one<{ source: string; is_manual: number; name: string; max_players: number }>(db, 'SELECT source, is_manual, name, max_players FROM games WHERE id = 2');
-		expect(shared?.max_players).toBe(5);
-		expect(applyCorrection(shared!, correction)).toMatchObject({ name: 'Our Harbour', max_players: 6 });
-		expect(applyCorrection({ ...shared!, source: 'bgg' }, correction)).toMatchObject({ name: 'Lantern Harbour', max_players: 5 });
+	it('moves what a group corrected for itself before D54 onto the game when it is saved', async () => {
+		await run(db, `INSERT INTO game_corrections (group_id, game_id, name, search_text, max_players, image_url, edited_by, edited_at) VALUES ('g1', 2, 'Our Harbour', 'our harbour', 6, 'https://example.com/a.jpg', 'bo', 1)`);
+		expect(await shelfNames('g2')).toContain('Lantern Harbour');
+		// The form shows the group's version, so saving it unchanged sends those values.
+		await editGame(db, 'g1', owner, 2, form({ name: 'Our Harbour', minPlayers: '2', maxPlayers: '6', imageUrl: 'https://example.com/a.jpg' }), NOW);
+		expect(await one(db, 'SELECT name, max_players, edited_by FROM games WHERE id = 2')).toEqual({ name: 'Our Harbour', max_players: 6, edited_by: 'ada' });
+		expect(await all(db, 'SELECT name, search_text, max_players, image_url, edited_by FROM game_corrections')).toEqual([
+			{ name: null, search_text: null, max_players: null, image_url: 'https://example.com/a.jpg', edited_by: 'bo' }
+		]);
+		expect(await shelfNames('g2')).toContain('Our Harbour');
 	});
 
-	it('shows in the group’s Wanted list and matches its pasted lists, not other groups’', async () => {
+	it('survives a Wikidata refresh', async () => {
+		await editGame(db, 'g1', owner, 2, form({ name: 'Our Harbour', maxPlayers: '6' }), NOW);
+		await cacheWikidataGames(db, [{ ...FakeWikidataClient.GAMES[0], maxPlayers: 5 }], NOW + 1);
+		expect(await one(db, 'SELECT name, max_players FROM games WHERE id = 2')).toEqual({ name: 'Our Harbour', max_players: 6 });
+	});
+
+	it('shows in every group’s Wanted list and pasted lists, but a hand-entered game stays private', async () => {
 		await editGame(db, 'g1', member, 1, form({ name: 'Supper Game' }), NOW);
-		await run(db, `INSERT INTO wishlist (user_id, game_id, added_at) VALUES ('ada', 2, 0)`);
-		await run(db, `DELETE FROM copies WHERE game_id = 2`);
 		await editGame(db, 'g1', owner, 2, form({ name: 'Our Harbour' }), NOW);
+		await run(db, `INSERT INTO wishlist (user_id, game_id, added_at) VALUES ('ada', 2, 0)`);
+		await run(db, `DELETE FROM copies WHERE game_id = 2 AND user_id = 'bo'`);
 		expect((await wantedGames(db, 'g1')).map((g) => g.name)).toEqual(['Our Harbour']);
 		const [renamed] = await matchLines(db, 'g1', 'cy', ['Supper Game'], null, NOW);
 		expect(renamed).toMatchObject({ status: 'group', game: { gameId: 1, name: 'Supper Game' } });
 		const [elsewhere] = await matchLines(db, 'g2', 'dee', ['Supper Game'], null, NOW);
 		expect(elsewhere.status).toBe('new');
+		const [shared] = await matchLines(db, 'g2', 'dee', ['Our Harbour'], null, NOW);
+		expect(shared).toMatchObject({ status: 'owned', game: { gameId: 2, name: 'Our Harbour' } });
 	});
 
 	it('refuses BGG games, people without a copy, and bad values', async () => {
 		expect((await editGame(db, 'g1', member, 3, form({ name: 'X' }), NOW)).ok).toBe(false);
 		expect((await editGame(db, 'g1', { id: 'cy', role: 'member' }, 1, form({ name: 'X' }), NOW)).ok).toBe(false);
-		expect(await editGame(db, 'g1', member, 1, form({ name: 'X', complexity: '7' }), NOW)).toEqual({ ok: false, error: expect.stringMatching(/1 \(light\) to 5/) });
+		expect(await editGame(db, 'g1', member, 1, form({ name: 'X', complexity: '3' }), NOW)).toEqual({ ok: false, error: 'Complexity is light, medium or heavy.' });
 		expect(await editGame(db, 'g1', member, 1, form({ name: 'X', minPlayers: '5', maxPlayers: '2' }), NOW)).toEqual({ ok: false, error: expect.stringMatching(/fewest players/) });
+		expect(await all(db, 'SELECT name, edited_by FROM games WHERE id IN (1, 3) ORDER BY id')).toEqual([
+			{ name: 'Kitchen Table Game', edited_by: null },
+			{ name: 'From BGG', edited_by: null }
+		]);
 		expect(await all(db, 'SELECT * FROM game_corrections')).toEqual([]);
 	});
 
-	it('go with their group, and lose the editor’s name when the editor deletes their account', async () => {
-		await editGame(db, 'g1', member, 2, form({ name: 'Ours' }), NOW);
-		await editGame(db, 'g2', { id: 'dee', role: 'owner' }, 2, form({ name: 'Theirs' }), NOW);
+	it('lose the editor’s name when the editor deletes their account, and a group’s picture goes with the group', async () => {
+		await editGame(db, 'g1', member, 2, form({ name: 'Ours', imageUrl: 'https://example.com/a.jpg' }), NOW);
+		await editGame(db, 'g2', { id: 'dee', role: 'owner' }, 2, form({ name: 'Ours', imageUrl: 'https://example.com/b.jpg' }), NOW);
 		await db.batch(deletePersonStatements(db, 'bo'));
+		expect(await one(db, 'SELECT name, edited_by FROM games WHERE id = 2')).toEqual({ name: 'Ours', edited_by: null });
 		expect(await all(db, 'SELECT group_id, edited_by FROM game_corrections ORDER BY group_id')).toEqual([
 			{ group_id: 'g1', edited_by: null },
 			{ group_id: 'g2', edited_by: 'dee' }

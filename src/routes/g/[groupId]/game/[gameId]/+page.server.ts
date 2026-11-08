@@ -65,7 +65,8 @@ export const load: PageServerLoad = async (event) => {
 		gameId
 	);
 	if (!shared) error(404, 'Game not found');
-	// The game as this group sees it, with its own corrections (D35).
+	// The game as this group sees it: the shared row, with this group's picture (D54) and anything it
+	// corrected for itself before D54.
 	const correction = (await groupCorrections(db, groupId, [gameId])).get(gameId);
 	const game = applyCorrection(shared, correction);
 
@@ -140,19 +141,20 @@ export const load: PageServerLoad = async (event) => {
 		: null;
 	const mine = myCopy != null;
 	const canEditDetails = canEdit && actor != null && (await canEditGame(db, groupId, actor, gameId));
-	// Who last corrected it for this group. Edits made to the shared row before D35 may come from
-	// another group, whose members' names stay there (the privacy page: only your groups see your name).
+	// Who last edited it: the shared game's last editor, or this group's picture if that came later.
+	// An editor's name shows only to groups they're in (D54; the privacy page says so).
 	const nameOf = (id: string | null) => (id == null ? null : (members.find((m) => m.id === id)?.name ?? null));
 	const isBgg = game.source === 'bgg' && game.is_manual !== 1;
+	const groupEdit = correction != null && (shared.edited_at == null || correction.edited_at >= shared.edited_at) ? correction : null;
 	const editedByName = isBgg
 		? null
-		: correction
-			? (nameOf(correction.edited_by) ?? 'a former member')
-			: game.edited_at == null
+		: groupEdit
+			? (nameOf(groupEdit.edited_by) ?? 'a former member')
+			: shared.edited_at == null
 				? null
-				: game.edited_by == null
+				: shared.edited_by == null
 					? 'a former member'
-					: (nameOf(game.edited_by) ?? 'someone outside this group');
+					: (nameOf(shared.edited_by) ?? 'someone outside this group');
 	const wanted = me ? wishers.some((w) => w.id === me.id) : false;
 	// Who has won this game most here, among current members (PRD "Play log").
 	const wins = new Map<string, number>();

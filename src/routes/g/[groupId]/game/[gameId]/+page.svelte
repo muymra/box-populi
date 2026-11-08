@@ -60,7 +60,7 @@
 	const best = $derived(formatCounts(countsFromMask(g.bestMask)));
 	const recommended = $derived(formatCounts(countsFromMask(g.recMask)));
 	const time = $derived(formatPlaytime(g.minPlaytime, g.maxPlaytime));
-	// BGG games show BGG's weight; anything else shows the complexity a member set, as a whole number.
+	// BGG games show BGG's weight; anything else shows the level a member set (D55).
 	const groupRated = $derived(g.source !== 'bgg');
 	// What a hand-entered or Wikidata game still lacks, so members know what to fill in.
 	const missing = $derived(
@@ -73,8 +73,8 @@
 					!g.imageUrl && 'a box image'
 				].filter((x): x is string => typeof x === 'string')
 	);
-	const weight = $derived(g.weight == null ? null : groupRated ? `${Math.round(g.weight)} / 5` : formatWeight(g.weight));
 	const bucket = $derived(weightBucket(g.weight));
+	const weight = $derived(g.weight == null ? null : groupRated ? BUCKET_LABELS[bucket!] : formatWeight(g.weight));
 	const pollLabel = $derived(g.pollSource === 'votes' ? 'computed from BGG poll votes' : 'BGG voters');
 	const youtube = $derived(`https://www.youtube.com/results?search_query=${encodeURIComponent(`how to play ${g.name}`)}`);
 
@@ -168,7 +168,7 @@
 						<Weight size={20} aria-hidden="true" />
 						<span>
 							<strong class="num">{weight}</strong>
-							<span class="muted">{groupRated ? 'complexity, set by the group' : 'BGG weight'}{#if bucket}{' · '}{BUCKET_LABELS[bucket].toLowerCase()} on Box Populi's scale{/if}</span>
+							<span class="muted">{#if groupRated}complexity{:else}BGG weight{#if bucket}{' · '}{BUCKET_LABELS[bucket].toLowerCase()} on Box Populi's scale{/if}{/if}</span>
 						</span>
 					</li>
 				{/if}
@@ -191,7 +191,7 @@
 
 		{#if data.canEditDetails || data.editedByName}
 			<section class="details-edit" aria-label="Game details">
-				{#if form?.detailsSaved}<p class="banner" role="status">Details saved. Only {data.group.name} sees them.</p>{/if}
+				{#if form?.detailsSaved}<p class="banner" role="status">Details saved.</p>{/if}
 				{#if data.editedByName}<p class="muted small">Details last edited by {data.editedByName}.</p>{/if}
 				{#if data.canEditDetails}
 					{#if missing.length}<p class="muted small">Missing: {missing.join(', ')}.</p>{/if}
@@ -209,21 +209,19 @@
 							</div>
 							<label>
 								Complexity
-								<select class="field" name="complexity" value={g.weight == null ? '' : String(Math.round(g.weight))}>
+								<select class="field" name="complexity" value={bucket ?? ''}>
 									<option value="">Not set</option>
-									<!-- Labels follow the shelf's complexity filter: light under 2, medium 2 to under 3, heavy 3 and up. -->
-									<option value="1">1, light</option>
-									<option value="2">2, medium</option>
-									<option value="3">3, heavy</option>
-									<option value="4">4, heavy</option>
-									<option value="5">5, very heavy</option>
+									<!-- The shelf's three levels (D15, D55). -->
+									<option value="light">Light</option>
+									<option value="medium">Medium</option>
+									<option value="heavy">Heavy</option>
 								</select>
 							</label>
 							<label>
 								<span>Image address <span class="hint">(optional, https://)</span></span>
 								<input class="field" name="imageUrl" type="url" value={g.imageUrlRaw ?? ''} />
 							</label>
-							<p class="hint">Changes show only in this group. Other groups with this game keep their own details.</p>
+							<p class="hint">Changes show in every group with this game. The image shows only in {data.group.name}.</p>
 							{#if form?.editError}<p class="banner error" role="alert">{form.editError}</p>{/if}
 							<button class="btn primary small" disabled={sending === 'details'}>{sending === 'details' ? 'Saving…' : 'Save details'}</button>
 						</form>

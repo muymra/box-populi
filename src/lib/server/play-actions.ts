@@ -2,7 +2,7 @@
 // +page.server.ts export only its own names, so the bodies live here).
 import { fail, type RequestEvent } from '@sveltejs/kit';
 import { requireRole } from './authz.ts';
-import { getDb } from './platform.ts';
+import { getDb } from '#lib/server/platform.ts';
 import { deletePlay, parsePlayForm, savePlay, setPodiumPoints } from './plays.ts';
 import { nightOf } from '#lib/table/regulars.ts';
 

@@ -1,18 +1,22 @@
-// Groups correcting and completing games that aren't from BGG (DECISIONS D31, D35). A game is one
-// row shared by every group, so a group's corrections live in `game_corrections` and only that
-// group sees them: nobody in one group can rename a game or change its picture for another. BGG
-// games are never corrected: BGG's terms forbid changing its data.
+// Filling in and correcting games that aren't from BGG (DECISIONS D31, D54). A game is one row
+// shared by every group, and its details (name, players, play time, complexity) are edited on that
+// row, so every group with the game sees the fix. The picture is the exception: it stays with the
+// group that set it, in `game_corrections`, because a picture loads in each viewer's browser from
+// wherever it points. BGG games are never edited: BGG's terms forbid changing its data.
 import { one, stmt, type DB } from './db.ts';
-import { bumpCatalogForGroup } from './catalog.ts';
+import { bumpCatalogForGames, bumpCatalogForGroup } from './catalog.ts';
+import { groupCorrections } from './corrections.ts';
 import { gameVisibleInGroup, parseManualGame } from './games.ts';
 import { atLeast } from './permissions.ts';
 import { buildSearchText } from '#lib/catalog/normalize.ts';
 import type { Role } from '#lib/catalog/types.ts';
+import { BUCKET_WEIGHTS, WEIGHT_BUCKETS, weightBucket, type WeightBucket } from '#lib/catalog/buckets.ts';
 
 type GameRow = {
 	source: string;
 	is_manual: number;
 	name: string;
+	search_text: string;
 	image_url: string | null;
 	min_players: number | null;
 	max_players: number | null;
@@ -24,7 +28,7 @@ type GameRow = {
 async function correctableGame(db: DB, gameId: number): Promise<GameRow | null> {
 	const row = await one<GameRow>(
 		db,
-		'SELECT source, is_manual, name, image_url, min_players, max_players, min_playtime, max_playtime, weight FROM games WHERE id = ?1',
+		'SELECT source, is_manual, name, search_text, image_url, min_players, max_players, min_playtime, max_playtime, weight FROM games WHERE id = ?1',
 		gameId
 	);
 	return row && (row.is_manual === 1 || row.source === 'manual' || row.source === 'wikidata') ? row : null;
@@ -48,29 +52,29 @@ export type GameEdit = {
 	maxPlayers: number | null;
 	minPlaytime: number | null;
 	maxPlaytime: number | null;
-	complexity: number | null; // 1 to 5, stored in `weight`
+	complexity: WeightBucket | null; // stored in `weight` as the middle of its band (D55)
 };
 
 export type EditParse = { ok: true; value: GameEdit } | { ok: false; error: string };
 
-/** The same rules as manual entry, plus a whole-number complexity from 1 to 5. */
+/** The same rules as manual entry, plus a complexity of light, medium or heavy (D55). */
 export function parseGameEdit(form: FormData): EditParse {
 	const base = parseManualGame(form);
 	if (!base.ok) return base;
-	const rawComplexity = String(form.get('complexity') ?? '').trim();
-	const complexity = rawComplexity === '' ? null : Number(rawComplexity);
-	if (complexity != null && !(Number.isInteger(complexity) && complexity >= 1 && complexity <= 5)) {
-		return { ok: false, error: 'Complexity is a whole number from 1 (light) to 5 (heavy).' };
-	}
-	return { ok: true, value: { ...base.value, complexity } };
+	const raw = String(form.get('complexity') ?? '').trim();
+	if (raw !== '' && !(WEIGHT_BUCKETS as string[]).includes(raw)) return { ok: false, error: 'Complexity is light, medium or heavy.' };
+	return { ok: true, value: { ...base.value, complexity: raw === '' ? null : (raw as WeightBucket) } };
 }
 
 export type EditResult = { ok: true } | { ok: false; error: string };
 
 /**
- * Saves the edit form as this group's correction. A field left empty, or the same as the game
- * row, isn't stored, so it keeps following the row (a Wikidata refresh, say). A form that changes
- * nothing removes the correction. Only this group's catalog changes.
+ * Saves the edit form (D54). A detail that changes goes on the shared game, for every group that
+ * has it, with this person as its last editor; an empty field leaves the value as it is, so nobody
+ * blanks a detail by accident. The picture is stored for this group only, and only when it differs
+ * from the game's own. Saving also clears what a group corrected for itself before D54: the form
+ * showed those values, so they reach the shared game now, and a group-only copy would hide later
+ * fixes from other groups.
  */
 export async function editGame(
 	db: DB,
@@ -85,40 +89,51 @@ export async function editGame(
 	const parsed = parseGameEdit(form);
 	if (!parsed.ok) return parsed;
 	const v = parsed.value;
-	const differs = <T>(value: T | null, base: T | null): T | null => (value == null || value === base ? null : value);
-	const c = {
-		name: differs(v.name, game.name),
-		image_url: differs(v.imageUrl, game.image_url),
-		min_players: differs(v.minPlayers, game.min_players),
-		max_players: differs(v.maxPlayers, game.max_players),
-		min_playtime: differs(v.minPlaytime, game.min_playtime),
-		max_playtime: differs(v.maxPlaytime, game.max_playtime),
-		weight: differs(v.complexity, game.weight)
-	};
-	const save = Object.values(c).some((x) => x != null)
-		? stmt(
+	const statements: D1PreparedStatement[] = [];
+
+	const fields = [
+		['name', v.name, game.name],
+		['min_players', v.minPlayers, game.min_players],
+		['max_players', v.maxPlayers, game.max_players],
+		['min_playtime', v.minPlaytime, game.min_playtime],
+		['max_playtime', v.maxPlaytime, game.max_playtime],
+		// The same level as before keeps the stored value, which may be finer than the band's middle.
+		['weight', v.complexity == null || v.complexity === weightBucket(game.weight) ? null : BUCKET_WEIGHTS[v.complexity], game.weight]
+	] as const;
+	const changed = fields.filter(([, value, current]) => value != null && value !== current);
+	if (changed.length) {
+		// The old titles stay searchable, so a list pasted with the previous name still matches.
+		const searchText = buildSearchText(v.name, game.search_text.split('|'));
+		const sets = changed.map(([column], i) => `${column} = ?${i + 5}`).join(', ');
+		statements.push(
+			stmt(db, `UPDATE games SET ${sets}, search_text = ?1, edited_by = ?2, edited_at = ?3 WHERE id = ?4`, searchText, actor.id, now, gameId, ...changed.map(([, value]) => value)),
+			bumpCatalogForGames(db, [gameId])
+		);
+	}
+
+	const image = v.imageUrl != null && v.imageUrl !== game.image_url ? v.imageUrl : null;
+	const existing = (await groupCorrections(db, groupId, [gameId])).get(gameId);
+	if (image != null) {
+		// An unchanged picture keeps the name of whoever set it.
+		statements.push(
+			stmt(
 				db,
-				`INSERT INTO game_corrections (group_id, game_id, name, search_text, image_url, min_players, max_players, min_playtime, max_playtime, weight, edited_by, edited_at)
-				 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+				`INSERT INTO game_corrections (group_id, game_id, image_url, edited_by, edited_at) VALUES (?1, ?2, ?3, ?4, ?5)
 				 ON CONFLICT(group_id, game_id) DO UPDATE SET
-				   name = excluded.name, search_text = excluded.search_text, image_url = excluded.image_url,
-				   min_players = excluded.min_players, max_players = excluded.max_players,
-				   min_playtime = excluded.min_playtime, max_playtime = excluded.max_playtime,
-				   weight = excluded.weight, edited_by = excluded.edited_by, edited_at = excluded.edited_at`,
+				   name = NULL, search_text = NULL, min_players = NULL, max_players = NULL, min_playtime = NULL, max_playtime = NULL, weight = NULL,
+				   edited_by = CASE WHEN game_corrections.image_url IS excluded.image_url THEN game_corrections.edited_by ELSE excluded.edited_by END,
+				   edited_at = CASE WHEN game_corrections.image_url IS excluded.image_url THEN game_corrections.edited_at ELSE excluded.edited_at END`,
 				groupId,
 				gameId,
-				c.name,
-				c.name == null ? null : buildSearchText(c.name),
-				c.image_url,
-				c.min_players,
-				c.max_players,
-				c.min_playtime,
-				c.max_playtime,
-				c.weight,
+				image,
 				actor.id,
 				now
 			)
-		: stmt(db, 'DELETE FROM game_corrections WHERE group_id = ?1 AND game_id = ?2', groupId, gameId);
-	await db.batch([save, bumpCatalogForGroup(db, groupId)]);
+		);
+	} else if (existing) {
+		statements.push(stmt(db, 'DELETE FROM game_corrections WHERE group_id = ?1 AND game_id = ?2', groupId, gameId));
+	}
+	if (statements.length === 0) return { ok: true };
+	await db.batch([...statements, bumpCatalogForGroup(db, groupId)]);
 	return { ok: true };
 }

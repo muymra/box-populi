@@ -57,7 +57,7 @@ export async function wantedGames(db: DB, groupId: string): Promise<WantedGame[]
 		 ORDER BY COUNT(*) DESC, g.name`,
 		groupId
 	);
-	// With the group's own names and pictures for games it has corrected (D35).
+	// With the group's own pictures, and anything it corrected for itself before D54.
 	const corrections = await groupCorrections(db, groupId);
 	return rows
 		.map((row) => applyCorrection(row, corrections.get(row.id)))

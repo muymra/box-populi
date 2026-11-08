@@ -1,5 +1,7 @@
-// Reading groups' corrections to shared games (DECISIONS D35; written by game-edit.ts). Kept apart
-// from game-edit.ts so the catalog can use it without importing the writer.
+// Reading groups' own versions of shared games (written by game-edit.ts). Since D54 that's a group's
+// picture; rows from before D54 can also hold a name, players, play time or complexity (D35), which
+// still apply until someone saves the game's form. Kept apart from game-edit.ts so the catalog can
+// use it without importing the writer.
 import { all, type DB } from './db.ts';
 
 export type Correction = {

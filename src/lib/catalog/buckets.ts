@@ -11,6 +11,12 @@ export const BUCKET_LABELS: Record<WeightBucket, string> = {
 	heavy: 'Heavy'
 };
 
+/**
+ * What a member's complexity stores, on the same 1–5 scale as BGG's weight so the two sort together:
+ * the middle of each band (D55).
+ */
+export const BUCKET_WEIGHTS: Record<WeightBucket, number> = { light: 1.5, medium: 2.5, heavy: 4 };
+
 export function weightBucket(weight: number | null): WeightBucket | null {
 	if (weight == null) return null;
 	if (weight < 2) return 'light';

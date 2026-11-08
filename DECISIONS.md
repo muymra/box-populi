@@ -197,7 +197,7 @@ Besides 5 misses per network address per 10 minutes, a whole instance allows 100
 **Trade-offs accepted:** anyone can block joining on an instance for an hour by sending 100 wrong codes. Joining is rare and the page says to try later; a guessed code would expose a group's names, collections and loans.
 **Revisit if:** a busy instance hits the ceiling with honest typos.
 
-## D35. Corrections to shared games belong to each group (2026-11-06)
+## D35. Corrections to shared games belong to each group (2026-11-06). Superseded by D54: details are shared, pictures stay per group.
 
 Replaces D31's shared edits. A hand-entered or Wikidata game is still one `games` row, but a group's corrections (name, picture, players, play time, complexity) go in `game_corrections` and only that group sees them. Chosen by Carlo after the 2026-11-06 audit, over locking games that other groups also have.
 **Why:** with shared edits, anyone in one group could rename a game or point its picture at their own server for every group that has it, and other groups saw their name.
@@ -337,3 +337,17 @@ A design review of the admin page found that the host could delete a group in on
 **Why:** a deleted group can't come back, and the host can't see inside it to judge what's lost; suspending already stops whatever prompted the delete.
 **Trade-offs accepted:** clearing out abuse takes two actions instead of one.
 **Revisit if:** hosters need to remove illegal content immediately, where suspending first leaves it in the database a moment longer (it's already hidden from everyone but members).
+
+## D54. A game's details are shared by every group; its picture stays per group (2026-11-08)
+
+Replaces D35. Filling in or correcting a hand-entered or Wikidata game (name, players, play time, complexity) edits the shared `games` row, so every group with the game sees the fix. The picture stays with the group that set it, as a `game_corrections` row. An editor's name shows only in groups they're in; elsewhere the game page says "someone outside this group". An empty field leaves a value as it is, so a form can't blank a detail. What groups corrected for themselves before this moves onto the game the next time someone saves that game's form, so there's no migration. Carlo chose it after 63 hand-entered games were filled in for one person and 49 Wikidata games turned out to have no play time, gaps every group would otherwise fill on its own.
+**Why:** a fix made once reaches everyone with the game, and someone in two groups doesn't fix the same game twice (D35's revisit condition).
+**Trade-offs accepted:** whoever can edit a game in one group changes it for every group that has it, mistakes and vandalism included, with no history or undo. A group can't keep its own name or house player count, and complexity is one shared opinion. An edited Wikidata game stops taking Wikidata's updates. Hand-entered games are still visible only to groups where a member has them, so their edits reach only those groups. Pictures stay per group because a picture loads in each viewer's browser from wherever it points, which would show that server the network addresses of other groups' members. Shipped in a patch (0.3.1) at Carlo's call, although D44 counts a feature as minor.
+**Revisit if:** edits get vandalised or fought over between groups; then add an edit history that owners and co-admins can undo.
+
+## D55. Members rate complexity as light, medium or heavy (2026-11-08)
+
+The edit form offered 1 to 5, labelled 1 light, 2 medium, 3 and 4 heavy, 5 very heavy, while the shelf filters on three levels (D15). Carlo noticed the two "heavy"s and the "very heavy" no filter has. The form now offers Light, Medium and Heavy, stored in `weight` as the middle of each band (1.5, 2.5, 4) so members' ratings sort among BGG weights. Choosing the level a game already has keeps its stored value, so earlier ratings of 4 and 5 stay as they were. The game page shows the word for a member's rating and keeps "2.31 / 5" for BGG's weight.
+**Why:** the form matches the only levels the shelf, the picker and the spines show.
+**Trade-offs accepted:** a member can't say "very heavy"; two heavy games rated by members sort as equals.
+**Revisit if:** the shelf gets the complexity range slider (PRD cut order item 3), which would want finer values.

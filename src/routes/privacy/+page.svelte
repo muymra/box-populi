@@ -29,8 +29,9 @@
 	<ul>
 		<li>The display name you choose. Members of your groups see it, and you can change it.</li>
 		<li>
-			The games you add, what you've lent or borrowed, your wishlist and the groups you're in. If you fill in a game's details, your
-			name shows beside them to the groups you're in.
+			The games you add, what you've lent or borrowed, your wishlist and the groups you're in. If you fill in a game's details,
+			every group that has the game sees them, and your name shows beside them only to the groups you're in. A picture you add
+			shows only in the group where you added it.
 		</li>
 		<li>Links you add to games, credited to you within that group.</li>
 		<li>

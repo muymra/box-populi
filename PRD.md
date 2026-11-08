@@ -178,7 +178,7 @@ For moving a collection over from a spreadsheet or notes app. Members paste one 
 
 ### Correcting games
 
-Hand-entered and Wikidata games can be filled in and corrected: name, image, players, play time and a 1 to 5 complexity. Anyone with the game on their shelf can do it, and so can a group's co-admins and owner. Corrections belong to the group that makes them (D35): other groups with the same game keep their own version, so nobody in one group can rename a game or change its picture for another. The game page lists what's still missing and who last edited it. Games from BGG are never editable; BGG's terms forbid changing its data.
+Hand-entered and Wikidata games can be filled in and corrected: name, image, players, play time and a complexity of light, medium or heavy (D55). Anyone with the game on their shelf can do it, and so can a group's co-admins and owner. The details are shared (D54): a fix reaches every group with the game. The image is the exception and shows only in the group that set it. An empty field leaves a detail as it is. The game page lists what's still missing and who last edited it; an editor's name shows only to groups they're in. Games from BGG are never editable; BGG's terms forbid changing its data.
 
 ### Catalog search and filters
 

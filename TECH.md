@@ -123,8 +123,8 @@ box-populi/
         groups.ts               creating and joining groups
         group-admin.ts          group settings: rename, code, roles, remove, hand over, theme, delete
         games.ts                BGG search, copies, manual entry, usableGames
-        game-edit.ts            a group's corrections to non-BGG games (D35)
-        corrections.ts          reading those corrections, applyCorrection()
+        game-edit.ts            editing non-BGG games: shared details, a group's own image (D54)
+        corrections.ts          reading groups' images and older corrections, applyCorrection()
         game-list.ts            pasting a list: parse, match, add
         wikidata.ts             the Wikidata client and cache (public-sources mode, D31)
         importer.ts             BGG collection import and the hydrate step
@@ -206,10 +206,10 @@ Bindings and variables come from `import { env } from 'cloudflare:workers'` (Sve
 
 `migrations/0001_init.sql`, then:
 
-- `0002_game_sources.sql`: `games.source` (`bgg`, `wikidata` or `manual`), `wikidata_id`, and `edited_by` / `edited_at` (edits to the shared row before D35).
+- `0002_game_sources.sql`: `games.source` (`bgg`, `wikidata` or `manual`), `wikidata_id`, and `edited_by` / `edited_at` (the shared row's last editor, D54).
 - `0003_group_theme.sql`: `groups.theme`, a preset id or NULL.
 - `0004_instance_settings.sql`: the one-row `instance_settings` table (custom colours, whether they're the default, the logo address).
-- `0005_game_corrections.sql`: `game_corrections`, each group's corrections to a non-BGG game (D35; shown after `wishlist` below).
+- `0005_game_corrections.sql`: `game_corrections`, each group's image for a non-BGG game, plus what groups corrected for themselves before D54 (D35; shown after `wishlist` below).
 - `0006_plays.sql`: `plays`, `play_players` and `groups.podium_points`, the play log (D37; shown after `game_links` below).
 - `0007_game_nights.sql`: `game_nights`, `night_people`, `night_games`, `plays.night_id` and `groups.nights_by` (D38; shown after the play log below).
 - `0008_pins.sql`: `users.pin_hash`, `pin_salt` and `pin_set_at`, the front door's PIN (D47).
@@ -330,9 +330,10 @@ CREATE TABLE wishlist (
   PRIMARY KEY (user_id, game_id)
 );
 
--- migrations/0005_game_corrections.sql: each group's corrections to a hand-entered or Wikidata
--- game (D35). Columns mirror games' name, image_url, players, play time and weight; NULL means
--- "as the game row says". search_text holds the corrected name, normalized. Keyed (group_id, game_id).
+-- migrations/0005_game_corrections.sql: each group's image for a hand-entered or Wikidata game
+-- (D54). Before D54 groups also corrected name, players, play time and weight here (D35); saving
+-- the game's form moves those onto the games row. NULL means "as the game row says". search_text
+-- holds the corrected name, normalized. Keyed (group_id, game_id).
 
 CREATE TABLE game_links (
   id        INTEGER PRIMARY KEY,
@@ -711,7 +712,7 @@ Built 2026-11-06 (D31), from steps 3 to 5 of the plan below. While BGG is off an
 - **Client.** `src/lib/server/wikidata.ts`. A search is two Wikidata API calls: `wbsearchentities` finds items by title or alias, then `wbgetentities` reads their claims. Only items with a BGG id (P2339) count as board games. From each it takes the English label (or any label), labels and aliases in ten common languages as alternate titles, min and max players (P1872, P1873, preferred rank first, deprecated never), and the year from P577 or P571. Requests carry the same User-Agent as BGG requests. There's no `maxlag`: Wikidata's lag is often over 5 seconds, which made it refuse every search. 429 and 5xx count as busy.
 - **Cache.** Results become `games` rows with `source = 'wikidata'` and `wikidata_id`, so adding, wishing and the catalog work as for any game. A row already known by its BGG id is linked, never overwritten. A refresh doesn't overwrite fields a member has edited (`edited_at`).
 - **Upgrade.** Wikidata games keep the BGG id Wikidata gives them. Once BGG is on, the hydrate step treats them like import stubs and fetches full BGG data, turning them into `source = 'bgg'`. If BGG doesn't know the id, the game stays Wikidata and loses the id.
-- **Editing.** `src/lib/server/game-edit.ts` writes, `corrections.ts` reads (D35). Anyone in a group with the game on their shelf, or a co-admin or owner of a group that shows it, can correct a hand-entered or Wikidata game: name, image, players, play time and a 1 to 5 complexity. The correction is a `game_corrections` row for that group, so only that group sees it; the shared `games` row never changes, and a Wikidata refresh updates it underneath. Only fields that differ from the shared row are stored, and a form that matches it deletes the correction. `applyCorrection` lays a group's row over the shared one in the catalog, the game page and Wanted, and never over BGG data (a Wikidata game upgraded to BGG shows BGG's). A renamed game keeps its earlier titles in search, and the group's pasted lists match the new name. The game page lists what's missing above the edit link and "Details last edited by" the group's editor. Saving bumps only that group's `catalog_version`. Rows edited directly before D35 keep their edits and their `edited_by`.
+- **Editing.** `src/lib/server/game-edit.ts` writes, `corrections.ts` reads (D54, replacing D35). Anyone in a group with the game on their shelf, or a co-admin or owner of a group that shows it, can edit a hand-entered or Wikidata game. Name, players, play time and a complexity (light, medium or heavy, stored in `weight` as 1.5, 2.5 or 4, D55; choosing the level a game already has keeps its value) go on the shared `games` row with `edited_by` and `edited_at`, and `bumpCatalogForGames` refreshes every group with a copy. Only changed fields are written, and an empty field leaves the row's value. A renamed game keeps its earlier titles in `search_text`, so pasted lists still match them. The image is that group's `game_corrections` row (an unchanged image keeps whoever set it), and clearing the field removes it. Rows that groups corrected for themselves before D54 still apply through `applyCorrection` (catalog, game page, Wanted, pasted lists, plays and nights exports), never over BGG data; saving the form moves their values onto the row and keeps only the image. A Wikidata refresh skips rows with `edited_at`. The game page lists what's missing above the edit link, and "Details last edited by" names the latest editor (this group's image or the row) only if they're a member of this group, otherwise "someone outside this group".
 - **Paste a list.** `src/lib/server/game-list.ts`. One title per line, optionally `| players | minutes` or tab-separated, up to 200 lines. Each line is checked against the person's shelf, then the group's games, then stored BGG and Wikidata games (exact title or alternate title), then Wikidata; whatever's left becomes a typed-in game, with Wikidata's closest title offered as a swap. Other groups' hand-entered games never match. The browser sends 10 lines per match call and 25 rows per add call: a Wikidata lookup is two subrequests, and Cloudflare's free plan allows 50 per request. D1 on the free plan also allows 50 queries per request (a `batch()` counts as one), so a match call looks up all its stored titles in one query and an add call is one check plus one batch. Stored titles match on whole `|`-separated segments of `search_text` with `instr()`, not `LIKE`: D1 refuses LIKE patterns over 50 bytes, which long titles reach. On the add page it's the "Paste a list" row of the ways-to-add panel, folded except on a new member's empty shelf without BGG (DESIGN.md "Add games").
 - **Credit and privacy.** The footer says "Game details from Wikidata" (CC0, so not required). The privacy page says searched titles go to Wikidata.
 

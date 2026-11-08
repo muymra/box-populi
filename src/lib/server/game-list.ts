@@ -76,7 +76,7 @@ const toMatched = (r: GameRow): MatchedGame => ({
 
 /**
  * Stored games whose title or an alternate title is exactly one of `titles` (normalized), keyed by
- * that title, with this group's corrections (D35): a game the group renamed matches its new name
+ * that title, with this group's corrections from before D54 (D35): a game the group renamed matches its new name
  * too, and shows it. One query for the whole chunk. It matches whole "|"-separated segments of
  * search_text with instr(), not LIKE: D1 refuses LIKE patterns over 50 bytes, and a substring
  * match with a LIMIT can miss the exact row for a short title.

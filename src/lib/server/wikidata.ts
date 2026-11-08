@@ -192,8 +192,8 @@ type CachedRow = { id: number; bgg_id: number | null; wikidata_id: string | null
 /**
  * Stores Wikidata games in the games cache so they can be added like any other, and returns
  * their game ids by Wikidata id. A game already known by its BGG id is linked, not replaced: BGG
- * data stays BGG data. Groups' corrections live apart (game_corrections, D35), so a refresh never
- * touches them; a row edited directly before D35 isn't refreshed. Wikidata items
+ * data stays BGG data. A row a member has edited (edited_at, D54) isn't refreshed, and groups'
+ * pictures live apart in game_corrections, so a refresh never touches either. Wikidata items
  * that share a BGG id (an edition and the game, say) map to one game, the best-ranked item's.
  */
 export async function cacheWikidataGames(db: DB, found: WikidataGame[], now: number): Promise<Map<string, number>> {
