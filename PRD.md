@@ -57,7 +57,7 @@ A copy belongs to the user, not the group. When someone is in two groups, their 
 
 ### Saturday: the core
 
-1. Identity without accounts: a display name, a device that stays signed in, and a sign-in link for other devices.
+1. Identity without accounts: a display name, a device that stays signed in, and a six-digit PIN for getting back in through a group's link on any other device (D47).
 2. Create a group; get a code. Join a group by code or by `/join/<code>` link.
 3. Add a game by searching BGG. Add a game by hand when BGG has no match or is unreachable.
 4. Group catalog with search and filters.
@@ -111,8 +111,8 @@ Ratings and reviews, a trading marketplace, chat, notifications, a native app, c
 ### Groups and codes
 
 - The code is five characters from an alphabet without lookalikes (no 0/O, 1/I/L), shown uppercase and matched case-insensitively. Example: `K7M4P`.
-- Join flow: open `/join/K7M4P` (or type the code) and see the group's name, members and games. Two ways on from there (D46): "New to the group?" takes a display name and joins; "Already in it on another device?" says not to join again but to open your sign-in link, and how to get a new one. A device that's already signed in joins in one tap, "Join as Ada", with "Not Ada?" beside it. The code page itself has the same second way: "Already in a group, on a new device? You don't need a code."
-- Creating a group leads to a ready page: the group's code and invite link to share, and for someone new their sign-in link beside it, marked "Only for you", then "Add your games" (D46).
+- Join flow: open `/join/K7M4P` (or type the code): the group's front door, which serves joining and coming back alike (D47). It shows the group's name, members and games, then "New to the group?", which takes a display name and a six-digit PIN and goes straight into the group, and "Already in it?", the members' names in their colours: tap yours and type your PIN, on any device. A member who hasn't set a PIN is told to set one on a signed-in device or open a sign-in link. A device that's already signed in joins in one tap, "Join as Ada", with "Not Ada?" beside it.
+- Creating a group asks someone new for their name and a PIN too, then leads to a ready page: the group's code and invite link to share, then "Add your games" (D46, D47).
 - Signed in, the home page is Your groups: a card per group with its members' colours, its member and game counts, your role when you're the owner or a co-admin, and its next game night ("Friday: At Bram's · 20:00"). Under the cards, "Another group": join with a code, or create one.
 - The code is a shared secret, so failed join attempts are rate-limited per network address (an IPv6 /64 counts as one address) and across the whole instance.
 - The owner or a co-admin can regenerate the code, which invalidates the old one. Existing members are unaffected.
@@ -130,6 +130,7 @@ Every group has exactly one owner, who starts as the creator. The owner promotes
 | Remove a member | no | yes | yes |
 | Remove a co-admin | no | no | yes |
 | Delete any link | no | yes | yes |
+| Make a sign-in code for a member, or merge a member's old entry (D48) | no | for members | for anyone but themselves |
 | Promote or demote co-admins | no | no | yes |
 | Transfer ownership | no | no | yes |
 | Delete the group | no | no | yes |
@@ -137,9 +138,10 @@ Every group has exactly one owner, who starts as the creator. The owner promotes
 Rules that follow from the table:
 
 - A co-admin can't remove the owner or another co-admin. The owner demotes first, then removes.
-- Nobody can promote themselves.
+- Nobody can promote themselves. Making someone a co-admin, or back to a member, asks for confirmation first, and handing over ownership asks for the new owner's name to be typed.
 - Admins can't edit or delete anyone's copies. A game on someone's shelf is theirs to manage. Removing the member hides all their copies from the group.
 - Removing a member doesn't block them from rejoining with the same code. To lock someone out, remove them and regenerate the code.
+- Sign-in codes and merging reach only people in this group and no other (D48): a person is one identity across all their groups, and a group's owner and co-admins have a say only in their own. The owner and co-admins also see who hasn't set a PIN yet ("No PIN yet" on the Group tab).
 - Transferring ownership asks the owner to pick a current member and confirm. The previous owner becomes a co-admin.
 - The owner can't leave or delete their account while other members remain. They transfer ownership first, or delete the group.
 - Leaving a group you're the only member of deletes it, with its code and links. The account page warns before it happens.
@@ -277,7 +279,7 @@ On Carlo's instance, `/demo` shows a read-only group of about 430 invented games
 - The repository holds everything needed to run an instance: code, migrations, example config, and SELF_HOSTING.md.
 - A hoster needs a free Cloudflare account, and optionally their own BGG application for search and import. There's no sign-in provider to set up. No instance depends on Carlo's, and no secrets or ids from Carlo's deployment are in the repo.
 - BGG's terms make an instance commercial if it takes any payment or donation, shows ads, or supports a business or event such as a game store, café or convention, even a non-profit one. Those hosters need BGG's commercial license, or must run with BGG switched off.
-- Instance settings: name, contact address, admin key, whether anyone or only the hoster can create groups, limits on groups per person and members per group, BGG on or off, the game source while BGG is off (`GAME_SOURCE`), the default theme (`THEME`), whether search engines may index it (`SEARCH_ENGINES`), and demo mode (`INSTANCE_MODE`). A custom theme and logo are set on `/admin`. TECH.md's config table has the names.
+- Instance settings: name, contact address, admin key, whether only the hoster (the default) or anyone can create groups, limits on groups per person and members per group, BGG on or off, the game source while BGG is off (`GAME_SOURCE`), the default theme (`THEME`), whether search engines may index it (`SEARCH_ENGINES`), and demo mode (`INSTANCE_MODE`). A custom theme and logo are set on `/admin`. TECH.md's config table has the names.
 - Upgrading is pull, apply migrations, deploy. SELF_HOSTING.md has the commands.
 - The privacy page is generated from the instance settings, so it names the hoster's instance and contact, not Carlo's.
 
@@ -293,8 +295,10 @@ Hosters need to deal with abuse and keep the instance within its free tier witho
 ### Account
 
 - People choose a display name when they create or join a group and can change it on the account page.
-- **Sign-in link** (the personal link of D25; named for what it does since D46, so it reads apart from the invite link). Shown once after joining (the welcome page) or creating (the ready page, beside the group's invite), with a copy button, "Only for you" and a reminder that it signs in as you, so it stays out of the group chat. Opening it on another device and confirming signs in there. The account page makes a new one, which kills the old one, and has "sign out everywhere."
-- **Losing every device** without the link means rejoining with the group code as a new person and re-importing from BGG; a group admin removes the old entry. Nobody, including admins, can sign in as someone else.
+- **PIN** (D47). Six digits, chosen when joining or creating a group; with any of your groups' links it gets you back in on any device. Your account sets or changes it from a signed-in device. Five wrong PINs for a person lock their name for 15 minutes; a network and the whole instance have limits too. Members' names show on a group's join page to anyone with its code, so they can tap theirs.
+- **Sign-in link** (the personal link of D25; named for what it does since D46). A backup way in: Your account makes one, for a password manager, and it works without a group's link. Making a new one stops the last and signs out every other device. Nobody is shown one when joining any more.
+- **Losing every device** is fine with your PIN: open a group's link, tap your name, type it. Without the PIN, the group's owner or a co-admin makes a one-time sign-in code (it works once, for 10 minutes), which you type at the door instead, then pick a new PIN (D48). Someone who joined again as a new person is merged back: the owner or a co-admin moves the old entry's games, plays, nights and wishlist onto the new one, which keeps the old colour. Both only for people in that group alone. Nobody signs in as anyone without that person's PIN, link or a code an admin hands them.
+- **Setting a PIN:** members without one see a note on the shelf ("Set a PIN so you can get back in on any device") until they set one or choose "Not now" on that device for two weeks.
 - A user can delete their account, which removes their copies, wishlist entries, memberships and sessions. Links they added stay, attributed to "former member." An owner of a group with other members must transfer ownership or delete the group first.
 
 ## Access and privacy

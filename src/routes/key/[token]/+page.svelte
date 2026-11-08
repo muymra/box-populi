@@ -25,7 +25,7 @@
 			<p class="muted">It may have been replaced by a newer one.</p>
 		</header>
 		<div class="steps">
-			<p>If you have another device that’s still signed in, make a new sign-in link from its account page.</p>
+			<p>Open your group’s link instead, tap your name and type your PIN. Or make a new sign-in link on a device where you’re still signed in.</p>
 			<p>Otherwise, <a href="/join">join your group again with its code</a> and ask a group admin to remove your old entry.</p>
 		</div>
 	{:else if data.alreadyYou}

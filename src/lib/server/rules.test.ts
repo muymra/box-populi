@@ -63,7 +63,18 @@ describe('permissions', () => {
 		['member', 'change_night', undefined, false, false],
 		['admin', 'change_night', undefined, false, true],
 		['member', 'set_night_planners', undefined, false, false],
-		['admin', 'set_night_planners', undefined, false, true]
+		['admin', 'set_night_planners', undefined, false, true],
+		// sign-in codes and merging (D48) reach whom removing reaches
+		['owner', 'make_sign_in_code', 'admin', false, true],
+		['owner', 'make_sign_in_code', 'owner', true, false],
+		['admin', 'make_sign_in_code', 'member', false, true],
+		['admin', 'make_sign_in_code', 'admin', false, false],
+		['member', 'make_sign_in_code', 'member', false, false],
+		['owner', 'merge_member', 'member', false, true],
+		['admin', 'merge_member', 'member', false, true],
+		['admin', 'merge_member', 'admin', false, false],
+		['admin', 'merge_member', 'member', true, false],
+		['member', 'merge_member', 'member', false, false]
 	];
 	it.each(cases)('%s %s on %s (self=%s) → %s', (actor, action, targetRole, targetIsSelf, expected) => {
 		expect(can(actor, action, { targetRole, targetIsSelf })).toBe(expected);
@@ -93,7 +104,7 @@ describe('instance config', () => {
 		if (!result.ok) return;
 		expect(result.config).toMatchObject({
 			instanceName: 'Box Populi',
-			groupCreation: 'anyone',
+			groupCreation: 'admins',
 			maxGroupsPerUser: 5,
 			maxMembersPerGroup: 100,
 			bggMinIntervalMs: 2000

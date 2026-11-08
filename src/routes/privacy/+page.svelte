@@ -18,7 +18,7 @@
 	<section class="short" aria-labelledby="short-h">
 		<h2 id="short-h">The short version</h2>
 		<ul>
-			<li>No accounts, emails or passwords: a name you choose, and a cookie on each device you use.</li>
+			<li>No accounts, emails or passwords: a name you choose, a six-digit PIN, and a cookie on each device you use.</li>
 			<li>The people in your groups see your name, games, loans, wishlist, plays and game nights. Nobody else does.</li>
 			<li>The host's admin page shows counts, not people or collections. The host runs the database, though.</li>
 			<li>You can delete your account at any time from your account page.</li>
@@ -41,9 +41,17 @@
 			Game nights planned in a group: the date and place, who's going or not, guests' names, and which games each person
 			is bringing, including titles typed in for games that aren't on anyone's shelf.
 		</li>
+		<li>
+			The six-digit PIN you choose, for getting back in through a group's link. The server stores only a scrambled fingerprint of
+			it, never the digits.
+		</li>
+		<li>
+			If your group's owner or a co-admin makes you a one-time sign-in code, its fingerprint, until you use it or ten minutes
+			pass.
+		</li>
 		<li>A cookie that keeps this device signed in. The server stores only a scrambled fingerprint of it, and the same for your sign-in link.</li>
 		<li>
-			Network addresses that tried a wrong join code, sign-in link or admin key, or created a group, and how often you searched
+			Network addresses that tried a wrong join code, PIN, sign-in link or admin key, or created a group, and how often you searched
 			for games, matched a pasted list or imported from BoardGameGeek. These are kept for about a day, to slow down guessing
 			and to stay within the game sources' limits.
 		</li>
@@ -56,8 +64,9 @@
 	<h2 id="who">Who can see it</h2>
 	<p>
 		Members of a group see each other's names, games, loans and wishlists, the links added to games, the group's game nights and its plays.
-		Any member can download the plays as a spreadsheet file, which names everyone in them. Nobody outside a group can see
-		inside it. The demo group is the exception: it's public and contains no real people.
+		Any member can download the plays as a spreadsheet file, which names everyone in them. Anyone with a group's code sees
+		its members' names on its join page, so they can tap their own. A group's owner and co-admins see who hasn't set a PIN yet.
+		Nobody outside a group can see inside it. The demo group is the exception: it's public and contains no real people.
 	</p>
 	<p>
 		The host's admin page shows totals and, per group, its name, number of members and games, and last activity. It

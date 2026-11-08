@@ -76,7 +76,8 @@ export function parseInstanceConfig(env: Record<string, unknown>, opts: { dev: b
 	const themeRaw = str(env, 'THEME') || DEFAULT_THEME;
 	if (!isThemeId(themeRaw)) errors.push(`THEME must be one of the preset ids in src/lib/themes.ts (got "${themeRaw}").`);
 
-	const groupCreationRaw = str(env, 'GROUP_CREATION') || 'anyone';
+	// Hoster-only unless set otherwise: a public site shouldn't let strangers start groups by default.
+	const groupCreationRaw = str(env, 'GROUP_CREATION') || 'admins';
 	if (groupCreationRaw !== 'anyone' && groupCreationRaw !== 'admins') {
 		errors.push(`GROUP_CREATION must be "anyone" or "admins" (got "${groupCreationRaw}").`);
 	}
@@ -108,7 +109,7 @@ export function parseInstanceConfig(env: Record<string, unknown>, opts: { dev: b
 	const config: InstanceConfig = {
 		instanceName: str(env, 'INSTANCE_NAME') || 'Box Populi',
 		instanceContact,
-		groupCreation: groupCreationRaw === 'admins' ? 'admins' : 'anyone',
+		groupCreation: groupCreationRaw === 'anyone' ? 'anyone' : 'admins',
 		maxGroupsPerUser: int('MAX_GROUPS_PER_USER', 5, 1),
 		maxMembersPerGroup: int('MAX_MEMBERS_PER_GROUP', 100, 2),
 		adminKey,

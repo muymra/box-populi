@@ -4,6 +4,11 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+- A member's Manage panel on the Group tab is grouped: role as Member | Co-admin with "Make owner…", getting in (PIN status, sign-in code, or why not), and merge and remove at the foot, one confirmation at a time. Opening it no longer moves the settings panel. Making someone a co-admin asks first, and handing over ownership asks you to type their name.
+- Members without a PIN see a note on the shelf to set one; the owner and co-admins see "No PIN yet" beside them on the Group tab.
+- An owner or co-admin can make a one-time sign-in code for a member who lost their PIN and every device, and merge someone's old entry into the new one they joined as. Both only for people in that group alone. Needs migration 0009.
+- Only the hoster creates groups unless `GROUP_CREATION=anyone` is set. **Upgrading:** instances that never set `GROUP_CREATION` and want anyone to create groups must now set it to `anyone`.
+- A group's link is now its front door for joining and for coming back: new people pick a name and a six-digit PIN; on another device, tap your name and type your PIN. Existing members set a PIN in Your account. Joining no longer stops at a "save your sign-in link" page; the sign-in link is a backup Your account can make, and existing links keep working. Needs migration 0008.
 - The version in the footer sits on the line with Privacy and Source again, not on a third line of its own.
 - The landing page shows the app: the example shelf, then finding what fits, planning a night, keeping score and joining without an account, each beside a small piece of the app with invented games. A visitor to a private instance sees the new hero.
 - Signing in looks like the rest of the app: "Not signed in" leads with your sign-in link, a link's page says whose it is and which groups it opens, and after "Sign out everywhere" one button signs this device back in.

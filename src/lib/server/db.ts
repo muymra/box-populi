@@ -42,6 +42,7 @@ export function deleteGroupStatements(db: DB, groupId: string): D1PreparedStatem
 		stmt(db, 'DELETE FROM night_games WHERE night_id IN (SELECT id FROM game_nights WHERE group_id = ?1)', groupId),
 		stmt(db, 'DELETE FROM night_people WHERE night_id IN (SELECT id FROM game_nights WHERE group_id = ?1)', groupId),
 		stmt(db, 'DELETE FROM game_nights WHERE group_id = ?1', groupId),
+		stmt(db, 'DELETE FROM sign_in_codes WHERE group_id = ?1', groupId),
 		stmt(db, 'DELETE FROM memberships WHERE group_id = ?1', groupId),
 		stmt(db, 'DELETE FROM groups WHERE id = ?1', groupId)
 	];
@@ -60,6 +61,8 @@ export function deletePersonStatements(db: DB, userId: string): D1PreparedStatem
 	return [
 		stmt(db, 'DELETE FROM sessions WHERE user_id = ?1', userId),
 		stmt(db, 'DELETE FROM personal_links WHERE user_id = ?1', userId),
+		stmt(db, 'DELETE FROM sign_in_codes WHERE user_id = ?1', userId),
+		stmt(db, 'UPDATE sign_in_codes SET created_by = NULL WHERE created_by = ?1', userId),
 		stmt(db, 'DELETE FROM memberships WHERE user_id = ?1', userId),
 		stmt(db, 'DELETE FROM copies WHERE user_id = ?1', userId),
 		stmt(db, 'DELETE FROM wishlist WHERE user_id = ?1', userId),

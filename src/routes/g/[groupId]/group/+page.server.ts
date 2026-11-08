@@ -16,6 +16,7 @@ import {
 } from '#lib/server/group-admin.ts';
 import { one, type DB } from '#lib/server/db.ts';
 import { setNightPlanners } from '#lib/server/nights.ts';
+import { formatSignInCode, makeSignInCode, memberReach, mergeMember, recoveryTools } from '#lib/server/recovery.ts';
 import { getDb } from '#lib/server/platform.ts';
 import type { Actions, PageServerLoad, RequestEvent } from './$types';
 
@@ -23,10 +24,11 @@ export const load: PageServerLoad = async (event) => {
 	const db = getDb();
 	const { groupId } = event.params;
 	const access = await requireRead(event, db, groupId);
-	const [members, counts, settings] = await Promise.all([
+	const [members, counts, settings, reach] = await Promise.all([
 		loadMembers(db, groupId),
 		gameCounts(db, groupId),
-		one<{ nights_by: 'members' | 'admins' }>(db, 'SELECT nights_by FROM groups WHERE id = ?1', groupId)
+		one<{ nights_by: 'members' | 'admins' }>(db, 'SELECT nights_by FROM groups WHERE id = ?1', groupId),
+		memberReach(db, groupId)
 	]);
 	const me = event.locals.user;
 	// Controls only for members of a writable group; the server checks every action again anyway.
@@ -45,7 +47,20 @@ export const load: PageServerLoad = async (event) => {
 			lastSeenAt: m.lastSeenAt,
 			games: counts.get(m.id) ?? 0,
 			isMe: m.id === me?.id,
-			actions: actor ? memberActions(actor, m) : []
+			actions: actor ? memberActions(actor, m) : [],
+			// For the owner and co-admins only: who still needs a PIN, and who can be helped back in (D48).
+			noPin: actor != null && actor.role !== 'member' && reach.get(m.id)?.hasPin === false,
+			tools: actor ? recoveryTools(actor, m, reach.get(m.id)?.groups ?? 0) : [],
+			// Why the helping-back-in tools aren't offered, said in the panel rather than left out silently.
+			helpNote:
+				actor && actor.role !== 'member' && m.id !== me?.id
+					? (reach.get(m.id)?.groups ?? 0) > 1
+						? ('other_group' as const)
+						: recoveryTools(actor, m, 1).length === 0
+							? ('role' as const)
+							: null
+					: null,
+			joinedAt: reach.get(m.id)?.joinedAt ?? 0
 		}))
 	};
 };
@@ -97,8 +112,27 @@ export const actions: Actions = {
 	},
 
 	transfer: async (event) => {
-		const result = await act(event, 'owner', (db, id, actor, form) => transferOwnership(db, id, actor, target(form)));
+		const result = await act(event, 'owner', (db, id, actor, form) => transferOwnership(db, id, actor, target(form), form.get('confirmName')));
 		return result.ok ? { memberChanged: true } : fail(400, { memberError: result.error });
+	},
+
+	/** A one-time sign-in code for a member who lost their PIN and every device (D48), shown once. */
+	signInCode: async (event) => {
+		const db = getDb();
+		const { groupId } = event.params;
+		const access = await requireRole(event, db, groupId, 'admin');
+		const userId = target(await event.request.formData());
+		const made = await makeSignInCode(db, groupId, { id: event.locals.user!.id, role: access.role }, userId, Date.now());
+		if (!made.ok) return fail(400, { memberError: made.error });
+		event.setHeaders({ 'cache-control': 'no-store' });
+		return { signInCode: { userId, name: made.name, code: formatSignInCode(made.code), expiresAt: made.expiresAt } };
+	},
+
+	merge: async (event) => {
+		const result = await act(event, 'admin', (db, id, actor, form) =>
+			mergeMember(db, id, actor, { oldId: target(form), newId: String(form.get('intoId') ?? '') })
+		);
+		return result.ok ? { merged: true } : fail(400, { memberError: result.error });
 	},
 
 	remove: async (event) => {

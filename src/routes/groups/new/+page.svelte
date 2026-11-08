@@ -2,6 +2,7 @@
 	// Creating a group: its name and, for someone new, theirs. Then the ready page, with the code to
 	// invite people (D46).
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
+	import { PIN_LENGTH } from '#lib/pin.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -34,6 +35,15 @@
 						<input id="displayName" class="field" name="displayName" required maxlength="40" autocomplete="nickname" placeholder="Ada" value={form?.displayName ?? ''} />
 					</div>
 				</div>
+				<div class="form-row">
+					<div class="form-label">
+						<label class="form-q" for="pin">Pick a PIN</label>
+						<span class="hint">Six digits. With your group’s link and your PIN you can get back in on any device. Not your bank card’s.</span>
+					</div>
+					<div class="form-body">
+						<input id="pin" class="field pin" name="pin" required inputmode="numeric" pattern={`[0-9]{${PIN_LENGTH}}`} maxlength={PIN_LENGTH} autocomplete="off" placeholder="123456" />
+					</div>
+				</div>
 			{/if}
 			{#if form?.error}<div class="form-block"><p class="banner error" role="alert">{form.error}</p></div>{/if}
 			<div class="form-foot indent">
@@ -58,5 +68,10 @@
 	}
 	.field {
 		max-width: 28rem;
+	}
+	.pin {
+		max-width: 12rem;
+		letter-spacing: 0.3em;
+		font-variant-numeric: tabular-nums;
 	}
 </style>

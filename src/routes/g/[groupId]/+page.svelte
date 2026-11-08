@@ -9,6 +9,7 @@
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import X from '@lucide/svelte/icons/x';
+	import KeyRound from '@lucide/svelte/icons/key-round';
 	import Modal from '#lib/components/Modal.svelte';
 	import Cube from '#lib/components/Cube.svelte';
 	import ListRow from '#lib/components/ListRow.svelte';
@@ -101,6 +102,19 @@
 		if (filters.stale) list.push({ key: 'stale', label: 'Not played lately', remove: () => (filters.stale = false) });
 		return list;
 	});
+
+	// Members without a PIN are asked to set one, so a new phone can't lock them out (D47, D48). Shown
+	// once in the browser, and "Not now" hides it on this device for two weeks.
+	const NUDGE_KEY = 'bp:pin-nudge';
+	let pinNudge = $state(false);
+	onMount(() => {
+		const hiddenAt = Number(storage.get(NUDGE_KEY) ?? 0);
+		pinNudge = !data.myPinSet && !data.readonly && Date.now() - hiddenAt > 14 * 86_400_000;
+	});
+	function notNow() {
+		storage.set(NUDGE_KEY, String(Date.now()));
+		pinNudge = false;
+	}
 
 	// On a phone More is a sheet from the bottom, with the count at hand; from 760px it opens under the strip.
 	let phone = $state(false);
@@ -196,6 +210,17 @@
 		filters.expansions = true;
 	}
 </script>
+
+{#if pinNudge}
+	<aside class="pin-nudge" aria-label="Set a PIN">
+		<KeyRound size={20} aria-hidden="true" />
+		<p><strong>Set a PIN</strong> so you can get back in on any device: open this group’s link, tap your name, type it.</p>
+		<div class="nudge-actions">
+			<a class="btn small" href="/me#pin-row">Set a PIN</a>
+			<button type="button" class="link-button" onclick={notNow}>Not now</button>
+		</div>
+	</aside>
+{/if}
 
 <section class="strip" aria-label="Filters">
 	<label class="search">
@@ -354,6 +379,32 @@
 {/if}
 
 <style>
+	/* The PIN nudge: a note above the strip, its actions at the right (under the words on phones). */
+	.pin-nudge {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--s-2) var(--s-3);
+		margin-bottom: var(--s-3);
+		padding: var(--s-3) var(--s-4);
+		background: var(--note);
+		border-radius: 10px;
+	}
+	.pin-nudge p {
+		flex: 1;
+		min-width: 14rem;
+		margin: 0;
+	}
+	.nudge-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--s-3);
+	}
+	.nudge-actions .link-button {
+		min-height: 36px;
+		font-weight: 650;
+	}
+
 	/* The dark shelf label strip holding search and filters */
 	.strip {
 		background: var(--label);

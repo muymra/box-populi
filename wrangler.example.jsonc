@@ -22,7 +22,7 @@
 		"BGG_MIN_INTERVAL_MS": "2000",
 		"INSTANCE_NAME": "Box Populi",
 		"INSTANCE_CONTACT": "mailto:you@example.com",
-		"GROUP_CREATION": "anyone",
+		"GROUP_CREATION": "admins",
 		// "demo" makes the home page introduce the demo group and link to GitHub instead of joining.
 		"INSTANCE_MODE": "standard",
 		// "block" asks search engines not to index this instance (robots.txt and X-Robots-Tag).

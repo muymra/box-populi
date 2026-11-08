@@ -4,13 +4,16 @@ export const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export const CODE_LENGTH = 5;
 
 /** Uniform random code. Bytes ≥ 248 are rejected so each character is equally likely (248 = 8 × 31). */
-export function generateCode(randomBytes: (n: number) => Uint8Array = (n) => crypto.getRandomValues(new Uint8Array(n))): string {
+export function generateCode(
+	randomBytes: (n: number) => Uint8Array = (n) => crypto.getRandomValues(new Uint8Array(n)),
+	length = CODE_LENGTH
+): string {
 	let code = '';
-	while (code.length < CODE_LENGTH) {
-		for (const byte of randomBytes(CODE_LENGTH * 2)) {
+	while (code.length < length) {
+		for (const byte of randomBytes(length * 2)) {
 			if (byte >= 248) continue;
 			code += CODE_ALPHABET[byte % CODE_ALPHABET.length];
-			if (code.length === CODE_LENGTH) break;
+			if (code.length === length) break;
 		}
 	}
 	return code;

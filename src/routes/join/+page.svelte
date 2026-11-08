@@ -1,6 +1,5 @@
 <script lang="ts">
-	// Joining starts with the group's code; signing in on another device doesn't need one, so that way
-	// in sits beside the form (D46).
+	// The group's code opens its front door (D46, D47), for joining and for coming back on a new device.
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -46,9 +45,9 @@
 		</form>
 
 		<section class="other-door" aria-labelledby="other-h">
-			<h2 id="other-h">Already in a group, on a new device?</h2>
-			<p>You don’t need a code. Open your <strong>sign-in link</strong> on this device. It was on the page you saw after you joined.</p>
-			<p>Lost it? On a device where you’re still signed in, go to Your account and make a new sign-in link.</p>
+			<h2 id="other-h">Already in the group, on a new device?</h2>
+			<p>Use the code here too. On the next page, <strong>tap your name and type your PIN</strong>.</p>
+			<p>Saved a sign-in link instead? Open it on this device.</p>
 		</section>
 	</div>
 </div>

@@ -33,16 +33,33 @@ export function cleanDisplayName(raw: unknown): string | null {
 	return name;
 }
 
+/** A PIN's fingerprint (D47). Plain salted SHA-256: a slow hash wouldn't fit Workers' CPU limit, and the
+ * digits are guarded where it counts, by the front door's limits on wrong tries (`pins.ts`). */
+export async function pinHash(pin: string, salt: string): Promise<string> {
+	return sha256Hex(`${salt}:${pin}`);
+}
+
 /**
- * Statements that create a person with a session on this device and a personal link.
+ * Statements that create a person with a session on this device and a personal link, and a PIN when
+ * they chose one (D47).
  * Run them in one batch together with whatever membership the person is joining with.
  */
-export async function newPersonStatements(db: DB, name: string, now: number) {
+export async function newPersonStatements(db: DB, name: string, now: number, pin: string | null = null) {
 	const id = crypto.randomUUID();
 	const sessionToken = randomToken();
 	const linkToken = randomToken();
+	const salt = pin ? randomToken() : null;
 	const statements = [
-		stmt(db, 'INSERT INTO users (id, name, created_at) VALUES (?1, ?2, ?3)', id, name, now),
+		stmt(
+			db,
+			'INSERT INTO users (id, name, created_at, pin_hash, pin_salt, pin_set_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)',
+			id,
+			name,
+			now,
+			pin && salt ? await pinHash(pin, salt) : null,
+			salt,
+			pin ? now : null
+		),
 		stmt(db, 'INSERT INTO sessions (id, user_id, expires_at) VALUES (?1, ?2, ?3)', await sha256Hex(sessionToken), id, now + SESSION_DAYS * DAY_MS),
 		stmt(db, 'INSERT INTO personal_links (user_id, token_hash, created_at) VALUES (?1, ?2, ?3)', id, await sha256Hex(linkToken), now)
 	];

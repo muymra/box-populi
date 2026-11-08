@@ -21,7 +21,7 @@
 		"BGG_MIN_INTERVAL_MS": "2000",
 		"INSTANCE_NAME": "Box Populi",
 		"INSTANCE_CONTACT": "mailto:you@example.com",
-		"GROUP_CREATION": "anyone",
+		"GROUP_CREATION": "admins",
 		"INSTANCE_MODE": "standard",
 		"SEARCH_ENGINES": "allow",
 		"THEME": "cube",

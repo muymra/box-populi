@@ -64,7 +64,7 @@ Yes. Add your games once and they show in every group you're in.
 
 ### What if I get a new phone or clear my browser?
 
-When you join, you're shown a sign-in link. Keep it somewhere safe, such as a note or a message to yourself. Opening it signs you back in on any device.
+When you join you pick a six-digit PIN. On another device, open your group's link, tap your name and type it. Your account can also make a sign-in link to keep in a password manager.
 
 ### Can we change how it looks?
 

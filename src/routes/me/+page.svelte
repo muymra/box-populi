@@ -2,6 +2,7 @@
 	// Your account (PRD "Identity"): your name, how you sign in elsewhere, your groups and loans, and
 	// deleting the account, as form panels like the rest of the app (DESIGN.md "Form panel").
 	import PersonalLink from '#lib/components/PersonalLink.svelte';
+	import { PIN_LENGTH } from '#lib/pin.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -35,18 +36,43 @@
 				{#if form?.renamed}<p class="muted" role="status">Saved.</p>{/if}
 			</div>
 		</div>
+		{#if data.viaCode && !form?.pinSaved}
+			<div class="form-block">
+				<p class="banner" role="status">You’re in with a code from your group’s admin. Pick a new PIN now, so next time you can get back in on your own.</p>
+			</div>
+		{/if}
+		<div class="form-row" id="pin-row">
+			<div class="form-label">
+				<label class="form-q" for="pin">PIN</label>
+				<span class="hint">With a group’s link and your PIN you can get back in on any device: tap your name, type your PIN.</span>
+			</div>
+			<div class="form-body">
+				<form method="POST" action="?/setPin" class="inline">
+					<input id="pin" class="field pin" name="pin" required inputmode="numeric" pattern={`[0-9]{${PIN_LENGTH}}`} maxlength={PIN_LENGTH} autocomplete="off" placeholder="123456" />
+					<button class="btn">{data.pinSetAt ? 'Change PIN' : 'Set PIN'}</button>
+				</form>
+				{#if form?.pinError}<p class="banner error" role="alert">{form.pinError}</p>{/if}
+				{#if form?.pinSaved}
+					<p class="muted" role="status">PIN saved.</p>
+				{:else if data.pinSetAt}
+					<p class="muted">Set {new Date(data.pinSetAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}. Six digits, not your bank card’s.</p>
+				{:else}
+					<p class="muted">Not set yet. Without one, getting in on another device needs your sign-in link.</p>
+				{/if}
+			</div>
+		</div>
 		<div class="form-row text-row" id="personal-link">
 			<div class="form-label">
 				<span class="form-q">Sign-in link</span>
-				<span class="hint">Signs you in on another device.</span>
+				<span class="hint">A backup way in, for a password manager.</span>
 			</div>
 			<div class="form-body">
 				{#if data.newLink}
 					<PersonalLink link={data.newLink} />
 				{:else}
 					<p>
-						Lost it, or think someone else has it? Make a new one. The old one stops working straight away, and every other device signed in as you is
-						signed out; use the new link to sign them back in.
+						Make one to keep in a password manager, for getting in without a group’s link. A new one replaces the last straight away and signs out every
+						other device; sign them back in with your PIN or the new link.
 					</p>
 					<form method="POST" action="?/newLink">
 						<button class="btn">Make a new sign-in link</button>
@@ -57,7 +83,7 @@
 		<div class="form-row">
 			<div class="form-label">
 				<span class="form-q">Sign out</span>
-				<span class="hint">Have your sign-in link first, or you’ll need to rejoin your groups.</span>
+				<span class="hint">Know your PIN first, or have a sign-in link, or you’ll need to rejoin your groups.</span>
 			</div>
 			<div class="form-body">
 				<div class="row">
@@ -195,6 +221,13 @@
 	.inline .field {
 		flex: 1;
 		min-width: 12rem;
+	}
+	.inline .field.pin {
+		flex: none;
+		min-width: 0;
+		width: 10rem;
+		letter-spacing: 0.3em;
+		font-variant-numeric: tabular-nums;
 	}
 	.row {
 		display: flex;

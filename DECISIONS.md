@@ -288,3 +288,24 @@ Carlo still likes join codes and links, but people couldn't tell which to use to
 **Trade-offs accepted:** the code and older docs still say "personal link"; someone who ignores the second door can still join twice, and a group admin removes the old entry; the join page shows the group's game count to anyone with the code.
 Later the same day the sign-in pages followed (Carlo's pick of "one sign-in look"): `/signin` is doors with the sign-in link as the main one and joining as plain buttons beside it; a link's confirm page names the person and their groups; welcome and signed-out share one column with the key panel.
 **Revisit if:** duplicate members keep turning up, which would earn the name check that was passed over.
+
+## D47. A front door with a PIN (2026-11-08)
+
+The screens of D46 explained the two links, but the model still asked people to save a long link at the moment they least cared, and the link they did have, the group's invite in the chat, made them a second person on a new phone. Carlo compared four ways in from a storyboard (a PIN at the group's door, a code from another signed-in device, passkeys, keeping the link) and took Claude's pick: the group's link is the front door for joining and for coming back. New people pick a name and a six-digit PIN and go straight into the group; returning people tap their name among the members and type their PIN, on any device, even after losing every one. Your account sets or changes the PIN from a signed-in device. The sign-in link stays as a backup Your account can make; it's no longer shown when joining, and the welcome page is gone. Existing links keep working; existing members set a PIN in Your account.
+**Why:** people already have the group's link, so it should do the right thing; and nothing should need saving at join time.
+**Trade-offs accepted:** anyone with a group's code sees its members' names, to tap their own; a PIN is something to remember; six digits are stored as a salted SHA-256, not a slow hash, because Workers' free plan can't spare the CPU and six digits fall to an offline search anyway, so the protection is the limits on online tries (5 wrong per person per 15 minutes, 10 per address per 10 minutes, 200 an hour across the instance); someone with the code can lock a name for 15 minutes by guessing.
+**Revisit if:** names on the door bother a group, lockouts get abused, or groups ask for a way back without a PIN, which is STATUS item 25 (admin recovery, scoped to people in one group).
+
+## D48. Helping members back in, within one group (2026-11-08)
+
+With the front door (D47), a member who forgets their PIN and loses every device, or who joined again as someone new, needed a way back that didn't let a group admin reach further than their group. Carlo asked for all three of Claude's suggestions: a note on the shelf and a "No PIN yet" tag on the Group tab so existing members set a PIN before they need it; a one-time sign-in code the owner or a co-admin makes for a member (eight characters, once, ten minutes), typed at the door instead of the PIN, then a new PIN; and merging an old entry into the new one, moving games, plays, nights, wishlist, links and edits, keeping the old colour and the higher role. Codes and merging reach whom removing reaches (the owner: anyone but themselves; a co-admin: members), and only people in this group and no other, because a person is one identity across groups while an admin's say stops at their own.
+**Why:** a PIN alone leaves no way back after forgetting it; duplicates from before D47 need cleaning up; and the reach of both must stop at the group.
+**Trade-offs accepted:** the admin who makes a code sees it and could use it, for ten minutes; someone in several groups can only be helped by themselves, from a signed-in device; a group whose owner loses everything has no way to recover the owner's entry (a co-admin can't reach the owner); a merge keeps the new entry's copy where both owned a game, so the old one's loan note on it goes.
+**Revisit if:** codes get misused, or people in several groups need help back in.
+
+## D49. Only the hoster creates groups, unless set otherwise (2026-11-08)
+
+`GROUP_CREATION` now defaults to `admins` (Carlo): on a fresh instance only the hoster, signed in to `/admin`, creates groups; everyone else joins with a code. `anyone` still opens creation to every visitor. Pages offering "Create a group" (the landing hero, Your groups, `/signin`) show it only when the visitor may.
+**Why:** a public site shouldn't let strangers start groups by default; most instances are one group's or a few friends'.
+**Trade-offs accepted:** an instance that never set the variable closes creation at its next deploy, so the changelog's upgrade note says to set `GROUP_CREATION=anyone` to keep it open.
+**Revisit if:** hosters mostly run open instances.

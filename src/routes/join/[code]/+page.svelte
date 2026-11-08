@@ -1,13 +1,27 @@
 <script lang="ts">
-	// Where an invite lands (PRD "Identity"). Two doors, because the commonest mix-up is someone who's
-	// already in the group, on a new phone, joining again and becoming a second person: "New to the
-	// group?" joins; "Already in it on another device?" sends them to their sign-in link instead (D46).
+	// A group's front door (D46, D47): the link in the group chat does both jobs. "New to Sandbox?"
+	// joins with a name and a PIN; "Already in Sandbox?" is the members' names: tap yours, type your
+	// PIN, on any device. Signed in, it's one tap: "Join as Ada".
+	import { untrack } from 'svelte';
+	import { playerColor } from '#lib/catalog/colors.ts';
+	import { PIN_LENGTH } from '#lib/pin.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
+
+	// After a wrong PIN or code, the name stays picked, and so does the way in that was tried.
+	let picked = $state(untrack(() => (form?.door === 'back' ? form.userId : '')));
+	let useCode = $state(untrack(() => form?.door === 'back' && form.usedCode));
+	let query = $state('');
+	const members = $derived(data.state === 'ok' || data.state === 'refused' ? data.members : []);
+	const shown = $derived(query.trim() ? members.filter((m) => m.name.toLowerCase().includes(query.trim().toLowerCase())) : members);
+	const pickedMember = $derived(members.find((m) => m.id === picked) ?? null);
+	// Someone without a PIN can only come in with a code from the group's owner or a co-admin (D48).
+	const codeMode = $derived(useCode || (pickedMember != null && !pickedMember.hasPin));
+	const canJoin = $derived(data.state === 'ok');
 </script>
 
-<svelte:head><title>Join {data.state === 'ok' || data.state === 'refused' ? data.groupName : 'a group'} · {data.instanceName}</title></svelte:head>
+<svelte:head><title>{data.state === 'ok' || data.state === 'refused' ? data.groupName : 'Join a group'} · {data.instanceName}</title></svelte:head>
 
 {#if data.state === 'limited'}
 	<section class="narrow">
@@ -20,57 +34,202 @@
 		<p>Check the code with whoever shared it. Codes are five letters and numbers, like K7M4P.</p>
 		<a class="btn" href="/join">Try another code</a>
 	</section>
-{:else if data.state === 'refused'}
-	<section class="narrow">
-		<h1>{data.groupName}</h1>
-		<p class="banner">{data.refusal}</p>
-	</section>
 {:else}
 	<div class="doors-page">
 		<header>
-			<h1>Join {data.groupName}</h1>
+			<h1>{data.groupName}</h1>
 			<p class="muted num">
-				{data.memberCount} {data.memberCount === 1 ? 'member' : 'members'} · {data.gameCount} {data.gameCount === 1 ? 'game' : 'games'} on the shelf
+				{data.memberCount} {data.memberCount === 1 ? 'member' : 'members'}{#if data.gameCount}{' · '}{data.gameCount} {data.gameCount === 1 ? 'game' : 'games'} on the shelf{/if}
 			</p>
 		</header>
+		{#if data.refusal}<p class="banner">{data.refusal}</p>{/if}
 
-		<div class="doors">
-			<form method="POST" class="form-panel" aria-labelledby="new-h">
-				<div class="form-head">
-					<div>
-						<h2 id="new-h">New to {data.groupName}?</h2>
-						{#if data.you}
-							<p>You’ll join as {data.you}, and your games go on the group’s shelf.</p>
-						{:else}
-							<p>Pick the name the group knows you by. There’s no email or password.</p>
-						{/if}
-					</div>
-				</div>
-				{#if !data.you}
-					<div class="form-row">
-						<div class="form-label"><label class="form-q" for="displayName">Your name</label></div>
-						<div class="form-body">
-							<input id="displayName" class="field" name="displayName" required maxlength="40" autocomplete="nickname" placeholder="Ada" value={form?.displayName ?? ''} />
+		<div class="doors" class:even={members.length > 0}>
+			{#if canJoin}
+				<form method="POST" action="?/join" class="form-panel" aria-labelledby="new-h">
+					<div class="form-head">
+						<div>
+							<h2 id="new-h">{data.you ? `Join ${data.groupName}` : `New to ${data.groupName}?`}</h2>
+							{#if data.you}
+								<p>You’ll join as {data.you}, and your games go on the group’s shelf.</p>
+							{:else}
+								<p>Pick the name the group knows you by, and a PIN. There’s no email or password.</p>
+							{/if}
 						</div>
 					</div>
-				{/if}
-				{#if form?.error}<div class="form-block"><p class="banner error" role="alert">{form.error}</p></div>{/if}
-				<div class="form-foot">
-					<div><button class="btn primary">{data.you ? `Join as ${data.you}` : `Join ${data.groupName}`}</button></div>
-				</div>
-			</form>
+					{#if !data.you}
+						<div class="form-row">
+							<div class="form-label"><label class="form-q" for="displayName">Your name</label></div>
+							<div class="form-body">
+								<input id="displayName" class="field" name="displayName" required maxlength="40" autocomplete="nickname" placeholder="Ada" value={form?.door === 'new' ? (form.displayName ?? '') : ''} />
+							</div>
+						</div>
+						<div class="form-row">
+							<div class="form-label">
+								<label class="form-q" for="newPin">Pick a PIN</label>
+								<span class="hint">Six digits. With this group’s link and your PIN you can get back in on any device. Not your bank card’s.</span>
+							</div>
+							<div class="form-body">
+								<input id="newPin" class="field pin" name="pin" required inputmode="numeric" pattern={`[0-9]{${PIN_LENGTH}}`} maxlength={PIN_LENGTH} autocomplete="off" placeholder="123456" />
+							</div>
+						</div>
+					{/if}
+					{#if form?.error && form.door === 'new'}<div class="form-block"><p class="banner error" role="alert">{form.error}</p></div>{/if}
+					<div class="form-foot">
+						<div><button class="btn primary">{data.you ? `Join as ${data.you}` : `Join ${data.groupName}`}</button></div>
+					</div>
+				</form>
+			{/if}
 
-			<section class="other-door" aria-labelledby="other-h">
-				{#if data.you}
+			{#if members.length}
+				<form method="POST" action="?/signin" class="form-panel" aria-labelledby="back-h">
+					<div class="form-head">
+						<div>
+							<h2 id="back-h">Already in {data.groupName}?</h2>
+							<p>Tap your name and type your PIN. It works on any device.</p>
+						</div>
+					</div>
+					<div class="form-block names-block">
+						{#if members.length > 12}
+							<input class="field find" type="search" placeholder="Find your name" aria-label="Find your name" bind:value={query} />
+						{/if}
+						<div class="names" role="radiogroup" aria-label="Your name">
+							{#each shown as m (m.id)}
+								<label class="name">
+									<input class="visually-hidden" type="radio" name="userId" value={m.id} bind:group={picked} />
+									<span class="dot" style:background={playerColor(m.colorIndex).fill}></span>{m.name}
+								</label>
+							{:else}
+								<p class="muted">Nobody here by that name.</p>
+							{/each}
+						</div>
+					</div>
+					{#if codeMode}
+						{#if pickedMember && !pickedMember.hasPin}
+							<div class="form-block">
+								<p class="note">
+									{pickedMember.name} hasn’t set a PIN yet. On a device where you’re signed in, Your account sets one. From here, ask the group’s owner or a
+									co-admin for a sign-in code, or open your sign-in link if you saved one.
+								</p>
+							</div>
+						{/if}
+						<div class="form-row">
+							<div class="form-label">
+								<label class="form-q" for="adminCode">Code from an admin</label>
+								<span class="hint">Eight letters and numbers. It works once; next you pick a new PIN.</span>
+							</div>
+							<div class="form-body">
+								<input id="adminCode" class="field code" name="adminCode" required maxlength="9" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K7M4-P2QX" />
+							</div>
+						</div>
+					{:else}
+						<div class="form-row">
+							<div class="form-label"><label class="form-q" for="pin">Your PIN</label></div>
+							<div class="form-body">
+								<input id="pin" class="field pin" name="pin" type="password" required inputmode="numeric" maxlength={PIN_LENGTH} autocomplete="current-password" />
+							</div>
+						</div>
+					{/if}
+					{#if form?.error && form.door === 'back'}<div class="form-block"><p class="banner error" role="alert">{form.error}</p></div>{/if}
+					<div class="form-foot">
+						<div><button class="btn primary">{pickedMember ? `Sign in as ${pickedMember.name}` : 'Sign in'}</button></div>
+						{#if !pickedMember || pickedMember.hasPin}
+							<p class="hint">
+								{#if useCode}
+									<button type="button" class="link-button" onclick={() => (useCode = false)}>Use my PIN</button>
+								{:else}
+									Forgot it? Your account sets a new one on a signed-in device, or
+									<button type="button" class="link-button" onclick={() => (useCode = true)}>use a code from an admin</button>.
+								{/if}
+							</p>
+						{/if}
+					</div>
+				</form>
+			{:else if data.you}
+				<section class="other-door" aria-labelledby="other-h">
 					<h2 id="other-h">Not {data.you}?</h2>
 					<p>This device is signed in as {data.you}. To join as someone else, sign out on <a href="/me">your account</a> first.</p>
-				{:else}
-					<h2 id="other-h">Already in {data.groupName} on another device?</h2>
-					<p>Don’t join again, or you’ll be in the group twice. Open your <strong>sign-in link</strong> on this device instead. It was on the page you saw after you joined.</p>
-					<p>Lost it? On a device where you’re still signed in, go to Your account and make a new sign-in link.</p>
-				{/if}
-			</section>
+				</section>
+			{/if}
 		</div>
 	</div>
 {/if}
 
+<style>
+	@media (min-width: 900px) {
+		.doors.even {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: var(--s-5);
+		}
+	}
+	/* Two forms side by side: their rows stack, question over answer, so neither column is cramped. */
+	.doors.even .form-row {
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--s-2);
+	}
+	.doors.even .form-label {
+		padding-top: 0;
+	}
+	.code {
+		max-width: 14rem;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+	}
+	.pin {
+		max-width: 12rem;
+		letter-spacing: 0.3em;
+		font-variant-numeric: tabular-nums;
+	}
+	.find {
+		max-width: 20rem;
+		margin-bottom: var(--s-3);
+	}
+	.names {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--s-2);
+	}
+	/* The person toggles from Who's here: a colour square and the name; marigold once picked. */
+	.name {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--s-2);
+		min-height: 40px;
+		padding: 0 14px 0 10px;
+		border-radius: 999px;
+		border: 1.5px solid var(--rule);
+		background: var(--laminate);
+		font-weight: 650;
+		cursor: pointer;
+	}
+	.name:hover {
+		border-color: var(--ink-3);
+	}
+	.name:has(:checked) {
+		background: var(--mark);
+		border-color: var(--mark);
+		color: var(--mark-ink);
+	}
+	.name:has(:focus-visible) {
+		outline: 2px solid var(--focus);
+		outline-offset: 2px;
+	}
+	.dot {
+		width: 14px;
+		height: 14px;
+		border-radius: 4px;
+		flex: none;
+	}
+	.note {
+		margin: 0;
+		padding: var(--s-3) var(--s-4);
+		border-radius: var(--r-ctl);
+		background: var(--note);
+	}
+	.form-foot .hint {
+		margin: 0;
+	}
+	.names-block .muted {
+		margin: 0;
+	}
+</style>

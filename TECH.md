@@ -64,7 +64,7 @@ box-populi/
   package.json  vite.config.ts  tsconfig.json  pnpm-workspace.yaml
   migrations/                   0001_init (schema below), 0002_game_sources, 0003_group_theme,
                                 0004_instance_settings, 0005_game_corrections, 0006_plays,
-                                0007_game_nights
+                                0007_game_nights, 0008_pins, 0009_sign_in_codes
   scripts/
     ensure-local-config.ts      creates the two gitignored config files on install
     seed-demo.ts                writes seed/demo.sql
@@ -187,7 +187,7 @@ The repo commits `wrangler.example.jsonc`. `pnpm install` copies it to `wrangler
 | `BGG_MIN_INTERVAL_MS` | var | `2000` | Minimum spacing between BGG requests across the whole instance. Values under 2000 are rejected, so the code can't be configured into hammering BGG. |
 | `INSTANCE_NAME` | var | `Box Populi` | Header, page titles, privacy page. |
 | `INSTANCE_CONTACT` | var | required | A `mailto:` or `https:` URL for reaching the hoster. Shown on the privacy page and on suspension notices. |
-| `GROUP_CREATION` | var | `anyone` | `anyone` or `admins`. With `admins`, only the hoster (signed in to `/admin`) creates groups; anyone can still join with a code. |
+| `GROUP_CREATION` | var | `admins` | `admins` or `anyone`. With `admins` (the default), only the hoster, signed in to `/admin`, creates groups; anyone can still join with a code. `anyone` lets every visitor create one. |
 | `INSTANCE_MODE` | var | `standard` | `standard` or `demo`. `demo` turns the home page into an introduction to the demo group, with links to the GitHub repo and SELF_HOSTING.md instead of joining, and the signed-out header link becomes "Run your own". For an instance that exists to show the demo. |
 | `SEARCH_ENGINES` | var | `allow` | `allow` or `block`. `block` serves a `robots.txt` that disallows everything and adds `X-Robots-Tag: noindex, nofollow` to every response, for an instance only its groups should know about. `allow` still disallows `/admin` and `/key/`. |
 | `THEME` | var | `cube` | The instance's default colour theme: `cube` or a preset id from `src/lib/themes.ts` (`dracula`, `catppuccin`, `solarized`, `gruvbox`, `tokyo-night`, `kanagawa`, `nord`, `everforest`, `rose-pine`, `one`, `github`, `ayu`). Each device can pick another from the footer; the choice lives in the `bp_theme` cookie. |
@@ -211,6 +211,8 @@ Bindings and variables come from `import { env } from 'cloudflare:workers'` (Sve
 - `0005_game_corrections.sql`: `game_corrections`, each group's corrections to a non-BGG game (D35; shown after `wishlist` below).
 - `0006_plays.sql`: `plays`, `play_players` and `groups.podium_points`, the play log (D37; shown after `game_links` below).
 - `0007_game_nights.sql`: `game_nights`, `night_people`, `night_games`, `plays.night_id` and `groups.nights_by` (D38; shown after the play log below).
+- `0008_pins.sql`: `users.pin_hash`, `pin_salt` and `pin_set_at`, the front door's PIN (D47).
+- `0009_sign_in_codes.sql`: `sign_in_codes`, one-time codes an owner or co-admin makes for a member (D48; shown after `personal_links` below).
 
 Timestamps are Unix milliseconds. JSON columns hold arrays and are written and read only through helpers in `db.ts`.
 
@@ -221,6 +223,7 @@ CREATE TABLE users (
   id          TEXT PRIMARY KEY,
   name        TEXT NOT NULL,      -- chosen when creating or joining a group; editable
   created_at  INTEGER NOT NULL
+  -- 0008: pin_hash TEXT, pin_salt TEXT, pin_set_at INTEGER (D47); all NULL until a PIN is set
 );
 
 -- The reusable personal link that signs a person in on another device. One per person;
@@ -229,6 +232,17 @@ CREATE TABLE personal_links (
   user_id     TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   token_hash  TEXT NOT NULL UNIQUE,
   created_at  INTEGER NOT NULL
+);
+
+-- 0009: a one-time sign-in code for a member who lost their PIN and every device (D48). One per
+-- person, for one group's front door, for ten minutes; only its SHA-256 is stored. Deleted
+-- explicitly with the person or the group (Turso runs no cascades).
+CREATE TABLE sign_in_codes (
+  user_id     TEXT PRIMARY KEY REFERENCES users(id),
+  group_id    TEXT NOT NULL REFERENCES groups(id),
+  code_hash   TEXT NOT NULL,
+  created_by  TEXT REFERENCES users(id),
+  expires_at  INTEGER NOT NULL
 );
 
 CREATE TABLE sessions (
@@ -441,7 +455,11 @@ Coming back to the shelf: `fetchCatalog()` keeps the last payload per group in m
 
 No accounts (D25). A person is a display name; a device proves who it is with a session cookie.
 
-**Creating or joining.** `/groups/new` and `/join/[code]` ask for a display name when the device has no session. The action creates the `users` row, the membership, a session and a personal link in one batch. The next page shows the personal link once, with a copy button and the advice to keep it like a password: `/welcome` after joining, `/g/[groupId]/ready` after creating, beside the group's invite. People see the personal link as the **sign-in link** (D46); the code and the older docs keep "personal link".
+**Creating or joining.** `/groups/new` and `/join/[code]` (action `join`) ask for a display name and a six-digit PIN when the device has no session. The action creates the `users` row with the PIN's fingerprint, the membership, a session and a personal link in one batch, and goes straight to the group (creating: its ready page). Nobody is shown the personal link at this point any more (D47); it's a backup Your account can make.
+
+**PINs (D47).** `src/lib/server/pins.ts`. Six digits (`cleanPin`), stored as `pin_hash` = SHA-256 of `<salt>:<pin>` with a 32-byte random `pin_salt` per person. A slow hash would be the textbook choice, but six digits fall to an offline search whatever the hash, and Workers' CPU limit on the free plan rules out a deliberately slow one; what protects a PIN is that it's only ever tried online, through a group's front door, under limits. `/join/[code]` lists the members (`frontDoorMembers`: names, colours, whether each has a PIN; alphabetical) to a signed-out device. Its `signin` action takes `userId` and `pin`: `signInWithPin` checks the person is a member of that group, takes a try from `pin_fail` (per address, 10 per 10 minutes), `pin_fail_person` (`pin:<userId>`, 5 per 15 minutes, so a name can't be worked through from many addresses) and `pin_fail_all` (instance, 200 per hour), and gives them back when the PIN is right. A right PIN creates a session (ending another person's session on that device) and redirects to the group. `/me` action `setPin` sets or replaces the PIN from a signed-in device; no old PIN is asked for, as with making a new sign-in link.
+
+**Helping someone back in (D48).** `src/lib/server/recovery.ts`, for the owner and co-admins, and only for a member who is in this group and no other (`memberReach` gives each member's group count, PIN status and join date in one query). `makeSignInCode` checks `can(role, 'make_sign_in_code')` (whom `remove_member` reaches) and makes eight characters of the join-code alphabet, shown as `K7M4-P2QX`, stored as SHA-256 in `sign_in_codes` with a 10-minute expiry, replacing any earlier one. At the front door "Use a code from an admin" (forced for a name without a PIN) posts `adminCode` to `signin`; `redeemSignInCode` takes from the PIN limits, matches person, group, hash and expiry, deletes the code and gives the tries back; the device is signed in and sent to `/me?code=1#pin-row`, which asks for a new PIN. `mergeMember` (`can(role, 'merge_member')`; never into the actor) moves an old entry's rows to the new one in one batch: copies and wishlist the new one lacks, loans, play seats and nights the new one isn't in, plays logged, nights hosted and planned, bring lists, games typed in and edited, links and corrections; the membership keeps the earlier `joined_at` (so the old colour), the later `last_seen_at` and the higher role; then `deletePersonStatements(old)` removes what's left, and the group's and the new person's catalogs are bumped. The Group tab shows "No PIN yet" to the owner and co-admins, and the shelf nudges a member without a PIN (`myPinSet` from the group layout; "Not now" stored as `bp:pin-nudge` for 14 days).
 
 **Sessions.** 32 random bytes, base64url, in the cookie `bp_session` (`HttpOnly; Secure; SameSite=Lax; Path=/`, `Max-Age` 400 days, the browser maximum). `sessions.id` holds its hex SHA-256, so a leaked database holds no usable sessions. Expiry is 400 days and slides: a request finding under 200 days left extends it. `hooks.server.ts` resolves the cookie into `event.locals.user = { id, name }` and deletes the row when it finds it expired. In local dev over http, the cookie drops `Secure`.
 
@@ -449,9 +467,9 @@ No accounts (D25). A person is a display name; a device proves who it is with a 
 - `GET /key/<token>` shows "Sign in as Ada on this device?" and changes nothing, so chat apps that preview links can't sign anyone in. The button POSTs to the same URL, which creates a new session for that person and redirects to `/`.
 - The account page regenerates it, which replaces the row, so the old link stops working at once, and deletes every session of the person's except the one on the device asking: whoever used a leaked link is signed out too. The same page offers "Sign out everywhere", which also ends this device's session.
 - Failed redemptions record `link_fail` rate events by IP: 10 per hour.
-- Nobody can create a link for someone else, admins included. Recovery after losing every device is rejoining as a new person (D25).
+- Nobody can create a link or set a PIN for someone else, admins included. Recovery after losing every device without the PIN is rejoining as a new person (D25; tools are STATUS item 25).
 
-**Signed-out visitors** to a non-demo group page land on `/signin`. It explains that they're not signed in on this device, and offers "open your sign-in link" first, then joining with a code, creating a group or the demo. `returnTo` is carried through join and link redemption, and accepted only when it starts with `/` and not `//` or `/\` (`return-to.ts`).
+**Signed-out visitors** to a non-demo group page land on `/signin`. It explains that they're not signed in on this device, and offers the group's link with your name and PIN first (or typing its code), a saved sign-in link, then joining, creating a group or the demo. `returnTo` is carried through join and link redemption, and accepted only when it starts with `/` and not `//` or `/\` (`return-to.ts`).
 
 **Instance admin.** `/admin/login` takes `ADMIN_KEY`. It compares SHA-256 digests in constant time, and on success sets `bp_admin` (`HttpOnly; Secure; SameSite=Strict; Path=/`, 12 hours). The path is `/`, not `/admin`, because `GROUP_CREATION=admins` checks the cookie on `/groups/new`. The cookie value is an HMAC of its expiry time keyed with `ADMIN_KEY`, so changing the key signs every admin out. Failures are rate-limited by IP: 5 per 15 minutes. `locals.isAdmin` reflects a valid cookie. Admin status grants nothing inside groups.
 
@@ -849,6 +867,7 @@ The demo seed invents 140 plays over 14 months with weighted skill per member, a
 A writable local group with invented data, for trying the app as a member sees it; the demo is read-only and hides every control.
 
 - `pnpm db:sandbox` runs `scripts/seed-sandbox.ts`, applies `seed/sandbox.sql` to the local database and prints a personal link for each member (`node scripts/seed-sandbox.ts --print` prints them again, `--origin` changes the host). Opening a link signs that browser in as the person, so the owner (Ada), a co-admin (Bram) and plain members can each be checked.
+- Every sandbox member except Kai and Lena has the PIN `123456` (`SANDBOX_PIN`), a test value for this local group only, so the front door at `/join/SNDBX` shows both a name with a PIN and one without.
 - Group `sandbox`, "Sandbox", code `SNDBX`, `is_demo = 0`. Twelve members (`sbx-*`), so who's here folds its list, two of them new with no games; 60 invented games plus four expansions, ten of them short and light for fillers; six unowned games wanted by four, three, two and one people; loans in and out of the group; rules and video links on example.com; about 40 plays over the last three months, most on past game nights; a night tonight at the café with a guest's game added by name, and one next week at Bram's.
 - Sandbox games use ids 9,100,001 to 9,199,999, separate from the demo's, so `pnpm db:seed` and `pnpm db:sandbox` never delete each other's rows. Dates are relative to when it runs: tonight's night is the day it was seeded, so re-run it on another day.
 - Re-running deletes the sandbox group, its people (with their sessions and links), its games and anything that refers to them, then writes it fresh with new links. Local only: the links file (`seed/sandbox-links.json`) signs anyone in, so never apply `seed/sandbox.sql` to a deployed database. Both files are gitignored.
@@ -860,9 +879,8 @@ A writable local group with invented data, for trying the app as a member sees i
 | `/` | Landing with "Create a group", "Join with a code" and "See a demo group". A device with a session in a group sees Your groups instead: cards from `groupGlances()` (games, the members' colours, nights from yesterday on, three queries for all groups) and a join-by-code form posting to `/join`. | none |
 | `/privacy` | What's stored, why, how to delete it. | none |
 | `/demo` | Redirect to `/g/demo`. | none |
-| `/join` and `/join/[code]` | Join form, code prefilled from the URL, with the sign-in link as the other way in (D46). `/join/[code]` shows the group's member and game counts (`groupGameCount()`), asks for a display name when the device has no session, and offers "Join as <name>" when it has one. | none; rate-limited by IP |
+| `/join` and `/join/[code]` | `/join` takes a code. `/join/[code]` is the group's front door (D46, D47): member and game counts (`groupGameCount()`); signed out, action `join` (name and PIN) and action `signin` (the members' names from `frontDoorMembers()`, then a PIN); signed in, "Join as <name>". | none; rate-limited by IP, PINs also by person |
 | `/groups/new` | Create a group. Asks for a display name when the device has no session. Redirects to the group's ready page. | `GROUP_CREATION`, `MAX_GROUPS_PER_USER`, rate limit by IP |
-| `/welcome` | Shown once after joining: the personal link with a copy button. | `requireUser` |
 | `/signin` | "You're not signed in on this device": open your sign-in link (the main door), or join with a code, create a group, or look at the demo. | none |
 | `/signed-out` | After "Sign out everywhere": the new personal link, once, with "Sign in again on this device" opening it. | none (reads the new-link cookie) |
 | `/robots.txt` | Allows everything, or disallows everything when `SEARCH_ENGINES=block`. | none |
@@ -877,9 +895,9 @@ A writable local group with invented data, for trying the app as a member sees i
 | `/g/[groupId]/plays` | The play log: leaderboard (`?period=all` for all time), plays, points setting, export. Actions `logPlay`, `editPlay`, `deletePlay` (also used by the game page's forms) and `points`. | `requireRead`; plays `requireRole(member)` plus `canChangePlay`; `points` `requireRole(admin)` |
 | `GET /g/[groupId]/plays/export.csv` | The plays as CSV (`who=me|all`, `period=year|all`), a download for people, no CORS. | `requireRead`; `who=me` needs membership |
 | `/g/[groupId]/wanted` | The Wanted tab: games members want that nobody in the group owns, with who wants each and a "Me too" toggle. Wishes are set by the `want` action here, on the game page and on the add page (`on=0` removes). | `requireRead`; `want` needs `requireRole(member)` |
-| `/g/[groupId]/ready` | After creating a group: the invite card and, read once from the new-link cookie, the creator's sign-in link; no-store, same-origin referrer. | `requireRead`, members only (others go to the group) |
-| `/g/[groupId]/group` | The Group tab: invite code, members list, and the settings actions (`rename`, `newCode`, `promote`, `demote`, `transfer`, `remove`, `delete`). Members see the code and the list; co-admins and the owner see the controls their role allows. | `requireRead`; each action `requireRole(admin)` or `requireRole(owner)` |
-| `/me` | Display name, groups, loans (what you lent, with "Mark as returned", and what you borrowed), new personal link, sign out of this device or everywhere, account deletion. Later: my games and wishlist. | `requireUser` |
+| `/g/[groupId]/ready` | After creating a group: the invite card, then "Add your games". | `requireRead`, members only (others go to the group) |
+| `/g/[groupId]/group` | The Group tab: invite code, members list, and the settings actions (`rename`, `newCode`, `promote`, `demote`, `transfer` (with `confirmName`, the new owner's name, checked by `transferOwnership`), `remove`, `signInCode`, `merge`, `delete`). Members see the code and the list; co-admins and the owner see the controls their role allows. | `requireRead`; each action `requireRole(admin)` or `requireRole(owner)` |
+| `/me` | Display name, PIN (`setPin`), groups, loans (what you lent, with "Mark as returned", and what you borrowed), a new sign-in link (backup), sign out of this device or everywhere, account deletion. Later: my games and wishlist. | `requireUser` |
 | `GET /api/g/[groupId]/catalog` | Catalog payload with ETag. | `requireRead` |
 | `GET /api/bgg/search` | BGG search proxy. | `requireActiveMember` (optional `groupId`), rate-limited per person |
 | `POST /api/bgg/import`, `/api/bgg/import/confirm`, `/api/bgg/hydrate` | Import flow. | `requireActiveMember` with the page's `groupId`, rate-limited per person |

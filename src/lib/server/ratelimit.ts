@@ -10,6 +10,11 @@ export const LIMITS = {
 	joinFailInstance: { kind: 'join_fail_all', max: 100, windowMs: 60 * 60_000 },
 	groupCreate: { kind: 'group_create', max: 5, windowMs: 24 * 60 * 60_000 },
 	linkFail: { kind: 'link_fail', max: 10, windowMs: 60 * 60_000 },
+	// Wrong PINs at a group's front door (D47): per address, per person (so a person's PIN can't be
+	// worked through from many addresses), and across the instance.
+	pinFail: { kind: 'pin_fail', max: 10, windowMs: 10 * 60_000 },
+	pinFailPerson: { kind: 'pin_fail_person', max: 5, windowMs: 15 * 60_000 },
+	pinFailInstance: { kind: 'pin_fail_all', max: 200, windowMs: 60 * 60_000 },
 	adminFail: { kind: 'admin_fail', max: 5, windowMs: 15 * 60_000 },
 	bggSearch: { kind: 'bgg_search', max: 30, windowMs: 60_000 },
 	wikidataSearch: { kind: 'wikidata_search', max: 30, windowMs: 60_000 },

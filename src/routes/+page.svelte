@@ -6,7 +6,6 @@
 	import { onMount } from 'svelte';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import Code from '@lucide/svelte/icons/code';
-	import KeyRound from '@lucide/svelte/icons/key-round';
 	import BoxFront from '#lib/components/BoxFront.svelte';
 	import OwnerEdge from '#lib/components/OwnerEdge.svelte';
 	import { playerColor } from '#lib/catalog/colors.ts';
@@ -166,16 +165,19 @@
 	<section class="moment flip" aria-labelledby="accounts-h">
 		<div class="say">
 			<h2 id="accounts-h">No accounts</h2>
-			<p>Join with the group’s code and a name. Your own sign-in link opens it on your other devices. There are no emails or passwords.</p>
+			<p>Join with the group’s code, a name and a six-digit PIN. On another device the same link gets you back in: tap your name, type your PIN. There are no emails or passwords.</p>
 		</div>
-		<figure class="piece pair" aria-label="Example: a group's join code, and a sign-in link only for you">
+		<figure class="piece pair" aria-label="Example: a group's join code, and coming back by tapping your name and typing a PIN">
 			<div class="code-card" aria-hidden="true">
 				<span class="muted">Join code</span>
 				<span class="code num">K7M4P</span>
 			</div>
 			<div class="link-card" aria-hidden="true">
-				<span class="link-label"><KeyRound size={16} /> Your sign-in link <span class="tag">Only for you</span></span>
-				<span class="fake-link">…/key/••••••••••••</span>
+				<span class="link-label">Already in Sandbox?</span>
+				<span class="door-names">
+					{#each [0, 1, 2] as who (who)}<span class:on={who === 0}><i style:background={playerColor(who).fill}></i>{NAMES[who]}</span>{/each}
+				</span>
+				<span class="fake-link num">PIN ● ● ● ● ● ●</span>
 			</div>
 		</figure>
 	</section>
@@ -278,7 +280,7 @@
 				<a class="btn primary" href="/join">Join with a code</a>
 				{#if data.canCreate}<a class="btn" href="/groups/new">Create a group</a>{/if}
 			</div>
-			<p class="small muted">There are no accounts or passwords: a code and your name. Already in a group? Open your sign-in link on this device.</p>
+			<p class="small muted">There are no accounts or passwords: a code, your name and a PIN. Already in a group? Open its link, tap your name and type your PIN.</p>
 			{#if data.demoExists}<p class="demo"><a href="/demo">Or look around a demo shelf first</a></p>{/if}
 		</div>
 		{@render exampleShelf()}
@@ -555,7 +557,7 @@
 	.p3 .block {
 		height: 64px;
 	}
-	/* 4: the group's code on the dark label beside a sign-in link on the cube, as on the ready page. */
+	/* 4: the group's code on the dark label beside the front door's "tap your name, type your PIN". */
 	.pair {
 		display: grid;
 		gap: var(--s-3);
@@ -597,6 +599,32 @@
 		align-items: center;
 		gap: 6px;
 		font-weight: 700;
+	}
+	.door-names {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+	}
+	.door-names span {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		padding: 2px 10px 2px 7px;
+		border-radius: 999px;
+		border: 1.5px solid var(--rule);
+		background: var(--laminate);
+		font-size: var(--t-small);
+		font-weight: 650;
+	}
+	.door-names span.on {
+		background: var(--mark);
+		border-color: var(--mark);
+		color: var(--mark-ink);
+	}
+	.door-names i {
+		width: 10px;
+		height: 10px;
+		border-radius: 3px;
 	}
 	.fake-link {
 		padding: 8px var(--s-3);

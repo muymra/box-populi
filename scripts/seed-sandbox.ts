@@ -25,7 +25,8 @@ if (values.print) {
 	const people = JSON.parse(readFileSync(LINKS_FILE, 'utf8')) as Array<{ name: string; role: string; token: string }>;
 	console.log('\nSandbox loaded. Open a link in your browser to be that person on this device:\n');
 	for (const p of people) console.log(`  ${p.name.padEnd(5)} ${p.role.padEnd(9)} ${values.origin}/key/${p.token}`);
-	console.log(`\nThen the group is at ${values.origin}/g/${GROUP}\n`);
+	console.log(`\nThen the group is at ${values.origin}/g/${GROUP}`);
+	console.log(`Or use the front door: ${values.origin}/join/SNDBX, tap a name, PIN 123456 (Kai and Lena have none).\n`);
 	process.exit(0);
 }
 
@@ -250,6 +251,19 @@ const gameLinks: Row[] = favourites.slice(0, 4).flatMap((g, i) => {
 	];
 });
 
+// The front door's PIN (D47) for everyone except the two newest, Kai and Lena, so the door shows both
+// cases: 123456, a test PIN for this local group only. Salted SHA-256, as the app stores it.
+export const SANDBOX_PIN = '123456';
+const NO_PIN = new Set(['sbx-kai', 'sbx-lena']);
+const pins = new Map(
+	members
+		.filter((m) => !NO_PIN.has(m.id))
+		.map((m) => {
+			const salt = randomBytes(32).toString('base64url');
+			return [m.id, { pin_salt: salt, pin_hash: createHash('sha256').update(`${salt}:${SANDBOX_PIN}`).digest('hex'), pin_set_at: NOW }];
+		})
+);
+
 // A personal link for everyone: a random token in the link, only its SHA-256 in the database, as the app does.
 const links = members.map((m) => {
 	const token = randomBytes(32).toString('base64url');
@@ -289,7 +303,7 @@ const statements = [
 	`DELETE FROM groups WHERE id = '${GROUP}';`,
 	`DELETE FROM games WHERE id BETWEEN ${FIRST_ID} AND ${LAST_ID};`,
 	"DELETE FROM users WHERE id LIKE 'sbx-%';",
-	insert('users', members.map((m) => ({ id: m.id, name: m.name, created_at: NOW - 200 * DAY }))),
+	insert('users', members.map((m) => ({ id: m.id, name: m.name, created_at: NOW - 200 * DAY, ...(pins.get(m.id) ?? {}) }))),
 	insert('personal_links', links.map((l) => ({ user_id: l.id, token_hash: l.hash, created_at: NOW }))),
 	`INSERT INTO groups (id, name, code, is_demo, catalog_version, created_at) VALUES ('${GROUP}', 'Sandbox', 'SNDBX', 0, ${NOW}, ${NOW - 200 * DAY});`,
 	// Joined in list order, so the player colours follow it.

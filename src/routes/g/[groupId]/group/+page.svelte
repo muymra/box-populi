@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import type { SubmitFunction } from '$app/forms';
 	import { page } from '$app/state';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Search from '@lucide/svelte/icons/search';
@@ -14,6 +15,24 @@
 	const ROLE = { owner: 'Owner', admin: 'Co-admin', member: 'Member' } as const;
 	const inviteLink = $derived(data.code ? `${page.url.origin}/join/${data.code}` : null);
 	let query = $state('');
+	// Which Manage panels are open, kept here so an action's reload doesn't fold them shut.
+	let openRows = $state<string[]>([]);
+	function keepOpen(id: string, open: boolean) {
+		if (open !== openRows.includes(id)) openRows = open ? [...openRows, id] : openRows.filter((r) => r !== id);
+	}
+	// The one confirmation open in the members list: whose, and for what.
+	type Confirm = 'role' | 'owner' | 'code' | 'merge' | 'remove';
+	let confirmFor = $state<{ id: string; kind: Confirm } | null>(null);
+	// What's typed to confirm a new owner; cleared whenever another confirmation opens.
+	let ownerTyped = $state('');
+	function toggle(id: string, kind: Confirm) {
+		confirmFor = confirmFor?.id === id && confirmFor.kind === kind ? null : { id, kind };
+		ownerTyped = '';
+	}
+	const closeAfter: SubmitFunction = () => async ({ update }) => {
+		await update();
+		confirmFor = null;
+	};
 
 	// A theme picked by name in the footer overrides the group's theme on this device.
 	const deviceOverrides = $derived(data.deviceTheme !== AUTO_THEME);
@@ -53,61 +72,167 @@
 			</label>
 		{/if}
 		{#if form?.memberError}<p class="banner error" role="alert">{form.memberError}</p>{/if}
+		{#if form?.merged}<p class="banner" role="status">Merged. The older entry is gone; everything it had is on the new one.</p>{/if}
 		<ul class="members">
 			{#each shown as m (m.id)}
 				{@const c = playerColor(m.colorIndex)}
 				{#snippet person()}
 					<span class="cube-chip" style:background={c.fill} style:color={c.ink} aria-hidden="true">{m.name.slice(0, 1).toUpperCase()}</span>
 					<span class="who">
-						<strong>{m.name}{#if m.isMe}<span class="muted">{' (you)'}</span>{/if}</strong>
+						<strong>{m.name}{#if m.isMe}<span class="muted">{' (you)'}</span>{/if}{#if m.noPin}{' '}<span class="tag">No PIN yet</span>{/if}</strong>
 						<span class="muted">
 							{ROLE[m.role]}{' · '}<span class="num">{m.games}</span> {m.games === 1 ? 'game' : 'games'}{' · '}{c.hatched ? 'striped ' : ''}{c.name.toLowerCase()}{' · '}<span class="nowrap">{lastActive(m.lastSeenAt, data.now)}</span>
 						</span>
 					</span>
 				{/snippet}
 				<li>
-					{#if m.actions.length}
-						<details class="manage">
+					{#if m.actions.length || m.tools.length}
+						{@const roleChange = m.actions.includes('promote') || m.actions.includes('demote')}
+						{@const codeHere = form?.signInCode?.userId === m.id ? form.signInCode : null}
+						{@const mine = confirmFor?.id === m.id && !(confirmFor.kind === 'code' && codeHere) ? confirmFor.kind : null}
+						<details class="manage" open={openRows.includes(m.id) || !!codeHere} ontoggle={(e) => keepOpen(m.id, e.currentTarget.open)}>
 							<summary>
 								{@render person()}
 								<span class="manage-label">Manage <ChevronDown size={16} aria-hidden="true" /></span>
 							</summary>
-							<div class="actions">
-								{#if m.actions.includes('promote')}
-									<form method="POST" action="?/promote" use:enhance>
-										<input type="hidden" name="userId" value={m.id} />
-										<button class="btn small">Make co-admin</button>
-									</form>
+							<!-- One panel in three parts (Carlo's pick): the role, getting in, and the irreversible ones in the foot; one confirmation open at a time. -->
+							<div class="manage-panel">
+								<div class="prow">
+									<span class="plabel" id="role-{m.id}">Role</span>
+									<div class="pbody">
+										{#if roleChange}
+											<!-- The other segment asks first (Carlo: too easy to make someone a co-admin by accident). -->
+											<div class="role-seg" role="group" aria-labelledby="role-{m.id}">
+												{#each [['member', 'Member'], ['admin', 'Co-admin']] as const as [role, label] (role)}
+													{#if m.role === role}
+														<span class="seg on" aria-current="true">{label}</span>
+													{:else}
+														<button type="button" class="seg" aria-expanded={mine === 'role'} onclick={() => toggle(m.id, 'role')}
+															>{label}<span class="visually-hidden">: make {m.name} {role === 'admin' ? 'a co-admin' : 'a regular member'}…</span></button
+														>
+													{/if}
+												{/each}
+											</div>
+										{:else}
+											<span>{ROLE[m.role]}</span>
+										{/if}
+										{#if m.actions.includes('transfer_ownership')}
+											<button type="button" class="link-button" aria-expanded={mine === 'owner'} onclick={() => toggle(m.id, 'owner')}>Make owner…</button>
+										{/if}
+									</div>
+								</div>
+								<div class="prow">
+									<span class="plabel">Getting in</span>
+									<div class="pbody">
+										{#if codeHere}
+											<span class="sign-in-code num">{codeHere.code}</span>
+											<span class="muted code-note">
+												Works once, until {new Date(codeHere.expiresAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}. Give it to {m.name}
+												yourself: at the group’s link they tap their name and choose “use a code from an admin”.
+											</span>
+										{:else}
+											<span>{m.noPin ? 'No PIN yet.' : 'Has a PIN.'}</span>
+											{#if m.tools.includes('sign_in_code')}
+												<button type="button" class="btn small" aria-expanded={mine === 'code'} onclick={() => toggle(m.id, 'code')}>Make a sign-in code</button>
+											{:else if m.helpNote === 'other_group'}
+												<span class="muted">In another group too, so only {m.name} can change how they get in.</span>
+											{:else if m.helpNote === 'role'}
+												<span class="muted">Only the owner can help a co-admin back in.</span>
+											{/if}
+										{/if}
+									</div>
+								</div>
+								{#if m.tools.includes('merge') || m.actions.includes('remove_member')}
+									<div class="pfoot">
+										{#if m.tools.includes('merge')}
+											<button type="button" class="link-button" aria-expanded={mine === 'merge'} onclick={() => toggle(m.id, 'merge')}>Merge into another entry…</button>
+										{/if}
+										{#if m.actions.includes('remove_member')}
+											<button type="button" class="link-button danger-link" aria-expanded={mine === 'remove'} onclick={() => toggle(m.id, 'remove')}>Remove from the group…</button>
+										{/if}
+									</div>
 								{/if}
-								{#if m.actions.includes('demote')}
-									<form method="POST" action="?/demote" use:enhance>
-										<input type="hidden" name="userId" value={m.id} />
-										<button class="btn small">Make a regular member</button>
-									</form>
-								{/if}
-								{#if m.actions.includes('transfer_ownership')}
-									<details class="confirm">
-										<summary class="link-button">Hand over ownership…</summary>
-										<div class="confirm-body">
-											<p>{m.name} becomes the owner and can delete the group. You become a co-admin.</p>
-											<form method="POST" action="?/transfer" use:enhance>
+								{#if mine}
+									<div class="confirm-well">
+										{#if mine === 'role' && m.role === 'member'}
+											<p>
+												Make {m.name} a co-admin? Co-admins can rename the group, make a new join code, remove members, change any play or night, and help
+												members back in.
+											</p>
+											<div class="cbtns">
+												<form method="POST" action="?/promote" use:enhance={closeAfter}>
+													<input type="hidden" name="userId" value={m.id} />
+													<button class="btn small">Make {m.name} a co-admin</button>
+												</form>
+												<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
+											</div>
+										{:else if mine === 'role'}
+											<p>Make {m.name} a regular member? They’ll no longer be able to manage the group.</p>
+											<div class="cbtns">
+												<form method="POST" action="?/demote" use:enhance={closeAfter}>
+													<input type="hidden" name="userId" value={m.id} />
+													<button class="btn small">Make {m.name} a regular member</button>
+												</form>
+												<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
+											</div>
+										{:else if mine === 'owner'}
+											<p>
+												{m.name} becomes the owner: they can delete the group and hand it on again. You become a co-admin, and only {m.name} can make you the
+												owner again.
+											</p>
+											<form method="POST" action="?/transfer" use:enhance={closeAfter} class="cbtns">
 												<input type="hidden" name="userId" value={m.id} />
-												<button class="btn small">Make {m.name} the owner</button>
+												<label class="into">
+													<span>Type <strong>{m.name}</strong> to confirm</span>
+													<input class="field" name="confirmName" required autocomplete="off" bind:value={ownerTyped} />
+												</label>
+												<button class="btn small" disabled={ownerTyped.replace(/\s+/g, ' ').trim().toLocaleLowerCase() !== m.name.toLocaleLowerCase()}>Make {m.name} the owner</button>
+												<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
 											</form>
-										</div>
-									</details>
-								{/if}
-								{#if m.actions.includes('remove_member')}
-									<details class="confirm">
-										<summary class="link-button">Remove from the group…</summary>
-										<div class="confirm-body">
+										{:else if mine === 'code'}
+											<p>
+												For when {m.name} has lost their PIN and every device. The code works once, for 10 minutes, and signs in as {m.name}, so give it to
+												them yourself.
+											</p>
+											<div class="cbtns">
+												<form method="POST" action="?/signInCode" use:enhance={closeAfter}>
+													<input type="hidden" name="userId" value={m.id} />
+													<button class="btn small">Make the code</button>
+												</form>
+												<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
+											</div>
+										{:else if mine === 'merge'}
+											{@const others = data.members
+												.filter((o) => o.id !== m.id && !o.isMe)
+												.sort((a, b) => Number(b.name === m.name) - Number(a.name === m.name) || b.joinedAt - a.joinedAt)}
+											<p>
+												If {m.name} joined again as someone new, this moves this entry’s games, plays, nights and wishlist to the new one and deletes this one.
+												The new one keeps this entry’s colour.
+											</p>
+											<form method="POST" action="?/merge" use:enhance={closeAfter} class="cbtns">
+												<input type="hidden" name="userId" value={m.id} />
+												<label class="into">
+													<span>Into</span>
+													<select class="field" name="intoId" required>
+														{#each others as o (o.id)}
+															<option value={o.id}>{o.name}, joined {new Date(o.joinedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</option>
+														{/each}
+													</select>
+												</label>
+												<button class="btn small danger">Merge and delete this entry</button>
+												<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
+											</form>
+										{:else if mine === 'remove'}
 											<p>{m.name}’s games leave the shelf. They can rejoin with the code unless you make a new one.</p>
-											<form method="POST" action="?/remove" use:enhance>
-												<input type="hidden" name="userId" value={m.id} />
-												<button class="btn small danger">Remove {m.name}</button>
-											</form>
-										</div>
-									</details>
+											<div class="cbtns">
+												<form method="POST" action="?/remove" use:enhance={closeAfter}>
+													<input type="hidden" name="userId" value={m.id} />
+													<button class="btn small danger">Remove {m.name}</button>
+												</form>
+												<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
+											</div>
+										{/if}
+									</div>
 								{/if}
 							</div>
 						</details>
@@ -270,6 +395,8 @@
 		.two {
 			grid-template-columns: 22rem minmax(0, 1fr);
 			grid-template-areas: 'invite people' 'settings people';
+			/* The members column's extra height goes to the second row, so opening Manage never moves the settings. */
+			grid-template-rows: auto 1fr;
 			align-items: start;
 			column-gap: var(--s-6);
 		}
@@ -364,12 +491,117 @@
 	.manage[open] .manage-label :global(svg) {
 		transform: rotate(180deg);
 	}
-	.actions {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: var(--s-1);
+	/* The Manage panel: Role and Getting in as labelled rows, the irreversible ones in a ruled foot, and
+	   the one open confirmation in a well under them. Lined up with the name, not the colour square. */
+	.manage-panel {
+		display: grid;
+		gap: var(--s-3);
 		padding: var(--s-1) var(--s-3) var(--s-4) calc(34px + 2 * var(--s-3));
+	}
+	.prow {
+		display: grid;
+		grid-template-columns: 6.5rem minmax(0, 1fr);
+		align-items: center;
+		gap: var(--s-1) var(--s-3);
+	}
+	.plabel {
+		font-size: var(--t-small);
+		font-weight: 650;
+		color: var(--ink-2);
+	}
+	.pbody {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--s-2) var(--s-4);
+		min-width: 0;
+	}
+	.pbody .link-button,
+	.pfoot .link-button {
+		min-height: 36px;
+		font-weight: 650;
+	}
+	/* Role as segments, as elsewhere: the current one sits on the cube; the other is the button that changes it. */
+	.role-seg {
+		display: inline-flex;
+		gap: 4px;
+		padding: 4px;
+		background: var(--gap);
+		border-radius: calc(var(--r-ctl) + 4px);
+	}
+	.seg {
+		display: inline-flex;
+		align-items: center;
+		min-height: 36px;
+		padding: 0 12px;
+		border: 0;
+		border-radius: var(--r-ctl);
+		background: none;
+		color: var(--ink-2);
+		font: inherit;
+		font-size: var(--t-small);
+		font-weight: 650;
+		cursor: pointer;
+	}
+	.seg:hover {
+		color: var(--ink);
+	}
+	.seg.on {
+		background: var(--cube);
+		color: var(--ink);
+		box-shadow: inset 0 0 0 1px var(--rule);
+		cursor: default;
+	}
+	.code-note {
+		flex-basis: 100%;
+		max-width: 38rem;
+		font-size: var(--t-small);
+	}
+	.pfoot {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--s-1) var(--s-5);
+		padding-top: var(--s-2);
+		border-top: 1px solid var(--gap);
+	}
+	.danger-link {
+		color: var(--danger);
+	}
+	.confirm-well {
+		display: grid;
+		gap: var(--s-3);
+		max-width: 40rem;
+		padding: var(--s-3) var(--s-4);
+		background: var(--laminate);
+		border-radius: var(--r-ctl);
+		box-shadow: inset 0 0 0 1px var(--rule);
+	}
+	.confirm-well p {
+		margin: 0;
+	}
+	.cbtns {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: end;
+		gap: var(--s-2) var(--s-3);
+	}
+	.into {
+		display: grid;
+		gap: 4px;
+		font-size: var(--t-small);
+		font-weight: 650;
+		color: var(--ink-2);
+	}
+	.into .field {
+		min-width: 15rem;
+	}
+	@media (max-width: 559px) {
+		.manage-panel {
+			padding-left: var(--s-3);
+		}
+		.prow {
+			grid-template-columns: minmax(0, 1fr);
+		}
 	}
 	.cube-chip {
 		flex: none;
@@ -442,5 +674,11 @@
 		.manage-label :global(svg) {
 			transition: none;
 		}
+	}
+	.sign-in-code {
+		margin: 0;
+		font-size: var(--t-h2);
+		font-weight: 800;
+		letter-spacing: 0.14em;
 	}
 </style>

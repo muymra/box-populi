@@ -3,7 +3,8 @@ import { getDb } from '#lib/server/platform.ts';
 import { cleanDisplayName, newPersonStatements } from '#lib/server/identity.ts';
 import { cleanGroupName, createGroup, ownedGroupCount } from '#lib/server/groups.ts';
 import { giveBack, ipSubject, LIMITS, take } from '#lib/server/ratelimit.ts';
-import { setNewLinkCookie, setSessionCookie } from '#lib/server/cookies.ts';
+import { setSessionCookie } from '#lib/server/cookies.ts';
+import { cleanPin } from '#lib/server/pins.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => ({
@@ -42,17 +43,19 @@ export const actions: Actions = {
 				await giveBack(db, tried.taken);
 				return fail(400, { ...values, error: 'Add your name as the group will see it, up to 40 characters.' });
 			}
-			newPerson = await newPersonStatements(db, displayName, now);
+			const pin = cleanPin(form.get('pin'));
+			if (!pin) {
+				await giveBack(db, tried.taken);
+				return fail(400, { ...values, error: 'Pick a PIN of six digits. With it you can get back in on any device.' });
+			}
+			newPerson = await newPersonStatements(db, displayName, now, pin);
 			userId = newPerson.person.id;
 		}
 
 		const { groupId } = await createGroup(db, { userId, name: groupName, now, before: newPerson?.statements });
 
-		// The ready page shows the invite, and for someone new, their sign-in link (D46).
-		if (newPerson) {
-			setSessionCookie(cookies, url, newPerson.sessionToken);
-			setNewLinkCookie(cookies, url, newPerson.linkToken);
-		}
+		// The ready page shows the invite to share (D46); someone new gets back in with their PIN (D47).
+		if (newPerson) setSessionCookie(cookies, url, newPerson.sessionToken);
 		redirect(303, `/g/${groupId}/ready`);
 	}
 };

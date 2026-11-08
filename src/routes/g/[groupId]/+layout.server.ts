@@ -4,6 +4,7 @@ import { one } from '#lib/server/db.ts';
 import { loadMembers } from '#lib/server/catalog.ts';
 import { canPlanNights, loadNights, nightOnlyGames } from '#lib/server/nights.ts';
 import { getDb } from '#lib/server/platform.ts';
+import { pinSetAt } from '#lib/server/pins.ts';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async (event) => {
@@ -40,6 +41,8 @@ export const load: LayoutServerLoad = async (event) => {
 		nightGames,
 		mayPlanNights,
 		myId: event.locals.user?.id ?? null,
+		// A member without a PIN is nudged on the shelf to set one (D47, D48).
+		myPinSet: access.role && event.locals.user ? (await pinSetAt(db, event.locals.user.id)) != null : true,
 		contact: event.locals.config.instanceContact,
 		pendingDetails: pending
 	};

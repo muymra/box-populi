@@ -16,7 +16,9 @@ export type GroupAction =
 	| 'set_points'
 	| 'plan_night'
 	| 'change_night'
-	| 'set_night_planners';
+	| 'set_night_planners'
+	| 'make_sign_in_code'
+	| 'merge_member';
 
 export type PermissionContext = {
 	/** Role of the member being acted on, for member-targeted actions. */
@@ -52,6 +54,10 @@ export function can(actor: Role, action: GroupAction, ctx: PermissionContext = {
 		case 'change_play':
 			return targetIsSelf || atLeast(actor, 'admin');
 		case 'remove_member':
+		// A sign-in code for someone who lost their way in, and merging an old entry into a new one (D48),
+		// reach the same people removing does: anyone but the owner for the owner, members for a co-admin.
+		case 'make_sign_in_code':
+		case 'merge_member':
 			if (targetIsSelf || targetRole == null || targetRole === 'owner') return false;
 			if (actor === 'owner') return true;
 			return actor === 'admin' && targetRole === 'member';

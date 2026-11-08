@@ -79,9 +79,13 @@ describe('roles', () => {
 	});
 
 	it('hands over ownership and makes the old owner a co-admin', async () => {
-		expect(await transferOwnership(db, 'g1', owner, 'bo')).toEqual({ ok: true });
+		// The new owner's name has to be typed first.
+		expect((await transferOwnership(db, 'g1', owner, 'bo', 'Cy')).ok).toBe(false);
+		expect((await transferOwnership(db, 'g1', owner, 'bo', '')).ok).toBe(false);
+		expect(await roles()).toMatchObject({ ada: 'owner', bo: 'member' });
+		expect(await transferOwnership(db, 'g1', owner, 'bo', ' bo ')).toEqual({ ok: true });
 		expect(await roles()).toMatchObject({ ada: 'admin', bo: 'owner' });
-		expect((await transferOwnership(db, 'g1', { id: 'ada', role: 'admin' }, 'di')).ok).toBe(false);
+		expect((await transferOwnership(db, 'g1', { id: 'ada', role: 'admin' }, 'di', 'Di')).ok).toBe(false);
 	});
 });
 

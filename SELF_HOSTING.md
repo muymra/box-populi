@@ -63,7 +63,7 @@ In `wrangler.jsonc` under `"vars"`:
 |---|---|
 | `INSTANCE_NAME` | What your instance is called, e.g. "Utrecht Board Gamers." |
 | `INSTANCE_CONTACT` | `mailto:you@example.com` or a contact page URL. Required. |
-| `GROUP_CREATION` | `anyone`, or `admins` if only you should create groups. |
+| `GROUP_CREATION` | `admins` (the default): only you create groups, from the admin page. `anyone`: every visitor can create one. |
 | `INSTANCE_MODE` | `standard`. Set `demo` for an instance that only shows the demo group: its home page introduces the demo and links to GitHub. |
 | `SEARCH_ENGINES` | `allow`. Set `block` if only your groups should find the instance; search engines are asked not to index it. |
 | `THEME` | `cube`, the default look. Or a preset such as `dracula`, `catppuccin` or `nord`; the full list is in `src/lib/themes.ts`. Visitors can still pick their own from the footer. |
@@ -95,7 +95,7 @@ pnpm exec wrangler pages deploy
 
 1. Open your site. On a new project the address can answer with error 522 for about a minute after the first deploy; wait and reload. If a setting is missing, the page names it.
 2. Open `/admin/login` and enter your admin key. The admin page should show zero groups. Its "Look of this site" section sets a custom theme from five colours and a logo, without redeploying.
-3. Create a group with your name, save the sign-in link it shows you, add a game, and open the catalog.
+3. From the admin page, create a group with your name and a PIN, add a game, and open the catalog. (With the default `GROUP_CREATION=admins`, only you can create groups; your group's members join with its code.)
 4. Open `/privacy` and check that it shows your instance name and contact.
 
 ## Optional: a demo group
@@ -107,7 +107,7 @@ node scripts/seed-demo.ts
 pnpm exec wrangler d1 execute DB --remote --file seed/demo.sql
 ```
 
-For an instance that exists only to show the demo, also set `INSTANCE_MODE` to `demo` and `GROUP_CREATION` to `admins`.
+For an instance that exists only to show the demo, also set `INSTANCE_MODE` to `demo` (and leave `GROUP_CREATION` at its default, `admins`).
 
 This seeds about 440 invented games and 140 invented plays for the leaderboard, which needs no BGG token. Re-run both commands after an upgrade to refresh it; it replaces the demo group each time. Seeding from a real BGG collection (`--bgg-user`) isn't built; it would contain BGG data, which is one reason `seed/demo.sql` is gitignored. The landing page links to `/demo` once it exists.
 

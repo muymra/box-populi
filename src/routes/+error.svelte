@@ -18,7 +18,7 @@
 	<div class="words">
 		<h1>{heading}</h1>
 		{#if notFound && inGroup}
-			<p>The link may be old, the group may have been deleted, or you're not in it on this device. Open your sign-in link on this device, or ask someone in the group for its code.</p>
+			<p>The link may be old, the group may have been deleted, or you're not in it on this device. Open your group's link and tap your name, or ask someone in the group for its code.</p>
 		{:else if notFound}
 			<p>There's nothing at this address.</p>
 		{:else}

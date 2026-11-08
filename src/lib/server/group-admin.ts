@@ -77,10 +77,18 @@ export async function removeMember(db: DB, groupId: string, actor: Actor, target
 	return { ok: true };
 }
 
-/** The owner hands the group to another member and becomes a co-admin. */
-export async function transferOwnership(db: DB, groupId: string, actor: Actor, targetId: string): Promise<AdminResult> {
+/**
+ * The owner hands the group to another member and becomes a co-admin. The owner types the member's
+ * name first, so a stray tap can't give the group away.
+ */
+export async function transferOwnership(db: DB, groupId: string, actor: Actor, targetId: string, typedName: unknown): Promise<AdminResult> {
 	const check = await targeted(db, groupId, actor, targetId, 'transfer_ownership');
 	if (typeof check === 'object') return check;
+	const target = await one<{ name: string }>(db, 'SELECT name FROM users WHERE id = ?1', targetId);
+	const typed = typeof typedName === 'string' ? typedName.replace(/\s+/g, ' ').trim() : '';
+	if (!target || typed.toLocaleLowerCase() !== target.name.toLocaleLowerCase()) {
+		return { ok: false, error: 'Type their name exactly as it’s shown to make them the owner.' };
+	}
 	// Demote first: the one-owner index is checked statement by statement.
 	await db.batch([
 		stmt(db, "UPDATE memberships SET role = 'admin' WHERE group_id = ?1 AND user_id = ?2", groupId, actor.id),

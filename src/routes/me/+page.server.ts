@@ -14,6 +14,7 @@ import {
 } from '#lib/server/identity.ts';
 import { clearSessionCookie, SECRET_PAGE_HEADERS, setNewLinkCookie, takeNewLink } from '#lib/server/cookies.ts';
 import { myLoans, returnCopy } from '#lib/server/lending.ts';
+import { cleanPin, pinSetAt, setPin } from '#lib/server/pins.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
@@ -24,6 +25,9 @@ export const load: PageServerLoad = async (event) => {
 		name: user.name,
 		groups: await listMyGroups(getDb(), user.id),
 		loans: await myLoans(getDb(), user.id),
+		pinSetAt: await pinSetAt(getDb(), user.id),
+		// Signed in just now with a code from the group's owner or a co-admin (D48): time to pick a new PIN.
+		viaCode: event.url.searchParams.has('code'),
 		newLink: token ? `${event.url.origin}/key/${token}` : null
 	};
 };
@@ -43,6 +47,15 @@ export const actions: Actions = {
 		if (!name) return fail(400, { renameError: 'Names are 1 to 40 characters.' });
 		await renamePerson(getDb(), user.id, name);
 		return { renamed: true };
+	},
+
+	// Setting or changing the PIN needs only this signed-in device, the way making a new sign-in link does (D47).
+	setPin: async (event) => {
+		const user = requireUser(event);
+		const pin = cleanPin((await event.request.formData()).get('pin'));
+		if (!pin) return fail(400, { pinError: 'A PIN is six digits.' });
+		await setPin(getDb(), user.id, pin, Date.now());
+		return { pinSaved: true };
 	},
 
 	newLink: async (event) => {
