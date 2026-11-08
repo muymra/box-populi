@@ -869,6 +869,10 @@ The demo seed invents 140 plays over 14 months with weighted skill per member, a
 - `seed/demo.sql` is gitignored: it's generated, and a seed from a real BGG collection would hold BGG data. Each hoster generates their own.
 - The demo is optional per instance. The landing page shows "See a demo group" only when a group with id `demo` exists. Hosters who want one run `pnpm db:seed` and apply `seed/demo.sql` to production as above.
 
+### Link previews
+
+With `INSTANCE_MODE=demo`, the home page carries Open Graph and Twitter card tags (`src/routes/+page.svelte`), so its link pasted in Discord, Messenger, Instagram and the like shows the headline, a line of pitch and a picture. `og:site_name` is `INSTANCE_NAME`; the URLs are absolute, built from the request's origin. The picture is `src/lib/assets/og-showcase.png`, 1200×630, imported so the build gives it a hashed name and a changed picture gets a new URL past the apps' caches. It's the page's own hero in the default light theme with the invented example shelf: the brand, the headline and "Free and open source." beside the shelf, with the lede, buttons, header and footer hidden. Retake it the same way when the headline or the example shelf changes. Other pages have no preview tags yet (STATUS.md).
+
 ## Sandbox group
 
 A writable local group with invented data, for trying the app as a member sees it; the demo is read-only and hides every control.

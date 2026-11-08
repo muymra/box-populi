@@ -4,6 +4,7 @@
 	// demo instance four moments, each a claim beside a small piece built from the app's own parts with
 	// invented games, a short list of the rest, and running your own.
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import Code from '@lucide/svelte/icons/code';
 	import BoxFront from '#lib/components/BoxFront.svelte';
@@ -12,9 +13,17 @@
 	import { whenLabel } from '#lib/days.ts';
 	import { nightOf } from '#lib/table/regulars.ts';
 	import { SELF_HOSTING_URL, SOURCE_URL } from '#lib/project.ts';
+	import showcaseImage from '#lib/assets/og-showcase.png';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+
+	// The link preview for a demo instance's home page, the link people pass around to show Box Populi
+	// (Discord, Messenger, Instagram and the like read these). The image is this page's hero at 1200×630
+	// in the default theme with invented games; TECH.md "Link previews" says how to retake it.
+	const SHOWCASE_TITLE = 'Every game your group owns, on one shelf';
+	const SHOWCASE_TEXT =
+		'Box Populi pools a board game group’s collections into one shelf you can search. Free and open source. Look around a demo group of invented games without signing up.';
 
 	const ROLE_LABELS = { owner: 'Owner', admin: 'Co-admin', member: null } as const;
 	// Archived groups (D50) leave the cards for a folded list at the end; they're read-only to look back on.
@@ -67,6 +76,22 @@
 		['What you manage', 'Who creates groups, suspending and deleting groups without seeing inside them, a way back in for a locked-out owner, and the colours and logo.']
 	] as const;
 </script>
+
+<svelte:head>
+	{#if data.demoMode}
+		<meta name="description" content={SHOWCASE_TEXT} />
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content={data.instanceName} />
+		<meta property="og:url" content={new URL('/', page.url.origin).href} />
+		<meta property="og:title" content={SHOWCASE_TITLE} />
+		<meta property="og:description" content={SHOWCASE_TEXT} />
+		<meta property="og:image" content={new URL(showcaseImage, page.url.origin).href} />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta property="og:image:alt" content="The Box Populi headline beside an example shelf of eight invented games, with a coloured line under each for the friends who own it." />
+		<meta name="twitter:card" content="summary_large_image" />
+	{/if}
+</svelte:head>
 
 {#snippet exampleShelf()}
 	<figure class="example" aria-label="Example shelf with invented games">

@@ -280,7 +280,7 @@ For fun, not for rankings anyone takes seriously (D37).
 
 ### Demo group
 
-On Carlo's instance, `/demo` shows a read-only group of about 430 invented games and made-up members (`pnpm db:seed`; seeding from a real BGG collection isn't built). Visitors can browse the catalog, open game pages, and use the picker. Anything that would change data is hidden, and the server refuses it regardless. On a demo instance the landing page leads to it: "Browse the demo shelf", and links from each of its four moments (the shelf filtered to four players and an hour, the next game night, the leaderboard). Other instances can seed their own demo or skip it; the link appears only when a demo group exists.
+On Carlo's instance, `/demo` shows a read-only group of about 430 invented games and made-up members (`pnpm db:seed`; seeding from a real BGG collection isn't built). Visitors can browse the catalog, open game pages, and use the picker. Anything that would change data is hidden, and the server refuses it regardless. On a demo instance the landing page leads to it: "Browse the demo shelf", and links from each of its four moments (the shelf filtered to four players and an hour, the next game night, the leaderboard). Other instances can seed their own demo or skip it; the link appears only when a demo group exists. Pasted in a chat app, a demo instance's home page link shows a preview: the headline, a line about Box Populi and a picture of the example shelf.
 
 ### Self-hosting
 
