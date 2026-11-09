@@ -4,6 +4,10 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+## 0.3.4 (2026-11-09)
+
+**Upgrading:** nothing to do: no migrations and no new settings. Deploy as usual.
+
 - Fixed: on Cloudflare's free plan, busy evenings could end in "Error 1102: Worker exceeded resource limits" or an "Internal Error" inside a group. Pages now cost the site less work: a game's page loads when you click it rather than when the mouse passes over it, the shelf draws itself in your browser, the site icons no longer go through the app, and every group page asks the database fewer times.
 - An icon for the home screen when you add Box Populi to an iPhone.
 - Docs: SELF_HOSTING.md step 1 walks through BGG's application form field by field, with example answers.
