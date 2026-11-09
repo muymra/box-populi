@@ -57,14 +57,14 @@ describe('details are shared, pictures stay with the group (D54)', () => {
 		expect(await shelfNames('g1')).toContain('Lantern Harbour (2nd edition)');
 		expect(await shelfNames('g2')).toContain('Lantern Harbour (2nd edition)');
 		const [here, there] = [(await loadCatalog(db, 'g1', 1)).games, (await loadCatalog(db, 'g2', 1)).games].map((games) => games.find((g) => g.id === 2)!);
-		expect(here).toMatchObject({ minPlayers: 2, maxPlayers: 5, maxPlaytime: 45, weight: 4.5, thumbUrl: 'https://example.com/box.jpg' });
-		expect(there).toMatchObject({ minPlayers: 2, maxPlayers: 5, maxPlaytime: 45, weight: 4.5, thumbUrl: null });
+		expect(here).toMatchObject({ minPlayers: 2, maxPlayers: 5, maxPlaytime: 45, weight: 5, thumbUrl: 'https://example.com/box.jpg' });
+		expect(there).toMatchObject({ minPlayers: 2, maxPlayers: 5, maxPlaytime: 45, weight: 5, thumbUrl: null });
 		expect(there.search).toContain('port des lanternes'); // the old titles still find it
 		expect(await one(db, 'SELECT name, max_players, image_url, weight, edited_by, edited_at FROM games WHERE id = 2')).toEqual({
 			name: 'Lantern Harbour (2nd edition)',
 			max_players: 5,
 			image_url: null,
-			weight: 4.5,
+			weight: 5,
 			edited_by: 'ada',
 			edited_at: NOW
 		});
@@ -75,12 +75,14 @@ describe('details are shared, pictures stay with the group (D54)', () => {
 		expect(await version('g2')).toBe(g2 + 1);
 	});
 
-	it('stores a level as the middle of its band, and keeps a finer value when the level is the same (D55, D56)', async () => {
+	it('stores a level as the vote it stands for, and keeps a finer value when the level is the same (D55, D62)', async () => {
 		await run(db, 'UPDATE games SET weight = 4.3 WHERE id = 2');
-		await editGame(db, 'g1', owner, 2, form({ name: 'Lantern Harbour', complexity: 'heavy' }), NOW);
+		await editGame(db, 'g1', owner, 2, form({ name: 'Lantern Harbour', complexity: 'medium-heavy' }), NOW);
 		expect(await one(db, 'SELECT weight, edited_by FROM games WHERE id = 2')).toEqual({ weight: 4.3, edited_by: null });
 		await editGame(db, 'g1', owner, 2, form({ name: 'Lantern Harbour', complexity: 'light' }), NOW);
-		expect(await one(db, 'SELECT weight FROM games WHERE id = 2')).toEqual({ weight: 1.5 });
+		expect(await one(db, 'SELECT weight FROM games WHERE id = 2')).toEqual({ weight: 1 });
+		await editGame(db, 'g1', owner, 2, form({ name: 'Lantern Harbour', complexity: 'medium-light' }), NOW);
+		expect(await one(db, 'SELECT weight FROM games WHERE id = 2')).toEqual({ weight: 2 });
 	});
 
 	it('leaves a detail as it is when its field is empty', async () => {
@@ -131,7 +133,7 @@ describe('details are shared, pictures stay with the group (D54)', () => {
 	it('refuses BGG games, people without a copy, and bad values', async () => {
 		expect((await editGame(db, 'g1', member, 3, form({ name: 'X' }), NOW)).ok).toBe(false);
 		expect((await editGame(db, 'g1', { id: 'cy', role: 'member' }, 1, form({ name: 'X' }), NOW)).ok).toBe(false);
-		expect(await editGame(db, 'g1', member, 1, form({ name: 'X', complexity: '3' }), NOW)).toEqual({ ok: false, error: 'Complexity is light, medium or heavy.' });
+		expect(await editGame(db, 'g1', member, 1, form({ name: 'X', complexity: '3' }), NOW)).toEqual({ ok: false, error: 'Complexity is light, medium light, medium, medium heavy or heavy.' });
 		expect(await editGame(db, 'g1', member, 1, form({ name: 'X', minPlayers: '5', maxPlayers: '2' }), NOW)).toEqual({ ok: false, error: expect.stringMatching(/fewest players/) });
 		expect(await all(db, 'SELECT name, edited_by FROM games WHERE id IN (1, 3) ORDER BY id')).toEqual([
 			{ name: 'Kitchen Table Game', edited_by: null },

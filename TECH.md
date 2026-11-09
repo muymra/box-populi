@@ -451,7 +451,7 @@ Filtering, sorting and the picker run in the browser through pure functions in `
 - `parseFilters(URLSearchParams)` and `serializeFilters(filters)` keep filter state in the URL with short keys (`q`, `n`, `best`, `t`, `w`, `mech`, `cat`, `all`, `own`, `avail`, `exp`, `sort`).
 - `filterGames(games, filters, groupMemberIds)` applies the PRD's filter table. A game missing a field passes any filter on that field. A copy counts as available unless `lentOut` is true or it's lent to a user who isn't in `groupMemberIds`. A game is available when any of its copies is.
 - `normalize(s)` lowercases, applies NFD, strips combining marks, and collapses whitespace. The server uses the same function to build `search_text`, and the text filter is `game.search.includes(normalize(q))`.
-- Weight buckets live in `buckets.ts`: light `< 2`, medium `>= 2 && < 4`, heavy `>= 4` (D56).
+- Weight buckets live in `buckets.ts`: BGG's five vote labels, a weight taking the vote it rounds to: light `< 1.5`, medium-light `< 2.5`, medium `< 3.5`, medium-heavy `< 4.5`, heavy from 4.5 (D62). A member's level is stored as its vote, 1 to 5 (`BUCKET_WEIGHTS`). Fillers use their own line, `FILLER_MAX_WEIGHT` = 2, in `pick.ts`.
 
 - `hiddenByDefault(games, filters, groupMemberIds)` counts what the two default hides leave out under the other filters: `lent` (shown with availability off) and `expansions` (shown with both off, minus `lent`), so the parts add up to everything hidden.
 

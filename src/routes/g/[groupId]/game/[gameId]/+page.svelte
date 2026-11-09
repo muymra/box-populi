@@ -23,7 +23,7 @@
 	import { nightOf } from '#lib/table/regulars.ts';
 	import { guessKind, KIND_LABELS, LINK_KINDS, type LinkKind } from '#lib/link-kinds.ts';
 	import BoxFront from '#lib/components/BoxFront.svelte';
-	import { BUCKET_LABELS, formatPlaytime, formatWeight, weightBucket } from '#lib/catalog/buckets.ts';
+	import { BUCKET_LABELS, WEIGHT_BUCKETS, formatPlaytime, formatWeight, weightBucket } from '#lib/catalog/buckets.ts';
 	import { countsFromMask, formatCounts, formatPlayerRange } from '#lib/catalog/players.ts';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import type { PageProps } from './$types';
@@ -211,10 +211,8 @@
 								Complexity
 								<select class="field" name="complexity" value={bucket ?? ''}>
 									<option value="">Not set</option>
-									<!-- The shelf's three levels (D15, D55). -->
-									<option value="light">Light</option>
-									<option value="medium">Medium</option>
-									<option value="heavy">Heavy</option>
+									<!-- The shelf's five levels, BGG's vote labels (D55, D62). -->
+									{#each WEIGHT_BUCKETS as level (level)}<option value={level}>{BUCKET_LABELS[level]}</option>{/each}
 								</select>
 							</label>
 							<label>

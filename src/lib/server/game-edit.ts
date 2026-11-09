@@ -66,17 +66,17 @@ export type GameEdit = {
 	maxPlayers: number | null;
 	minPlaytime: number | null;
 	maxPlaytime: number | null;
-	complexity: WeightBucket | null; // stored in `weight` as the middle of its band (D55)
+	complexity: WeightBucket | null; // stored in `weight` as the BGG vote its level stands for (D55, D62)
 };
 
 export type EditParse = { ok: true; value: GameEdit } | { ok: false; error: string };
 
-/** The same rules as manual entry, plus a complexity of light, medium or heavy (D55). */
+/** The same rules as manual entry, plus a complexity on BGG's five levels (D55, D62). */
 export function parseGameEdit(form: FormData): EditParse {
 	const base = parseManualGame(form);
 	if (!base.ok) return base;
 	const raw = String(form.get('complexity') ?? '').trim();
-	if (raw !== '' && !(WEIGHT_BUCKETS as string[]).includes(raw)) return { ok: false, error: 'Complexity is light, medium or heavy.' };
+	if (raw !== '' && !(WEIGHT_BUCKETS as string[]).includes(raw)) return { ok: false, error: 'Complexity is light, medium light, medium, medium heavy or heavy.' };
 	return { ok: true, value: { ...base.value, complexity: raw === '' ? null : (raw as WeightBucket) } };
 }
 
@@ -111,7 +111,7 @@ export async function editGame(
 		['max_players', v.maxPlayers, game.max_players],
 		['min_playtime', v.minPlaytime, game.min_playtime],
 		['max_playtime', v.maxPlaytime, game.max_playtime],
-		// The same level as before keeps the stored value, which may be finer than the band's middle.
+		// The same level as before keeps the stored value, which may be finer than the level's vote.
 		['weight', v.complexity == null || v.complexity === weightBucket(game.weight) ? null : BUCKET_WEIGHTS[v.complexity], game.weight]
 	] as const;
 	const changed = fields.filter(([, value, current]) => value != null && value !== current);

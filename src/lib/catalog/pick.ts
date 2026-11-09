@@ -25,20 +25,25 @@ export function pickWeight(game: CatalogGame, players: number | null): number {
 export const FILLER_MAX_MINUTES = 30;
 
 /**
+ * A filler's complexity stays under this, whatever the levels are called: D62's Light alone (under 1.5)
+ * would leave out short games such as Hanabi, so fillers keep the line they had under D56.
+ */
+export const FILLER_MAX_WEIGHT = 2;
+
+/**
  * A filler: something to play while people arrive or between longer games. It lists
- * FILLER_MAX_MINUTES or less as its longest play time, and it's light or its complexity is unknown.
- * A game with no play time isn't one, since nothing says it's short.
+ * FILLER_MAX_MINUTES or less as its longest play time, and its complexity is under FILLER_MAX_WEIGHT
+ * or unknown. A game with no play time isn't one, since nothing says it's short.
  */
 export function isFiller(game: CatalogGame): boolean {
 	const longest = game.maxPlaytime ?? game.minPlaytime;
 	if (longest == null || longest > FILLER_MAX_MINUTES) return false;
-	const bucket = weightBucket(game.weight);
-	return bucket == null || bucket === 'light';
+	return game.weight == null || game.weight < FILLER_MAX_WEIGHT;
 }
 
 /** Fillers known to be light come up twice as often as those whose complexity nobody has set. */
 export function fillerWeight(game: CatalogGame, players: number | null): number {
-	return pickWeight(game, players) * (weightBucket(game.weight) === 'light' ? 2 : 1);
+	return pickWeight(game, players) * (game.weight != null && game.weight < FILLER_MAX_WEIGHT ? 2 : 1);
 }
 
 export type PickResult = { games: CatalogGame[]; reset: boolean };

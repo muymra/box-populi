@@ -649,8 +649,7 @@
 							<select class="field" bind:value={ceiling}>
 								<option value={null}>Any</option>
 								<option value="light">Light only</option>
-								<option value="medium">Up to medium</option>
-								<option value="heavy">Up to heavy</option>
+								{#each WEIGHT_BUCKETS.slice(1) as level (level)}<option value={level}>Up to {BUCKET_LABELS[level].toLowerCase()}</option>{/each}
 							</select>
 						</label>
 						<label class="fillers-check">

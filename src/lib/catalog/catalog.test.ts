@@ -10,7 +10,7 @@ import {
 	maskHas,
 	playerChoiceLabel
 } from './players.ts';
-import { formatPlaytime, formatWeight, weightBucket } from './buckets.ts';
+import { BUCKET_WEIGHTS, formatPlaytime, formatWeight, WEIGHT_BUCKETS, weightBucket } from './buckets.ts';
 import { DEFAULT_FILTERS, filterGames, hiddenByDefault, parseFilters, passedOnUnknown, serializeFilters, type Filters } from './filter.ts';
 import {
 	MAX_CHOSEN,
@@ -79,14 +79,22 @@ describe('player masks', () => {
 });
 
 describe('weight and time', () => {
-	it('closes the gaps between buckets', () => {
-		expect(weightBucket(1.99)).toBe('light');
-		expect(weightBucket(2)).toBe('medium');
-		expect(weightBucket(3)).toBe('medium'); // BGG's own word for a 3 is "Medium" (D56)
-		expect(weightBucket(3.99)).toBe('medium');
-		expect(weightBucket(4)).toBe('heavy');
-		expect(weightBucket(4.2)).toBe('heavy');
+	it('gives a weight the label of the BGG vote it rounds to (D62)', () => {
+		expect(weightBucket(1)).toBe('light');
+		expect(weightBucket(1.49)).toBe('light');
+		expect(weightBucket(1.5)).toBe('medium-light');
+		expect(weightBucket(2.31)).toBe('medium-light');
+		expect(weightBucket(2.5)).toBe('medium');
+		expect(weightBucket(3.49)).toBe('medium');
+		expect(weightBucket(3.5)).toBe('medium-heavy');
+		expect(weightBucket(4.3)).toBe('medium-heavy'); // BGG's own word for a 4 is "Medium Heavy"
+		expect(weightBucket(4.5)).toBe('heavy');
+		expect(weightBucket(5)).toBe('heavy');
 		expect(weightBucket(null)).toBeNull();
+	});
+
+	it('stores each level as the vote it stands for, which reads back as the same level', () => {
+		for (const level of WEIGHT_BUCKETS) expect(weightBucket(BUCKET_WEIGHTS[level])).toBe(level);
 	});
 	it('shows weight at BGG precision', () => {
 		expect(formatWeight(2.3125)).toBe('2.31 / 5');
@@ -163,9 +171,11 @@ describe('filterGames', () => {
 	});
 
 	it('filters by weight bucket', () => {
-		const light = game({ weight: 1.5 });
-		const heavy = game({ weight: 4.4 });
-		expect(filterGames([light, heavy], f({ weights: ['heavy'] }), members)).toEqual([heavy]);
+		const light = game({ weight: 1.2 });
+		const mediumHeavy = game({ weight: 4.4 });
+		const heavy = game({ weight: 4.6 });
+		expect(filterGames([light, mediumHeavy, heavy], f({ weights: ['heavy'] }), members)).toEqual([heavy]);
+		expect(filterGames([light, mediumHeavy, heavy], f({ weights: ['light', 'medium-heavy'] }), members)).toEqual([light, mediumHeavy]);
 	});
 
 	it('supports any and all tag matching', () => {
@@ -292,7 +302,8 @@ describe('picker', () => {
 		expect(isFiller(typed)).toBe(true);
 		expect(isFiller(game({ minPlaytime: 30, maxPlaytime: 30, weight: 1.9 }))).toBe(true);
 		expect(isFiller(game({ minPlaytime: 30, maxPlaytime: 60, weight: 1.2 }))).toBe(false); // only a filler on a good night
-		expect(isFiller(game({ minPlaytime: 20, maxPlaytime: 20, weight: 2.4 }))).toBe(false); // short but medium
+		expect(isFiller(game({ minPlaytime: 20, maxPlaytime: 20, weight: 1.7 }))).toBe(true); // medium light, but under 2 (D62)
+		expect(isFiller(game({ minPlaytime: 20, maxPlaytime: 20, weight: 2.4 }))).toBe(false); // short but not light
 		expect(isFiller(game({ minPlaytime: null, maxPlaytime: null, weight: 1.1 }))).toBe(false); // nothing says it's short
 		expect(fillerWeight(sushi, 4)).toBe(2 * fillerWeight(typed, 4));
 		const fillers = pick([sushi, typed], 4, seededRng(3), new Set(), 3, fillerWeight).games;
@@ -364,7 +375,8 @@ describe('keeping and choosing (PRD "Picker")', () => {
 		expect(misfits(long, { players: 1, minutes: null, ceiling: null }, true)).toEqual(['Not for 1 player']);
 		const unknown = game({ minPlayers: null, maxPlayers: null, minPlaytime: null, maxPlaytime: null, weight: null });
 		expect(misfits(unknown, limits, true)).toEqual([]);
-		expect(misfits(game({ weight: 2.5 }), { players: null, minutes: null, ceiling: 'light' }, true)).toEqual(['Too heavy']);
+		expect(misfits(game({ weight: 1.6 }), { players: null, minutes: null, ceiling: 'light' }, true)).toEqual(['Too heavy']);
+		expect(misfits(game({ weight: 4.4 }), { players: null, minutes: null, ceiling: 'medium-heavy' }, true)).toEqual([]);
 	});
 
 	it('lists games that fit first, then those best at the count, otherwise as given', () => {
