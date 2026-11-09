@@ -1,5 +1,6 @@
 <script lang="ts">
 	// The group's code opens its front door (D46, D47), for joining and for coming back on a new device.
+	import { tidyCode } from '#lib/codes.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -35,6 +36,7 @@
 						spellcheck="false"
 						placeholder="K7M4P"
 						value={form?.code ?? ''}
+						oninput={(e) => (e.currentTarget.value = tidyCode(e.currentTarget.value))}
 					/>
 				</div>
 			</div>

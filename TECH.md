@@ -548,6 +548,8 @@ The hoster operates the database and can read all of it with `wrangler d1 execut
 - Joining takes a try from two limits before looking the code up: 5 per 10 minutes per network address (`ipSubject`, which counts an IPv6 address by its /64) and 100 per hour across the instance (`join_fail_all`, subject `instance`). A right code gives both tries back, so only misses count. With 20 groups, the instance limit puts a lucky guess about 600 days away. The cost: someone sending 100 wrong codes an hour blocks joining for everyone until the hour passes (D34).
 - The demo group's code is `DEMO0`. The `0` keeps it out of the generator's alphabet, and the join action refuses demo groups anyway.
 
+Both code fields (the home page's "Another group" and `/join`) tidy what's typed with `tidyCode` from `src/lib/codes.ts`: capitals, no spaces or dashes, at most five characters, with characters codes never use left in for the server's message. The alphabet and length live there too, for the browser, and `server/codes.ts` takes them from it. The server still normalizes and checks every code, with or without JavaScript.
+
 ## BoardGameGeek integration
 
 ### Access and terms

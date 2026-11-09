@@ -5,6 +5,7 @@
 	// invented games, a short list of the rest, and running your own.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { tidyCode } from '#lib/codes.ts';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import Code from '@lucide/svelte/icons/code';
 	import BoxFront from '#lib/components/BoxFront.svelte';
@@ -301,6 +302,7 @@
 							autocapitalize="characters"
 							spellcheck="false"
 							placeholder="K7M4P"
+							oninput={(e) => (e.currentTarget.value = tidyCode(e.currentTarget.value))}
 						/>
 						<button class="btn">Join</button>
 					</form>

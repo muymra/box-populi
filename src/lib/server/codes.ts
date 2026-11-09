@@ -1,7 +1,8 @@
 // Five-character group join codes (DECISIONS D06). No 0, O, 1, I or L, so codes read aloud
 // or typed from a phone can't be confused.
-export const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-export const CODE_LENGTH = 5;
+import { CODE_ALPHABET, CODE_LENGTH } from '#lib/codes.ts';
+
+export { CODE_ALPHABET, CODE_LENGTH };
 
 /** Uniform random code. Bytes ≥ 248 are rejected so each character is equally likely (248 = 8 × 31). */
 export function generateCode(
