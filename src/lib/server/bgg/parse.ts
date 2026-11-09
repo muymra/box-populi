@@ -22,9 +22,12 @@ const parser = new XMLParser({
 type Node = any;
 
 const asArray = (v: Node): Node[] => (Array.isArray(v) ? v : v == null ? [] : [v]);
+// The XML parser resolves XML's own entities (&amp;, &quot;) but not character references, and
+// BGG writes an apostrophe in a name as &#039;. Every attribute goes through decodeEntities, so names,
+// alternate names, mechanics and themes come out as they read.
 const attr = (node: Node, key = 'value'): string | null => {
 	const v = node?.[key];
-	return typeof v === 'string' ? v : null;
+	return typeof v === 'string' ? decodeEntities(v) : null;
 };
 const text = (node: Node): string | null => {
 	if (node == null) return null;
@@ -175,7 +178,7 @@ export function parseCollection(xml: string): BggCollectionResult {
 	const items = asArray(doc?.items?.item)
 		.map((item: Node) => ({
 			bggId: Number(attr(item, 'objectid')),
-			name: text(asArray(item.name)[0]) ?? '',
+			name: decodeEntities(text(asArray(item.name)[0]) ?? ''),
 			year: positiveNumber(text(item.yearpublished)),
 			imageUrl: text(item.image)?.trim() || null,
 			thumbUrl: text(item.thumbnail)?.trim() || null

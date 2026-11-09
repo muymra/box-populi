@@ -101,12 +101,12 @@
 									<span class="muted num">· {entry.people} went</span>
 								</h3>
 								{#if entry.plays.length}
-									<PlayList plays={entry.plays} members={data.tableMembers} {table} groupId={data.group.id} showGame showDate={false} />
+									<PlayList plays={entry.plays} members={data.tableMembers} {table} groupId={data.group.id} showGame showDate={false} nights={data.nightList} />
 								{:else}
 									<p class="muted small">No plays logged.</p>
 								{/if}
 							{:else}
-								<PlayList plays={entry.plays} members={data.tableMembers} {table} groupId={data.group.id} showGame showDate={false} />
+								<PlayList plays={entry.plays} members={data.tableMembers} {table} groupId={data.group.id} showGame showDate={false} nights={data.nightList} />
 							{/if}
 						</div>
 					</li>

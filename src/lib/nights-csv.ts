@@ -4,17 +4,17 @@
 import { csvField, csvFile, SOURCE_LABEL, type GameSource } from './csv.ts';
 import type { Night, NightGame } from './nights.ts';
 
-export const NIGHTS_CSV_COLUMNS = ['date', 'starts', 'game_night', 'host', 'person', 'person_type', 'answer', 'brought', 'game_data_from', 'bgg_id', 'stayed_home', 'night_id'];
+export const NIGHTS_CSV_COLUMNS = ['date', 'starts', 'game_night', 'host', 'person', 'person_type', 'answer', 'came', 'brought', 'game_data_from', 'bgg_id', 'stayed_home', 'night_id'];
 
 export type NightGameInfo = { name: string; source: GameSource; bggId: number | null };
 
-type Person = { userId: string | null; guestName: string | null; going: boolean | null };
+type Person = { userId: string | null; guestName: string | null; going: boolean | null; came: boolean | null };
 
 /** Everyone on a night: who answered, in the order they did, then anyone who brought a game without answering. */
 function nightPeople(night: Night): Person[] {
-	const people: Person[] = night.people.map((p) => ({ userId: p.userId, guestName: p.guestName, going: p.going }));
+	const people: Person[] = night.people.map((p) => ({ userId: p.userId, guestName: p.guestName, going: p.going, came: p.came }));
 	const has = (g: NightGame) => people.some((p) => (g.guestName != null ? p.guestName === g.guestName : p.userId === g.broughtBy));
-	for (const g of night.games) if (!has(g)) people.push({ userId: g.broughtBy, guestName: g.guestName, going: null });
+	for (const g of night.games) if (!has(g)) people.push({ userId: g.broughtBy, guestName: g.guestName, going: null, came: null });
 	return people;
 }
 
@@ -48,6 +48,8 @@ export function nightsCsv(
 					csvField(name),
 					csvField(type),
 					csvField(answer),
+					// Who came, once someone checked (D67); empty until then.
+					csvField(person.came == null ? null : person.came ? 'yes' : 'no'),
 					csvField(game?.name ?? null, bgg),
 					csvField(game ? SOURCE_LABEL[game.source] : null),
 					csvField(game?.bggId ?? null),

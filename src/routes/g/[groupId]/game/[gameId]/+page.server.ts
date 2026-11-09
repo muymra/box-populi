@@ -1,4 +1,5 @@
 import { error, fail, redirect } from '@sveltejs/kit';
+import { nightListRead } from '#lib/server/nights.ts';
 import { requireRead, requireRole } from '#lib/server/authz.ts';
 import { addCopy, gameUsableInGroup, gameVisibleInGroup, removeCopy } from '#lib/server/games.ts';
 import { addLink, canDeleteLink, deleteLink, parseLink } from '#lib/server/links.ts';
@@ -60,6 +61,8 @@ export const load: PageServerLoad = async (event) => {
 	// as gameVisibleInGroup). That check comes back with the rest, and nothing else is used unless it passes.
 	// Copies hidden from the group don't count (D66), except the viewer's own: they open it to show it again.
 	const r = await readAll(db, {
+		// The nights a play can be put on (STATUS item 42).
+		nightList: nightListRead(db, groupId, new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)),
 		shared: rowOf<GameDetail>(
 			db,
 			`SELECT g.* FROM games g WHERE g.id = ?2 AND (
@@ -189,6 +192,7 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		plays: plays.slice(0, 10).map((p) => ({ ...p, canChange: canEdit && actor != null && canChangePlay(actor, p) })),
 		playCount: plays.length,
+		nightList: r.nightList,
 		mostWins: topId ? { name: nameOf(topId) ?? '', wins: topWins } : null,
 		canLog: canEdit && owners.length > 0,
 		// For attaching a play to tonight's game night when the game is in its pool (D38).

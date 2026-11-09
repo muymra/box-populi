@@ -22,7 +22,7 @@
 	import { formatPlaytime } from '#lib/catalog/buckets.ts';
 	import { favouritesAmong, pick, pickWeight, withInterest } from '#lib/catalog/pick.ts';
 	import type { CatalogGame } from '#lib/catalog/types.ts';
-	import { bringList, chatText, goingMembers, nightDate, nightGuests, nightPoolIds } from '#lib/nights.ts';
+	import { bringList, cameChecked, cameList, chatText, goingMembers, nightDate, nightGuests, nightPlayers, nightPoolIds, playOutcome, recapText } from '#lib/nights.ts';
 	import { nightOf } from '#lib/table/regulars.ts';
 	import { getTable } from '#lib/table/table.svelte.ts';
 	import type { PageProps } from './$types';
@@ -120,11 +120,49 @@
 	let logGame = $state<number | null>(null);
 	let logged = $state(false);
 
+	const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+	// After the night (D67): who came (anyone in a play on it, then whoever was marked, or who said
+	// they'd go), what got played and who won, and what was brought but not played.
+	const played = $derived(nightPlayers(data.plays));
+	const came = $derived(cameList(night, memberIds, played));
+	const checked = $derived(cameChecked(night));
+	const sameName = (a: string, b: string) => a.toLocaleLowerCase() === b.toLocaleLowerCase();
+	const cameGuest = (name: string) => came.guests.some((g) => sameName(g, name));
+	const playedGuest = (name: string) => [...played.guests].some((g) => sameName(g, name));
+	// You can say whether you came; co-admins can for anyone, so they see everyone to mark.
+	const mayMark = (id: string) => data.canMarkAll || id === data.me;
+	const cameRows = $derived(members.filter((m) => came.members.includes(m.id) || (data.canAnswer && mayMark(m.id))));
+	const guestRows = $derived([...guests, ...came.guests.filter((g) => !guests.some((x) => sameName(x, g)))]);
+	const playedIds = $derived(new Set(data.plays.map((p) => p.gameId)));
+	const broughtNotPlayed = $derived(list.filter((g) => !g.stayedHome && !playedIds.has(g.gameId)));
+	const personName = (p: { userId: string | null; guestName: string | null }) => p.guestName ?? (p.userId ? (memberById.get(p.userId)?.name ?? 'a former member') : 'someone');
+	const wentSummary = $derived(
+		[
+			checked
+				? `${plural(came.members.length + came.guests.length, 'person', 'people')} came.`
+				: `${going.length + guests.length} said they’d go. Nobody has checked who came yet.`,
+			data.plays.length ? `${plural(data.plays.length, 'play', 'plays')} logged.` : ''
+		]
+			.filter(Boolean)
+			.join(' ')
+	);
+	const cameHint = $derived(
+		data.canMarkAll
+			? checked
+				? 'Tap anyone to change it. Anyone in a play logged on the night came.'
+				: 'Filled in: said they’d go, or played. Tap anyone who didn’t come, or who came anyway.'
+			: data.me
+				? 'Tap your name if that’s not right. Anyone in a play logged on the night came.'
+				: ''
+	);
+
+	const url = $derived(`${page.url.origin}${base}/nights/${night.id}`);
 	const chat = $derived(
-		chatText(night, memberIds, { member: (id) => memberById.get(id)?.name ?? 'someone', game: gameName }, `${page.url.origin}${base}/nights/${night.id}`)
+		isPast
+			? recapText(night, came, data.plays, broughtNotPlayed.map((g) => gameName(g.gameId)), (id) => memberById.get(id)?.name ?? 'someone', url)
+			: chatText(night, memberIds, { member: (id) => memberById.get(id)?.name ?? 'someone', game: gameName }, url)
 	);
 	const when = $derived(`${nightDate(night.nightOn)}${night.startsAt ? `, ${night.startsAt}` : ''}`);
-	const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 	const whoSummary = $derived(
 		`${going.length} of ${plural(members.length, 'member', 'members')} going${guests.length ? `, plus ${plural(guests.length, 'guest', 'guests')}` : ''}.`
 	);
@@ -182,75 +220,173 @@
 		</section>
 	{/if}
 
-	<section class="form-panel" aria-labelledby="who-h">
-		<div class="form-head">
-			<div>
-				<h2 id="who-h">Who’s going</h2>
-				<p>{whoSummary}</p>
+	{#if isPast}
+		<!-- After the night (D67): who came, what got played, what was brought and not played. -->
+		<section class="form-panel" aria-labelledby="went-h">
+			<div class="form-head">
+				<div>
+					<h2 id="went-h">How it went</h2>
+					<p>{wentSummary}</p>
+				</div>
+				{#if !checked && data.canMarkAll && night.people.length}
+					<form method="POST" action="?/confirmCame" use:enhance><button class="btn small">That’s right</button></form>
+				{/if}
 			</div>
-		</div>
-		<div class="form-row" role="group" aria-labelledby="members-q">
-			<div class="form-label">
-				<span id="members-q" class="form-q">Members</span>
-				<span class="hint">{data.canChange && !isPast ? 'Tap someone to change their answer. ' : ''}Filled in: going. Struck through: can’t make it.</span>
-			</div>
-			<div class="form-body">
-				<ul class="people">
-					{#each members as m (m.id)}
-						{@const a = answer(m.id)}
-						{@const c = playerColor(m.colorIndex)}
-						<li>
-							{#if data.canChange && !isPast}
-								<form method="POST" action="?/going" use:enhance>
-									<input type="hidden" name="userId" value={m.id} />
-									<input type="hidden" name="going" value={a === true ? '0' : '1'} />
-									<button class="person" class:going={a === true} class:no={a === false} title={a === true ? `Mark ${m.name} not going` : `Mark ${m.name} going`}>
-										<span class="dot" style:background={c.fill}></span>{m.name}
-									</button>
-								</form>
-							{:else}
-								<a class="person" href="{base}/members/{m.id}" class:going={a === true} class:no={a === false}><span class="dot" style:background={c.fill}></span>{m.name}</a>
-							{/if}
-						</li>
-					{/each}
-				</ul>
-			</div>
-		</div>
-		{#if guests.length || (data.canAnswer && !isPast)}
-			<div class="form-row" role="group" aria-labelledby="guests-q">
+			<div class="form-row" role="group" aria-labelledby="came-q">
 				<div class="form-label">
-					<span id="guests-q" class="form-q">Guests</span>
-					<span class="hint">People coming who aren’t in the group.</span>
+					<span id="came-q" class="form-q">Came</span>
+					{#if cameHint}<span class="hint">{cameHint}</span>{/if}
 				</div>
 				<div class="form-body">
-					{#if guests.length}
+					{#if cameRows.length || guestRows.length}
 						<ul class="people">
-							{#each guests as name (name)}
+							{#each cameRows as m (m.id)}
+								{@const c = came.members.includes(m.id)}
+								{@const inPlay = played.members.has(m.id)}
+								{@const col = playerColor(m.colorIndex)}
 								<li>
-									<span class="person going guest">
-										<span class="dot"></span>{name}
-										{#if data.canAnswer}
-											<form method="POST" action="?/removeGuest" use:enhance>
-												<input type="hidden" name="name" value={name} />
-												<button class="remove" aria-label="Take {name} off the night"><X size={14} aria-hidden="true" /></button>
-											</form>
-										{/if}
-									</span>
+									{#if data.canAnswer && mayMark(m.id) && !(c && inPlay)}
+										<form method="POST" action="?/came" use:enhance>
+											<input type="hidden" name="userId" value={m.id} />
+											<input type="hidden" name="came" value={c ? '0' : '1'} />
+											<button class="person" class:going={c} aria-pressed={c} title={c ? `Mark ${m.name} as not there` : `Mark ${m.name} as there`}>
+												<span class="dot" style:background={col.fill}></span>{m.name}
+											</button>
+										</form>
+									{:else}
+										<a class="person" class:going={c} href="{base}/members/{m.id}" title={inPlay ? 'In a play logged on this night' : undefined}
+											><span class="dot" style:background={col.fill}></span>{m.name}</a
+										>
+									{/if}
+								</li>
+							{/each}
+							{#each guestRows as name (name)}
+								{@const c = cameGuest(name)}
+								<li>
+									{#if data.canMarkAll && !playedGuest(name) && guests.includes(name)}
+										<form method="POST" action="?/came" use:enhance>
+											<input type="hidden" name="guestName" value={name} />
+											<input type="hidden" name="came" value={c ? '0' : '1'} />
+											<button class="person guest" class:going={c} aria-pressed={c} title={c ? `Mark ${name} as not there` : `Mark ${name} as there`}>
+												<span class="dot"></span>{name}
+											</button>
+										</form>
+									{:else}
+										<span class="person guest" class:going={c}><span class="dot"></span>{name}</span>
+									{/if}
 								</li>
 							{/each}
 						</ul>
+					{:else}
+						<p class="muted quiet">Nobody said they’d go, and no plays are logged.</p>
 					{/if}
-					{#if data.canAnswer && !isPast}
-						<form method="POST" action="?/addGuest" class="inline guest-form" use:enhance>
-							<label class="visually-hidden" for="guest-name">A guest’s name</label>
-							<input id="guest-name" class="field" name="name" maxlength="30" placeholder="Add a guest by name" autocomplete="off" />
+					{#if data.canMarkAll}
+						<form method="POST" action="?/addCameGuest" class="inline guest-form" use:enhance>
+							<label class="visually-hidden" for="came-guest">A guest who came</label>
+							<input id="came-guest" class="field" name="name" maxlength="30" placeholder="Add a guest who came" autocomplete="off" />
 							<button class="btn">Add</button>
 						</form>
 					{/if}
 				</div>
 			</div>
-		{/if}
-	</section>
+			<div class="form-row" role="group" aria-labelledby="played-q">
+				<div class="form-label"><span id="played-q" class="form-q">Played</span></div>
+				<div class="form-body">
+					{#if data.plays.length}
+						<ul class="outcomes">
+							{#each data.plays as p (p.id)}
+								{@const outcome = playOutcome(p, personName)}
+								<li><a href="{base}/game/{p.gameId}">{p.gameName}</a>{#if outcome}<span class="muted">{outcome}</span>{/if}</li>
+							{/each}
+						</ul>
+					{:else}
+						<p class="muted quiet">Nothing logged. Log what you played under Plays.</p>
+					{/if}
+				</div>
+			</div>
+			{#if broughtNotPlayed.length}
+				<div class="form-row" role="group" aria-labelledby="unplayed-q">
+					<div class="form-label"><span id="unplayed-q" class="form-q">Brought, not played</span></div>
+					<div class="form-body">
+						<ul class="outcomes">
+							{#each broughtNotPlayed as g (g.gameId)}<li><a href="{base}/game/{g.gameId}">{gameName(g.gameId)}</a></li>{/each}
+						</ul>
+					</div>
+				</div>
+			{/if}
+		</section>
+	{:else}
+		<section class="form-panel" aria-labelledby="who-h">
+			<div class="form-head">
+				<div>
+					<h2 id="who-h">Who’s going</h2>
+					<p>{whoSummary}</p>
+				</div>
+			</div>
+			<div class="form-row" role="group" aria-labelledby="members-q">
+				<div class="form-label">
+					<span id="members-q" class="form-q">Members</span>
+					<span class="hint">{data.canChange && !isPast ? 'Tap someone to change their answer. ' : ''}Filled in: going. Struck through: can’t make it.</span>
+				</div>
+				<div class="form-body">
+					<ul class="people">
+						{#each members as m (m.id)}
+							{@const a = answer(m.id)}
+							{@const c = playerColor(m.colorIndex)}
+							<li>
+								{#if data.canChange && !isPast}
+									<form method="POST" action="?/going" use:enhance>
+										<input type="hidden" name="userId" value={m.id} />
+										<input type="hidden" name="going" value={a === true ? '0' : '1'} />
+										<button class="person" class:going={a === true} class:no={a === false} title={a === true ? `Mark ${m.name} not going` : `Mark ${m.name} going`}>
+											<span class="dot" style:background={c.fill}></span>{m.name}
+										</button>
+									</form>
+								{:else}
+									<a class="person" href="{base}/members/{m.id}" class:going={a === true} class:no={a === false}><span class="dot" style:background={c.fill}></span>{m.name}</a>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				</div>
+			</div>
+			{#if guests.length || (data.canAnswer && !isPast)}
+				<div class="form-row" role="group" aria-labelledby="guests-q">
+					<div class="form-label">
+						<span id="guests-q" class="form-q">Guests</span>
+						<span class="hint">People coming who aren’t in the group.</span>
+					</div>
+					<div class="form-body">
+						{#if guests.length}
+							<ul class="people">
+								{#each guests as name (name)}
+									<li>
+										<span class="person going guest">
+											<span class="dot"></span>{name}
+											{#if data.canAnswer}
+												<form method="POST" action="?/removeGuest" use:enhance>
+													<input type="hidden" name="name" value={name} />
+													<button class="remove" aria-label="Take {name} off the night"><X size={14} aria-hidden="true" /></button>
+												</form>
+											{/if}
+										</span>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+						{#if data.canAnswer && !isPast}
+							<form method="POST" action="?/addGuest" class="inline guest-form" use:enhance>
+								<label class="visually-hidden" for="guest-name">A guest’s name</label>
+								<input id="guest-name" class="field" name="name" maxlength="30" placeholder="Add a guest by name" autocomplete="off" />
+								<button class="btn">Add</button>
+							</form>
+						{/if}
+					</div>
+				</div>
+			{/if}
+		</section>
+
+	{/if}
 
 	<section class="form-panel" aria-labelledby="bring-h">
 		<div class="form-head">
@@ -389,7 +525,7 @@
 			</div>
 			{#if logged}<div class="form-block"><p class="banner" role="status">Play logged.</p></div>{/if}
 			{#if data.plays.length}
-				<div class="form-block"><PlayList plays={data.plays} {members} {table} groupId={data.group.id} /></div>
+				<div class="form-block"><PlayList plays={data.plays} {members} {table} groupId={data.group.id} nights={data.nightList} /></div>
 			{/if}
 		</section>
 	{/if}
@@ -444,7 +580,9 @@
 						{members}
 						{table}
 						nightId={night.id}
-						people={{ members: going, guests }}
+						day={night.nightOn}
+						nights={data.nightList}
+						people={{ members: came.members, guests: came.guests }}
 						ondone={(saved) => {
 							logOpen = false;
 							logged = saved;
@@ -602,6 +740,26 @@
 	}
 	.remove:hover {
 		background: rgb(0 0 0 / 0.1);
+	}
+	/* What got played, and what was brought but not: a game per line, the outcome after it. */
+	.outcomes {
+		list-style: none;
+		display: grid;
+		gap: 6px;
+		margin: 0;
+		padding: 0;
+	}
+	.outcomes li {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 10px;
+		align-items: baseline;
+	}
+	.outcomes a {
+		font-weight: 650;
+	}
+	.quiet {
+		margin: 0;
 	}
 	.guest-form .field {
 		flex: 1;

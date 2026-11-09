@@ -4,6 +4,10 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+- Game names from BoardGameGeek no longer show codes like `&#039;` in place of an apostrophe; names already on shelves are fixed when you upgrade, along with mechanics and themes.
+- After a game night, its page shows how it went: who came, what got played and who won, and what was brought but not played, and "Copy for the chat" copies that. Who came starts as who said they'd go; anyone in a play logged that night counts as there. You can say whether you came, and co-admins can for anyone or confirm the list in one tap. Play counts on profiles and the plays page, Play soon, and the nights export (a new `came` column) follow it.
+- Logging a play on a day that had a game night puts it on that night ("At Café, that day's game night"), and you can untick it; editing a play can move it onto or off a night. A play logged from a past night's page now gets the night's date instead of today's.
+- Plays saved on the wrong day by the bug above are corrected when you upgrade: a play logged after its night takes the night's date, and one moved to an earlier day leaves the night it no longer matches.
 - Member profiles: tap a member's name (Group tab, a game's page, the leaderboard, play rows, a night's page) for their page in the group: how often you've played together and who wins, games you both love, their games you haven't played yet, their record and wants. Your name in the top bar opens your own, which adds figures only you see: your year by month, your win rate by table size, who you play with most, how much of your shelf gets played, and your Play soon list. It shows only what the group could already see.
 - The showcase home page (`INSTANCE_MODE=demo`) draws its example shelves the way the shelf looks now and has a part on favourites and Play soon; its link preview is retaken to match. The demo group's members have favourites, so the demo shows the heart, the Favourites filters and the Most loved sort. Reseed the demo after upgrading to get them.
 ## 0.4.1 (2026-11-09)

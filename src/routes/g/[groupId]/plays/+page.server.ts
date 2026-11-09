@@ -5,9 +5,9 @@ import { canChangePlay, playsRead, podiumPointsRead } from '#lib/server/plays.ts
 import { deletePlayAction, pointsAction, savePlayAction } from '#lib/server/play-actions.ts';
 import { getDb } from '#lib/server/platform.ts';
 import { standings } from '#lib/plays.ts';
-import { assembleNights, nightReads } from '#lib/server/nights.ts';
+import { assembleNights, nightListRead, nightReads } from '#lib/server/nights.ts';
 import { readAll } from '#lib/server/db.ts';
-import { goingMembers, nightGuests } from '#lib/nights.ts';
+import { cameList, nightPlayers } from '#lib/nights.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 /** Plays listed on the page; the export has them all. */
@@ -24,6 +24,8 @@ export const load: PageServerLoad = async (event) => {
 	const until = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
 	// One round trip after the access check (D59, D65).
 	const r = await readAll(db, {
+		// The nights a play can be put on (STATUS item 42).
+		nightList: nightListRead(db, groupId, new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)),
 		plays: playsRead(db, groupId, { since }),
 		scheme: podiumPointsRead(db, groupId),
 		members: membersRead(db, groupId),
@@ -43,8 +45,12 @@ export const load: PageServerLoad = async (event) => {
 		| { kind: 'plays'; date: string; plays: typeof listed };
 	const entries: Entry[] = [];
 	const nightEntry = new Map<string, Extract<Entry, { kind: 'night' }>>();
+	// "· 5 went" counts who came (D67): anyone in a play on the night, then who was marked, or who said they'd go.
+	const playsByNight = new Map<string, typeof plays>();
+	for (const p of plays) if (p.night) playsByNight.set(p.night.id, [...(playsByNight.get(p.night.id) ?? []), p]);
 	for (const n of nights) {
-		const entry = { kind: 'night' as const, id: n.id, name: n.name, date: n.nightOn, people: goingMembers(n, memberIds).length + nightGuests(n).length, plays: [] as typeof listed };
+		const came = cameList(n, memberIds, nightPlayers(playsByNight.get(n.id) ?? []));
+		const entry = { kind: 'night' as const, id: n.id, name: n.name, date: n.nightOn, people: came.members.length + came.guests.length, plays: [] as typeof listed };
 		nightEntry.set(n.id, entry);
 		entries.push(entry);
 	}
@@ -59,6 +65,7 @@ export const load: PageServerLoad = async (event) => {
 	}
 	entries.sort((a, b) => b.date.localeCompare(a.date) || (a.kind === 'night' ? -1 : 1));
 	return {
+		nightList: r.nightList,
 		period,
 		year,
 		scheme,

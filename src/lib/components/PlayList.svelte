@@ -28,7 +28,8 @@
 		table,
 		groupId,
 		showGame = false,
-		showDate = true
+		showDate = true,
+		nights = []
 	}: {
 		plays: ListedPlay[];
 		members: Member[];
@@ -37,6 +38,8 @@
 		showGame?: boolean;
 		/** Off where the date is already said once for the group, as in the plays page's timeline. */
 		showDate?: boolean;
+		/** The group's nights up to today, so an edit can put the play on its day's night or take it off. */
+		nights?: Array<{ id: string; name: string; nightOn: string }>;
 	} = $props();
 
 	const memberById = $derived(new Map(members.map((m) => [m.id, m])));
@@ -125,6 +128,7 @@
 			{members}
 			{table}
 			initial={editing}
+			{nights}
 			ondone={() => (editOpen = false)}
 		/>
 	{/if}

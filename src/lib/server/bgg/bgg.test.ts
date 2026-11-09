@@ -265,3 +265,23 @@ describe.skipIf(localThings.length === 0)('local real BGG responses', () => {
 		}
 	});
 });
+
+describe('character references in BGG names', () => {
+	// BGG writes an apostrophe as &#039;, which the XML parser leaves alone; hand-written, like every fixture here.
+	it('decodes them in names, alternate names, mechanics and themes', () => {
+		const [t] = parseThings(
+			`<items><item type="boardgame" id="7"><name type="primary" value="Harbour&#039;s Light: The Second Tide"/><name type="alternate" value="Rock &amp; Roll&#039;s"/>` +
+				`<link type="boardgamemechanic" id="2" value="Players&#039; Choice"/><link type="boardgamecategory" id="3" value="Pirates &#8211; Age of Sail"/></item></items>`
+		);
+		expect(t.name).toBe("Harbour's Light: The Second Tide");
+		expect(t.alternateNames).toEqual(["Rock & Roll's"]);
+		expect(t.mechanics).toEqual(["Players' Choice"]);
+		expect(t.categories).toEqual(['Pirates – Age of Sail']);
+	});
+
+	it('decodes them in search results and collections', () => {
+		expect(parseSearch(`<items><item type="boardgame" id="7"><name type="primary" value="Harbour&#039;s Light"/></item></items>`)[0].name).toBe("Harbour's Light");
+		const collection = parseCollection(`<items><item objectid="7"><name sortindex="1">Harbour&#039;s Light</name></item></items>`);
+		expect(collection.status === 'ready' && collection.items[0].name).toBe("Harbour's Light");
+	});
+});

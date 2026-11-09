@@ -32,9 +32,9 @@ describe('night rules', () => {
 		hostId: null,
 		createdBy: 'ada',
 		people: [
-			{ userId: 'ada', guestName: null, going: true },
-			{ userId: 'bo', guestName: null, going: false },
-			{ userId: null, guestName: 'Sam', going: true }
+			{ userId: 'ada', guestName: null, going: true, came: null },
+			{ userId: 'bo', guestName: null, going: false, came: null },
+			{ userId: null, guestName: 'Sam', going: true, came: null }
 		],
 		games: [
 			{ gameId: 1, broughtBy: 'ada', guestName: null, addedBy: 'ada', stayedHome: false },

@@ -16,6 +16,7 @@ export type GroupAction =
 	| 'set_points'
 	| 'plan_night'
 	| 'change_night'
+	| 'mark_came'
 	| 'set_night_planners'
 	| 'make_sign_in_code'
 	| 'merge_member'
@@ -60,6 +61,9 @@ export function can(actor: Role, action: GroupAction, ctx: PermissionContext = {
 			// targetIsSelf: the actor planned the night.
 			return targetIsSelf || atLeast(actor, 'admin');
 		case 'change_play':
+			return targetIsSelf || atLeast(actor, 'admin');
+		case 'mark_came':
+			// Who came to a night (D67): you for yourself, co-admins for anyone. Not the planner as such.
 			return targetIsSelf || atLeast(actor, 'admin');
 		case 'remove_member':
 		// A sign-in code for someone who lost their way in, and merging an old entry into a new one (D48),

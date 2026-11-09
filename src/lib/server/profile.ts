@@ -29,6 +29,10 @@ const PROFILE_GAMES = `SELECT c.game_id FROM group_copies c WHERE c.group_id = ?
 	UNION SELECT f.game_id FROM favourites f
 	WHERE f.user_id = ?2 AND EXISTS (SELECT 1 FROM group_copies c WHERE c.group_id = ?1 AND c.game_id = f.game_id)`;
 
+/** SQL for "person `who` came to night `n`" (D67). */
+const CAME = (who: string) => `(EXISTS (SELECT 1 FROM night_people np WHERE np.night_id = n.id AND np.user_id = ${who} AND COALESCE(np.came, np.going) = 1)
+	OR EXISTS (SELECT 1 FROM plays p CROSS JOIN play_players pp WHERE p.night_id = n.id AND pp.play_id = p.id AND +pp.user_id = ${who}))`;
+
 type FlagRow = GameRow & { subject_owns: number; subject_loves: number; viewer_loves: number; played_here: number; viewer_played: number };
 type CopyRow = { game_id: number; owner_id: string; lent_to_user_id: string | null; lent_to_text: string | null; added_at: number };
 
@@ -74,16 +78,15 @@ export function profileReads(db: DB, groupId: string, subjectId: string, viewerI
 			subjectId,
 			viewerId
 		),
-		// The group's nights since they joined (and any before, from guest plays taken over, D37) up to today.
+		// The group's nights since they joined (and any before, from guest plays taken over, D37) up to
+		// today, and who came (D67): in a play logged on it, or marked as having come, or, unmarked, going.
 		nightRows: rowsOf<{ night_on: string; subject_went: number; viewer_went: number }>(
 			db,
-			`SELECT n.night_on,
-			   EXISTS (SELECT 1 FROM night_people np WHERE np.night_id = n.id AND np.user_id = ?2 AND np.going = 1) AS subject_went,
-			   EXISTS (SELECT 1 FROM night_people np WHERE np.night_id = n.id AND np.user_id = ?3 AND np.going = 1) AS viewer_went
+			`SELECT n.night_on, ${CAME('?2')} AS subject_went, ${CAME('?3')} AS viewer_went
 			 FROM game_nights n
 			 WHERE n.group_id = ?1 AND n.night_on <= ?4
 			   AND (n.night_on >= (SELECT date(m.joined_at / 1000, 'unixepoch') FROM memberships m WHERE m.group_id = ?1 AND m.user_id = ?2)
-			        OR EXISTS (SELECT 1 FROM night_people np WHERE np.night_id = n.id AND np.user_id = ?2 AND np.going = 1))
+			        OR ${CAME('?2')})
 			 ORDER BY n.night_on`,
 			groupId,
 			subjectId,

@@ -4,6 +4,8 @@
 	// (places follow from them), or a co-op win or loss. Who played comes first, then the result as a
 	// scoresheet right under it; the date folds to "Played today · Change" beside the buttons, and
 	// "Change" opens the last seven days as chips above them, with "Earlier…" for a grid of weeks.
+	// When the day had a game night, the play is at it ("Played Fri 6 Nov at Café"), ticked to start
+	// with and untickable, so a play can be put on a past night or taken off one (STATUS item 42).
 	import { tick, untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '$app/forms';
@@ -18,6 +20,7 @@
 
 	type Member = { id: string; name: string; colorIndex: number };
 	type Initial = { id: string; playedOn: string; coop: Coop | null; lowestWins: boolean; players: PlayPlayer[]; night?: { id: string } | null };
+	type NightOption = { id: string; name: string; nightOn: string };
 	let {
 		action,
 		game,
@@ -25,6 +28,8 @@
 		table,
 		initial = null,
 		nightId = null,
+		nights = [],
+		day = null,
 		people = null,
 		ondone
 	}: {
@@ -33,8 +38,12 @@
 		members: Member[];
 		table: Table;
 		initial?: Initial | null;
-		/** The game night a new play belongs to (D38); an edit keeps the play's own. */
+		/** The game night a new play belongs to (D38); an edit starts from the play's own. */
 		nightId?: string | null;
+		/** The group's game nights up to today, so a play can be put on the one held on its day. */
+		nights?: NightOption[];
+		/** The day a new play starts on, such as a past night's date; today otherwise. */
+		day?: string | null;
 		/** Who to start from instead of tonight's who's here, such as a night's going list. */
 		people?: { members: string[]; guests: string[] } | null;
 		/** Called with true after a save, false on Cancel. */
@@ -63,7 +72,10 @@
 						people?.guests ?? table.guests,
 						table.regulars
 					),
-			playedOn: initial?.playedOn ?? today,
+			playedOn: initial?.playedOn ?? day ?? today,
+			night: initial ? (initial.night?.id ?? null) : nightId,
+			// An existing play that wasn't at its day's night stays off it until someone ticks it.
+			untickedDay: initial && !initial.night ? initial.playedOn : null,
 			result: (initial?.coop ?? (from.some((p) => p.score != null) ? 'scores' : 'places')) as 'places' | 'scores' | Coop,
 			lowestWins: initial?.lowestWins ?? false,
 			scores: Object.fromEntries(from.map((p) => [keyOf(p), p.score == null ? '' : String(p.score)])),
@@ -77,6 +89,17 @@
 	let scores = $state<Record<string, string>>(start.scores);
 	let places = $state<Record<string, string>>(start.places);
 	let error = $state<string | null>(null);
+	// The game night on the play's day: ticked unless unticked for that day; with two that day, the one picked.
+	let chosenNight = $state(start.night);
+	let untickedDay = $state<string | null>(start.untickedDay);
+	const nightsThatDay = $derived(nights.filter((n) => n.nightOn === playedOn));
+	const atNight = $derived(untickedDay === playedOn ? null : (nightsThatDay.find((n) => n.id === chosenNight) ?? nightsThatDay[0] ?? null));
+	function setNight(id: string | null) {
+		if (id) {
+			chosenNight = id;
+			untickedDay = null;
+		} else untickedDay = playedOn;
+	}
 	// Places, Scores or Co-op; co-op then says won or lost.
 	const mode = $derived(result === 'won' || result === 'lost' ? 'coop' : result);
 	function setMode(next: 'places' | 'scores' | 'coop') {
@@ -155,7 +178,7 @@
 <form method="POST" {action} use:enhance={submit} class="play-form">
 	<input type="hidden" name="gameId" value={game.id} />
 	{#if initial}<input type="hidden" name="playId" value={initial.id} />{/if}
-	{#if (initial ? initial.night?.id : nightId)}<input type="hidden" name="nightId" value={initial ? initial.night?.id : nightId} />{/if}
+	{#if atNight}<input type="hidden" name="nightId" value={atNight.id} />{/if}
 	<input type="hidden" name="result" value={result} />
 
 	<fieldset>
@@ -243,13 +266,23 @@
 					<button type="button" onclick={showEarlier}>Earlier…</button>
 				</div>
 			{/if}
+			{#if nightsThatDay.length === 1}
+				<label class="check"><input type="checkbox" checked={atNight != null} onchange={(e) => setNight(e.currentTarget.checked ? nightsThatDay[0].id : null)} /> At {nightsThatDay[0].name}, that day’s game night</label>
+			{:else if nightsThatDay.length > 1}
+				<div class="choice-chips" role="radiogroup" aria-label="Which game night">
+					{#each nightsThatDay as n (n.id)}
+						<label><input type="radio" name="{id}-night" checked={atNight?.id === n.id} onchange={() => setNight(n.id)} />At {n.name}</label>
+					{/each}
+					<label><input type="radio" name="{id}-night" checked={atNight == null} onchange={() => setNight(null)} />Not at either</label>
+				</div>
+			{/if}
 		</fieldset>
 	{/if}
 	{#if error}<p class="banner error" role="alert">{error}</p>{/if}
 	<div class="foot">
 		<div class="when">
 			{#if !dateOpen}<input type="hidden" name="playedOn" value={playedOn} />{/if}
-			<span class="muted">Played {dateWords}</span>
+			<span class="muted">Played {dateWords}{atNight ? ` at ${atNight.name}` : ''}</span>
 			<button type="button" class="link-button" aria-expanded={dateOpen} onclick={toggleDate}>
 				{dateOpen ? 'Done' : 'Change'}<span class="visually-hidden"> the date</span>
 			</button>

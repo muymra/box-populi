@@ -5,9 +5,14 @@ import {
 	bringCopy,
 	bringOther,
 	canChangeNight,
+	canMarkCame,
+	confirmCame,
+	addCameGuest,
+	setCame,
 	deleteNight,
 	assembleNights,
 	nightOnlyGamesRead,
+	nightListRead,
 	nightReads,
 	parseNightForm,
 	removeNightGuest,
@@ -30,6 +35,8 @@ export const load: PageServerLoad = async (event) => {
 	const me = event.locals.user;
 	// Everything in one round trip after the access check (D59, D65).
 	const r = await readAll(db, {
+		// The nights a play can be put on (STATUS item 42).
+		nightList: nightListRead(db, groupId, new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)),
 		...nightReads(db, groupId, { id: nightId }),
 		otherGames: nightOnlyGamesRead(db, groupId, { ids: [nightId] }),
 		plays: playsRead(db, groupId, { nightId }),
@@ -57,6 +64,9 @@ export const load: PageServerLoad = async (event) => {
 		me: actor?.id ?? null,
 		playSoon: soon,
 		canChange: actor != null && canChangeNight(actor, night),
+		// Who came (D67): co-admins for anyone; everyone else for themselves.
+		canMarkAll: actor != null && canMarkCame(actor, null),
+		nightList: r.nightList,
 		canAnswer: actor != null
 	};
 };
@@ -97,6 +107,18 @@ export const actions: Actions = {
 		),
 
 	addGuest: async (event) => act(event, (form) => addNightGuest(getDb(), event.params.groupId, event.params.nightId, form.get('name'))),
+
+	// Who came (D67): you for yourself, co-admins for anyone; then "That's right", and a guest added afterwards.
+	came: async (event) =>
+		act(event, (form, actor) => {
+			const guestName = String(form.get('guestName') ?? '');
+			const who = guestName ? { guestName } : { userId: String(form.get('userId') ?? '') || actor.id };
+			return setCame(getDb(), event.params.groupId, actor, event.params.nightId, who, form.get('came') === '1');
+		}),
+
+	confirmCame: async (event) => act(event, (_form, actor) => confirmCame(getDb(), event.params.groupId, actor, event.params.nightId)),
+
+	addCameGuest: async (event) => act(event, (form, actor) => addCameGuest(getDb(), event.params.groupId, actor, event.params.nightId, form.get('name'))),
 
 	removeGuest: async (event) => act(event, (form) => removeNightGuest(getDb(), event.params.groupId, event.params.nightId, String(form.get('name') ?? ''))),
 

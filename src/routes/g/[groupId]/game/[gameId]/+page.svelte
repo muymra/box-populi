@@ -484,7 +484,7 @@
 				</div>
 				{#if data.playCount}
 					<div class="form-block">
-						<PlayList plays={recentPlays} members={data.tableMembers} {table} groupId={data.group.id} />
+						<PlayList plays={recentPlays} members={data.tableMembers} {table} groupId={data.group.id} nights={data.nightList} />
 					</div>
 				{/if}
 				{#if logged}<div class="form-block"><p class="banner" role="status">Play logged.</p></div>{/if}
@@ -508,6 +508,7 @@
 				members={data.tableMembers}
 				{table}
 				nightId={tonight?.id ?? null}
+				nights={data.nightList}
 				ondone={(saved) => {
 					logOpen = false;
 					logged = saved;

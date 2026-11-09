@@ -3,7 +3,7 @@
 import { all, mapRead, one, readAll, rowsOf, stmt, type DB, type Read } from './db.ts';
 import { bumpCatalogForGroup } from './catalog.ts';
 import { can } from './permissions.ts';
-import { gameOnNight, nightInGroup } from './nights.ts';
+import { gameOnNight, nightDay } from './nights.ts';
 import { cleanGuestName } from '#lib/table/here.ts';
 import {
 	DEFAULT_POINTS,
@@ -156,7 +156,12 @@ export async function savePlay(db: DB, groupId: string, actor: Actor, gameId: nu
 	if (playId && !existing) return { ok: false, error: 'That play is gone. Reload the page.' };
 	if (existing && !canChangePlay(actor, existing)) return { ok: false, error: 'Only whoever logged it, its players and co-admins can change a play.' };
 	const nightId = input.nightId ?? null;
-	if (nightId && !(await nightInGroup(db, groupId, nightId))) return { ok: false, error: 'That game night is gone. Reload the page.' };
+	if (nightId) {
+		const night = await nightDay(db, groupId, nightId);
+		if (!night) return { ok: false, error: 'That game night is gone. Reload the page.' };
+		// A play on a night is played on its day (STATUS item 42).
+		if (night !== input.playedOn) return { ok: false, error: 'That game night was on another day. Change the date, or untick the night.' };
+	}
 	// A shelf game, or one on the night's bring list, such as a guest's (D38).
 	if (existing?.gameId !== gameId && !(await gameOnShelf(db, groupId, gameId)) && !(nightId && (await gameOnNight(db, groupId, nightId, gameId)))) {
 		return { ok: false, error: 'That game isn’t on this group’s shelf or the night’s list.' };

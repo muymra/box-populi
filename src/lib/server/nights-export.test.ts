@@ -24,8 +24,8 @@ beforeEach(async () => {
 	);
 	await run(
 		db,
-		`INSERT INTO night_people (night_id, user_id, guest_name, going) VALUES
-		 ('n1', 'ada', NULL, 1), ('n1', 'bo', NULL, 0), ('n1', NULL, 'Sam', 1), ('n2', 'bo', NULL, 1)`
+		`INSERT INTO night_people (night_id, user_id, guest_name, going, came) VALUES
+		 ('n1', 'ada', NULL, 1, 1), ('n1', 'bo', NULL, 0, NULL), ('n1', NULL, 'Sam', 1, 0), ('n2', 'bo', NULL, 1, NULL)`
 	);
 	await run(
 		db,
@@ -41,14 +41,14 @@ describe('the game nights CSV', () => {
 		expect([...games.keys()].sort()).toEqual([1, 2, 3]);
 		const names = new Map([['ada', 'Ada'], ['bo', 'Bo']]);
 		const lines = nightsCsv(nights, (id) => names.get(id) ?? null, (id) => games.get(id) ?? null).split('\r\n');
-		expect(lines[0]).toBe('﻿date,starts,game_night,host,person,person_type,answer,brought,game_data_from,bgg_id,stayed_home,night_id');
+		expect(lines[0]).toBe('﻿date,starts,game_night,host,person,person_type,answer,came,brought,game_data_from,bgg_id,stayed_home,night_id');
 		expect(lines.slice(1, -1)).toEqual([
-			'2026-11-20,,Café,,Bo,member,going,,,,,n2',
-			'2026-11-20,,Café,,a former member,former member,,Harbour Lights,BoardGameGeek,4242,no,n2',
-			"2026-11-06,19:30,At Ada's,Ada,Ada,member,going,Harbour Lights,BoardGameGeek,4242,no,n1",
-			"2026-11-06,19:30,At Ada's,Ada,Ada,member,going,Ember Tavern (2nd ed.),typed in,,yes,n1",
-			"2026-11-06,19:30,At Ada's,Ada,Bo,member,not going,,,,,n1",
-			"2026-11-06,19:30,At Ada's,Ada,Sam,guest,going,Elsewhere,typed in,,no,n1"
+			'2026-11-20,,Café,,Bo,member,going,,,,,,n2',
+			'2026-11-20,,Café,,a former member,former member,,,Harbour Lights,BoardGameGeek,4242,no,n2',
+			"2026-11-06,19:30,At Ada's,Ada,Ada,member,going,yes,Harbour Lights,BoardGameGeek,4242,no,n1",
+			"2026-11-06,19:30,At Ada's,Ada,Ada,member,going,yes,Ember Tavern (2nd ed.),typed in,,yes,n1",
+			"2026-11-06,19:30,At Ada's,Ada,Bo,member,not going,,,,,,n1",
+			"2026-11-06,19:30,At Ada's,Ada,Sam,guest,going,no,Elsewhere,typed in,,no,n1"
 		]);
 	});
 

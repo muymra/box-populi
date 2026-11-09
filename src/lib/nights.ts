@@ -3,7 +3,8 @@
 import { isCopyAtHand } from './catalog/pick.ts';
 import type { CatalogGame } from './catalog/types.ts';
 
-export type NightPerson = { userId: string | null; guestName: string | null; going: boolean };
+/** `came`: who came, checked after the night (D67); null until someone does. */
+export type NightPerson = { userId: string | null; guestName: string | null; going: boolean; came: boolean | null };
 export type NightGame = { gameId: number; broughtBy: string | null; guestName: string | null; addedBy: string | null; stayedHome: boolean };
 export type Night = {
 	id: string;
@@ -25,6 +26,43 @@ export function goingMembers(night: Night, memberIds: ReadonlySet<string>): stri
 
 export function nightGuests(night: Night): string[] {
 	return night.people.flatMap((p) => (p.guestName ? [p.guestName] : []));
+}
+
+type PlayedBy = { players: readonly { userId: string | null; guestName: string | null }[] };
+
+/** The members and guests in a night's logged plays: they came, whatever anyone marked (D67). */
+export function nightPlayers(plays: readonly PlayedBy[]): { members: Set<string>; guests: Set<string> } {
+	const members = new Set<string>();
+	const guests = new Set<string>();
+	for (const play of plays)
+		for (const p of play.players) {
+			if (p.userId) members.add(p.userId);
+			else if (p.guestName) guests.add(p.guestName);
+		}
+	return { members, guests };
+}
+
+/** Whether anyone has checked who came (D67). Until someone does, a night counts its going list. */
+export function cameChecked(night: Night): boolean {
+	return night.people.some((p) => p.came != null);
+}
+
+const sameGuest = (a: string, b: string) => a.toLocaleLowerCase() === b.toLocaleLowerCase();
+
+/**
+ * Who came to a night (D67): anyone in a play logged on it, then anyone marked as having come, or,
+ * for someone nobody marked, anyone who said they'd go. Members still in the group, in the order
+ * they answered, then members who only played; guests the same way.
+ */
+export function cameList(night: Night, memberIds: ReadonlySet<string>, played: { members: ReadonlySet<string>; guests: ReadonlySet<string> }): { members: string[]; guests: string[] } {
+	const members = night.people.flatMap((p) => (p.userId && memberIds.has(p.userId) && (played.members.has(p.userId) || (p.came ?? p.going)) ? [p.userId] : []));
+	for (const id of played.members) if (memberIds.has(id) && !members.includes(id)) members.push(id);
+	const guests = night.people.flatMap((p) => {
+		const name = p.guestName;
+		return name && ([...played.guests].some((g) => sameGuest(g, name)) || (p.came ?? p.going)) ? [name] : [];
+	});
+	for (const g of played.guests) if (!guests.some((x) => sameGuest(x, g))) guests.push(g);
+	return { members, guests };
 }
 
 /**
@@ -73,6 +111,47 @@ export function nightOn(nights: readonly Night[], today: string): Night | null {
 export function nightDate(day: string, thisYear = new Date().getFullYear()): string {
 	const d = new Date(`${day}T12:00:00`);
 	return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: d.getFullYear() === thisYear ? undefined : 'numeric' });
+}
+
+type RecapPlay = { gameName: string; coop: 'won' | 'lost' | null; players: readonly { userId: string | null; guestName: string | null; place: number | null }[] };
+
+/** "Bram won", "Ada and Bram won", "co-op, won", or nothing for a play logged without places. */
+export function playOutcome(play: RecapPlay, name: (p: { userId: string | null; guestName: string | null }) => string): string {
+	if (play.coop) return `co-op, ${play.coop}`;
+	const places = play.players.map((p) => p.place);
+	const winners = play.players.filter((p) => p.place === 1 && places.some((q) => q != null && q > 1)).map(name);
+	if (!winners.length) return '';
+	return `${winners.length > 1 ? `${winners.slice(0, -1).join(', ')} and ${winners.at(-1)}` : winners[0]} won`;
+}
+
+/**
+ * A past night for the chat (D67): who came, what got played and who won, and what was brought but
+ * not played, then the link.
+ */
+export function recapText(
+	night: Night,
+	came: { members: string[]; guests: string[] },
+	plays: readonly RecapPlay[],
+	broughtNotPlayed: readonly string[],
+	member: (id: string) => string,
+	url: string
+): string {
+	const people = [...came.members.map(member), ...came.guests];
+	const name = (p: { userId: string | null; guestName: string | null }) => p.guestName ?? (p.userId ? member(p.userId) : 'someone');
+	const lines = [`${night.name}, ${nightDate(night.nightOn)}: ${people.length} came${people.length ? ` (${people.join(', ')})` : ''}`];
+	if (plays.length) {
+		lines.push(
+			`Played: ${plays
+				.map((p) => {
+					const outcome = playOutcome(p, name);
+					return outcome ? `${p.gameName} (${outcome})` : p.gameName;
+				})
+				.join(', ')}`
+		);
+	}
+	if (broughtNotPlayed.length) lines.push(`Brought, not played: ${broughtNotPlayed.join(', ')}`);
+	lines.push(url);
+	return lines.join('\n');
 }
 
 /** A start time as typed, HH:MM in 24 hours, or null. */

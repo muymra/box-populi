@@ -229,6 +229,8 @@ Bindings and variables come from `import { env } from 'cloudflare:workers'` (Sve
 - `0014_favourites_play_soon.sql`: `favourites` and `play_soon` (D63, D64; shown after `wishlist` below).
 - `0015_audit_fixes.sql` (D65): indexes `night_people(night_id)`, `plays(group_id, game_id, played_on)` and a partial `copies(lent_to_user_id)`; `groups.link_key`, the invite link's key (see "Group codes"), filled for existing groups with `randomblob`; and `game_bases` (below), with its triggers.
 - `0016_hidden_copies.sql` (D66): `hidden_copies` and `memberships.hide_new`, four triggers that keep hidden rows in step with `copies` and `memberships`, and the view `group_copies` (below). Every query about what a group holds reads the view; `hiding.ts` writes the rows.
+- `0017_night_came.sql` (D67): `night_people.came`, empty until someone checks who came, 1 or 0 after; and a one-off correction of plays saved on the wrong day (a play after its night takes the night's date; one before it leaves the night), bumping those groups' catalog version for "last played".
+- `0018_bgg_entities.sql`: decodes `&#039;` and a few other character references left in stored BGG names, search text, mechanics, themes and cached searches (see "Parsing `thing`"), bumping the catalog of groups with an affected game.
 - Guest plays to a member (D37) needs no migration: `linkGuestPlays` in `guest-plays.ts` rewrites `play_players`, `night_people` and `night_games` guest rows to the member, checking `can(role, 'link_guest_plays')`.
 
 Timestamps are Unix milliseconds. JSON columns hold arrays and are written and read only through helpers in `db.ts`.
@@ -412,7 +414,9 @@ CREATE INDEX game_links_lookup ON game_links(group_id, game_id);
 -- migrations/0007_game_nights.sql: game nights (D38). game_nights: id (random text), group_id,
 -- name, night_on (YYYY-MM-DD), starts_at (HH:MM or NULL), host_id (a member whose shelf counts, or
 -- NULL for somewhere else), created_by, created_at. night_people: a member (user_id, going 1 or 0)
--- or a guest (guest_name), unique per night. night_games: (night_id, game_id) with brought_by (a
+-- or a guest (guest_name), unique per night; came (0017, D67): NULL until checked, then 1 or 0.
+-- Who came is COALESCE(came, going) = 1, or being in a play on the night (`cameList` in
+-- src/lib/nights.ts, the CAME clause in profile.ts, activeMark in interest.ts). night_games: (night_id, game_id) with brought_by (a
 -- member) or guest_name, added_by and stayed_home. plays.night_id: the night a play belongs to.
 -- groups.nights_by: 'members' (default) or 'admins'.
 
@@ -752,6 +756,7 @@ Rules:
 - **Zero means unknown.** BGG sends `0` for missing player counts, play times, weight (no votes) and year. Store NULL.
 - Play time: `min_playtime` and `max_playtime`; when one is zero, fall back to `playingtime`.
 - Description: BGG double-encodes entities, so after XML parsing the text still contains `&#10;` and friends. Decode those, strip any tags, and store plain text.
+- Names and other attributes: BGG writes an apostrophe as `&#039;` (and the odd dash or quote as another character reference), which the XML parser leaves alone, since it resolves only XML's own entities. Every attribute value goes through `decodeEntities`, and so does a collection item's name, so "Harbour's Light" never reads `Harbour&#039;s Light`. Migration 0018 decoded the names, search text, mechanics, themes and cached searches stored before this.
 - Player counts (`poll.ts`): prefer BGG's own summary. The `poll-summary name="suggested_numplayers"` element's `bestwith` and `recommmendedwith` results carry text like "Best with 3–4 players" (BGG spells it with three m's; confirm against a real response). Parse the counts, ranges and comma lists into the masks, ignoring counts above 30. This keeps the app's "best at" identical to what BGG shows, so it isn't a modified version of BGG's data.
 - When the summary is missing, fall back to the raw poll and label the result in the UI as "computed from BGG poll votes." Ignore `results` rows whose `numplayers` contains `+` or is above 30. If `totalvotes` is under 10, both masks are 0. Otherwise a count is **best** when Best votes exceed both Recommended and Not Recommended, and **recommended** when Best plus Recommended exceed Not Recommended. Store which source was used in a `poll_source` column (`summary`, `votes`, or NULL).
 
@@ -1050,7 +1055,7 @@ Run with `pnpm test` (Vitest). Tests sit next to their code as `*.test.ts`.
 |---|---|
 | `lib/catalog/*` (filter, URL params, normalize, buckets, pick) | Pure unit tests. Filter tests include games with NULL fields, lent copies, and expansions. Picker tests use a seeded rng. |
 | `permissions.ts` | Table test over every role, action and target role. Must fail: admin removes admin, admin promotes self, owner leaves with members, anyone acting on a demo group. |
-| `bgg/parse.ts`, `bgg/poll.ts` | Against the fixtures: zeros become NULL, "N+" rows skipped, low-vote polls give no data, double-encoded descriptions decode, expansions get base ids. |
+| `bgg/parse.ts`, `bgg/poll.ts` | Against the fixtures: zeros become NULL, "N+" rows skipped, low-vote polls give no data, double-encoded descriptions decode, `&#039;` in names, alternate names, mechanics, search hits and collections decodes, expansions get base ids. |
 | `codes.ts` | Alphabet only, length 5. |
 | BGG pacer | SQL test: ten concurrent reservations get distinct slots at least `BGG_MIN_INTERVAL_MS` apart; a 503 pushes `next_at` out by 30 seconds; refused reservations leave `next_at` unchanged. Client tests (stubbed fetch): a refused slot sends nothing, and a timed-out request or body read becomes `BggBusyError`. |
 | `instance.ts` | Defaults applied, required values reported by name, bad values (`GROUP_CREATION=maybe`, non-numeric limits, `BGG_MIN_INTERVAL_MS` under 2000) rejected. |

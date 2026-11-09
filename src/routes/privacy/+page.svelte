@@ -39,7 +39,7 @@
 			the table who aren't members, as typed by whoever logged the play.
 		</li>
 		<li>
-			Game nights planned in a group: the date and place, who's going or not, guests' names, and which games each person
+			Game nights planned in a group: the date and place, who's going or not and, afterwards, who came, guests' names, and which games each person
 			is bringing, including titles typed in for games that aren't on anyone's shelf.
 		</li>
 		<li>

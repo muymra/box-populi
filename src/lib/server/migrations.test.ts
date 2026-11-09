@@ -53,3 +53,73 @@ describe('0015: audit fixes (D65)', () => {
 		expect(bases()).toEqual([{ b: 100, g: 3 }, { b: 101, g: 4 }]);
 	});
 });
+
+describe('0017: who came, and plays saved on the wrong day (D67)', () => {
+	it('moves a play logged after its night onto the night, and takes one logged earlier off it', () => {
+		const raw = new DatabaseSync(':memory:');
+		applyMigrationsSync(
+			raw,
+			MIGRATIONS.filter((m) => m.name < '0017')
+		);
+		raw.exec(`
+			INSERT INTO groups (id, name, code, created_at, catalog_version) VALUES ('g1', 'One', 'K7M4P', 0, 5), ('g2', 'Two', 'K7M4Q', 0, 5);
+			INSERT INTO games (id, name, search_text) VALUES (1, 'Alpha', 'alpha');
+			INSERT INTO game_nights (id, group_id, name, night_on, created_at) VALUES ('n1', 'g1', 'Café', '2026-11-06', 0), ('n2', 'g2', 'Café', '2026-11-06', 0);
+			INSERT INTO plays (id, group_id, game_id, played_on, night_id, created_at) VALUES
+				('later', 'g1', 1, '2026-11-08', 'n1', 0),
+				('earlier', 'g1', 1, '2026-11-04', 'n1', 0),
+				('right', 'g2', 1, '2026-11-06', 'n2', 0),
+				('none', 'g2', 1, '2026-11-01', NULL, 0);
+		`);
+		applyMigrationsSync(raw);
+
+		const plays = raw.prepare('SELECT id, played_on, night_id FROM plays ORDER BY id').all();
+		expect(plays).toEqual([
+			{ id: 'earlier', played_on: '2026-11-04', night_id: null },
+			{ id: 'later', played_on: '2026-11-06', night_id: 'n1' },
+			{ id: 'none', played_on: '2026-11-01', night_id: null },
+			{ id: 'right', played_on: '2026-11-06', night_id: 'n2' }
+		]);
+		// Only the group whose plays moved shows "last played" afresh.
+		expect(raw.prepare('SELECT id, catalog_version AS v FROM groups ORDER BY id').all()).toEqual([
+			{ id: 'g1', v: 6 },
+			{ id: 'g2', v: 5 }
+		]);
+		expect(raw.prepare("SELECT name FROM pragma_table_info('night_people') WHERE name = 'came'").all()).toEqual([{ name: 'came' }]);
+	});
+});
+
+describe('0018: character references in stored BGG names', () => {
+	it('decodes apostrophes and dashes in names, search text, mechanics, themes and cached searches, and keeps the lists valid', () => {
+		const raw = new DatabaseSync(':memory:');
+		applyMigrationsSync(
+			raw,
+			MIGRATIONS.filter((m) => m.name < '0018')
+		);
+		raw.exec(`
+			INSERT INTO users (id, name, created_at) VALUES ('ada', 'Ada', 0);
+			INSERT INTO groups (id, name, code, created_at, catalog_version) VALUES ('g1', 'One', 'K7M4P', 0, 5), ('g2', 'Two', 'K7M4Q', 0, 5);
+			INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES ('g1', 'ada', 'owner', 0, 0);
+			INSERT INTO games (id, bgg_id, name, search_text, mechanics, categories) VALUES
+				(1, 11, 'Harbour&#039;s Light &#8211; Tide', 'harbour&#039;s light &#8211; tide|the &#034;harbour&#034;', '["Players&#039; Choice"]', '["Say &#034;hi&#034;"]'),
+				(2, 12, 'Plain Name', 'plain name', '[]', '[]');
+			INSERT INTO copies (user_id, game_id, added_at) VALUES ('ada', 1, 0);
+			INSERT INTO bgg_search_cache (query, hits, fetched_at) VALUES ('harbour', '[{"bggId":11,"name":"Harbour&#039;s Light"}]', 0);
+		`);
+		applyMigrationsSync(raw);
+
+		expect(raw.prepare('SELECT name, search_text, mechanics, categories FROM games WHERE id = 1').get()).toEqual({
+			name: "Harbour's Light – Tide",
+			search_text: 'harbour\'s light – tide|the "harbour"',
+			mechanics: '["Players\' Choice"]',
+			categories: '["Say &#034;hi&#034;"]'
+		});
+		expect(JSON.parse((raw.prepare('SELECT categories FROM games WHERE id = 1').get() as { categories: string }).categories)).toEqual(['Say &#034;hi&#034;']);
+		expect(JSON.parse((raw.prepare("SELECT hits FROM bgg_search_cache WHERE query = 'harbour'").get() as { hits: string }).hits)[0].name).toBe("Harbour's Light");
+		// Only the group with an affected game on its shelf shows its names afresh.
+		expect(raw.prepare('SELECT id, catalog_version AS v FROM groups ORDER BY id').all()).toEqual([
+			{ id: 'g1', v: 6 },
+			{ id: 'g2', v: 5 }
+		]);
+	});
+});

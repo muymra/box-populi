@@ -33,7 +33,7 @@ export function activeMark(now: string): string {
 	   SELECT 1 FROM night_people np
 	   JOIN game_nights n ON n.id = np.night_id
 	   JOIN night_games ng ON ng.night_id = n.id AND ng.game_id = s.game_id AND ng.stayed_home = 0
-	   WHERE np.user_id = s.user_id AND np.going = 1
+	   WHERE np.user_id = s.user_id AND COALESCE(np.came, np.going) = 1
 	     AND n.night_on >= date(s.marked_at / 1000, 'unixepoch')
 	     AND n.night_on >= date(n.created_at / 1000, 'unixepoch')
 	     AND n.night_on < date(${now} / 1000, 'unixepoch'))`;

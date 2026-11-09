@@ -62,6 +62,11 @@ describe('permissions', () => {
 		['member', 'change_night', undefined, true, true],
 		['member', 'change_night', undefined, false, false],
 		['admin', 'change_night', undefined, false, true],
+		// mark_came (D67): yourself, or a co-admin for anyone
+		['member', 'mark_came', undefined, true, true],
+		['member', 'mark_came', undefined, false, false],
+		['admin', 'mark_came', undefined, false, true],
+		['owner', 'mark_came', undefined, false, true],
 		['member', 'set_night_planners', undefined, false, false],
 		['admin', 'set_night_planners', undefined, false, true],
 		// sign-in codes and merging (D48) reach whom removing reaches
