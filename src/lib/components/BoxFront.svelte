@@ -1,10 +1,12 @@
 <!--
 	A game's box front. BGG box art when there is some (linked, never copied: DECISIONS D12);
 	otherwise a printed box in a cardboard colour with the title set on it, so hand-entered,
-	demo and not-yet-loaded games still stand on the shelf.
+	demo and not-yet-loaded games still stand on the shelf. On the shelf (`cube`) a cover takes the
+	shape of its own cover, which the cube sizes from `--ratio` and `data-fit`.
 -->
 <script lang="ts">
 	import { boxColor } from '#lib/catalog/colors.ts';
+	import { boxFit, boxRatio } from '#lib/catalog/box-shape.ts';
 
 	let {
 		name,
@@ -15,11 +17,24 @@
 	let failed = $state(false);
 	const color = $derived(boxColor(name));
 	const showImage = $derived(!!src && !failed);
+
+	// The cover's width over height, read once it has loaded; kept with its src, so a reused box
+	// never takes the last cover's shape.
+	let img = $state<HTMLImageElement>();
+	let measured = $state<{ src: string; ratio: number } | null>(null);
+	function measure(el: HTMLImageElement) {
+		if (src && el.naturalWidth && el.naturalHeight) measured = { src, ratio: el.naturalWidth / el.naturalHeight };
+	}
+	$effect(() => {
+		if (img?.complete) measure(img);
+	});
+	const ratio = $derived(measured && measured.src === src ? measured.ratio : null);
+	const known = $derived(showImage ? ratio : null);
 </script>
 
-<div class="box {size}" style:--box-bg={color.bg} style:--box-ink={color.ink} class:art={showImage}>
+<div class="box {size}" style:--box-bg={color.bg} style:--box-ink={color.ink} class:art={showImage} style:--ratio={size === 'cube' ? boxRatio(known) : undefined} data-fit={size === 'cube' ? boxFit(known) : undefined}>
 	{#if showImage}
-		<img {src} alt="" loading="lazy" decoding="async" onerror={() => (failed = true)} />
+		<img bind:this={img} class:ready={ratio != null} {src} alt="" loading="lazy" decoding="async" onload={(e) => measure(e.currentTarget as HTMLImageElement)} onerror={() => (failed = true)} />
 	{:else}
 		<span class="title" aria-hidden="true">{name}</span>
 	{/if}
@@ -55,6 +70,16 @@
 		height: 100%;
 		object-fit: cover;
 		display: block;
+	}
+	/* On the shelf a cover shows once its box has its shape, and what a box held to the limits can't
+	   hold goes from the sides or the bottom: titles sit at the top. */
+	.cube.art img {
+		object-position: 50% 0;
+		opacity: 0;
+		transition: opacity 0.2s var(--ease-out);
+	}
+	.cube.art img.ready {
+		opacity: 1;
 	}
 	.title {
 		position: absolute;

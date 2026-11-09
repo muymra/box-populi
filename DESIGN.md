@@ -202,7 +202,7 @@ components:
   cube:
     backgroundColor: "{colors.cube}"
     textColor: "{colors.ink}"
-    padding: "8px 8px 0"
+    padding: "7% 0 0"
   shelf:
     backgroundColor: "{colors.shelf-gap}"
     rounded: "{rounded.shelf}"
@@ -271,7 +271,7 @@ The catalog is drawn as the group's shared cube-storage shelf. Each game is a bo
 
 Density follows the use: three cubes across on a phone at the table, five to seven on a desktop at home, and a denser Spines view (boxes lying on their sides) for scanning long collections. The type is one family, Archivo, used heavy and semi-condensed for anything printed on a box and at normal width for interface text. Dark mode is the same shelf in black-brown laminate, with the same roles swapped value for value.
 
-The world refuses the category default for game catalogs: a dark app with a grid of box-art cards and a filter sidebar. Box art from BoardGameGeek appears inside the cube when a game has it, hotlinked and cover-fitted, never copied; games without art get a printed box front so a hand-entered shelf still looks like a shelf.
+The world refuses the category default for game catalogs: a dark app with a grid of box-art cards and a filter sidebar. Box art from BoardGameGeek appears inside the cube when a game has it, hotlinked, never copied, standing at its own shape; games without art get a printed box front so a hand-entered shelf still looks like a shelf.
 
 **Key Characteristics:**
 - Square cubes on a shelf-gap grid, each closed by a 6px owner-colour edge.
@@ -279,7 +279,7 @@ The world refuses the category default for game catalogs: a dark app with a grid
 - Player colours by join order are the only saturated colour; marigold marks what is chosen.
 - Printed box fronts in cardboard tones with a lid seam and a heavy condensed title.
 - Archivo alone, steered by weight (400 to 800) and width (78% to 100%).
-- Flat at rest; a box lifts with one soft shadow when touched, a game's own page shows its box slightly tilted, and the things that stand for objects on the table (dice, podium blocks) carry the same lift.
+- Each cube is a compartment drawn in perspective and lit from the upper left: its box stands on the floor at the cover's own shape and casts a short shadow down and to the right, and the name and caption sit on the floor in front of it. Touched, the box lifts. A game's own page shows its box slightly tilted, and the things that stand for objects on the table (dice, podium blocks) carry the lift.
 
 ## Colors
 
@@ -296,7 +296,8 @@ A cardboard-and-laminate neutral field with two kinds of colour on top: player c
 
 ### Neutral
 - **White Laminate** (laminate): page ground and bottom tab bar; also the ink on the primary button.
-- **Cube White** (cube): the inside of each cube, panels, buttons, fields.
+- **Cube White** (cube): panels, buttons, fields, flags; the colour every compartment's shades are mixed from.
+- **Cubby** (cubby-wall, cubby-shade, cubby-ceiling, cubby-side, cubby-lit, cubby-floor): a compartment's walls, mixed from the cube colour with black (light: 3.5 to 16%; dark: 5 to 31%), so every theme gets its own. Ceiling darkest, then the top of the back wall and the left wall, the back wall, the right wall, and the floor lightest.
 - **Shelf Gap** (shelf-gap, CSS `--gap`): the grey between cubes and around the Spines list; tag fills; tab hover.
 - **Shelf Rule** (rule): 1px dividers and 1.5px control borders.
 - **Shelf Ink** (ink, ink-2, ink-3): text in three steps; ink-3 is the quietest that still passes 5:1 on laminate, used for placeholders and hover borders.
@@ -340,7 +341,7 @@ A cardboard-and-laminate neutral field with two kinds of colour on top: player c
 
 A centred container (max 76rem, 16px side padding) holds a top bar, the page, and the BoardGameGeek credit footer, which the root layout renders on every page. Spacing runs on a seven-step scale from 4px to 48px; most gaps are 8, 12 or 16px.
 
-The shelf is a CSS grid of auto-filling columns on a shelf-gap background: minimum 104px cubes with 6px gaps on phones (three across at 390px), minimum 142px with 8px gaps from 760px (five to seven across). Each cube is 1:1.04 inside its padding. The Spines view stacks full-width spines with 4px gaps on the same shelf-gap ground. Narrow single-task pages (join, create, account) cap at 30rem; the Group and Add pages at 46rem.
+The shelf is a CSS grid of auto-filling columns on a shelf-gap background: minimum 104px cubes with 6px gaps on phones (three across at 390px), minimum 142px with 8px gaps from 760px (five to seven across). Each cube's room for its box is 76% of the cube's width, 0.886 wide to tall, 7% of the width below the cube's top; the name, caption and owner edge follow under it.04 inside the cube's padding, with 6% of the opening's width either side of the box and 3.2% in front of it. The Spines view stacks full-width spines with 4px gaps on the same shelf-gap ground. Narrow single-task pages (join, create, account) cap at 30rem; the Group and Add pages at 46rem.
 
 Breakpoints, as used: 480px (spines move their facts to a second line below this), 640px (the game page places the box beside its title), 760px (cubes widen, filter chips wrap instead of scrolling sideways, modals centre), 900px (group tabs leave the bottom bar for the top bar; the landing hero goes two-column; the game page gains its side rail).
 
@@ -351,14 +352,16 @@ Breakpoints, as used: 480px (spines move their facts to a second line below this
 
 ## Elevation & Depth
 
-Flat at rest. Depth comes from the shelf itself: lighter cubes against the darker gap, the dark label strip against the laminate, and a 1px inset hairline (8% black) that gives box fronts and spines an edge. One shadow exists, and it means a box has been lifted off its shelf.
+The shelf has depth; everything else is flat. Each cube is a compartment drawn in one-point perspective from above (`.compartment` in app.css): the back wall darkening under the ceiling, side walls 19% of the width deep at the back, a ceiling 6px deep (2px on phones, whose taller cubes put the vanishing point higher) and a floor reaching 76px (68px) up from the front edge, deep enough to hold the name and caption in front of the box. Each wall is one background layer and each corner where two walls meet is a layer split along its own diagonal, so the drawing fits a cube of any height, and the walls run under the corners so no seam opens between layers. One light, from the upper left, sets every shade: the ceiling and left wall in shade, the right wall and floor lit, and the boxes' shadows falling down and to the right (Carlo asked for cubes with depth and boxes that cast shadows, then for the depth to fill the whole compartment with the text on its floor, 2026-11-09; chosen over the compartment above a shelf board carrying the text). Elsewhere depth comes from the dark label strip against the laminate and a 1px inset hairline (8% black) that gives box fronts and spines an edge. All of it is static backgrounds and shadows, with no extra elements: in headless Chrome at 2x a 1,240-cube shelf scrolls at a mean of 16.6ms a frame with a p95 of 17.8ms, against 17.5ms for the flat shelf.
 
 ### Shadow Vocabulary
-- **Lift** (`box-shadow: 0 1px 1px rgb(43 42 40 / 0.06), 0 6px 14px -6px rgb(43 42 40 / 0.18)`; dark mode `0 1px 1px rgb(0 0 0 / 0.3), 0 8px 18px -8px rgb(0 0 0 / 0.6)`): on a cube's box when hovered or focused (with a 3px rise), on the small boxes in the picker's results, on the hero box of a game page, on rolled dice, and on the podium blocks of the leaderboard.
+- **Stand** (`--shadow-stand`: `0 1px 1px rgb(0 0 0 / 0.2), 4px 3px 9px -3px rgb(0 0 0 / 0.3)`; dark mode at 0.5 and 0.6): every box standing in a cube.
+- **Shelf lift** (`--shadow-stand-lift`: `0 1px 1px rgb(0 0 0 / 0.1), 7px 10px 16px -7px rgb(0 0 0 / 0.38)`; dark mode at 0.3 and 0.75): a cube's box when hovered or focused, with a 3px rise; the cubby's light, so it falls the same way as Stand.
+- **Lift** (`box-shadow: 0 1px 1px rgb(43 42 40 / 0.06), 0 6px 14px -6px rgb(43 42 40 / 0.18)`; dark mode `0 1px 1px rgb(0 0 0 / 0.3), 0 8px 18px -8px rgb(0 0 0 / 0.6)`): off the shelf: on the small boxes in the picker's results, on the hero box of a game page, on rolled dice, and on the podium blocks of the leaderboard.
 - **Box hairline** (`box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08)`): the printed edge of every box front and spine.
 
 ### Named Rules
-**The Lift On Touch Rule.** Only a thing that stands for an object on the table gets a shadow: a box off its shelf (touched, pulled, or shown on its own page), a rolled die, a podium block. Panels, wells, buttons and chips stay flat.
+**The Lift On Touch Rule.** Only a thing that stands for an object gets a shadow: a box standing in its cube, a box off its shelf (touched, pulled, or shown on its own page), a rolled die, a podium block. Panels, wells, buttons and chips stay flat.
 
 ## Shapes
 
@@ -481,10 +484,10 @@ The Wanted tab draws the games members want as cubes on the shelf-gap ground, tw
 - **Leaderboard:** see Plays page: a podium for the top three, then a table from fourth place (1px rules, points at 780, numbers right-aligned and tabular). The period switch (the current year, e.g. "2026", and "All time") is the shelf's view switch, the current side filled with ink; it's a page-level view switch, which is why it isn't the quieter Segments.
 
 ### Cube
-The signature. A cube-white cell holding a box front standing on its floor, the game's name under box art (one line at 13px and 700, ink, cut with an ellipsis), a centred caption (players and time, tabular, ink-2), and the owner edge closing the bottom. A printed front already shows its title, so its name line stays empty but keeps its height: captions and owner edges sit level across a row (Carlo, 2026-11-09, chosen over a name on every box, two lines on phones, and a hover tooltip). On hover or focus the box rises 3px and takes the lift shadow over 0.2s on the shared ease-out curve. The link has no `aria-label`: a visually hidden lead (name, year and every flag that applies) comes first, so a screen reader also hears the caption and the owners from the edge, as in Spines.
+The signature. A compartment drawn with depth (see Elevation & Depth): a box front standing on its floor with the Stand shadow, in front of it on the floor the game's name under box art (one line at 13px and 700, ink, cut with an ellipsis), a centred caption (players and time, tabular, ink-2), both with 6px sides, and the owner edge as the floor's painted front edge, the cube's full width. A printed front already shows its title, so its name line stays empty but keeps its height: captions and owner edges sit level across a row (Carlo, 2026-11-09, chosen over a name on every box, two lines on phones, and a hover tooltip). On hover or focus the box rises 3px and takes the shelf lift over 0.2s on the shared ease-out curve. A flag sits 6px above the box's base. The shelf's loading cubes are the same compartments. The link has no `aria-label`: a visually hidden lead (name, year and every flag that applies) comes first, so a screen reader also hears the caption and the owners from the edge, as in Spines.
 
 ### Box Front
-BGG box art, cover-fitted and lazy-loaded from BGG's servers, when the game has it; on a missing image or a load error it falls back to the printed front: a cardboard print, the lid seam, and the box title. Sizes: cube, mini (seam only, no title) and hero (game page, picker).
+BGG box art, lazy-loaded from BGG's servers, when the game has it; on a missing image or a load error it falls back to the printed front: a cardboard print, the lid seam, and the box title. Sizes: cube, mini (seam only, no title) and hero (game page, picker). On the shelf a cover stands at its own width over height (`box-shape.ts`), so a wide box stands low and a card game's tall one stands narrow, as on a real shelf. It fills the room's width, or its height when it's taller than the room (0.886). The extremes are held to 0.7 and 1.6, so a 2:1 box doesn't turn into a sliver: past them the cover loses its ends, from the sides or the bottom (titles sit at the top), a sixth of a 2:1 cover. The cover fades in once its shape is known, square and shelf-gap grey until then; a printed front is square. Before this every cover was cut to one slightly tall frame, which took the ends off wide titles, and a tall cover stretched its cube (Carlo, 2026-11-09, chosen over three standard boxes and the whole cover on its cardboard print). Mini and hero stay cover-fitted.
 
 ### Spines
 Each game as a box lying on its side: a 46px bar in its cardboard print with the title along it, the facts (players, time, weight band) in tabular 13px, and a 12px end painted in its owners' colours stacked vertically (three colours plus an ink-3 "more" block past four owners). Hover or focus slides the spine 4px right over 0.18s.
@@ -535,6 +538,6 @@ The cube shelf above is the default and the reference design. Twelve presets rec
 - **Don't** add a box print that is saturated, sits in a player hue, or falls below 4.5:1 with its ink; keep dark prints to about a quarter of the set.
 - **Don't** download, proxy or re-host BGG box art.
 - **Don't** put eyebrows or kickers above headings: no small uppercase labels, no label that repeats the tab or title just above it, no group-size label over a game's name. Put that fact in a tag or the line of context.
-- **Don't** use hard offset shadows; the lift shadow is the only shadow.
+- **Don't** use hard offset shadows. The shadows are Stand and the shelf lift for boxes in cubes and Lift off the shelf, all soft, and on the shelf all from the one light at the upper left.
 - **Don't** use gradient text.
 - **Don't** separate cubes with borders or card shadows; the shelf gap does that.

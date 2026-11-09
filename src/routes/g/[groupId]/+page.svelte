@@ -352,7 +352,7 @@
 {#if !payload && !loadError}
 	<div class="shelf" aria-hidden="true">
 		{#each Array.from({ length: 12 }) as _, i (i)}
-			<div class="cube-empty" style:--i={i}>
+			<div class="cube-empty compartment" style:--i={i}>
 				<span class="skeleton box"></span>
 				<span class="skeleton line"></span>
 			</div>
@@ -759,7 +759,6 @@
 	}
 	.cube-empty {
 		aspect-ratio: 1 / 1.3;
-		background: var(--cube);
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -784,10 +783,6 @@
 			grid-template-columns: repeat(auto-fill, minmax(142px, 1fr));
 			padding: 8px;
 			gap: 8px;
-		}
-		/* The cube cell only: BoxFront's own size class is also "cube". */
-		.shelf > li > :global(a.cube) {
-			padding: 12px 12px 0;
 		}
 	}
 

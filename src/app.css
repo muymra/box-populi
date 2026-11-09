@@ -28,6 +28,16 @@
 	--r-cube: 2px; /* box fronts, spines, pulled boxes */
 	--r-ctl: 8px;
 	--shadow-lift: 0 1px 1px rgb(43 42 40 / 0.06), 0 6px 14px -6px rgb(43 42 40 / 0.18);
+	/* The inside of a compartment (.compartment), mixed from the theme's cube colour, lit from the upper left */
+	--cubby-wall: color-mix(in oklab, var(--cube) 92%, black);
+	--cubby-shade: color-mix(in oklab, var(--cube) 88%, black);
+	--cubby-ceiling: color-mix(in oklab, var(--cube) 84%, black);
+	--cubby-side: color-mix(in oklab, var(--cube) 88.5%, black);
+	--cubby-lit: color-mix(in oklab, var(--cube) 95%, black);
+	--cubby-floor: color-mix(in oklab, var(--cube) 96.5%, black);
+	/* a box standing in its cube, and lifted from it on hover; the light is the cubby's */
+	--shadow-stand: 0 1px 1px rgb(0 0 0 / 0.2), 4px 3px 9px -3px rgb(0 0 0 / 0.3);
+	--shadow-stand-lift: 0 1px 1px rgb(0 0 0 / 0.1), 7px 10px 16px -7px rgb(0 0 0 / 0.38);
 	--ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
 	--s-1: 4px;
@@ -71,6 +81,14 @@
 		--chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23f1ede6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 		--chevron-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%232b2a28' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 		--shadow-lift: 0 1px 1px rgb(0 0 0 / 0.3), 0 8px 18px -8px rgb(0 0 0 / 0.6);
+		--cubby-wall: color-mix(in oklab, var(--cube) 83%, black);
+		--cubby-shade: color-mix(in oklab, var(--cube) 76%, black);
+		--cubby-ceiling: color-mix(in oklab, var(--cube) 69%, black);
+		--cubby-side: color-mix(in oklab, var(--cube) 76%, black);
+		--cubby-lit: color-mix(in oklab, var(--cube) 91%, black);
+		--cubby-floor: color-mix(in oklab, var(--cube) 95%, black);
+		--shadow-stand: 0 1px 1px rgb(0 0 0 / 0.5), 4px 3px 9px -3px rgb(0 0 0 / 0.6);
+		--shadow-stand-lift: 0 1px 1px rgb(0 0 0 / 0.3), 7px 10px 16px -7px rgb(0 0 0 / 0.75);
 		color-scheme: dark;
 	}
 }
@@ -79,6 +97,37 @@
 *::before,
 *::after {
 	box-sizing: border-box;
+}
+
+/* A shelf compartment (Cube.svelte, and the shelf's loading cubes), in one-point perspective from above:
+   the back wall darkening under the ceiling, then two side walls --wall-d deep at the back, a ceiling
+   --wall-t deep and a floor reaching --wall-b up from the front, deep enough to hold a cube's name and
+   caption in front of its box. Each wall is one background layer, and each corner where two walls meet
+   is a layer split along its own diagonal (a "to top right" gradient's 50% line runs corner to corner),
+   so it fits a compartment of any height, with no extra elements. The walls run under the corners,
+   so no seam can open between two layers at a fraction of a pixel. The light comes from the upper left:
+   the ceiling and left wall in shade, the right wall and floor lit. */
+.compartment {
+	--wall-d: 19%;
+	--wall-t: 6px;
+	--wall-b: 76px;
+	background:
+		linear-gradient(to top right, var(--cubby-side) calc(50% - 0.5px), var(--cubby-ceiling) calc(50% + 0.5px)) 0 0 / var(--wall-d) var(--wall-t) no-repeat,
+		linear-gradient(to bottom right, var(--cubby-ceiling) calc(50% - 0.5px), var(--cubby-lit) calc(50% + 0.5px)) 100% 0 / var(--wall-d) var(--wall-t) no-repeat,
+		linear-gradient(to bottom right, var(--cubby-side) calc(50% - 0.5px), var(--cubby-floor) calc(50% + 0.5px)) 0 100% / var(--wall-d) var(--wall-b) no-repeat,
+		linear-gradient(to top right, var(--cubby-floor) calc(50% - 0.5px), var(--cubby-lit) calc(50% + 0.5px)) 100% 100% / var(--wall-d) var(--wall-b) no-repeat,
+		linear-gradient(var(--cubby-ceiling) 0 0) 0 0 / 100% var(--wall-t) no-repeat,
+		linear-gradient(var(--cubby-floor) 0 0) 0 100% / 100% var(--wall-b) no-repeat,
+		linear-gradient(var(--cubby-side) 0 0) 0 0 / var(--wall-d) 100% no-repeat,
+		linear-gradient(var(--cubby-lit) 0 0) 100% 0 / var(--wall-d) 100% no-repeat,
+		linear-gradient(to bottom, var(--cubby-shade), var(--cubby-wall) 35%);
+}
+/* A narrower cube is taller for its width, so its walls meet the vanishing point with a shallower ceiling. */
+@media (max-width: 759px) {
+	.compartment {
+		--wall-t: 2px;
+		--wall-b: 68px;
+	}
 }
 
 html {

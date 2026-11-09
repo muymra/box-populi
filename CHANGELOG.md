@@ -8,6 +8,8 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 - Group codes and sign-in codes are harder to mix up. Both fields tidy what you type (capitals, no spaces; the sign-in code gets its dash). Typing a sign-in code where a group code goes shows a hint and, if sent, says where it belongs, and the other way round. The example sign-in code no longer starts like the example group code.
 - Pages ask the database once or twice instead of up to 16 times, so they cost the site less on Cloudflare's free plan and load a little faster.
 - Games with box art show their name under the box on the shelf, since the art's own title is often cropped.
+- The shelf has depth: each cube is drawn as a little compartment lit from the upper left, every box stands on its floor with a soft shadow, and the name and caption sit on the floor in front of it. Box art keeps its own shape, so a wide box stands low and a card game's tall one stands narrow, instead of every cover being cut to one frame and losing the ends of its title.
+- Fixed: a cover taller than its box (a card game's, say) stretched its cube and pushed that game's name and caption below the rest of the row.
 - Box Populi asks BoardGameGeek less. A search for the same words within a week is answered from the instance's own copy, the Add page waits a little longer after you stop typing, and imports, loading details and Find on BoardGameGeek wait for a quiet moment between requests, so they take a few minutes longer. Searches you wait on are as quick as before.
 - The admin page shows how many requests this instance sent to BoardGameGeek today and in the last week, and how many BGG asked it to slow down.
 
