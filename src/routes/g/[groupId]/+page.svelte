@@ -421,7 +421,7 @@
 		<!-- Empty compartments fill out the last row, so the shelf never stops short. -->
 		{#each { length: spare } as _, k (k)}
 			<li aria-hidden="true">
-				<Compartment>
+				<Compartment empty>
 					{#snippet edge()}<OwnerEdge owners={[]} />{/snippet}
 				</Compartment>
 			</li>

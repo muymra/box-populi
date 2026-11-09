@@ -1,7 +1,7 @@
 <script lang="ts">
 	// The home page. Signed in with groups: Your groups. Otherwise the landing, which shows the app
 	// rather than describing it (Carlo's pick, 2026-11-08): the headline beside an example shelf, then on a
-	// demo instance four moments, each a claim beside a small piece built from the app's own parts with
+	// demo instance five moments, each a claim beside a small piece built from the app's own parts with
 	// invented games, a short list of the rest, and running your own.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
@@ -9,6 +9,7 @@
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import Code from '@lucide/svelte/icons/code';
 	import BoxFront from '#lib/components/BoxFront.svelte';
+	import Compartment from '#lib/components/Compartment.svelte';
 	import OwnerEdge from '#lib/components/OwnerEdge.svelte';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { whenLabel } from '#lib/days.ts';
@@ -41,19 +42,25 @@
 	const NAMES = ['Ada', 'Bram', 'Chen', 'Dewi', 'Eli', 'Fen'];
 	const owners = (ids: number[]) => ids.map((o) => ({ name: NAMES[o], colorIndex: o }));
 	const EXAMPLE = [
-		{ name: 'Copper Harbor', owners: [0] },
-		{ name: 'Lantern Valley', owners: [1, 3] },
-		{ name: 'Saffron Bazaar', owners: [2] },
-		{ name: 'Tidal Archive', owners: [4] },
-		{ name: 'Iron Orchard', owners: [0, 2] },
-		{ name: 'Moss Citadel', owners: [3] },
-		{ name: 'Quill Expedition', owners: [1] },
-		{ name: 'Ember Tavern', owners: [5] }
+		{ name: 'Copper Harbor', players: '2–4p', owners: [0] },
+		{ name: 'Lantern Valley', players: '2–5p', owners: [1, 3] },
+		{ name: 'Saffron Bazaar', players: '3–6p', owners: [2] },
+		{ name: 'Tidal Archive', players: '1–4p', owners: [4] },
+		{ name: 'Iron Orchard', players: '2–4p', owners: [0, 2] },
+		{ name: 'Moss Citadel', players: '3–5p', owners: [3] },
+		{ name: 'Quill Expedition', players: '3–4p', owners: [1] },
+		{ name: 'Ember Tavern', players: '2–6p', owners: [5] }
 	];
 	const FITS = [
 		{ name: 'Lantern Valley', facts: '2–5p · 45 min', owners: [1, 3] },
 		{ name: 'Quill Expedition', facts: '3–4p · 60 min', owners: [1] },
 		{ name: 'Ember Tavern', facts: '2–6p · 30 min', owners: [5] }
+	];
+	// Play tonight's pulls for the people here, with who loves each and who'd like to play it soon (D63, D64).
+	const TONIGHT = [
+		{ name: 'Lantern Valley', facts: '2–5p · 45 min', fans: [0, 2], soon: [] as number[] },
+		{ name: 'Moss Citadel', facts: '3–5p · 90 min', fans: [], soon: [1, 4] },
+		{ name: 'Copper Harbor', facts: '2–4p · 60 min', fans: [3], soon: [] as number[] }
 	];
 	const BRINGING = [
 		{ who: 0, game: 'Copper Harbor' },
@@ -67,6 +74,7 @@
 	];
 	const ALSO = [
 		['Wanted', 'games someone wants and nobody in the group owns yet'],
+		['Hide games from a group', 'keep some of your games out of one group, a work group say, while your other groups still see them'],
 		['Lending', 'who has whose copy, so lent games don’t go missing'],
 		['Rules and tutorials', 'rulebook and video links on every game'],
 		['At the table', 'who goes first, any mix of dice, and a coin, a tap away'],
@@ -98,11 +106,13 @@
 
 {#snippet exampleShelf()}
 	<figure class="example" aria-label="Example shelf with invented games">
-		<ul class="shelf">
+		<ul class="shelf" aria-hidden="true">
 			{#each EXAMPLE as game, i (game.name)}
-				<li class="cube" style:--i={i}>
-					<span class="slot"><BoxFront name={game.name} /></span>
-					<OwnerEdge owners={owners(game.owners)} />
+				<li style:--i={i}>
+					<Compartment name={game.name}>
+						{#snippet caption()}{game.players}{/snippet}
+						{#snippet edge()}<OwnerEdge owners={owners(game.owners)} />{/snippet}
+					</Compartment>
 				</li>
 			{/each}
 		</ul>
@@ -144,10 +154,11 @@
 			</div>
 			<ul class="shelf small" aria-hidden="true">
 				{#each FITS as game, i (game.name)}
-					<li class="cube" style:--i={i}>
-						<span class="slot"><BoxFront name={game.name} /></span>
-						<span class="caption num">{game.facts}</span>
-						<OwnerEdge owners={owners(game.owners)} />
+					<li style:--i={i}>
+						<Compartment name={game.name}>
+							{#snippet caption()}{game.facts}{/snippet}
+							{#snippet edge()}<OwnerEdge owners={owners(game.owners)} />{/snippet}
+						</Compartment>
 					</li>
 				{/each}
 			</ul>
@@ -174,7 +185,34 @@
 		</figure>
 	</section>
 
-	<section class="moment" aria-labelledby="score-h">
+	<section class="moment" aria-labelledby="want-h">
+		<div class="say">
+			<h2 id="want-h">Play what people want</h2>
+			<p>Heart the games you love, and keep a short list of ones you’d like to play soon. Play tonight leans towards both for whoever’s there. Nobody gets asked to bring anything: an owner only sees that someone going would like to play theirs.</p>
+			{#if data.demoExists}<a class="go" href="/g/demo?sort=loved">See the demo’s most loved <ArrowRight size={16} aria-hidden="true" /></a>{/if}
+		</div>
+		<figure class="piece" aria-label="Example: Play tonight's three games, with whose favourites they are and who'd like to play one soon">
+			<ul class="tonight" aria-hidden="true">
+				{#each TONIGHT as t (t.name)}
+					<li>
+						<span class="mini"><BoxFront name={t.name} size="mini" /></span>
+						<span class="t-body">
+							<strong>{t.name}</strong>
+							<span class="t-facts num">{t.facts}</span>
+							{#if t.fans.length}
+								<span class="t-line"
+									><span class="squares">{#each t.fans as f (f)}<i style:background={playerColor(f).fill}></i>{/each}</span>Favourite of {t.fans.map((f) => NAMES[f]).join(' and ')}</span
+								>
+							{/if}
+							{#if t.soon.length}<span class="t-line soon">{t.soon.map((f) => NAMES[f]).join(' and ')} would like to play this soon</span>{/if}
+						</span>
+					</li>
+				{/each}
+			</ul>
+		</figure>
+	</section>
+
+	<section class="moment flip" aria-labelledby="score-h">
 		<div class="say">
 			<h2 id="score-h">Keep score, for fun</h2>
 			<p>Log who played what and how it ended. Podium points add up to a leaderboard for the year, and the plays download as a spreadsheet.</p>
@@ -194,7 +232,7 @@
 		</figure>
 	</section>
 
-	<section class="moment flip" aria-labelledby="accounts-h">
+	<section class="moment" aria-labelledby="accounts-h">
 		<div class="say">
 			<h2 id="accounts-h">No accounts</h2>
 			<p>Join with the group’s code, a name and a six-digit PIN. On another device the same link gets you back in: tap your name, type your PIN. There are no emails or passwords.</p>
@@ -397,25 +435,17 @@
 		background: var(--gap);
 		border-radius: 6px;
 	}
-	.cube {
-		background: var(--cube);
-		padding: 12px 12px 0;
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-	.slot {
-		display: block;
-		aspect-ratio: 1 / 1.04;
-		padding: 0 6%;
+	/* The example shelves are the shelf's own compartments (Compartment.svelte); each box rises into its
+	   room one after another, and two in the hero stand a little askew, as boxes do. */
+	.shelf :global(.slot > .box) {
 		animation: rise 0.6s var(--ease-out) both;
 		animation-delay: calc(120ms + var(--i) * 70ms);
 	}
-	.example .cube:nth-child(3) .slot {
+	.example li:nth-child(3) :global(.slot > .box) {
 		rotate: -4deg;
 		translate: 0 2px;
 	}
-	.example .cube:nth-child(6) .slot {
+	.example li:nth-child(6) :global(.slot > .box) {
 		rotate: 3deg;
 	}
 	@keyframes rise {
@@ -425,7 +455,7 @@
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.slot {
+		.shelf :global(.slot > .box) {
 			animation: none;
 		}
 	}
@@ -506,14 +536,57 @@
 		grid-template-columns: repeat(3, 1fr);
 		border-radius: 0 0 6px 6px;
 	}
-	.caption {
-		font-size: 0.75rem;
-		font-weight: 600;
+	/* 3: Play tonight's rows, as on the Game night tab, with whose favourites they are and who'd like to
+	   play one soon. */
+	.tonight {
+		list-style: none;
+		margin: 0;
+		padding: var(--s-2) var(--s-4);
+		background: var(--cube);
+		border: 1px solid var(--rule);
+		border-radius: 10px;
+	}
+	.tonight li {
+		display: grid;
+		grid-template-columns: 52px minmax(0, 1fr);
+		gap: var(--s-3);
+		align-items: center;
+		padding: var(--s-3) 0;
+	}
+	.tonight li + li {
+		border-top: 1px solid var(--gap);
+	}
+	.mini {
+		display: block;
+		aspect-ratio: 1 / 1.04;
+	}
+	.t-body {
+		display: grid;
+		gap: 2px;
+		min-width: 0;
+	}
+	.t-facts,
+	.t-line {
+		font-size: var(--t-small);
 		color: var(--ink-2);
-		text-align: center;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
+	}
+	.t-line {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.t-line .squares {
+		display: inline-flex;
+		gap: 3px;
+	}
+	.t-line .squares i {
+		width: 10px;
+		height: 10px;
+		border-radius: 3px;
+	}
+	.soon {
+		color: var(--ink);
+		font-weight: 600;
 	}
 	/* 2: a game night card, as on the Game night tab. (Not `.night`: Your groups uses that name.) */
 	.night-card {

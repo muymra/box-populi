@@ -70,7 +70,7 @@
 			{/each}
 			{#each { length: spare } as _, k (k)}
 				<li aria-hidden="true">
-					<Compartment>
+					<Compartment empty>
 						{#snippet edge()}<span class="gap-edge blank"></span>{/snippet}
 					</Compartment>
 				</li>

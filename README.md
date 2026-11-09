@@ -4,25 +4,26 @@ A shared shelf for your board game group. Everyone adds the games they own, and 
 
 **Try it:** [box-populi.pages.dev](https://box-populi.pages.dev) has a demo group with invented games and people. There's nothing to sign up for.
 
-![The demo group's shelf on a laptop: games as boxes in a shelf, with a coloured line under each box for each friend who owns it](docs/screenshots/shelf-desktop.png)
+![The demo group's shelf on a laptop: each game's box standing in its own compartment of a shelf, its players and play time on the floor in front, and a coloured line along the front for each friend who owns it](docs/screenshots/shelf-desktop.png)
 
 ## What your group gets
 
-- **One shelf for everyone's games.** Each box has a coloured line for each friend who owns it.
+- **One shelf for everyone's games.** Each game stands in its own compartment, at the shape of its box, with a coloured line for each friend who owns it.
 - **Finding something to play.** Pick "4 players" and "fits in an hour", add "not too heavy" if you like, and the shelf shows only what fits.
 - **Game night.** Plan a night, see who's coming and what they'll bring, and copy it all to the group chat. On the night, Play tonight suggests three games from what's actually there, guests' games included, or lets you choose and keep your own, plus quick fillers for while others arrive, split across tables if the group is too big for any of them.
+- **Favourites and Play soon.** Heart the games you love, and keep a short list of ones you'd like to play soon. Play tonight leans towards both for whoever's there, and nobody gets asked to bring anything: an owner only sees that someone going would like to play theirs.
 - **Play log.** Note who played what and who won, with scores if you like, kept with the night you played them. A leaderboard with points for the podium, just for fun.
 - **At the table.** Buttons at the top pick who goes first from the people there, guests included, and roll any mix of dice or flip a coin.
 - **Wishlists and lending.** See which games someone wants that nobody in the group has yet, and who borrowed whose copy.
 - **Rulebooks and videos.** Save the links once, next to the game, for everyone.
 - **No accounts.** You join with the group's five-character code, your name and a six-digit PIN, which gets you back in on any device. No email, no password.
 - **Your data stays yours.** Download your games, your plays and your game nights as spreadsheets whenever you like. Your games paste straight into another Box Populi.
-- **Several groups, one shelf.** In two or more groups, switch between them from the top of the page; your games show in each.
+- **Several groups, one shelf.** In two or more groups, switch between them from the top of the page; your games show in each, unless you hide some from a group.
 - **Made for phones.** It's a website, so there's nothing to install, and it works on any phone or computer.
 
 | | |
 |---|---|
-| ![The shelf on a phone, with tabs along the bottom](docs/screenshots/shelf-phone.png) | ![A game's page on a phone in dark mode: players, play time, complexity, who owns it, and a how-to-play link](docs/screenshots/game-phone-dark.png) |
+| ![The shelf on a phone: three compartments across, with tabs along the bottom](docs/screenshots/shelf-phone.png) | ![A game's page on a phone in dark mode: its box, players, play time, complexity and a how-to-play link](docs/screenshots/game-phone-dark.png) |
 
 ![The Game night tab: the next planned night at the top, then Play tonight with Ada, Bram and Chen ticked as here, three games suggested from what they own, and quick fillers below](docs/screenshots/picker-desktop.png)
 
@@ -58,11 +59,11 @@ No. Without one, people search a free public database of games (Wikidata), paste
 
 ### Who can see our games?
 
-Only the people in your group. The person running the copy can pause or delete a group, but their admin page doesn't show who is in it or what they own. They do run the database, so like the owner of any website they could look at it directly. Each copy has a privacy page that lists what's stored.
+Only the people in your group, and you can keep any of your own games out of one group: open the game and choose "Hide from" that group. The person running the copy can pause or delete a group, but their admin page doesn't show who is in it or what they own. They do run the database, so like the owner of any website they could look at it directly. Each copy has a privacy page that lists what's stored.
 
 ### Can I be in more than one group?
 
-Yes. Add your games once and they show in every group you're in. In two or more groups, the group name at the top of the page switches between them.
+Yes. Add your games once and they show in every group you're in. In two or more groups, the group name at the top of the page switches between them. To keep some games out of one group, open a game and choose "Hide from" that group; Add games lists what you've hidden there and can keep games you add later hidden in it too.
 
 ### When should we start a second group?
 

@@ -1,15 +1,17 @@
 <!--
 	One compartment of the shelf (app.css `.compartment`): a box standing in its room on the floor, the
 	name and a caption on the floor in front of it, and the floor's painted front edge. The shelf's
-	cubes (Cube.svelte) and the Wanted tab draw theirs with it. Without an `href` it's an empty
-	compartment, the same size as the rest, so a row never stops short; it still takes the caller's
-	edge, so its floor is as deep as its neighbours'.
+	cubes (Cube.svelte), the Wanted tab and the landing's example shelves draw theirs with it. With an
+	`href` it's a link; without one, a picture of a cube (the landing's invented games). `empty` draws an
+	empty compartment, the same size as the rest, so a row never stops short; it still takes the
+	caller's edge, so its floor is as deep as its neighbours'.
 -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import BoxFront from './BoxFront.svelte';
 
 	let {
+		empty = false,
 		href = null,
 		name = '',
 		src = null,
@@ -20,7 +22,9 @@
 		caption,
 		edge
 	}: {
-		/** Where the cube links; none for an empty compartment. */
+		/** An empty compartment: no box, no name. */
+		empty?: boolean;
+		/** Where the cube links; without one it's a picture of a cube, not a link. */
 		href?: string | null;
 		name?: string;
 		src?: string | null;
@@ -39,7 +43,7 @@
 	} = $props();
 </script>
 
-{#if href == null}
+{#if empty}
 	<div class="cube compartment empty" aria-hidden="true">
 		<div class="slot"></div>
 		<div class="name"></div>
@@ -47,7 +51,7 @@
 		{@render edge?.()}
 	</div>
 {:else}
-	<a class="cube compartment" class:out {href}>
+	<svelte:element this={href ? 'a' : 'div'} class="cube compartment" class:out href={href ?? undefined}>
 		<span class="visually-hidden">{lead}</span>
 		{#if badge}<span class="badge" aria-hidden="true">{badge}</span>{/if}
 		<div class="slot">
@@ -60,7 +64,7 @@
 		<div class="name" aria-hidden="true">{src ? name : ''}</div>
 		<div class="caption num">{@render caption?.()}</div>
 		{@render edge?.()}
-	</a>
+	</svelte:element>
 {/if}
 
 <style>
@@ -102,8 +106,8 @@
 		width: auto;
 		height: 100%;
 	}
-	.cube:hover .slot > :global(.box),
-	.cube:focus-visible .slot > :global(.box) {
+	a.cube:hover .slot > :global(.box),
+	a.cube:focus-visible .slot > :global(.box) {
 		transform: translateY(-3px);
 		box-shadow: var(--shadow-stand-lift), inset 0 0 0 1px rgb(0 0 0 / 0.08);
 	}

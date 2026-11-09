@@ -259,6 +259,19 @@ for (const user of ['demo-ada', 'demo-ada', 'demo-bram', 'demo-chen']) {
 	if (game) nightGames.push({ night_id: next, game_id: game.game_id, brought_by: user, guest_name: null, added_by: user, stayed_home: 0 });
 }
 
+// Favourites (D63): each member hearts a few of the games on the shelf, mostly ones the group plays a
+// lot, so the demo shows "Favourite of …", the Favourites filters and the Most loved sort. Drawn last,
+// so everything above stays as it was.
+const onShelf = [...new Set(copies.map((c) => c.game_id as number))];
+const playedMost = favourites.map((g) => g.id as number).filter((id) => onShelf.includes(id));
+const favouriteRows: Array<Record<string, string | number>> = [];
+for (const m of members) {
+	const picks = new Set<number>();
+	const want = rand(4, 9);
+	while (picks.size < want) picks.add(rng() < 0.75 && playedMost.length ? choice(playedMost) : choice(onShelf));
+	for (const gameId of picks) favouriteRows.push({ user_id: m.id, game_id: gameId, added_at: NOW - rand(1, 300) * DAY });
+}
+
 // Columns that are NOT NULL with a default: rows that don't set them get the default, not NULL.
 const GAME_DEFAULTS = { best_mask: 0, rec_mask: 0, mechanics: '[]', categories: '[]', base_bgg_ids: '[]', is_expansion: 0, is_manual: 0 };
 
@@ -279,6 +292,9 @@ const statements = [
 	"DELETE FROM night_games WHERE night_id IN (SELECT id FROM game_nights WHERE group_id = 'demo');",
 	"DELETE FROM night_people WHERE night_id IN (SELECT id FROM game_nights WHERE group_id = 'demo');",
 	"DELETE FROM game_nights WHERE group_id = 'demo';",
+	// Favourites and Play soon point at the demo's games, so they go before the games do.
+	"DELETE FROM favourites WHERE user_id LIKE 'demo-%';",
+	"DELETE FROM play_soon WHERE user_id LIKE 'demo-%';",
 	"DELETE FROM copies WHERE user_id LIKE 'demo-%';",
 	"DELETE FROM wishlist WHERE user_id LIKE 'demo-%';",
 	"DELETE FROM game_links WHERE group_id = 'demo';",
@@ -298,9 +314,10 @@ const statements = [
 	insert('night_people', nightPeople),
 	insert('night_games', nightGames),
 	insert('plays', plays),
-	insert('play_players', playPlayers)
+	insert('play_players', playPlayers),
+	insert('favourites', favouriteRows)
 ];
 
 mkdirSync('seed', { recursive: true });
 writeFileSync('seed/demo.sql', statements.join('\n\n') + '\n');
-console.log(`Wrote seed/demo.sql: ${games.length + wanted.length} games, ${copies.length} copies, ${members.length} members, ${plays.length} plays, ${nights.length} game nights.`);
+console.log(`Wrote seed/demo.sql: ${games.length + wanted.length} games, ${copies.length} copies, ${members.length} members, ${plays.length} plays, ${nights.length} game nights, ${favouriteRows.length} favourites.`);
