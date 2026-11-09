@@ -178,3 +178,40 @@ describe('mergeMatches', () => {
 		await expect(mergeMatches(db, 'ada', pairs)).rejects.toThrow();
 	});
 });
+
+describe('a typed-in game that carries a BGG id (seen live, 2026-11-09)', () => {
+	async function typedWithBggId(bggId: number): Promise<number> {
+		const id = await manual('ada', 'Test Game Alpha (typed)');
+		await run(db, 'UPDATE games SET bgg_id = ?1, year = 2019 WHERE id = ?2', bggId, id);
+		return id;
+	}
+
+	it('is left to the loader rather than listed as unmatched', async () => {
+		const id = await typedWithBggId(900001);
+		expect((await unmatchedGames(db, 'ada')).map((g) => g.gameId)).not.toContain(id);
+		const { pendingDetails, hydrateStep } = await import('./importer.ts');
+		expect(await pendingDetails(db, 'ada')).toBe(1);
+		await hydrateStep(db, fake, 'ada', NOW);
+		const row = await one<{ source: string; is_manual: number; name: string }>(db, 'SELECT source, is_manual, name FROM games WHERE id = ?1', id);
+		expect(row).toEqual({ source: 'bgg', is_manual: 0, name: 'Test Game Alpha' });
+		expect(await pendingDetails(db, 'ada')).toBe(0);
+	});
+
+	it('is upgraded by a search that finds its BGG id, instead of standing in for the BGG game', async () => {
+		const id = await typedWithBggId(900001);
+		const hits = await searchBgg(db, fake, 'Test Game Alpha', 'ada', NOW);
+		const hit = hits.find((h) => h.bggId === 900001)!;
+		expect(hit.gameId).toBe(id);
+		expect(hit.name).toBe('Test Game Alpha');
+		expect((await one<{ source: string }>(db, 'SELECT source FROM games WHERE id = ?1', id))?.source).toBe('bgg');
+	});
+
+	it('loses a BGG id that BGG doesn’t know, so loading ends and Find on BoardGameGeek can take it', async () => {
+		const id = await typedWithBggId(123456);
+		const { pendingDetails, hydrateStep } = await import('./importer.ts');
+		await hydrateStep(db, fake, 'ada', NOW);
+		expect(await pendingDetails(db, 'ada')).toBe(0);
+		expect((await one<{ bgg_id: number | null; source: string }>(db, 'SELECT bgg_id, source FROM games WHERE id = ?1', id))).toEqual({ bgg_id: null, source: 'manual' });
+		expect((await unmatchedGames(db, 'ada')).map((g) => g.gameId)).toContain(id);
+	});
+});

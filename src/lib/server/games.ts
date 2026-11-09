@@ -132,10 +132,17 @@ export async function searchBgg(db: DB, client: BggClient, query: string, userId
 	const ids = top.map((h) => h.bggId);
 	const placeholders = ids.map((_, i) => `?${i + 1}`).join(', ');
 
-	const known = await all<{ id: number; bgg_id: number; fetched_at: number | null }>(db, `SELECT id, bgg_id, fetched_at FROM games WHERE bgg_id IN (${placeholders})`, ...ids);
-	const cachedIds = new Set(known.filter((r) => r.fetched_at != null).map((r) => r.bgg_id));
-	// Import stubs among the hits get their details now, so groups with copies of them need a fresh catalog.
-	const stubIds = known.filter((r) => r.fetched_at == null).map((r) => r.id);
+	const known = await all<{ id: number; bgg_id: number; fetched_at: number | null; source: string; is_manual: number }>(
+		db,
+		`SELECT id, bgg_id, fetched_at, source, is_manual FROM games WHERE bgg_id IN (${placeholders})`,
+		...ids
+	);
+	// Only BGG's own data counts as cached. A Wikidata or typed-in row that carries the hit's BGG id is
+	// fetched and upgraded by the upsert, instead of standing in for the BGG game in the results.
+	const isCached = (r: (typeof known)[number]) => r.fetched_at != null && r.source === 'bgg' && r.is_manual !== 1;
+	const cachedIds = new Set(known.filter(isCached).map((r) => r.bgg_id));
+	// Stubs and upgraded rows among the hits get their details now, so groups with copies need a fresh catalog.
+	const stubIds = known.filter((r) => !isCached(r)).map((r) => r.id);
 	const missing = top.filter((h) => !cachedIds.has(h.bggId));
 	if (missing.length) {
 		const things = await client.things(missing.map((h) => h.bggId));

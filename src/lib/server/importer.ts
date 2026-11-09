@@ -128,10 +128,12 @@ export async function confirmImport(
 }
 
 /**
- * Games still waiting for BGG details: stubs from an import, and Wikidata games that carry a BGG id,
- * which get upgraded to full BGG data once BGG is on (only called then).
+ * Games still waiting for BGG details: stubs from an import, and Wikidata or typed-in games that carry
+ * a BGG id, which get upgraded to full BGG data once BGG is on (only called then).
  */
-const NEEDS_BGG_DETAILS = `g.bgg_id IS NOT NULL AND (g.fetched_at IS NULL OR g.source = 'wikidata')`;
+// A typed-in row that somehow carries a BGG id counts too (seen on a live instance, 2026-11-09): the
+// upsert on its BGG id turns it into the BGG game, the way it turns a Wikidata one.
+const NEEDS_BGG_DETAILS = `g.bgg_id IS NOT NULL AND (g.fetched_at IS NULL OR g.source <> 'bgg' OR g.is_manual = 1)`;
 
 export async function pendingDetails(db: DB, userId: string): Promise<number> {
 	return (await readAll(db, { n: pendingDetailsRead(db, userId) })).n;
@@ -171,12 +173,13 @@ export async function hydrateStep(db: DB, client: BggClient, userId: string, now
 	await db.batch([
 		...things.map((t) => upsertThingStatement(db, t, now)),
 		// Ids BGG doesn't return end the loop too: BGG stubs are marked fetched as they are, and a
-		// Wikidata game loses the BGG id Wikidata gave it but keeps its Wikidata details.
+		// Wikidata or typed-in game loses the BGG id it carried but keeps its own details (so it can be
+		// found with Find on BoardGameGeek instead).
 		...ids
 			.filter((id) => !found.has(id))
 			.flatMap((id) => [
-				stmt(db, "UPDATE games SET fetched_at = ?1 WHERE bgg_id = ?2 AND source != 'wikidata'", now, id),
-				stmt(db, "UPDATE games SET bgg_id = NULL WHERE bgg_id = ?1 AND source = 'wikidata'", id)
+				stmt(db, "UPDATE games SET fetched_at = ?1 WHERE bgg_id = ?2 AND source = 'bgg' AND is_manual = 0", now, id),
+				stmt(db, "UPDATE games SET bgg_id = NULL WHERE bgg_id = ?1 AND (source <> 'bgg' OR is_manual = 1)", id)
 			]),
 		// Every group with a copy of these games, which includes all of the caller's groups.
 		bumpCatalogForGames(db, rows.map((r) => r.id))

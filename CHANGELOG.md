@@ -4,6 +4,7 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+- Fixed: a typed-in game that had a BoardGameGeek id never got BGG's details, and searching for it offered your own typed-in copy instead of the BGG game. Loading details now upgrades it, as it does Wikidata games.
 - Group codes and sign-in codes are harder to mix up. Both fields tidy what you type (capitals, no spaces; the sign-in code gets its dash). Typing a sign-in code where a group code goes shows a hint and, if sent, says where it belongs, and the other way round. The example sign-in code no longer starts like the example group code.
 - Pages ask the database once or twice instead of up to 16 times, so they cost the site less on Cloudflare's free plan and load a little faster.
 - Games with box art show their name under the box on the shelf, since the art's own title is often cropped.

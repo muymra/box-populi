@@ -10,10 +10,10 @@ import { normalize } from '#lib/catalog/normalize.ts';
 import type { BggClient } from './bgg/types.ts';
 
 /**
- * Games on the person's shelf with no BGG details to fetch: typed in, or from Wikidata without a
- * BGG id. A Wikidata game that has one is the hydrate loop's job, so it isn't listed here.
+ * Games on the person's shelf with no BGG details to fetch: typed in, or from Wikidata, without a
+ * BGG id. One that has a BGG id is the hydrate loop's job, so it isn't listed here.
  */
-const UNMATCHED = `(g.is_manual = 1 OR g.source <> 'bgg') AND NOT (g.source = 'wikidata' AND g.bgg_id IS NOT NULL)`;
+const UNMATCHED = `(g.is_manual = 1 OR g.source <> 'bgg') AND g.bgg_id IS NULL`;
 
 export type UnmatchedGame = {
 	gameId: number;
