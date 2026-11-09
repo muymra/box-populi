@@ -1,7 +1,7 @@
 // The instance admin page (TECH.md "Instance administration"). 404 for anyone without the admin
 // cookie, so the page doesn't announce itself. Shows counts and group names, never group contents.
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
-import { adminDeleteGroup, adminLog, instanceTotals, listGroups, ownerSignInCode, suspendGroup, unsuspendGroup, type AdminResult } from '#lib/server/admin.ts';
+import { adminDeleteGroup, adminLog, bggUsage, instanceTotals, listGroups, ownerSignInCode, suspendGroup, unsuspendGroup, type AdminResult } from '#lib/server/admin.ts';
 import { formatSignInCode } from '#lib/server/recovery.ts';
 import { clearAdminCookie } from '#lib/server/cookies.ts';
 import { getAppearance, saveAppearance } from '#lib/server/appearance.ts';
@@ -19,9 +19,17 @@ export const load: PageServerLoad = async (event) => {
 	requireAdmin(event);
 	event.setHeaders({ 'cache-control': 'no-store' });
 	const db = getDb();
-	const [totals, groups, log, appearance] = await Promise.all([instanceTotals(db), listGroups(db), adminLog(db), getAppearance(db)]);
+	const now = Date.now();
+	const [totals, groups, log, appearance, bgg] = await Promise.all([
+		instanceTotals(db),
+		listGroups(db),
+		adminLog(db),
+		getAppearance(db),
+		event.locals.config.bggMode === 'off' ? null : bggUsage(db, now)
+	]);
 	return {
-		now: Date.now(),
+		now,
+		bgg,
 		totals,
 		groups,
 		log,

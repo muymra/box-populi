@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
 import { all, deleteGroupStatements, deletePersonStatements, one, run } from './db.ts';
-import { canEditGame, editGame } from './game-edit.ts';
+import { canEditGame, editGame, mayEditGame } from './game-edit.ts';
 import { loadCatalog } from './catalog.ts';
 import { matchLines } from './game-list.ts';
 import { cacheWikidataGames, FakeWikidataClient } from './wikidata.ts';
@@ -153,3 +153,17 @@ describe('details are shared, pictures stay with the group (D54)', () => {
 		expect(await all(db, 'SELECT group_id FROM game_corrections')).toEqual([{ group_id: 'g2' }]);
 	});
 });
+
+describe('mayEditGame (D59)', () => {
+	it('agrees with canEditGame for a game the group can see', () => {
+		const typed = { source: 'manual', is_manual: 1 };
+		const wikidata = { source: 'wikidata', is_manual: 0 };
+		const bgg = { source: 'bgg', is_manual: 0 };
+		expect(mayEditGame(typed, 'member', true)).toBe(true);
+		expect(mayEditGame(typed, 'member', false)).toBe(false);
+		expect(mayEditGame(wikidata, 'admin', false)).toBe(true);
+		expect(mayEditGame(wikidata, 'owner', false)).toBe(true);
+		expect(mayEditGame(bgg, 'owner', true)).toBe(false);
+	});
+});
+

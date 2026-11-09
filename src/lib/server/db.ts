@@ -18,6 +18,45 @@ export async function run(db: DB, sql: string, ...params: unknown[]): Promise<D1
 	return stmt(db, sql, ...params).run();
 }
 
+/** A SELECT (or WITH … SELECT), or a write with RETURNING: statements whose rows a batch hands back. */
+export const returnsRows = (sql: string) => /^\s*(select|with)\b/i.test(sql) || /\breturning\b/i.test(sql);
+
+/** One read, as a statement and what to make of its rows, so several can share a round trip (`readAll`). */
+export type Read<T> = { statement: D1PreparedStatement | null; map: (rows: unknown[]) => T };
+
+/** A read whose rows come back as they are. */
+export function rowsOf<T>(db: DB, sql: string, ...params: unknown[]): Read<T[]> {
+	return { statement: stmt(db, sql, ...params), map: (rows) => rows as T[] };
+}
+
+/** A read of at most one row. */
+export function rowOf<T>(db: DB, sql: string, ...params: unknown[]): Read<T | null> {
+	return { statement: stmt(db, sql, ...params), map: (rows) => (rows[0] as T | undefined) ?? null };
+}
+
+/** A read that needs no query, for a value already known: keeps a `readAll` call's shape the same. */
+export function known<T>(value: T): Read<T> {
+	return { statement: null, map: () => value };
+}
+
+/** Same read, different result. */
+export function mapRead<T, U>(read: Read<T>, f: (value: T) => U): Read<U> {
+	return { statement: read.statement, map: (rows) => f(read.map(rows)) };
+}
+
+/**
+ * Runs several reads in one round trip and returns their results by name. On Cloudflare's free plan
+ * each database call costs CPU time out of about 10ms per request (D59), and D1 counts a batch as one
+ * query towards its 50 per request. A batch is a transaction; for reads that only means a consistent view.
+ */
+export async function readAll<T extends Record<string, Read<unknown>>>(db: DB, reads: T): Promise<{ [K in keyof T]: T[K] extends Read<infer U> ? U : never }> {
+	const keys = Object.keys(reads);
+	const queried = keys.filter((k) => reads[k].statement != null);
+	const results = queried.length ? await db.batch(queried.map((k) => reads[k].statement!)) : [];
+	const rowsFor = new Map(queried.map((k, i) => [k, (results[i]?.results ?? []) as unknown[]]));
+	return Object.fromEntries(keys.map((k) => [k, reads[k].map(rowsFor.get(k) ?? [])])) as { [K in keyof T]: T[K] extends Read<infer U> ? U : never };
+}
+
 /** Reads a JSON array column, tolerating bad data instead of failing the page. */
 export function jsonArray<T>(raw: unknown): T[] {
 	if (typeof raw !== 'string') return [];

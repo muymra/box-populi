@@ -2,7 +2,7 @@
 // ADMIN_KEY. These queries select only the columns TECH.md lists: never member names, join codes,
 // collections, links or wishlists. Adding one needs a DECISIONS.md entry approved by Carlo.
 import { sha256Hex } from './identity.ts';
-import { all, deleteGroupStatements, one, stmt, type DB } from './db.ts';
+import { all, deleteGroupStatements, one, run, stmt, type DB } from './db.ts';
 import { signInCodeStatement } from './recovery.ts';
 
 export const ADMIN_COOKIE = 'bp_admin';
@@ -53,6 +53,29 @@ export async function instanceTotals(db: DB): Promise<Totals> {
 		        (SELECT COUNT(*) FROM rate_events) AS rateEvents`
 	);
 	return row ?? { people: 0, groups: 0, games: 0, copies: 0, sessions: 0, rateEvents: 0 };
+}
+
+export type BggUsage = { today: number; week: number; throttledWeek: number };
+
+const DAY_MS = 24 * 60 * 60_000;
+const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/**
+ * Requests this instance sent to BGG today and in the last seven days (UTC), and how many BGG
+ * answered by throttling (D58). Days older than 90 are deleted here, the only place they're read.
+ */
+export async function bggUsage(db: DB, now: number): Promise<BggUsage> {
+	await run(db, 'DELETE FROM bgg_daily WHERE day < ?1', utcDay(now - 90 * DAY_MS));
+	const row = await one<BggUsage>(
+		db,
+		`SELECT COALESCE(SUM(CASE WHEN day = ?1 THEN requests END), 0) AS today,
+		        COALESCE(SUM(requests), 0) AS week,
+		        COALESCE(SUM(throttled), 0) AS throttledWeek
+		 FROM bgg_daily WHERE day >= ?2`,
+		utcDay(now),
+		utcDay(now - 6 * DAY_MS)
+	);
+	return row ?? { today: 0, week: 0, throttledWeek: 0 };
 }
 
 export type AdminGroup = {

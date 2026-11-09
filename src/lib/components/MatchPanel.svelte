@@ -155,7 +155,7 @@
 					brings complexity, mechanics and best-at counts with it.
 				</p>
 				<button type="button" class="btn primary" onclick={find}>Find {games.length} {games.length === 1 ? 'game' : 'games'} on BoardGameGeek</button>
-				<p class="hint">About four seconds a game, at the pace BoardGameGeek asks for. Nothing changes until you choose.</p>
+				<p class="hint">About ten seconds a game: it goes slowly on purpose, to be easy on BoardGameGeek. Nothing changes until you choose.</p>
 			</div>
 		</details>
 	{:else if phase === 'finding'}

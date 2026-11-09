@@ -1,6 +1,6 @@
 // The play log on the server (PRD "Play log"): reading the form, saving, reading back and deleting
 // plays, and the group's podium points. Every function takes the group, and nothing crosses groups.
-import { all, one, stmt, type DB } from './db.ts';
+import { all, mapRead, one, readAll, rowsOf, stmt, type DB, type Read } from './db.ts';
 import { bumpCatalogForGroup } from './catalog.ts';
 import { can } from './permissions.ts';
 import { gameOnNight, nightInGroup } from './nights.ts';
@@ -221,6 +221,11 @@ export type PlayQuery = { gameId?: number; since?: string; withUser?: string; ni
 
 /** Plays in a group, newest first, with their players in the order entered and the group's name for each game. */
 export async function loadPlays(db: DB, groupId: string, q: PlayQuery = {}): Promise<StoredPlay[]> {
+	return (await readAll(db, { p: playsRead(db, groupId, q) })).p;
+}
+
+/** loadPlays as a read, to share a round trip with others (`readAll`, D59). */
+export function playsRead(db: DB, groupId: string, q: PlayQuery = {}): Read<StoredPlay[]> {
 	const params: unknown[] = [groupId];
 	const where = ['group_id = ?1'];
 	if (q.gameId != null) where.push(`game_id = ?${params.push(q.gameId)}`);
@@ -228,7 +233,7 @@ export async function loadPlays(db: DB, groupId: string, q: PlayQuery = {}): Pro
 	if (q.withUser) where.push(`id IN (SELECT play_id FROM play_players WHERE user_id = ?${params.push(q.withUser)})`);
 	if (q.nightId) where.push(`night_id = ?${params.push(q.nightId)}`);
 	const limit = q.limit != null ? ` LIMIT ${Math.max(1, Math.floor(q.limit))}` : '';
-	const rows = await all<{
+	type PlayRow = {
 		id: string;
 		game_id: number;
 		game_name: string;
@@ -245,42 +250,47 @@ export async function loadPlays(db: DB, groupId: string, q: PlayQuery = {}): Pro
 		guest_name: string | null;
 		place: number | null;
 		score: number | null;
-	}>(
-		db,
-		`SELECT p.id, p.game_id, COALESCE(gc.name, g.name) AS game_name, g.bgg_id, g.source, g.is_manual, p.played_on, p.coop, p.lowest_wins, p.logged_by,
-		        p.night_id, n.name AS night_name,
-		        pp.user_id, pp.guest_name, pp.place, pp.score
-		 FROM (SELECT * FROM plays WHERE ${where.join(' AND ')} ORDER BY played_on DESC, created_at DESC${limit}) p
-		 JOIN games g ON g.id = p.game_id
-		 LEFT JOIN game_corrections gc ON gc.group_id = p.group_id AND gc.game_id = p.game_id
-		 LEFT JOIN game_nights n ON n.id = p.night_id
-		 JOIN play_players pp ON pp.play_id = p.id
-		 ORDER BY p.played_on DESC, p.created_at DESC, p.id, pp.seat`,
-		...params
-	);
-	const plays = new Map<string, StoredPlay>();
-	for (const r of rows) {
-		let play = plays.get(r.id);
-		if (!play) {
-			play = {
-				id: r.id,
-				gameId: r.game_id,
-				gameName: r.game_name,
-				bggId: r.bgg_id,
-				// BGG data means what the footer's credit means (holdsBggData): a BGG id, not typed in.
-				gameSource: r.is_manual === 1 ? 'manual' : r.source === 'wikidata' ? 'wikidata' : r.source === 'bgg' && r.bgg_id != null ? 'bgg' : 'manual',
-				playedOn: r.played_on,
-				coop: r.coop,
-				lowestWins: r.lowest_wins === 1,
-				loggedBy: r.logged_by,
-				night: r.night_id ? { id: r.night_id, name: r.night_name ?? '' } : null,
-				players: []
-			};
-			plays.set(r.id, play);
+	};
+	return mapRead(
+		rowsOf<PlayRow>(
+			db,
+			`SELECT p.id, p.game_id, COALESCE(gc.name, g.name) AS game_name, g.bgg_id, g.source, g.is_manual, p.played_on, p.coop, p.lowest_wins, p.logged_by,
+			        p.night_id, n.name AS night_name,
+			        pp.user_id, pp.guest_name, pp.place, pp.score
+			 FROM (SELECT * FROM plays WHERE ${where.join(' AND ')} ORDER BY played_on DESC, created_at DESC${limit}) p
+			 JOIN games g ON g.id = p.game_id
+			 LEFT JOIN game_corrections gc ON gc.group_id = p.group_id AND gc.game_id = p.game_id
+			 LEFT JOIN game_nights n ON n.id = p.night_id
+			 JOIN play_players pp ON pp.play_id = p.id
+			 ORDER BY p.played_on DESC, p.created_at DESC, p.id, pp.seat`,
+			...params
+		),
+		(rows) => {
+			const plays = new Map<string, StoredPlay>();
+			for (const r of rows) {
+				let play = plays.get(r.id);
+				if (!play) {
+					play = {
+						id: r.id,
+						gameId: r.game_id,
+						gameName: r.game_name,
+						bggId: r.bgg_id,
+						// BGG data means what the footer's credit means (holdsBggData): a BGG id, not typed in.
+						gameSource: r.is_manual === 1 ? 'manual' : r.source === 'wikidata' ? 'wikidata' : r.source === 'bgg' && r.bgg_id != null ? 'bgg' : 'manual',
+						playedOn: r.played_on,
+						coop: r.coop,
+						lowestWins: r.lowest_wins === 1,
+						loggedBy: r.logged_by,
+						night: r.night_id ? { id: r.night_id, name: r.night_name ?? '' } : null,
+						players: []
+					};
+					plays.set(r.id, play);
+				}
+				play.players.push({ userId: r.user_id, guestName: r.guest_name, place: r.place, score: r.score });
+			}
+			return [...plays.values()];
 		}
-		play.players.push({ userId: r.user_id, guestName: r.guest_name, place: r.place, score: r.score });
-	}
-	return [...plays.values()];
+	);
 }
 
 export async function podiumPoints(db: DB, groupId: string): Promise<number[]> {

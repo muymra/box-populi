@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
-import { all, deletePersonStatements, one, run, stmt } from './db.ts';
+import { all, deletePersonStatements, known, mapRead, one, readAll, rowOf, rowsOf, run, stmt } from './db.ts';
 import { bumpCatalogForUser, catalogVersion, loadCatalog } from './catalog.ts';
-import { backOff, BACKOFF_MS, reserveSlot } from './bgg/pace.ts';
+import { backOff, BACKOFF_MS, BULK_GAP_MS, reserveSlot, takeBulkSlot } from './bgg/pace.ts';
 
 let db: ReturnType<typeof createTestDb>;
 
@@ -184,3 +184,52 @@ describe('BGG pacer', () => {
 		expect((await reserveSlot(db, now, 2000, 15_000)).ok).toBe(false);
 	});
 });
+
+describe('BGG bulk lane (D58)', () => {
+	const nextAt = async () => (await one<{ next_at: number }>(db, 'SELECT next_at FROM bgg_pace WHERE id = 1'))!.next_at;
+
+	it('takes a slot at once when the instance has been quiet', async () => {
+		expect(await takeBulkSlot(db, 1_000_000, 2000, BULK_GAP_MS)).toEqual({ ok: true, slotAt: 1_000_000 });
+		expect(await nextAt()).toBe(1_002_000);
+	});
+
+	it('waits for five quiet seconds after any request, without booking ahead', async () => {
+		const t = 1_000_000;
+		await reserveSlot(db, t, 2000, Number.MAX_SAFE_INTEGER); // a member's search at t
+		const refused = await takeBulkSlot(db, t + 1000, 2000, BULK_GAP_MS);
+		expect(refused).toEqual({ ok: false, waitMs: 4000 });
+		expect(await nextAt()).toBe(t + 2000); // nothing reserved, so a second search isn't pushed back
+		expect(await reserveSlot(db, t + 1000, 2000, Number.MAX_SAFE_INTEGER)).toEqual({ ok: true, slotAt: t + 2000 });
+		expect((await takeBulkSlot(db, t + 7000, 2000, BULK_GAP_MS)).ok).toBe(true);
+	});
+
+	it('also waits out a backoff', async () => {
+		await backOff(db, 2_000_000);
+		const r = await takeBulkSlot(db, 1_990_000, 2000, BULK_GAP_MS);
+		expect(r).toEqual({ ok: false, waitMs: 2_000_000 - 2000 + BULK_GAP_MS - 1_990_000 });
+	});
+});
+
+describe('readAll (D59)', () => {
+	it('runs named reads in one batch and maps each result', async () => {
+		await run(db, `INSERT INTO users (id, name, created_at) VALUES ('ra', 'Ada', 0), ('rb', 'Bo', 0)`);
+		let batches = 0;
+		const counting = new Proxy(db, {
+			get: (target, key) => (key === 'batch' ? (s: D1PreparedStatement[]) => (batches++, target.batch(s)) : Reflect.get(target, key, target))
+		});
+		const r = await readAll(counting, {
+			people: rowsOf<{ id: string }>(counting, `SELECT id FROM users WHERE id IN ('ra', 'rb') ORDER BY id`),
+			first: rowOf<{ name: string }>(counting, 'SELECT name FROM users WHERE id = ?1', 'rb'),
+			none: rowOf<{ name: string }>(counting, 'SELECT name FROM users WHERE id = ?1', 'zz'),
+			count: mapRead(rowOf<{ n: number }>(counting, `SELECT COUNT(*) AS n FROM users WHERE id LIKE 'r_'`), (row) => row?.n ?? 0),
+			given: known('no query')
+		});
+		expect(r).toEqual({ people: [{ id: 'ra' }, { id: 'rb' }], first: { name: 'Bo' }, none: null, count: 2, given: 'no query' });
+		expect(batches).toBe(1);
+	});
+
+	it('makes no call when every read is already known', async () => {
+		expect(await readAll(db, { a: known(1) })).toEqual({ a: 1 });
+	});
+});
+

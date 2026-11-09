@@ -17,7 +17,7 @@ export const POST: RequestHandler = async (event) => {
 	const db = getDb();
 	const refused = await refuseInactive(event, db, body.groupId);
 	if (refused) return refused;
-	const client = getBggClient(event.locals.config, db, event.url.origin);
+	const client = getBggClient(event.locals.config, db, event.url.origin, 'bulk');
 	if (!client) return jsonError(503, OFF_MESSAGE);
 
 	const gameId = Number(body.gameId);

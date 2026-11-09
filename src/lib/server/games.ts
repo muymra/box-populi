@@ -1,6 +1,6 @@
 // Writing games and copies. BGG fields are stored exactly as parsed; nothing edits them later
 // (TECH.md "No modification"). Every change to a person's copies bumps their groups' catalogs.
-import { all, one, stmt, type DB } from './db.ts';
+import { all, jsonArray, one, stmt, type DB } from './db.ts';
 import { bumpCatalogForGames, bumpCatalogForUser } from './catalog.ts';
 import { buildSearchText, normalize } from '#lib/catalog/normalize.ts';
 import type { BggClient, BggSearchHit, BggThing } from './bgg/types.ts';
@@ -81,6 +81,34 @@ export function rankHits(hits: BggSearchHit[], query: string, limit = 10): BggSe
 		.map((x) => x.h);
 }
 
+/** How long a BGG search's results are reused before BGG is asked again (D58). */
+export const SEARCH_CACHE_MS = 7 * 24 * 60 * 60_000;
+/** Hits kept per cached search: more than any caller shows. */
+const CACHED_HITS = 20;
+
+/**
+ * BGG's search, through a week-long cache keyed by the normalized query (D58), so the same words
+ * from anyone on the instance ask BGG once. Stores the ranked top hits; a failed search stores nothing.
+ */
+export async function cachedSearch(db: DB, client: BggClient, query: string, now: number): Promise<BggSearchHit[]> {
+	const key = normalize(query);
+	const row = await one<{ hits: string; fetched_at: number }>(db, 'SELECT hits, fetched_at FROM bgg_search_cache WHERE query = ?1', key);
+	if (row && now - row.fetched_at < SEARCH_CACHE_MS) return jsonArray<BggSearchHit>(row.hits);
+	const hits = rankHits(await client.search(query), query, CACHED_HITS);
+	await db.batch([
+		stmt(
+			db,
+			`INSERT INTO bgg_search_cache (query, hits, fetched_at) VALUES (?1, ?2, ?3)
+			 ON CONFLICT(query) DO UPDATE SET hits = excluded.hits, fetched_at = excluded.fetched_at`,
+			key,
+			JSON.stringify(hits),
+			now
+		),
+		stmt(db, 'DELETE FROM bgg_search_cache WHERE fetched_at < ?1', now - SEARCH_CACHE_MS)
+	]);
+	return hits;
+}
+
 export type SearchResult = {
 	gameId: number;
 	bggId: number;
@@ -95,11 +123,11 @@ export type SearchResult = {
 };
 
 /**
- * BGG title search for the add page (TECH.md "Search"): one `search` call, then one `thing` call
- * for the top hits that aren't cached yet. Every hit ends up as a games row, so it can be added.
+ * BGG title search for the add page (TECH.md "Search"): one `search` call (or none, when the same
+ * words were searched this week), then one `thing` call for the top hits that aren't cached yet. Every hit ends up as a games row, so it can be added.
  */
 export async function searchBgg(db: DB, client: BggClient, query: string, userId: string, now: number, limit = 10): Promise<SearchResult[]> {
-	const top = rankHits(await client.search(query), query, limit);
+	const top = rankHits(await cachedSearch(db, client, query, now), query, limit);
 	if (top.length === 0) return [];
 	const ids = top.map((h) => h.bggId);
 	const placeholders = ids.map((_, i) => `?${i + 1}`).join(', ');

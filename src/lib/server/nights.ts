@@ -1,6 +1,6 @@
 // Game nights on the server (PRD "Game night", DECISIONS D38): planning, who's going, the bring
 // list, and reading nights back. Every function takes the group; nothing crosses groups.
-import { all, one, stmt, type DB } from './db.ts';
+import { all, one, readAll, rowsOf, stmt, type DB, type Read } from './db.ts';
 import { can } from './permissions.ts';
 import { GAME_COLUMNS, toCatalogGame } from './catalog.ts';
 import { buildSearchText, normalize } from '#lib/catalog/normalize.ts';
@@ -44,7 +44,12 @@ async function isMember(db: DB, groupId: string, userId: string): Promise<boolea
 /** Whether this person may plan nights in the group, by the group's `nights_by` setting. */
 export async function canPlanNights(db: DB, groupId: string, role: Role): Promise<boolean> {
 	const row = await one<{ nights_by: string }>(db, 'SELECT nights_by FROM groups WHERE id = ?1', groupId);
-	return can(role, 'plan_night', { openToMembers: (row?.nights_by ?? 'members') === 'members' });
+	return mayPlanNights(role, row?.nights_by ?? null);
+}
+
+/** canPlanNights for a caller that already has the group's `nights_by` (the group layout's one query, D59). */
+export function mayPlanNights(role: Role, nightsBy: string | null): boolean {
+	return can(role, 'plan_night', { openToMembers: (nightsBy ?? 'members') === 'members' });
 }
 
 async function nightRow(db: DB, groupId: string, nightId: string) {
@@ -286,32 +291,42 @@ export async function setNightPlanners(db: DB, groupId: string, actor: Actor, va
 
 export type NightQuery = { from?: string; to?: string; id?: string };
 
-/** Nights with their people and games, by date and then time. Three queries, whatever the count. */
+type NightRow = { id: string; name: string; night_on: string; starts_at: string | null; host_id: string | null; created_by: string | null };
+type NightPersonRow = { night_id: string; user_id: string | null; guest_name: string | null; going: number };
+type NightGameRow = { night_id: string; game_id: number; brought_by: string | null; guest_name: string | null; added_by: string | null; stayed_home: number };
+export type NightReads = { nights: Read<NightRow[]>; people: Read<NightPersonRow[]>; games: Read<NightGameRow[]> };
+
+/** Nights with their people and games, by date and then time. Three reads in one round trip, whatever the count. */
 export async function loadNights(db: DB, groupId: string, q: NightQuery = {}): Promise<Night[]> {
+	const { nights, people, games } = await readAll(db, nightReads(db, groupId, q));
+	return assembleNights(nights, people, games);
+}
+
+/** loadNights' three reads, for a caller batching them with others (`readAll`, D59); then `assembleNights`. */
+export function nightReads(db: DB, groupId: string, q: NightQuery = {}): NightReads {
 	const params: unknown[] = [groupId];
 	const where = ['group_id = ?1'];
 	if (q.from) where.push(`night_on >= ?${params.push(q.from)}`);
 	if (q.to) where.push(`night_on <= ?${params.push(q.to)}`);
 	if (q.id) where.push(`id = ?${params.push(q.id)}`);
 	const ids = `SELECT id FROM game_nights WHERE ${where.join(' AND ')}`;
-	const [nights, people, games] = await Promise.all([
-		all<{ id: string; name: string; night_on: string; starts_at: string | null; host_id: string | null; created_by: string | null }>(
+	return {
+		nights: rowsOf<NightRow>(
 			db,
 			`SELECT id, name, night_on, starts_at, host_id, created_by FROM game_nights WHERE ${where.join(' AND ')}
 			 ORDER BY night_on, starts_at, created_at`,
 			...params
 		),
-		all<{ night_id: string; user_id: string | null; guest_name: string | null; going: number }>(
-			db,
-			`SELECT night_id, user_id, guest_name, going FROM night_people WHERE night_id IN (${ids}) ORDER BY rowid`,
-			...params
-		),
-		all<{ night_id: string; game_id: number; brought_by: string | null; guest_name: string | null; added_by: string | null; stayed_home: number }>(
+		people: rowsOf<NightPersonRow>(db, `SELECT night_id, user_id, guest_name, going FROM night_people WHERE night_id IN (${ids}) ORDER BY rowid`, ...params),
+		games: rowsOf<NightGameRow>(
 			db,
 			`SELECT night_id, game_id, brought_by, guest_name, added_by, stayed_home FROM night_games WHERE night_id IN (${ids}) ORDER BY rowid`,
 			...params
 		)
-	]);
+	};
+}
+
+export function assembleNights(nights: NightRow[], people: NightPersonRow[], games: NightGameRow[]): Night[] {
 	const peopleBy = new Map<string, NightPerson[]>();
 	for (const p of people) peopleBy.set(p.night_id, [...(peopleBy.get(p.night_id) ?? []), { userId: p.user_id, guestName: p.guest_name, going: p.going === 1 }]);
 	const gamesBy = new Map<string, NightGame[]>();

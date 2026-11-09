@@ -1,6 +1,7 @@
 // A D1-shaped wrapper around node:sqlite (TECH.md "Hosting targets"). The Node platform (Docker)
 // runs on it, and so do the tests, which is why the app code never needs to know which it has.
 import type { DatabaseSync, StatementSync } from 'node:sqlite';
+import { returnsRows } from './db.ts';
 
 type Row = Record<string, unknown>;
 
@@ -45,9 +46,9 @@ class SqliteStatement {
 		return this.runSync();
 	}
 
-	/** Used by batch(): statements with RETURNING need all(), others run(). */
+	/** Used by batch(): reads and statements with RETURNING give their rows, as D1's batch does; others run(). */
 	executeSync() {
-		return /\breturning\b/i.test(this.sql) ? this.allSync() : this.runSync();
+		return returnsRows(this.sql) ? this.allSync() : this.runSync();
 	}
 }
 

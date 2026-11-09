@@ -31,7 +31,21 @@ async function correctableGame(db: DB, gameId: number): Promise<GameRow | null> 
 		'SELECT source, is_manual, name, search_text, image_url, min_players, max_players, min_playtime, max_playtime, weight FROM games WHERE id = ?1',
 		gameId
 	);
-	return row && (row.is_manual === 1 || row.source === 'manual' || row.source === 'wikidata') ? row : null;
+	return row && isCorrectable(row) ? row : null;
+}
+
+/** Typed in or from Wikidata: never a game from BGG. */
+function isCorrectable(row: { source: string; is_manual: number }): boolean {
+	return row.is_manual === 1 || row.source === 'manual' || row.source === 'wikidata';
+}
+
+/**
+ * canEditGame for a caller that already has the game row as the group may see it (so it's visible)
+ * and knows whether the person has a copy: the game page's one round trip (D59).
+ */
+export function mayEditGame(visibleRow: { source: string; is_manual: number }, role: Role, ownsCopy: boolean): boolean {
+	if (!isCorrectable(visibleRow)) return false;
+	return atLeast(role, 'admin') || ownsCopy;
 }
 
 /**

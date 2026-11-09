@@ -44,8 +44,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const chosen = event.cookies.get(THEME_COOKIE);
 	event.locals.deviceTheme = isDeviceTheme(chosen) ? chosen : AUTO_THEME;
 	const groupId = event.url.pathname.match(/^\/g\/([^/]+)/)?.[1];
+	// Only HTML carries the theme; a data request (client-side navigation) gets it from the group
+	// layout's data, so it skips the query (D59).
 	const groupTheme =
-		groupId && !isThemeId(event.locals.deviceTheme) ? await groupThemeFor(getDb(), groupId, event.locals.user?.id ?? null) : null;
+		groupId && !event.isDataRequest && !isThemeId(event.locals.deviceTheme)
+			? await groupThemeFor(getDb(), groupId, event.locals.user?.id ?? null)
+			: null;
 	// The hoster's custom theme can replace THEME as the default (set on /admin).
 	event.locals.appearance = await getAppearance(getDb());
 	const instanceTheme = event.locals.appearance.colors && event.locals.appearance.customDefault ? 'custom' : config.config.theme;

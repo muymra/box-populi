@@ -35,7 +35,7 @@ Cloudflare free tier, approximately: 100,000 Functions requests per day, 5 milli
 
 If the limits bite anyway, the Workers Paid plan ($5 per month) raises them by orders of magnitude. Nothing in the design changes.
 
-**CPU time is the tightest limit (D59).** The free plan allows 10ms of CPU per request, applied loosely: measured on 2026-11-09 on a live instance with a few hundred games, ordinary page-data requests cost 4 to 48ms and a full shelf load 37 to 44ms, and Cloudflare stopped a few of them with error 1102 once traffic was steady. So the app keeps requests few and cheap: links preload on tap, not hover; the shelf isn't server-rendered; icons are static files; the access check is one query. To measure, `wrangler pages deployment tail <id> --project-name <p> --format json` reports `cpuTime` and an `outcome` of `exceededCpu` per request.
+**CPU time is the tightest limit (D59).** The free plan allows 10ms of CPU per request, applied loosely: measured on 2026-11-09 on a live instance with a few hundred games, ordinary page-data requests cost 4 to 48ms and a full shelf load 37 to 44ms, and Cloudflare stopped a few of them with error 1102 once traffic was steady. So the app keeps requests few and cheap: links preload on tap, not hover; the shelf isn't server-rendered; icons are static files; the access check is one query; and a request's other reads go in one `readAll` batch (D60): a game page is two database calls, the group layout two or three, the catalog two. To measure, `wrangler pages deployment tail <id> --project-name <p> --format json` reports `cpuTime` and an `outcome` of `exceededCpu` per request.
 
 ## Architecture
 
@@ -67,7 +67,7 @@ box-populi/
   migrations/                   0001_init (schema below), 0002_game_sources, 0003_group_theme,
                                 0004_instance_settings, 0005_game_corrections, 0006_plays,
                                 0007_game_nights, 0008_pins, 0009_sign_in_codes, 0010_archive,
-                                0011_owner_sign_in_codes
+                                0011_owner_sign_in_codes, 0012_bgg_courtesy
   scripts/
     ensure-local-config.ts      creates the two gitignored config files on install
     seed-demo.ts                writes seed/demo.sql
@@ -187,7 +187,7 @@ The repo commits `wrangler.example.jsonc`. `pnpm install` copies it to `wrangler
 | `ADMIN_KEY` | secret | required in production | Signs the hoster in to `/admin`. At least 24 characters; generate one with `openssl rand -base64 32`. |
 | `BGG_TOKEN` | secret | optional | The hoster's own BGG application token. BGG registers applications, not people. Adding it turns on BGG search, import and game details. |
 | `BGG_MODE` | var | from the token | `live`, `off` or `fake`. Unset, it's `live` when `BGG_TOKEN` exists, otherwise `off` (or `fake` in development), so an instance needs no BGG application to launch (D28). `off` hides BGG search and import; games then come from `GAME_SOURCE` (Wikidata by default, or hand entry only). `fake` serves test fixtures and is for development only. Setting `live` without a token is a setup error. |
-| `BGG_MIN_INTERVAL_MS` | var | `2000` | Minimum spacing between BGG requests across the whole instance. Values under 2000 are rejected, so the code can't be configured into hammering BGG. |
+| `BGG_MIN_INTERVAL_MS` | var | `2000` | Minimum spacing between BGG requests across the whole instance. Values under 2000 are rejected, so the code can't be configured into hammering BGG. Bulk work waits for 5 seconds of quiet, or this value if it's longer (D58). |
 | `INSTANCE_NAME` | var | `Box Populi` | Header, page titles, privacy page. |
 | `INSTANCE_CONTACT` | var | required | A `mailto:` or `https:` URL for reaching the hoster. Shown on the privacy page and on suspension notices. |
 | `GROUP_CREATION` | var | `admins` | `admins` or `anyone`. With `admins` (the default), only the hoster, signed in to `/admin`, creates groups; anyone can still join with a code. `anyone` lets every visitor create one. |
@@ -219,6 +219,7 @@ Bindings and variables come from `import { env } from 'cloudflare:workers'` (Sve
 - `0010_archive.sql`: `groups.archived_at` and `archived_by` (D50). Archiving and restoring are `can(role, 'archive_group', { ownerAway })`: the owner, or a co-admin when `ownerAway()` finds the owner's `last_seen_at` older than `OWNER_AWAY_DAYS` (60, in `permissions.ts`). The Group tab gets `canArchive`, `archiveWaits`, `canRestore`, `restoreWaits` and `ownerAwayDays` to show the right action or the rule with the days left. `authz.ts` treats an archived group like a suspended one: `requireRead` returns it `readonly`, and `requireRole` refuses it unless `allowArchived` (restoring, and deleting); `requireActiveMember` skips archived groups. `joinRefusal` gives `archived`, though members still sign in at its door. The layout drops the join code while archived. `deleteGroup` refuses a group that is neither archived nor suspended. Deleting a person clears `archived_by`.
 - Taking over as owner (D51) needs no migration: `claimOwnership` in `group-admin.ts` checks `can(role, 'claim_ownership', { ownerAway })` (a co-admin only), then one batch demotes the owner only if their `last_seen_at` is still past the cutoff, and promotes the actor only if no owner is left, setting their `last_seen_at` to now; it reads the actor's role back to tell whether it happened. So an owner who came back in the meantime keeps the group, and a second co-admin can't take it from the first. The Group tab gets `canClaim`, and its `claim` action.
 - `0011_owner_sign_in_codes.sql`: rebuilds `admin_actions` (SQLite can't change a CHECK in place) to allow `owner_sign_in_code` (D52).
+- `0012_bgg_courtesy.sql`: `bgg_search_cache` (a normalized query, its ranked top 20 hits as JSON, `fetched_at`) and `bgg_daily` (requests and throttled answers per UTC day) (D58).
 
 Timestamps are Unix milliseconds. JSON columns hold arrays and are written and read only through helpers in `db.ts`.
 
@@ -512,7 +513,7 @@ The group actions live in `src/lib/server/group-admin.ts`. Each reads the target
 
 Instance limits apply in the actions: creating a group checks `GROUP_CREATION`, the caller's owned-group count against `MAX_GROUPS_PER_USER`, and 5 `group_create` tries per network address per day, given back when the form turns out invalid. Joining checks `MAX_MEMBERS_PER_GROUP` and refuses suspended and demo groups.
 
-`requireRead` is `readGroup(event, db, groupId).access`: one query reads the group, the caller's role, `last_seen_at` and, for the group layout, the join code, theme and PIN date (`extras`, never spread into page data whole). `last_seen_at` is written only when it's over an hour old (D59).
+`requireRead` is `readGroup(event, db, groupId).access`: one query reads the group, the caller's role, `last_seen_at` and, for the group layout and the catalog, the join code, theme, PIN date, `nights_by` and `catalog_version` (`extras`, never spread into page data whole). `last_seen_at` is written only when it's over an hour old (D59).
 
 ## Instance administration
 
@@ -521,6 +522,7 @@ The instance admin is whoever holds `ADMIN_KEY` (see "Identity and sessions"). `
 The admin page shows:
 
 - Totals: people, groups, cached games, copies, sessions and `rate_events` rows, for spotting runaway growth against the free tier.
+- Requests to BoardGameGeek, while BGG isn't off (D58): today (UTC), the last 7 days, and how many BGG throttled in those 7 days, from `bgg_daily` (`bggUsage` in `admin.ts`, which also deletes days older than 90).
 - A groups table: name, created date, member count, copy count, last activity (the latest `last_seen_at` among members), and status. Sortable by each column. Each row's Manage also has the group's play and game night counts, for the delete warning: counts only, never the plays or nights.
 - Each action answers with what happened: a failure (`{ groupId, action, error }`) reopens that action's confirmation with the error beside its fields, and a success (`{ done: { action, name } }`) shows a status line over the list, which is how a deleted group's row says it's gone.
 - The admin log, newest first.
@@ -631,6 +633,18 @@ D1 applies writes one at a time, so concurrent requests get distinct slots at le
 
 Each request has a 10-second timeout (`BGG_TIMEOUT_MS`, `AbortSignal.timeout`), started after the wait for the slot and covering the body as well as the headers. A timeout becomes `BggBusyError` with a 30-second retry hint, so callers show the same busy message; it doesn't back the instance off.
 
+Bulk work takes a slower lane (D58). `getBggClient(config, db, origin, 'bulk')` is used by import, hydrate and Find on BoardGameGeek; search uses the default `interactive`. A bulk request calls `takeBulkSlot`, which takes a slot only when the instance has made no request for `BULK_GAP_MS` (5 seconds, or `BGG_MIN_INTERVAL_MS` if longer) and never books ahead:
+
+```sql
+UPDATE bgg_pace SET next_at = ?1 + ?2          -- ?1 = now, ?2 = BGG_MIN_INTERVAL_MS
+WHERE id = 1 AND next_at - ?2 + ?3 <= ?1        -- ?3 = the bulk gap
+RETURNING ?1 AS slot_at;
+```
+
+Refused, it sleeps for the wait and tries again, up to five times within 15 seconds, then throws `BggBusyError` and the page's loop retries. Since a refused bulk request reserves nothing, a member's search never waits behind an import; bulk work simply goes in the gaps.
+
+Every request sent is counted in `bgg_daily` for its UTC day (`countRequest`), with throttled answers (429, 500, 502, 503) counted separately, for `/admin`.
+
 On 429, 500, 502 or 503, the client sets `next_at` to at least now plus 30 seconds (or now plus `Retry-After` when given), so the whole instance backs off, and throws `BggBusyError`. Callers turn that into a "BGG is busy" response. A 202 from the collection endpoint isn't an error; the import flow handles it.
 
 ### Parsing `thing`
@@ -682,13 +696,13 @@ Rules:
 
 ### Search
 
-`GET /api/bgg/search?q=&groupId=` (signed in and `requireActiveMember`, rate-limited to 30 per minute per user; the client debounces 400 ms and waits for three characters):
+`GET /api/bgg/search?q=&groupId=` (signed in and `requireActiveMember`, rate-limited to 30 per minute per user; the client debounces 600 ms (D58) and waits for three characters):
 
-1. `search?query=<q>&type=boardgame,boardgameexpansion`. De-duplicate hits by id; BGG can list an item under both types.
+1. `search?query=<q>&type=boardgame,boardgameexpansion`, unless the same normalized query was searched in the last 7 days: `cachedSearch` keeps the ranked top 20 hits in `bgg_search_cache`, empty results included, and deletes expired rows when it writes (D58). De-duplicate hits by id; BGG can list an item under both types.
 2. Rank hits: exact name match first, then names starting with the query, then the rest, keeping BGG's order within each tier. Keep the first 10.
 3. Call `things()` only for those of the 10 that aren't already cached with `fetched_at` set, and upsert the results into `games`. Sort the 10 by `users_rated` descending with exact matches pinned to the top. Return them with thumbnails and whether the caller already owns each.
 
-At most two BGG calls per search, and one when every hit is cached. With instance-wide pacing, a search takes two to three seconds when BGG is idle; the UI shows a spinner after 300 ms. The ranking is a heuristic; tune it with real queries and note changes in DECISIONS.md.
+At most two BGG calls per search, one when every hit's details are cached, and none when the same words were searched this week. With instance-wide pacing, a search takes two to three seconds when BGG is idle; the UI shows a spinner after 300 ms. The ranking is a heuristic; tune it with real queries and note changes in DECISIONS.md.
 
 ### Import and hydrate
 
@@ -706,7 +720,7 @@ All three endpoints take the add page's `groupId` and call `requireActiveMember`
 3. After the add, delete the caller's own copies of `removeGameIds` with a catalog bump (`removeFromShelf`, the same as "Remove from my games" on each). Removal comes second so a busy BGG returns the whole step for a retry.
 4. Return `{ status: 'added', added, removed, pending }`: games added to the shelf, copies taken off, and how many of the person's games still wait for details. While BGG is still building the collection, `202 { status: 'pending' }`.
 
-`POST /api/bgg/hydrate` with `{ groupId }` (rate-limited to 60 `bgg_hydrate` calls per 10 minutes per person, 1,200 games' worth): select up to 20 games with `fetched_at IS NULL AND bgg_id IS NOT NULL` among the caller's copies, call `things()`, update the rows, bump the catalog of every group where anyone has a copy of those games (other people may own the same stubs), and return `{ updated, remaining }`. On `BggBusyError`, answer 503 with `{ error, retryAfterMs }`; past the rate limit, 429 with `retryAfterMs` of 60 seconds. The client loops until `remaining` is 0. It calls again as soon as each step returns, since the server-side pacer sets the rate. On a 503 or 429 with `retryAfterMs` it waits that long or its own backoff, whichever is longer (5 seconds doubling to 60), then carries on. A 1,000-game import takes 50 steps: at least 100 seconds, likely three to four minutes, behind a progress bar. A larger import pauses at the rate limit and resumes by itself.
+`POST /api/bgg/hydrate` with `{ groupId }` (rate-limited to 60 `bgg_hydrate` calls per 10 minutes per person, 1,200 games' worth): select up to 20 games with `fetched_at IS NULL AND bgg_id IS NOT NULL` among the caller's copies, call `things()`, update the rows, bump the catalog of every group where anyone has a copy of those games (other people may own the same stubs), and return `{ updated, remaining }`. On `BggBusyError`, answer 503 with `{ error, retryAfterMs }`; past the rate limit, 429 with `retryAfterMs` of 60 seconds. The client loops until `remaining` is 0. It calls again as soon as each step returns, since the server-side pacer sets the rate. On a 503 or 429 with `retryAfterMs` it waits that long or its own backoff, whichever is longer (5 seconds doubling to 60), then carries on. A 1,000-game import takes 50 steps, each waiting for five quiet seconds in the bulk lane (D58): about four to five minutes behind a progress bar. A larger import pauses at the rate limit and resumes by itself.
 
 Hydrate is idempotent and resumable. Any page that sees the caller owns stubs shows "Finish loading game details," which restarts the loop. Two members hydrating the same stub at once is harmless.
 
@@ -714,7 +728,7 @@ Hydrate is idempotent and resumable. Any page that sees the caller owns stubs sh
 
 Built 2026-11-09 (D57), in `src/lib/server/bgg-match.ts` and `MatchPanel.svelte`. Hydrate only reaches games with a BGG id, so a member's typed-in games, and Wikidata games without a BGG id, stay without weight, mechanics or best-at data after the token arrives. While BGG is on, the add page loads them (`unmatchedGames`: on the caller's shelf, `is_manual = 1 OR source <> 'bgg'`, minus Wikidata games that have a BGG id, which hydrate handles) and shows their count with a "Find them on BoardGameGeek" fold.
 
-1. `POST /api/bgg/match` with `{ groupId, gameId }`, one game per call (rate-limited to 120 `bgg_match` calls per 10 minutes per person): refuse unless the game is one of the caller's unmatched games (404), then run `searchBgg` on its name with the top five hits, which stores each hit as a BGG row and fetches details for the ones not cached. When nothing is found, search once more with a shorter title (`shorterTitle`: without a trailing parenthetical, or the part before a colon or a spaced dash). Return `{ gameId, candidates }`, exact titles first (`normalize` equal), then the most rated. Busy and limit answers are the hydrate loop's: 503 or 429 with `retryAfterMs`, and the page waits and retries the same game. Nothing changes on the caller's shelf in this step.
+1. `POST /api/bgg/match` with `{ groupId, gameId }`, one game per call in the bulk lane, about ten seconds each (rate-limited to 120 `bgg_match` calls per 10 minutes per person): refuse unless the game is one of the caller's unmatched games (404), then run `searchBgg` on its name with the top five hits, which stores each hit as a BGG row and fetches details for the ones not cached. When nothing is found, search once more with a shorter title (`shorterTitle`: without a trailing parenthetical, or the part before a colon or a spaced dash). Return `{ gameId, candidates }`, exact titles first (`normalize` equal), then the most rated. Busy and limit answers are the hydrate loop's: 503 or 429 with `retryAfterMs`, and the page waits and retries the same game. Nothing changes on the caller's shelf in this step.
 2. The page lists every game looked up so far with its first candidate selected (a select when there are more), the box front, year, players and a "View on BoardGameGeek" link. Exact titles come ticked, others don't. The member can stop part-way and review, and look up the rest later.
 3. `POST /api/bgg/match/confirm` with `{ groupId, pairs: [{ gameId, targetId }] }`, up to 10 pairs per call. A pair counts only when `gameId` is one of the caller's unmatched games and `targetId` is a BGG row (`source = 'bgg'`, `is_manual = 0`, a BGG id); the rest are skipped. Each pair is ten statements in one batch, in order: move copies, wishes and bring-list rows to the BGG game unless that person or night already has it (then delete the typed-in row), move links and plays, delete the game's group corrections, delete the typed-in game. Then bump the catalogs of every group with a copy of the targets, and the caller's. Return `{ merged, skipped }`. No BGG request is made: step 1 stored the targets.
 

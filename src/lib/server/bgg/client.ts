@@ -1,10 +1,10 @@
 // The live BGG XML API client (TECH.md "Client"). Every request goes through the instance-wide
 // pacer, carries the bearer token and an identifying User-Agent, and backs the whole instance off
-// when BGG throttles. Not yet run against BGG itself: STATUS.md tracks that.
+// when BGG throttles. Bulk work takes the slower lane (D58), and every request is counted.
 import pkg from '../../../../package.json';
 import { SOURCE_URL } from '#lib/project.ts';
 import { parseCollection, parseSearch, parseThings } from './parse.ts';
-import { BACKOFF_MS, backOff, reserveSlot } from './pace.ts';
+import { BACKOFF_MS, BULK_GAP_MS, backOff, countRequest, reserveSlot, takeBulkSlot } from './pace.ts';
 import { FakeBggClient } from './fake.ts';
 import {
 	BggBusyError,
@@ -70,6 +70,12 @@ export type LiveClientOptions = {
 	origin: string;
 	/** INSTANCE_CONTACT, for the User-Agent. */
 	contact?: string;
+	/**
+	 * `bulk` for work nobody waits on request by request (imports, loading details, Find on
+	 * BoardGameGeek): it waits for the instance to be quiet for BULK_GAP_MS instead of booking the
+	 * next slot. Searches stay `interactive` (D58).
+	 */
+	lane?: 'interactive' | 'bulk';
 	fetchFn?: typeof fetch;
 	now?: () => number;
 	sleep?: (ms: number) => Promise<void>;
@@ -91,12 +97,30 @@ export class LiveBggClient implements BggClient {
 		this.timeoutMs = opts.timeoutMs ?? BGG_TIMEOUT_MS;
 	}
 
-	private async request(path: string): Promise<BggResponse> {
+	/** Waits for the next slot in this client's lane, or throws BggBusyError when it's too far off. */
+	private async takeSlot(): Promise<void> {
+		const { db, intervalMs } = this.opts;
+		if (this.opts.lane === 'bulk') {
+			const gap = Math.max(BULK_GAP_MS, intervalMs);
+			const deadline = this.now() + MAX_SLOT_WAIT_MS;
+			// A handful of tries: searches may keep the instance busy, and the caller retries later anyway.
+			for (let attempt = 0; attempt < 5; attempt++) {
+				const now = this.now();
+				const slot = await takeBulkSlot(db, now, intervalMs, gap);
+				if (slot.ok) return;
+				if (now + slot.waitMs > deadline || attempt === 4) throw new BggBusyError(Math.max(slot.waitMs, 1_000));
+				await this.sleep(slot.waitMs);
+			}
+		}
 		const now = this.now();
-		const slot = await reserveSlot(this.opts.db, now, this.opts.intervalMs, MAX_SLOT_WAIT_MS);
+		const slot = await reserveSlot(db, now, intervalMs, MAX_SLOT_WAIT_MS);
 		if (!slot.ok) throw new BggBusyError(slot.waitMs);
 		const wait = slot.slotAt - now;
 		if (wait > 0) await this.sleep(wait);
+	}
+
+	private async request(path: string): Promise<BggResponse> {
+		await this.takeSlot();
 
 		const fetchFn = this.fetchFn;
 		// Started after the wait for the slot, and it covers reading the body too.
@@ -111,7 +135,9 @@ export class LiveBggClient implements BggClient {
 				signal
 			})
 		);
-		if (response.status === 429 || response.status === 500 || response.status === 502 || response.status === 503) {
+		const throttled = response.status === 429 || response.status === 500 || response.status === 502 || response.status === 503;
+		await countRequest(this.opts.db, this.now(), throttled);
+		if (throttled) {
 			const delay = retryAfterMs(response.headers.get('retry-after')) ?? BACKOFF_MS;
 			await backOff(this.opts.db, this.now() + delay);
 			throw new BggBusyError(delay);
@@ -147,9 +173,12 @@ export class LiveBggClient implements BggClient {
 	}
 }
 
-/** The client for this instance's BGG_MODE, or null when BGG is switched off. */
-export function getBggClient(config: InstanceConfig, db: DB, origin: string): BggClient | null {
+/**
+ * The client for this instance's BGG_MODE, or null when BGG is switched off. `lane` is `bulk` for
+ * imports, loading details and Find on BoardGameGeek, `interactive` (the default) for search (D58).
+ */
+export function getBggClient(config: InstanceConfig, db: DB, origin: string, lane: 'interactive' | 'bulk' = 'interactive'): BggClient | null {
 	if (config.bggMode === 'off') return null;
 	if (config.bggMode === 'fake') return new FakeBggClient();
-	return new LiveBggClient({ token: config.bggToken ?? '', db, intervalMs: config.bggMinIntervalMs, origin, contact: config.instanceContact });
+	return new LiveBggClient({ token: config.bggToken ?? '', db, intervalMs: config.bggMinIntervalMs, origin, contact: config.instanceContact, lane });
 }

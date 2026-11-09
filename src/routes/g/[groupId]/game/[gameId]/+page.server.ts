@@ -4,13 +4,13 @@ import { addCopy, gameUsableInGroup, gameVisibleInGroup, removeCopy } from '#lib
 import { addLink, canDeleteLink, deleteLink, parseLink } from '#lib/server/links.ts';
 import { addWish, removeWish } from '#lib/server/wishlist.ts';
 import { lendCopy, returnCopy } from '#lib/server/lending.ts';
-import { canEditGame, editGame } from '#lib/server/game-edit.ts';
-import { applyCorrection, groupCorrections } from '#lib/server/corrections.ts';
+import { editGame, mayEditGame } from '#lib/server/game-edit.ts';
+import { applyCorrection, correctionsRead } from '#lib/server/corrections.ts';
 import { linkHost } from '#lib/link-kinds.ts';
-import { loadMembers } from '#lib/server/catalog.ts';
-import { canChangePlay, loadPlays } from '#lib/server/plays.ts';
+import { membersRead } from '#lib/server/catalog.ts';
+import { canChangePlay, playsRead } from '#lib/server/plays.ts';
 import { isWin } from '#lib/plays.ts';
-import { all, jsonArray, one } from '#lib/server/db.ts';
+import { jsonArray, known, readAll, rowOf, rowsOf } from '#lib/server/db.ts';
 import { getDb } from '#lib/server/platform.ts';
 import type { PollSource } from '#lib/catalog/types.ts';
 import type { Actions, PageServerLoad } from './$types';
@@ -51,27 +51,24 @@ export const load: PageServerLoad = async (event) => {
 	const gameId = Number(event.params.gameId);
 	if (!Number.isInteger(gameId) || gameId <= 0) error(404, 'Game not found');
 
-	// Only games this group owns, wants, brings to a night or has played are visible here: the cache
-	// is shared across groups, and hand-entered titles from other groups shouldn't be readable by
-	// guessing ids (same rule as gameVisibleInGroup).
-	const shared = await one<GameDetail>(
-		db,
-		`SELECT g.* FROM games g WHERE g.id = ?2 AND (
+	const me = event.locals.user;
+	// Everything this page shows, in one round trip after the access check (D59). Only games this
+	// group owns, wants, brings to a night or has played are visible here: the cache is shared across
+	// groups, and hand-entered titles from other groups shouldn't be readable by guessing ids (same rule
+	// as gameVisibleInGroup). That check comes back with the rest, and nothing else is used unless it passes.
+	const r = await readAll(db, {
+		shared: rowOf<GameDetail>(
+			db,
+			`SELECT g.* FROM games g WHERE g.id = ?2 AND (
 			EXISTS (SELECT 1 FROM copies c JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1 WHERE c.game_id = g.id)
 			OR EXISTS (SELECT 1 FROM wishlist w JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1 WHERE w.game_id = g.id)
 			OR EXISTS (SELECT 1 FROM night_games ng JOIN game_nights n ON n.id = ng.night_id AND n.group_id = ?1 WHERE ng.game_id = g.id)
 			OR EXISTS (SELECT 1 FROM plays p WHERE p.group_id = ?1 AND p.game_id = g.id))`,
-		groupId,
-		gameId
-	);
-	if (!shared) error(404, 'Game not found');
-	// The game as this group sees it: the shared row, with this group's picture (D54) and anything it
-	// corrected for itself before D54.
-	const correction = (await groupCorrections(db, groupId, [gameId])).get(gameId);
-	const game = applyCorrection(shared, correction);
-
-	const [owners, wishers, links, expansions, bases, members, plays] = await Promise.all([
-		all<{ user_id: string; name: string; lent_to_name: string | null; lent_to_text: string | null; lent_in_group: number }>(
+			groupId,
+			gameId
+		),
+		corrections: correctionsRead(db, groupId, [gameId]),
+		owners: rowsOf<{ user_id: string; name: string; lent_to_name: string | null; lent_to_text: string | null; lent_in_group: number }>(
 			db,
 			`SELECT c.user_id, u.name, lu.name AS lent_to_name, c.lent_to_text,
 				EXISTS (SELECT 1 FROM memberships lm WHERE lm.group_id = ?1 AND lm.user_id = c.lent_to_user_id) AS lent_in_group
@@ -84,7 +81,7 @@ export const load: PageServerLoad = async (event) => {
 			groupId,
 			gameId
 		),
-		all<{ id: string; name: string }>(
+		wishers: rowsOf<{ id: string; name: string }>(
 			db,
 			`SELECT u.id, u.name FROM wishlist w
 			 JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1
@@ -95,7 +92,7 @@ export const load: PageServerLoad = async (event) => {
 			groupId,
 			gameId
 		),
-		all<{ id: number; kind: 'rules' | 'video' | 'other'; title: string | null; url: string; added_by: string | null; added_by_name: string | null }>(
+		links: rowsOf<{ id: number; kind: 'rules' | 'video' | 'other'; title: string | null; url: string; added_by: string | null; added_by_name: string | null }>(
 			db,
 			`SELECT l.id, l.kind, l.title, l.url, l.added_by, u.name AS added_by_name
 			 FROM game_links l LEFT JOIN users u ON u.id = l.added_by
@@ -103,44 +100,49 @@ export const load: PageServerLoad = async (event) => {
 			groupId,
 			gameId
 		),
-		game.bgg_id == null
-			? Promise.resolve([])
-			: all<{ id: number; name: string; year: number | null }>(
+		// Expansions of this game someone in the group owns; none for a game without a BGG id.
+		expansions: rowsOf<{ id: number; name: string; year: number | null }>(
+			db,
+			`SELECT DISTINCT g.id, g.name, g.year
+			 FROM games g, json_each(g.base_bgg_ids) j
+			 JOIN copies c ON c.game_id = g.id
+			 JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1
+			 WHERE g.is_expansion = 1 AND j.value = (SELECT bgg_id FROM games WHERE id = ?2)
+			 ORDER BY g.name`,
+			groupId,
+			gameId
+		),
+		// For an expansion, its base games; none otherwise.
+		bases: rowsOf<{ id: number; name: string; bgg_id: number }>(
+			db,
+			`SELECT id, name, bgg_id FROM games
+			 WHERE bgg_id IN (SELECT value FROM json_each((SELECT base_bgg_ids FROM games WHERE id = ?1 AND is_expansion = 1)))`,
+			gameId
+		),
+		members: membersRead(db, groupId),
+		plays: playsRead(db, groupId, { gameId }),
+		myCopy: me
+			? rowOf<{ lent_to_user_id: string | null; lent_to_text: string | null }>(
 					db,
-					`SELECT DISTINCT g.id, g.name, g.year
-					 FROM games g, json_each(g.base_bgg_ids) j
-					 JOIN copies c ON c.game_id = g.id
-					 JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1
-					 WHERE g.is_expansion = 1 AND j.value = ?2
-					 ORDER BY g.name`,
-					groupId,
-					game.bgg_id
-				),
-		game.is_expansion
-			? all<{ id: number; name: string; bgg_id: number }>(
-					db,
-					'SELECT id, name, bgg_id FROM games WHERE bgg_id IN (SELECT value FROM json_each(?1))',
-					game.base_bgg_ids
+					'SELECT lent_to_user_id, lent_to_text FROM copies WHERE user_id = ?1 AND game_id = ?2',
+					me.id,
+					gameId
 				)
-			: Promise.resolve([]),
-		loadMembers(db, groupId),
-		loadPlays(db, groupId, { gameId })
-	]);
+			: known(null)
+	});
+	const shared = r.shared;
+	if (!shared) error(404, 'Game not found');
+	// The game as this group sees it: the shared row, with this group's picture (D54) and anything it
+	// corrected for itself before D54.
+	const correction = r.corrections.get(gameId);
+	const game = applyCorrection(shared, correction);
+	const { owners, wishers, links, expansions, bases, members, plays, myCopy } = r;
 	const colorOf = new Map(members.map((m) => [m.id, m.colorIndex]));
 
-	const me = event.locals.user;
 	const canEdit = access.role != null && !access.readonly;
 	const actor = me && access.role ? { id: me.id, role: access.role } : null;
-	const myCopy = me
-		? await one<{ lent_to_user_id: string | null; lent_to_text: string | null }>(
-				db,
-				'SELECT lent_to_user_id, lent_to_text FROM copies WHERE user_id = ?1 AND game_id = ?2',
-				me.id,
-				gameId
-			)
-		: null;
 	const mine = myCopy != null;
-	const canEditDetails = canEdit && actor != null && (await canEditGame(db, groupId, actor, gameId));
+	const canEditDetails = canEdit && actor != null && mayEditGame(shared, actor.role, mine);
 	// Who last edited it: the shared game's last editor, or this group's picture if that came later.
 	// An editor's name shows only to groups they're in (D54; the privacy page says so).
 	const nameOf = (id: string | null) => (id == null ? null : (members.find((m) => m.id === id)?.name ?? null));

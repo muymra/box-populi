@@ -103,7 +103,7 @@ In `wrangler.jsonc` under `"vars"`:
 | `MAX_GROUPS_PER_USER` | Default `5`. |
 | `MAX_MEMBERS_PER_GROUP` | Default `100`. |
 | `BGG_MODE` | Leave it empty. BGG turns on when the `BGG_TOKEN` secret exists. Set `off` to keep BGG off even with a token. |
-| `BGG_MIN_INTERVAL_MS` | Default `2000`, the minimum. Raise it if BGG asks you to. |
+| `BGG_MIN_INTERVAL_MS` | Default `2000`, the minimum. Imports and other bulk work wait 5 seconds, or this if it's longer. Raise it if BGG asks you to, or if `/admin` shows requests throttled. |
 
 ## 5. Store the admin key
 

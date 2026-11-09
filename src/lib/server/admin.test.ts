@@ -5,6 +5,7 @@ import {
 	adminCookieValue,
 	adminDeleteGroup,
 	adminLog,
+	bggUsage,
 	instanceTotals,
 	isAdminKey,
 	listGroups,
@@ -118,3 +119,21 @@ describe('a sign-in code for a group\'s owner (D52)', () => {
 		expect((await adminLog(db))[0]).toMatchObject({ action: 'owner_sign_in_code', targetLabel: 'Quiet', reason: 'Bo lost their PIN and phone' });
 	});
 });
+
+describe('bggUsage (D58)', () => {
+	it('sums today and the last seven days, and drops days past ninety', async () => {
+		const now = Date.parse('2026-11-09T12:00:00Z');
+		await run(
+			db,
+			`INSERT INTO bgg_daily (day, requests, throttled) VALUES
+			 ('2026-11-09', 40, 1), ('2026-11-03', 100, 2), ('2026-11-02', 500, 9), ('2026-07-01', 7, 0)`
+		);
+		expect(await bggUsage(db, now)).toEqual({ today: 40, week: 140, throttledWeek: 3 });
+		expect(await all(db, 'SELECT day FROM bgg_daily ORDER BY day')).toEqual([{ day: '2026-11-02' }, { day: '2026-11-03' }, { day: '2026-11-09' }]);
+	});
+
+	it('is all zeros before the first request', async () => {
+		expect(await bggUsage(db, Date.now())).toEqual({ today: 0, week: 0, throttledWeek: 0 });
+	});
+});
+

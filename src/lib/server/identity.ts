@@ -1,6 +1,6 @@
 // People, device sessions and personal links (DECISIONS D25, TECH.md "Identity and sessions").
 // Only SHA-256 digests of tokens are stored, so a leaked database holds nothing usable.
-import { all, type DB, deleteGroupStatements, deletePersonStatements, one, run, stmt } from './db.ts';
+import { all, type DB, deleteGroupStatements, deletePersonStatements, mapRead, one, readAll, rowsOf, run, stmt, type Read } from './db.ts';
 import { bumpCatalogForUser } from './catalog.ts';
 import { can } from './permissions.ts';
 import type { Role } from '#lib/catalog/types.ts';
@@ -142,16 +142,23 @@ export async function renamePerson(db: DB, userId: string, name: string): Promis
 export type MyGroup = { id: string; name: string; role: Role; isDemo: boolean; memberCount: number; archivedAt: number | null };
 
 export async function listMyGroups(db: DB, userId: string): Promise<MyGroup[]> {
-	const rows = await all<{ id: string; name: string; role: Role; is_demo: number; member_count: number; archived_at: number | null }>(
-		db,
-		`SELECT g.id, g.name, m.role, g.is_demo, g.archived_at,
-			(SELECT COUNT(*) FROM memberships m2 WHERE m2.group_id = g.id) AS member_count
-		 FROM memberships m JOIN groups g ON g.id = m.group_id
-		 WHERE m.user_id = ?1
-		 ORDER BY m.last_seen_at DESC, g.name`,
-		userId
+	return (await readAll(db, { g: myGroupsRead(db, userId) })).g;
+}
+
+/** listMyGroups as a read, to share a round trip with others (`readAll`, D59). */
+export function myGroupsRead(db: DB, userId: string): Read<MyGroup[]> {
+	return mapRead(
+		rowsOf<{ id: string; name: string; role: Role; is_demo: number; member_count: number; archived_at: number | null }>(
+			db,
+			`SELECT g.id, g.name, m.role, g.is_demo, g.archived_at,
+				(SELECT COUNT(*) FROM memberships m2 WHERE m2.group_id = g.id) AS member_count
+			 FROM memberships m JOIN groups g ON g.id = m.group_id
+			 WHERE m.user_id = ?1
+			 ORDER BY m.last_seen_at DESC, g.name`,
+			userId
+		),
+		(rows) => rows.map((r) => ({ id: r.id, name: r.name, role: r.role, isDemo: r.is_demo === 1, memberCount: r.member_count, archivedAt: r.archived_at }))
 	);
-	return rows.map((r) => ({ id: r.id, name: r.name, role: r.role, isDemo: r.is_demo === 1, memberCount: r.member_count, archivedAt: r.archived_at }));
 }
 
 export type DeleteResult = { ok: true } | { ok: false; blockingGroups: string[] };

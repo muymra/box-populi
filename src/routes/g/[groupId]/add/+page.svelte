@@ -54,7 +54,8 @@
 			message = null;
 			return;
 		}
-		timer = setTimeout(() => search(q), 400);
+		// 600ms: a pause mid-word sends fewer searches to BGG (D58).
+		timer = setTimeout(() => search(q), 600);
 	}
 
 	async function search(q: string) {

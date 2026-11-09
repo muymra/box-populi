@@ -366,6 +366,16 @@ Replaces "switching to live later doesn't migrate manual games" (TECH.md "Public
 **Trade-offs accepted:** the game is shared (D54), so merging moves other members' copies of it too, the same reach a correction has. A duplicate copy's note and loan go with the typed-in row. Matching costs two BGG requests per game (search, then details for the top five), about four seconds each at the instance pace.
 **Revisit if:** members merge into the wrong game often; an undo would need the typed-in row kept instead of deleted.
 
+## D58. Ask BGG less: a week-long search cache, a slower lane for bulk work, and a count (2026-11-09)
+
+Adds to D23's instance-wide pacing. Carlo, 2026-11-09: "i want the app to stay on their good side." Three changes, none of which slows a search a member waits on:
+- **Search cache.** A BGG search's ranked top 20 hits are kept for 7 days in `bgg_search_cache`, keyed by the normalized query, so the same words from anyone on the instance ask BGG once. Empty results are kept too; failed searches aren't. The add page also waits 600 ms after typing stops instead of 400, so fewer half-typed words reach BGG.
+- **Bulk lane.** Imports, loading details and Find on BoardGameGeek take a slot only after the instance has made no request for 5 seconds (BGG's older wiki said five seconds sufficed), or `BGG_MIN_INTERVAL_MS` if that's longer, and never book one ahead. Searches keep the 2-second interval and never queue behind bulk work.
+- **Count.** Every request sent to BGG, and every throttled answer, is counted per UTC day in `bgg_daily` and shown on `/admin` (today, the last 7 days, throttled in 7 days), so a host sees what the instance asks of BGG and knows when to raise `BGG_MIN_INTERVAL_MS`.
+**Why:** each instance has its own token, and BGG judges each by its traffic. Repeated searches were the steady source of it; bulk work was the burst.
+**Trade-offs accepted:** bulk work takes two to three times longer: a 1,000-game import loads details in about four minutes instead of under two, and Find on BoardGameGeek takes about ten seconds a game. A game added to BGG this week may not appear for a search someone ran before it existed, for up to a week. Migration 0012.
+**Revisit if:** BGG publishes limits, or `/admin` shows throttling; the ranks-file index (TECH.md) is the next step, removing most searches.
+
 ## D59. Stay inside the free plan's CPU time: fewer requests, less work per request (2026-11-09)
 
 Carlo's instance started answering Cloudflare error 1102 ("Worker exceeded resource limits") on 2026-11-09, the day it imported, matched and browsed a few hundred games. A five-minute log of 91 requests with their CPU time showed nothing running away: ordinary pages cost 4 to 48ms of CPU against the free plan's 10ms, a full load of the shelf 37 to 44ms, and Cloudflare stopped 6 of them, not always the most expensive (a 48ms request passed, a 10ms one didn't). So the limit is applied loosely and by volume, and the app was living on that looseness. Carlo chose to fix the code rather than pay for Workers Paid. Changes:
@@ -376,3 +386,18 @@ Carlo's instance started answering Cloudflare error 1102 ("Worker exceeded resou
 **Why:** PRD and TECH promise that a group runs on the free tier; each hoster gets the same 10ms.
 **Trade-offs accepted:** a game page opens a moment later on a mouse (its data loads on press, not on hover). Opening the shelf by its link shows the bar and an empty shelf for an instant before the games draw. "Last active" on the Group tab is accurate to the hour, as it already was.
 **Revisit if:** a log of CPU times after deploying still shows stopped requests. Next candidates: batching the group layout's remaining queries (members, nights, groups, pending details) into one `db.batch`, and reading BGG's XML replies with less work.
+
+## D60. Batch a request's reads into one round trip (2026-11-09)
+
+Follows D59. After 0.3.4, a five-minute log on Carlo's instance had no request stopped, but each one still cost 11 to 24ms of CPU (a game page), 11 to 18ms (the shelf's catalog) and about 10ms (the group layout), against about 10ms allowed; the cost tracked how many database calls a request made, up to 16 for a game page. D1 runs a `batch()` as one call. `readAll(db, { name: read, … })` in `db.ts` takes named reads (`rowsOf`, `rowOf`, `mapRead`, `known` for a value needing no query) and runs them in one batch; the loaders that pages share have a read form next to their usual function (`membersRead`, `correctionsRead`, `nightReads` with `assembleNights`, `myGroupsRead`, `pendingDetailsRead`, `playsRead`). The access check's one query (`readGroup`) also brings the group's `nights_by` and `catalog_version`. Result: a game page is two calls (access, then one batch, its visibility check included and nothing used unless it passes), the group layout two or three, the catalog two (one when unchanged), and data requests skip the hook's group-theme query, which only HTML needs. The node:sqlite and libSQL adapters now return rows for SELECTs in a batch, as D1 does.
+**Why:** the free plan's CPU time per request (D59); fewer calls is the change that applies to every page.
+**Trade-offs accepted:** a read batched with others runs even when an earlier one (the visibility check) means it won't be used; a few wasted reads cost less than another round trip. Loaders keep their old function as a wrapper, so other callers are unchanged.
+**Revisit if:** a log after deploying still shows stopped requests; then full page loads (`/me` was 39ms) and the BGG XML parsing are next.
+
+## D61. Member profiles show only what the group already sees (2026-11-09)
+
+Planned, not built (STATUS item 34). Carlo's idea, 2026-11-09, checked against the privacy promises: PRODUCT.md principle 4 ("people's data is kept to a display name"), the PRD's "Access and privacy" ("no email addresses or other contact details"; BGG usernames "not stored") and `/privacy`'s list of what's stored. A profile is a page per member, inside a group, built from data that group can already see: their colour and display name, when they joined it, their shelf and wishlist (a shelf already shows in every group its owner is in), and this group's plays, wins and game nights with them in it.
+**Why:** it needs no new personal data, so none of the promises or the privacy page change.
+**Trade-offs accepted:** nothing a member writes about themselves. Ruled out: contact details of any kind (a headline promise), photos or image links (an upload is new personal data and a link tells another server who viewed it; initials or a colour stand in), a stored BGG username (the PRD says it's not stored), and a bio, pronouns or favourite games (more than a display name; possible later, but only as a deliberate change to the promise, with the privacy page, deletion and "Your data" covering it).
+**Revisit if:** members ask to say something about themselves; that's a new decision, not an extension of this one. Whatever the page shows, it never reveals a member's other groups, or plays and nights from them.
+

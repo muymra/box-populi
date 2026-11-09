@@ -1,7 +1,7 @@
 // BGG collection import (TECH.md "Import and hydrate"). Three steps the browser drives:
 // preview (nothing stored), confirm (stubs and copies at once), hydrate (20 games' details per call).
 // The BGG username is used for the requests and never stored.
-import { all, one, stmt, type DB } from './db.ts';
+import { all, mapRead, readAll, rowOf, stmt, type DB, type Read } from './db.ts';
 import { bumpCatalogForGames, bumpCatalogForUser } from './catalog.ts';
 import { stubStatement, upsertThingStatement } from './games.ts';
 import { THINGS_PER_REQUEST, type BggClient, type BggCollectionItem } from './bgg/types.ts';
@@ -134,13 +134,20 @@ export async function confirmImport(
 const NEEDS_BGG_DETAILS = `g.bgg_id IS NOT NULL AND (g.fetched_at IS NULL OR g.source = 'wikidata')`;
 
 export async function pendingDetails(db: DB, userId: string): Promise<number> {
-	const row = await one<{ n: number }>(
-		db,
-		`SELECT COUNT(DISTINCT g.id) AS n FROM copies c JOIN games g ON g.id = c.game_id
-		 WHERE c.user_id = ?1 AND ${NEEDS_BGG_DETAILS}`,
-		userId
+	return (await readAll(db, { n: pendingDetailsRead(db, userId) })).n;
+}
+
+/** pendingDetails as a read, to share a round trip with others (`readAll`, D59). */
+export function pendingDetailsRead(db: DB, userId: string): Read<number> {
+	return mapRead(
+		rowOf<{ n: number }>(
+			db,
+			`SELECT COUNT(DISTINCT g.id) AS n FROM copies c JOIN games g ON g.id = c.game_id
+			 WHERE c.user_id = ?1 AND ${NEEDS_BGG_DETAILS}`,
+			userId
+		),
+		(row) => row?.n ?? 0
 	);
-	return row?.n ?? 0;
 }
 
 /**

@@ -4,6 +4,11 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+- Pages ask the database once or twice instead of up to 16 times, so they cost the site less on Cloudflare's free plan and load a little faster.
+- Games with box art show their name under the box on the shelf, since the art's own title is often cropped.
+- Box Populi asks BoardGameGeek less. A search for the same words within a week is answered from the instance's own copy, the Add page waits a little longer after you stop typing, and imports, loading details and Find on BoardGameGeek wait for a quiet moment between requests, so they take a few minutes longer. Searches you wait on are as quick as before.
+- The admin page shows how many requests this instance sent to BoardGameGeek today and in the last week, and how many BGG asked it to slow down.
+
 ## 0.3.4 (2026-11-09)
 
 **Upgrading:** nothing to do: no migrations and no new settings. Deploy as usual.

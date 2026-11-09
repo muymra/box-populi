@@ -214,6 +214,19 @@
 				</div>
 			{/each}
 		</dl>
+		{#if data.bgg}
+			<!-- What this instance asks of BGG (D58). Throttling means BGG asked it to slow down. -->
+			<h3 class="sub-h">Requests to BoardGameGeek</h3>
+			<dl class="totals bgg-usage">
+				<div><dt>Today (UTC)</dt><dd class="num">{data.bgg.today.toLocaleString('en')}</dd></div>
+				<div><dt>Last 7 days</dt><dd class="num">{data.bgg.week.toLocaleString('en')}</dd></div>
+				<div><dt>Throttled, 7 days</dt><dd class="num">{data.bgg.throttledWeek.toLocaleString('en')}</dd></div>
+			</dl>
+			<p class="muted usage-note">
+				Searches are reused for a week and bulk work waits for a quiet moment, so this stays low. If “Throttled” isn’t zero, BoardGameGeek asked
+				this site to slow down: raise <code>BGG_MIN_INTERVAL_MS</code>.
+			</p>
+		{/if}
 	{/snippet}
 
 	{#snippet groupTools()}
@@ -554,6 +567,20 @@
 	.totals div {
 		background: var(--cube);
 		padding: var(--s-3);
+	}
+	/* Exactly three cells, so the grid never shows an empty one; about the width of three above. */
+	.totals.bgg-usage {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		max-width: 30rem;
+	}
+	.sub-h {
+		margin: var(--s-4) 0 var(--s-2);
+		font-size: var(--t-body);
+	}
+	.usage-note {
+		font-size: var(--t-small);
+		margin: var(--s-2) 0 0;
+		max-width: 68ch;
 	}
 	.totals dt {
 		font-size: var(--t-small);

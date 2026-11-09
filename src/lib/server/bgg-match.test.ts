@@ -54,7 +54,7 @@ describe('titles', () => {
 		expect(shorterTitle('Go: the board game')).toBeNull();
 		expect(shorterTitle('Spot-It')).toBeNull();
 	});
-	it('compares titles without case, accents or punctuation', () => {
+	it('compares titles without case or accents', () => {
 		expect(sameTitle('Test Game ALPHA', 'test game alpha')).toBe(true);
 		expect(sameTitle('Café', 'Cafe')).toBe(true);
 		expect(sameTitle('Test Game Alpha', 'Test Game Alpha: Beta Expansion')).toBe(false);

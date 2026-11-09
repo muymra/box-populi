@@ -3,6 +3,7 @@
 // Turso doesn't enforce foreign keys over HTTP, so the app deletes dependent rows itself
 // (deleteGroupStatements, deletePersonStatements in db.ts) instead of relying on cascades.
 import type { Client, InStatement, ResultSet } from '@libsql/client';
+import { returnsRows } from './db.ts';
 
 type Row = Record<string, unknown>;
 
@@ -65,7 +66,8 @@ export function libsqlD1(client: Client, ready: Promise<void> = Promise.resolve(
 				statements.map((s) => s.statement),
 				'write'
 			);
-			return results.map((rs, i) => (/\breturning\b/i.test(statements[i].sql) ? { results: rows(rs), success: true, meta: {} } : runResult(rs)));
+			// Reads give their rows, as D1's batch does (readAll in db.ts relies on it).
+			return results.map((rs, i) => (returnsRows(statements[i].sql) ? { results: rows(rs), success: true, meta: {} } : runResult(rs)));
 		},
 		async exec(sql: string) {
 			await ready;

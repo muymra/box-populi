@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { countsFromMask } from '#lib/catalog/players.ts';
 import { createTestDb } from '../testing/d1.ts';
-import { one, run } from '../db.ts';
+import { all, one, run } from '../db.ts';
 import { cleanDescription, parseCollection, parseSearch, parseThings, positiveNumber } from './parse.ts';
 import { masksFromVotes, parseCountList } from './poll.ts';
 import { FakeBggClient } from './fake.ts';
@@ -145,12 +145,13 @@ describe('FakeBggClient', () => {
 describe('LiveBggClient slots and timeouts', () => {
 	const NOW = 1_800_000_000_000;
 	const ok = () => Promise.resolve(new Response('<?xml version="1.0"?><items></items>', { status: 200 }));
-	function setup(fetchFn: typeof fetch, timeoutMs?: number) {
-		const db = createTestDb();
+	function setup(fetchFn: typeof fetch, timeoutMs?: number, lane?: 'interactive' | 'bulk', shared?: ReturnType<typeof createTestDb>) {
+		const db = shared ?? createTestDb();
 		const calls: RequestInit[] = [];
 		const live = new LiveBggClient({
 			token: 't',
 			db,
+			lane,
 			intervalMs: 2000,
 			origin: 'https://example.pages.dev',
 			now: () => NOW,
@@ -203,6 +204,50 @@ describe('LiveBggClient slots and timeouts', () => {
 		await expect(setup(stalls).live.collection('someone')).rejects.toBeInstanceOf(BggBusyError);
 		const offline: typeof fetch = () => Promise.reject(new TypeError('fetch failed'));
 		await expect(setup(offline).live.search('x')).rejects.toThrow(TypeError);
+	});
+});
+
+describe('LiveBggClient lanes and counts (D58)', () => {
+	const NOW = 1_800_000_000_000;
+	const day = new Date(NOW).toISOString().slice(0, 10);
+	const answer = (status: number) => () => Promise.resolve(new Response('<?xml version="1.0"?><items></items>', { status }));
+	function client(db: ReturnType<typeof createTestDb>, fetchFn: typeof fetch, lane: 'interactive' | 'bulk') {
+		const calls: string[] = [];
+		const live = new LiveBggClient({
+			token: 't',
+			db,
+			lane,
+			intervalMs: 2000,
+			origin: 'https://example.pages.dev',
+			now: () => NOW,
+			sleep: async () => {},
+			fetchFn: (input, init) => {
+				calls.push(String(input));
+				return fetchFn(input, init);
+			}
+		});
+		return { live, calls };
+	}
+
+	it('counts every request it sends, and the ones BGG throttles', async () => {
+		const db = createTestDb();
+		await client(db, answer(200), 'interactive').live.search('catan');
+		await run(db, 'UPDATE bgg_pace SET next_at = 0');
+		await client(db, answer(429), 'interactive').live.search('azul').catch(() => {});
+		expect(await all(db, 'SELECT day, requests, throttled FROM bgg_daily')).toEqual([{ day, requests: 2, throttled: 1 }]);
+	});
+
+	it('keeps bulk work off BGG until the instance has been quiet, while searches still go', async () => {
+		const db = createTestDb();
+		const search = client(db, answer(200), 'interactive');
+		await search.live.search('catan');
+		const bulk = client(db, answer(200), 'bulk');
+		const busy = await bulk.live.things([1]).catch((e) => e);
+		expect(busy).toBeInstanceOf(BggBusyError);
+		expect(bulk.calls).toHaveLength(0);
+		// The refused bulk request reserved nothing: the next search's slot is the usual 2 seconds on.
+		const slot = await one<{ next_at: number }>(db, 'SELECT next_at FROM bgg_pace WHERE id = 1');
+		expect(slot!.next_at).toBe(NOW + 2000);
 	});
 });
 

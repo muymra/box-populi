@@ -2,7 +2,7 @@
 // picture; rows from before D54 can also hold a name, players, play time or complexity (D35), which
 // still apply until someone saves the game's form. Kept apart from game-edit.ts so the catalog can
 // use it without importing the writer.
-import { all, type DB } from './db.ts';
+import { mapRead, readAll, rowsOf, known, type DB, type Read } from './db.ts';
 
 export type Correction = {
 	game_id: number;
@@ -22,16 +22,21 @@ const CORRECTION_COLUMNS = 'game_id, name, search_text, image_url, min_players, 
 
 /** This group's corrections, by game id: all of them, or those for `gameIds` (up to 99). */
 export async function groupCorrections(db: DB, groupId: string, gameIds?: number[]): Promise<Map<number, Correction>> {
-	if (gameIds && gameIds.length === 0) return new Map();
-	const rows = gameIds
-		? await all<Correction>(
+	return (await readAll(db, { c: correctionsRead(db, groupId, gameIds) })).c;
+}
+
+/** groupCorrections as a read, to share a round trip with others (`readAll`, D59). */
+export function correctionsRead(db: DB, groupId: string, gameIds?: number[]): Read<Map<number, Correction>> {
+	if (gameIds && gameIds.length === 0) return known(new Map());
+	const read = gameIds
+		? rowsOf<Correction>(
 				db,
 				`SELECT ${CORRECTION_COLUMNS} FROM game_corrections WHERE group_id = ?1 AND game_id IN (${gameIds.map((_, i) => `?${i + 2}`).join(', ')})`,
 				groupId,
 				...gameIds
 			)
-		: await all<Correction>(db, `SELECT ${CORRECTION_COLUMNS} FROM game_corrections WHERE group_id = ?1`, groupId);
-	return new Map(rows.map((r) => [r.game_id, r]));
+		: rowsOf<Correction>(db, `SELECT ${CORRECTION_COLUMNS} FROM game_corrections WHERE group_id = ?1`, groupId);
+	return mapRead(read, (rows) => new Map(rows.map((r) => [r.game_id, r])));
 }
 
 const NUMBER_FIELDS = ['min_players', 'max_players', 'min_playtime', 'max_playtime', 'weight'] as const;

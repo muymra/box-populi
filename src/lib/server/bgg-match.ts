@@ -60,7 +60,7 @@ export function shorterTitle(name: string): string | null {
 	return shorter.length >= 3 && shorter !== trimmed ? shorter : null;
 }
 
-/** Same title once case, accents and punctuation are set aside. */
+/** Same title once case, accents and extra spaces are set aside (punctuation counts). */
 export function sameTitle(a: string, b: string): boolean {
 	return normalize(a) === normalize(b);
 }

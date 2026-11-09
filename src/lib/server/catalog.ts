@@ -1,7 +1,7 @@
 // Server side of the catalog: builds the payload the browser filters (TECH.md "Catalog delivery")
 // and keeps `groups.catalog_version` current so the ETag changes when the payload does.
-import { all, jsonArray, one, stmt, type DB } from './db.ts';
-import { applyCorrection, groupCorrections } from './corrections.ts';
+import { jsonArray, mapRead, one, readAll, rowsOf, stmt, type DB, type Read } from './db.ts';
+import { applyCorrection, correctionsRead } from './corrections.ts';
 import { colorIndexesByJoinOrder } from '#lib/catalog/colors.ts';
 import type { CatalogGame, CatalogMember, CatalogPayload, PollSource, Role } from '#lib/catalog/types.ts';
 
@@ -66,25 +66,35 @@ export async function catalogVersion(db: DB, groupId: string): Promise<number | 
 }
 
 export async function loadMembers(db: DB, groupId: string): Promise<CatalogMember[]> {
-	const rows = await all<{ id: string; name: string; role: Role; last_seen_at: number; joined_at: number }>(
-		db,
-		`SELECT u.id, u.name, m.role, m.last_seen_at, m.joined_at
-		 FROM memberships m JOIN users u ON u.id = m.user_id
-		 WHERE m.group_id = ?1
-		 ORDER BY m.last_seen_at DESC, u.name`,
-		groupId
+	return (await readAll(db, { m: membersRead(db, groupId) })).m;
+}
+
+/** loadMembers as a read, to share a round trip with others (`readAll`, D59). */
+export function membersRead(db: DB, groupId: string): Read<CatalogMember[]> {
+	return mapRead(
+		rowsOf<{ id: string; name: string; role: Role; last_seen_at: number; joined_at: number }>(
+			db,
+			`SELECT u.id, u.name, m.role, m.last_seen_at, m.joined_at
+			 FROM memberships m JOIN users u ON u.id = m.user_id
+			 WHERE m.group_id = ?1
+			 ORDER BY m.last_seen_at DESC, u.name`,
+			groupId
+		),
+		(rows) => {
+			const colors = colorIndexesByJoinOrder(rows.map((r) => ({ id: r.id, joinedAt: r.joined_at })));
+			return rows.map((r) => ({ id: r.id, name: r.name, role: r.role, lastSeenAt: r.last_seen_at, colorIndex: colors.get(r.id) ?? 0 }));
+		}
 	);
-	const colors = colorIndexesByJoinOrder(rows.map((r) => ({ id: r.id, joinedAt: r.joined_at })));
-	return rows.map((r) => ({ id: r.id, name: r.name, role: r.role, lastSeenAt: r.last_seen_at, colorIndex: colors.get(r.id) ?? 0 }));
 }
 
 export async function loadCatalog(db: DB, groupId: string, version: number): Promise<CatalogPayload> {
-	const [members, corrections, played, rows] = await Promise.all([
-		loadMembers(db, groupId),
-		groupCorrections(db, groupId),
+	// One round trip for all four (D59).
+	const { members, corrections, played, rows } = await readAll(db, {
+		members: membersRead(db, groupId),
+		corrections: correctionsRead(db, groupId),
 		// For "not played lately" (PRD "Play log").
-		all<{ game_id: number; last: string }>(db, 'SELECT game_id, MAX(played_on) AS last FROM plays WHERE group_id = ?1 GROUP BY game_id', groupId),
-		all<GameRow & { owner_id: string; lent_to_user_id: string | null; lent_to_text: string | null; added_at: number }>(
+		played: rowsOf<{ game_id: number; last: string }>(db, 'SELECT game_id, MAX(played_on) AS last FROM plays WHERE group_id = ?1 GROUP BY game_id', groupId),
+		rows: rowsOf<GameRow & { owner_id: string; lent_to_user_id: string | null; lent_to_text: string | null; added_at: number }>(
 			db,
 			`SELECT ${GAME_COLUMNS}, c.user_id AS owner_id, c.lent_to_user_id, c.lent_to_text, c.added_at
 			 FROM copies c
@@ -93,7 +103,7 @@ export async function loadCatalog(db: DB, groupId: string, version: number): Pro
 			 ORDER BY g.id`,
 			groupId
 		)
-	]);
+	});
 
 	const lastPlayed = new Map(played.map((p) => [p.game_id, p.last]));
 	const games = new Map<number, CatalogGame>();

@@ -4,7 +4,7 @@ import { all, one, run } from './db.ts';
 import { FakeBggClient } from './bgg/fake.ts';
 import { LiveBggClient, userAgent, BggAuthError } from './bgg/client.ts';
 import { BggBusyError, type BggSearchHit } from './bgg/types.ts';
-import { addCopy, addManualGame, gameUsableInGroup, parseManualGame, rankHits, removeCopy, searchBgg } from './games.ts';
+import { addCopy, addManualGame, cachedSearch, gameUsableInGroup, parseManualGame, rankHits, removeCopy, SEARCH_CACHE_MS, searchBgg } from './games.ts';
 import { loadCatalog } from './catalog.ts';
 
 let db: ReturnType<typeof createTestDb>;
@@ -212,3 +212,37 @@ describe('gameUsableInGroup', () => {
 		expect(await gameUsableInGroup(db, 'g1', 'ada', 7)).toBe(true);
 	});
 });
+
+describe('cachedSearch (D58)', () => {
+	function counting() {
+		const fake = new FakeBggClient();
+		const queries: string[] = [];
+		const client = {
+			search: (q: string) => (queries.push(q), fake.search(q)),
+			things: (ids: number[]) => fake.things(ids),
+			collection: (u: string) => fake.collection(u)
+		};
+		return { client, queries };
+	}
+
+	it('asks BGG once for the same words within a week, whoever searches', async () => {
+		const { client, queries } = counting();
+		const first = await cachedSearch(db, client, 'Test Game Alpha', NOW);
+		const again = await cachedSearch(db, client, ' test game  ALPHA', NOW + 60_000);
+		expect(again).toEqual(first);
+		expect(queries).toEqual(['Test Game Alpha']);
+		await cachedSearch(db, client, 'Test Game Alpha', NOW + SEARCH_CACHE_MS + 1);
+		expect(queries).toHaveLength(2);
+	});
+
+	it('remembers a search that found nothing, and nothing from a failed one', async () => {
+		const { client, queries } = counting();
+		expect(await cachedSearch(db, client, 'no such game', NOW)).toEqual([]);
+		await cachedSearch(db, client, 'no such game', NOW + 1);
+		expect(queries).toHaveLength(1);
+		const failing = { ...client, search: () => Promise.reject(new BggBusyError(1000)) };
+		await expect(cachedSearch(db, failing, 'busy words', NOW)).rejects.toBeInstanceOf(BggBusyError);
+		expect(await one(db, `SELECT query FROM bgg_search_cache WHERE query = 'busy words'`)).toBeNull();
+	});
+});
+
