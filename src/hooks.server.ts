@@ -57,6 +57,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.theme = resolveTheme(event.locals.deviceTheme, groupTheme, instanceTheme);
 	const theme = event.locals.theme;
 	const response = await resolve(event, { transformPageChunk: ({ html }) => html.replace('%bp.theme%', theme) });
+	// Headers that close off framing and content sniffing without limiting scripts or styles (D65): no
+	// other site may frame a page (clickjacking), forms post only here, and a response is only ever
+	// the type it says. A full script policy would need checking against whatever a host's platform
+	// injects, such as an analytics beacon.
+	response.headers.set('x-content-type-options', 'nosniff');
+	response.headers.set('x-frame-options', 'DENY');
+	response.headers.set('content-security-policy', "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'");
 	// SEARCH_ENGINES=block: an instance meant only for the people who have its links.
 	if (config.config.searchEngines === 'block') response.headers.set('x-robots-tag', 'noindex, nofollow');
 	return response;

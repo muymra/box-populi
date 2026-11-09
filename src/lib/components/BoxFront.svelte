@@ -34,7 +34,17 @@
 
 <div class="box {size}" style:--box-bg={color.bg} style:--box-ink={color.ink} class:art={showImage} style:--ratio={size === 'cube' ? boxRatio(known) : undefined} data-fit={size === 'cube' ? boxFit(known) : undefined}>
 	{#if showImage}
-		<img bind:this={img} class:ready={ratio != null} {src} alt="" loading="lazy" decoding="async" onload={(e) => measure(e.currentTarget as HTMLImageElement)} onerror={() => (failed = true)} />
+		<img
+			bind:this={img}
+			class:ready={ratio != null}
+			{src}
+			alt=""
+			loading={size === 'hero' ? 'eager' : 'lazy'}
+			fetchpriority={size === 'hero' ? 'high' : undefined}
+			decoding="async"
+			onload={(e) => measure(e.currentTarget as HTMLImageElement)}
+			onerror={() => (failed = true)}
+		/>
 	{:else}
 		<span class="title" aria-hidden="true">{name}</span>
 	{/if}

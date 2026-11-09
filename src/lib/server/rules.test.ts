@@ -75,6 +75,12 @@ describe('permissions', () => {
 		['admin', 'merge_member', 'admin', false, false],
 		['admin', 'merge_member', 'member', true, false],
 		['member', 'merge_member', 'member', false, false],
+		// guest plays to a member (D37): the owner or a co-admin, for anyone but themselves
+		['owner', 'link_guest_plays', 'member', false, true],
+		['owner', 'link_guest_plays', 'owner', true, false],
+		['admin', 'link_guest_plays', 'owner', false, true],
+		['admin', 'link_guest_plays', 'admin', true, false],
+		['member', 'link_guest_plays', 'member', false, false],
 		['member', 'archive_group', undefined, false, false],
 		['admin', 'archive_group', undefined, false, false], // only once the owner is away, below
 		['owner', 'archive_group', undefined, false, true],

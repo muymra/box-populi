@@ -2,9 +2,9 @@
 // so they can get back in on any device through the group's link. Wrong tries are limited per
 // address, per person and across the instance; a right one gives the tries back.
 import { colorIndexesByJoinOrder } from '#lib/catalog/colors.ts';
-import { all, one, run, type DB } from './db.ts';
+import { all, mapRead, one, readAll, rowsOf, run, type DB, type Read } from './db.ts';
 import { pinHash, randomToken, type Person } from './identity.ts';
-import { giveBack, INSTANCE, ipSubject, LIMITS, take } from './ratelimit.ts';
+import { giveBack, groupSubject, ipSubject, LIMITS, take } from './ratelimit.ts';
 
 export { PIN_LENGTH } from '../pin.ts';
 
@@ -21,7 +21,12 @@ export async function setPin(db: DB, userId: string, pin: string, now: number): 
 }
 
 export async function pinSetAt(db: DB, userId: string): Promise<number | null> {
-	return (await one<{ pin_set_at: number | null }>(db, 'SELECT pin_set_at FROM users WHERE id = ?1', userId))?.pin_set_at ?? null;
+	return (await readAll(db, { p: pinSetAtRead(db, userId) })).p;
+}
+
+/** pinSetAt as a read, to share a round trip with others (`readAll`, D59). */
+export function pinSetAtRead(db: DB, userId: string): Read<number | null> {
+	return mapRead(rowsOf<{ pin_set_at: number | null }>(db, 'SELECT pin_set_at FROM users WHERE id = ?1', userId), (rows) => rows[0]?.pin_set_at ?? null);
 }
 
 export type DoorMember = { id: string; name: string; colorIndex: number; hasPin: boolean };
@@ -66,7 +71,7 @@ export async function signInWithPin(
 		input.now,
 		[ipSubject(input.ip), LIMITS.pinFail],
 		[`pin:${row.id}`, LIMITS.pinFailPerson],
-		[INSTANCE, LIMITS.pinFailInstance]
+		[groupSubject(input.groupId), LIMITS.pinFailGroup]
 	);
 	if (!tried.ok) return { ok: false, reason: tried.limit === LIMITS.pinFailPerson ? 'locked_person' : 'locked_address' };
 	if ((await pinHash(input.pin, row.pin_salt)) !== row.pin_hash) return { ok: false, reason: 'wrong' };

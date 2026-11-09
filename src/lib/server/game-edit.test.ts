@@ -94,7 +94,10 @@ describe('details are shared, pictures stay with the group (D54)', () => {
 		await editGame(db, 'g1', owner, 2, form({ name: 'Lantern Harbour', imageUrl: 'https://example.com/a.jpg' }), NOW);
 		await editGame(db, 'g1', member, 2, form({ name: 'Lantern Harbour', imageUrl: 'https://example.com/a.jpg', maxPlayers: '6' }), NOW + 1);
 		expect(await one(db, 'SELECT edited_by, edited_at FROM game_corrections')).toEqual({ edited_by: 'ada', edited_at: NOW });
-		await editGame(db, 'g1', member, 2, form({ name: 'Lantern Harbour' }), NOW + 2);
+		// A second picture replaces the first, with its editor.
+		await editGame(db, 'g1', member, 2, form({ name: 'Lantern Harbour', imageUrl: 'https://example.com/b.jpg' }), NOW + 2);
+		expect(await one(db, 'SELECT image_url, edited_by FROM game_corrections')).toEqual({ image_url: 'https://example.com/b.jpg', edited_by: 'bo' });
+		await editGame(db, 'g1', member, 2, form({ name: 'Lantern Harbour' }), NOW + 3);
 		expect(await all(db, 'SELECT * FROM game_corrections')).toEqual([]);
 	});
 

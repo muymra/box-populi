@@ -6,26 +6,30 @@ import {
 	deletePerson,
 	endSession,
 	leaveGroup,
-	listMyGroups,
+	myGroupsRead,
 	regeneratePersonalLink,
 	renamePerson,
 	SESSION_COOKIE,
 	signOutEverywhere
 } from '#lib/server/identity.ts';
 import { clearSessionCookie, SECRET_PAGE_HEADERS, setNewLinkCookie, takeNewLink } from '#lib/server/cookies.ts';
-import { myLoans, returnCopy } from '#lib/server/lending.ts';
-import { cleanPin, pinSetAt, setPin } from '#lib/server/pins.ts';
+import { myLoansReads, returnCopy } from '#lib/server/lending.ts';
+import { readAll } from '#lib/server/db.ts';
+import { cleanPin, pinSetAtRead, setPin } from '#lib/server/pins.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
 	const user = requireUser(event);
 	event.setHeaders(SECRET_PAGE_HEADERS);
 	const token = takeNewLink(event.cookies, event.url);
+	const db = getDb();
+	// One round trip (D59, D65).
+	const r = await readAll(db, { groups: myGroupsRead(db, user.id), ...myLoansReads(db, user.id), pinSetAt: pinSetAtRead(db, user.id) });
 	return {
 		name: user.name,
-		groups: await listMyGroups(getDb(), user.id),
-		loans: await myLoans(getDb(), user.id),
-		pinSetAt: await pinSetAt(getDb(), user.id),
+		groups: r.groups,
+		loans: { lent: r.lent, borrowed: r.borrowed },
+		pinSetAt: r.pinSetAt,
 		// Signed in just now with a code from the group's owner or a co-admin (D48): time to pick a new PIN.
 		viaCode: event.url.searchParams.has('code'),
 		// Just deleted a group from its Group tab: say so, since it has left every list.

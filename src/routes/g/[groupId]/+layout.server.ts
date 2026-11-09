@@ -1,10 +1,12 @@
 import { readGroup } from '#lib/server/authz.ts';
+import { invitePath } from '#lib/server/codes.ts';
 import { pendingDetailsRead } from '#lib/server/importer.ts';
 import { membersRead } from '#lib/server/catalog.ts';
-import { assembleNights, mayPlanNights, nightOnlyGames, nightReads } from '#lib/server/nights.ts';
+import { assembleNights, mayPlanNights, nightOnlyGamesRead, nightReads } from '#lib/server/nights.ts';
 import { getDb } from '#lib/server/platform.ts';
 import { myGroupsRead } from '#lib/server/identity.ts';
 import { known, readAll } from '#lib/server/db.ts';
+import { myPlaySoonRead } from '#lib/server/interest.ts';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async (event) => {
@@ -14,6 +16,8 @@ export const load: LayoutServerLoad = async (event) => {
 	// Members see the join code so they can invite people; demo visitors never do, and nobody does
 	// while the group is archived (D50) or suspended, since joining is refused then.
 	const code = access.role && !access.group.isDemo && !access.group.archived && !access.group.suspended ? extras.code : null;
+	// The invite link carries the group's link key after the code (D65), which spares it the limit on wrong codes.
+	const invite = code ? invitePath(code, extras.linkKey) : null;
 	// The group's theme, for switching colours without a reload when moving between groups.
 	const groupTheme = extras.theme;
 	const user = event.locals.user;
@@ -28,14 +32,14 @@ export const load: LayoutServerLoad = async (event) => {
 		members: membersRead(db, access.group.id),
 		// The switcher in the top bar (PRD "Groups and codes").
 		groups: access.role && user ? myGroupsRead(db, user.id) : known([]),
-		...nightReads(db, access.group.id, { from: day(-1) })
+		// The viewer's own Play soon list (D64), for the shelf's "My Play soon" filter. Never anyone else's.
+		myPlaySoon: access.role && user ? myPlaySoonRead(db, user.id, Date.now()) : known([]),
+		...nightReads(db, access.group.id, { from: day(-1) }),
+		// Games on nights around today that no member owns, so Play tonight can draw from a guest's game.
+		nightGames: nightOnlyGamesRead(db, access.group.id, { from: day(-1), to: day(1) })
 	});
 	const tableMembers = reads.members.map((m) => ({ id: m.id, name: m.name, colorIndex: m.colorIndex }));
 	const nights = assembleNights(reads.nights, reads.people, reads.games);
-	// Games on nights around today that no member owns come along, so Play tonight can draw from a
-	// guest's game. A second round trip only when there's such a night.
-	const near = nights.filter((n) => n.nightOn <= day(1)).map((n) => n.id);
-	const nightGames = await nightOnlyGames(db, access.group.id, near);
 	const mayPlan = access.role && !access.readonly ? mayPlanNights(access.role, extras.nightsBy) : false;
 	// A member's live groups, this one included, by name so they keep their places. Empty unless
 	// there's somewhere else to go.
@@ -45,15 +49,17 @@ export const load: LayoutServerLoad = async (event) => {
 		...access,
 		myGroups,
 		code,
+		invite,
 		groupTheme,
 		tableMembers,
 		nights,
-		nightGames,
+		nightGames: reads.nightGames,
 		mayPlanNights: mayPlan,
 		myId: event.locals.user?.id ?? null,
 		// A member without a PIN is nudged on the shelf to set one (D47, D48).
 		myPinSet: access.role && event.locals.user ? extras.pinSetAt != null : true,
 		contact: event.locals.config.instanceContact,
-		pendingDetails: reads.pending
+		pendingDetails: reads.pending,
+		myPlaySoon: reads.myPlaySoon
 	};
 };

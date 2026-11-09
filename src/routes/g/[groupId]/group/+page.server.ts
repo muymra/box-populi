@@ -1,14 +1,14 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { requireRead, requireRole } from '#lib/server/authz.ts';
+import { readGroup, requireRole } from '#lib/server/authz.ts';
 import { OWNER_AWAY_DAYS } from '#lib/server/permissions.ts';
-import { loadMembers } from '#lib/server/catalog.ts';
+import { membersRead } from '#lib/server/catalog.ts';
 import {
 	archiveGroup,
 	claimOwnership,
 	deleteGroup,
-	ownerAway,
+	ownerAwayRead,
 	restoreGroup,
-	gameCounts,
+	gameCountsRead,
 	memberActions,
 	regenerateCode,
 	removeMember,
@@ -19,29 +19,37 @@ import {
 	type Actor,
 	type AdminResult
 } from '#lib/server/group-admin.ts';
-import { one, type DB } from '#lib/server/db.ts';
+import { known, one, readAll, type DB } from '#lib/server/db.ts';
 import { setNightPlanners } from '#lib/server/nights.ts';
-import { formatSignInCode, makeSignInCode, memberReach, mergeMember, recoveryTools } from '#lib/server/recovery.ts';
+import { formatSignInCode, makeSignInCode, memberReachRead, mergeMember, recoveryTools } from '#lib/server/recovery.ts';
+import { assembleGuestHistory, guestHistoryReads, linkGuestPlays } from '#lib/server/guest-plays.ts';
+import { can } from '#lib/server/permissions.ts';
 import { getDb } from '#lib/server/platform.ts';
 import type { Actions, PageServerLoad, RequestEvent } from './$types';
 
 export const load: PageServerLoad = async (event) => {
 	const db = getDb();
 	const { groupId } = event.params;
-	const access = await requireRead(event, db, groupId);
-	const [members, counts, settings, reach] = await Promise.all([
-		loadMembers(db, groupId),
-		gameCounts(db, groupId),
-		one<{ nights_by: 'members' | 'admins' }>(db, 'SELECT nights_by FROM groups WHERE id = ?1', groupId),
-		memberReach(db, groupId)
-	]);
+	const { access, extras } = await readGroup(event, db, groupId);
 	const me = event.locals.user;
-	const away = access.role === 'admin' ? await ownerAway(db, groupId, Date.now()) : false;
 	// Controls only for members of a writable group; the server checks every action again anyway.
 	const actor: Actor | null = me && access.role && !access.readonly ? { id: me.id, role: access.role } : null;
+	const manages = actor != null && actor.role !== 'member';
+	// One round trip after the access check (D59, D65).
+	const r = await readAll(db, {
+		members: membersRead(db, groupId),
+		counts: gameCountsRead(db, groupId),
+		reach: memberReachRead(db, groupId),
+		away: access.role === 'admin' ? ownerAwayRead(db, groupId, Date.now()) : known(false),
+		// Guest plays to a member (D37): the guest names and what they were in, for the owner and co-admins.
+		...(manages ? guestHistoryReads(db, groupId) : { guestPlays: known([]), guestNights: known([]) })
+	});
+	const { members, counts, reach, away } = r;
+	const guests = manages ? assembleGuestHistory(r.guestPlays, r.guestNights) : [];
 	return {
+		guests,
 		now: Date.now(),
-		nightsBy: settings?.nights_by ?? 'members',
+		nightsBy: extras.nightsBy === 'admins' ? ('admins' as const) : ('members' as const),
 		canManage: actor != null && actor.role !== 'member',
 		// Deleting stays open to the owner of a suspended group.
 		// Archiving (D50): the owner archives and restores, and a co-admin once the owner has been away
@@ -73,6 +81,7 @@ export const load: PageServerLoad = async (event) => {
 			// For the owner and co-admins only: who still needs a PIN, and who can be helped back in (D48).
 			noPin: actor != null && actor.role !== 'member' && reach.get(m.id)?.hasPin === false,
 			tools: actor ? recoveryTools(actor, m, reach.get(m.id)?.groups ?? 0) : [],
+			canLinkGuests: actor != null && guests.length > 0 && can(actor.role, 'link_guest_plays', { targetRole: m.role, targetIsSelf: m.id === actor.id }),
 			// Why the helping-back-in tools aren't offered, said in the panel rather than left out silently.
 			helpNote:
 				actor && actor.role !== 'member' && m.id !== me?.id
@@ -82,7 +91,9 @@ export const load: PageServerLoad = async (event) => {
 							? ('role' as const)
 							: null
 					: null,
-			joinedAt: reach.get(m.id)?.joinedAt ?? 0
+			joinedAt: reach.get(m.id)?.joinedAt ?? 0,
+			// Only an entry in this group alone can take another's things in a merge (D65).
+			onlyHere: (reach.get(m.id)?.groups ?? 0) === 1
 		}))
 	};
 };
@@ -155,6 +166,23 @@ export const actions: Actions = {
 			mergeMember(db, id, actor, { oldId: target(form), newId: String(form.get('intoId') ?? '') })
 		);
 		return result.ok ? { merged: true } : fail(400, { memberError: result.error });
+	},
+
+	/** Guest plays to a member (D37): the chosen plays and nights of the names they used as a guest. */
+	guestPlays: async (event) => {
+		const db = getDb();
+		const { groupId } = event.params;
+		const access = await requireRole(event, db, groupId, 'admin');
+		const form = await event.request.formData();
+		const result = await linkGuestPlays(db, groupId, { id: event.locals.user!.id, role: access.role }, {
+			userId: target(form),
+			names: form.getAll('name').map(String),
+			playIds: form.getAll('play').map(String),
+			nightIds: form.getAll('night').map(String)
+		});
+		if (!result.ok) return fail(400, { memberError: result.error });
+		const name = (await one<{ name: string }>(db, 'SELECT name FROM users WHERE id = ?1', target(form)))?.name ?? 'them';
+		return { guestLinked: { name, plays: result.plays, nights: result.nights, skipped: result.skipped } };
 	},
 
 	remove: async (event) => {

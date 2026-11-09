@@ -20,7 +20,8 @@ export type GroupAction =
 	| 'make_sign_in_code'
 	| 'merge_member'
 	| 'archive_group'
-	| 'claim_ownership';
+	| 'claim_ownership'
+	| 'link_guest_plays';
 
 export type PermissionContext = {
 	/** Role of the member being acted on, for member-targeted actions. */
@@ -84,6 +85,10 @@ export function can(actor: Role, action: GroupAction, ctx: PermissionContext = {
 		// The owner becomes a co-admin.
 		case 'claim_ownership':
 			return actor === 'admin' && ownerAway;
+		// Guest plays to a member (D37): the owner or a co-admin, for anyone in the group but themselves,
+		// so nobody takes a guest's wins for their own.
+		case 'link_guest_plays':
+			return atLeast(actor, 'admin') && !targetIsSelf && targetRole != null;
 		case 'leave':
 			return actor !== 'owner' || otherMembers === 0;
 	}

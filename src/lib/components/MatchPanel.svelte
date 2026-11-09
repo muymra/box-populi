@@ -32,7 +32,7 @@
 
 	let { groupId, shelfHref, games }: { groupId: string; shelfHref: string; games: Game[] } = $props();
 
-	const MERGE_CHUNK = 10;
+	const MERGE_CHUNK = 7; // MERGES_PER_CALL in bgg-match.ts: the confirm endpoint refuses more
 
 	let phase = $state<'idle' | 'finding' | 'review' | 'saving' | 'done'>('idle');
 	// Candidates per game, in the order games were looked up; a game not looked up yet has no entry.

@@ -3,7 +3,7 @@
 // id; these have none. The browser asks for one game's matches at a time through the normal paced
 // search, the person ticks the right ones, and each ticked game is merged into the BGG game: its
 // copies, wishes, links, bring lists and plays move across, and the typed-in row goes.
-import { all, stmt, type DB } from './db.ts';
+import { all, mapRead, readAll, rowsOf, stmt, type DB, type Read } from './db.ts';
 import { bumpCatalogForGames, bumpCatalogForUser } from './catalog.ts';
 import { searchBgg } from './games.ts';
 import { normalize } from '#lib/catalog/normalize.ts';
@@ -26,24 +26,32 @@ export type UnmatchedGame = {
 };
 
 export async function unmatchedGames(db: DB, userId: string): Promise<UnmatchedGame[]> {
-	const rows = await all<{ id: number; name: string; source: string; min_players: number | null; max_players: number | null; min_playtime: number | null; max_playtime: number | null }>(
-		db,
-		`SELECT g.id, g.name, g.source, g.min_players, g.max_players, g.min_playtime, g.max_playtime
-		 FROM copies c JOIN games g ON g.id = c.game_id
-		 WHERE c.user_id = ?1 AND ${UNMATCHED}`,
-		userId
+	return (await readAll(db, { u: unmatchedGamesRead(db, userId) })).u;
+}
+
+/** unmatchedGames as a read, to share a round trip with others (`readAll`, D59). */
+export function unmatchedGamesRead(db: DB, userId: string): Read<UnmatchedGame[]> {
+	return mapRead(
+		rowsOf<{ id: number; name: string; source: string; min_players: number | null; max_players: number | null; min_playtime: number | null; max_playtime: number | null }>(
+			db,
+			`SELECT g.id, g.name, g.source, g.min_players, g.max_players, g.min_playtime, g.max_playtime
+			 FROM copies c JOIN games g ON g.id = c.game_id
+			 WHERE c.user_id = ?1 AND ${UNMATCHED}`,
+			userId
+		),
+		(rows) =>
+			rows
+				.map((r) => ({
+					gameId: r.id,
+					name: r.name,
+					source: r.source === 'wikidata' ? ('wikidata' as const) : ('manual' as const),
+					minPlayers: r.min_players,
+					maxPlayers: r.max_players,
+					minPlaytime: r.min_playtime,
+					maxPlaytime: r.max_playtime
+				}))
+				.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }))
 	);
-	return rows
-		.map((r) => ({
-			gameId: r.id,
-			name: r.name,
-			source: r.source === 'wikidata' ? ('wikidata' as const) : ('manual' as const),
-			minPlayers: r.min_players,
-			maxPlayers: r.max_players,
-			minPlaytime: r.min_playtime,
-			maxPlaytime: r.max_playtime
-		}))
-		.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
 }
 
 /**
@@ -113,14 +121,14 @@ export async function findMatches(db: DB, client: BggClient, userId: string, gam
 		.sort((a, b) => Number(b.exact) - Number(a.exact));
 }
 
-/** Pairs per call: ten statements each, so a batch stays near a hundred. */
-export const MERGES_PER_CALL = 10;
+/** Pairs per call: fourteen statements each, so a batch stays near a hundred. */
+export const MERGES_PER_CALL = 7;
 
 export type Merge = { gameId: number; targetId: number };
 
 /**
  * Everything that names the typed-in game moves to the BGG game, in order, for one pair. Where a
- * person already has the BGG game on their shelf or wishlist, or a night already lists it, the
+ * person already has the BGG game on their shelf, wishlist, favourites or Play soon, or a night already lists it, the
  * typed-in row is the one dropped, so the unique keys hold. Group-only corrections go with it:
  * BGG games are never corrected.
  */
@@ -130,6 +138,10 @@ function mergeStatements(db: DB, from: number, to: number): D1PreparedStatement[
 		stmt(db, 'DELETE FROM copies WHERE game_id = ?1', from),
 		stmt(db, 'UPDATE wishlist SET game_id = ?2 WHERE game_id = ?1 AND NOT EXISTS (SELECT 1 FROM wishlist w2 WHERE w2.game_id = ?2 AND w2.user_id = wishlist.user_id)', from, to),
 		stmt(db, 'DELETE FROM wishlist WHERE game_id = ?1', from),
+		stmt(db, 'UPDATE favourites SET game_id = ?2 WHERE game_id = ?1 AND NOT EXISTS (SELECT 1 FROM favourites f2 WHERE f2.game_id = ?2 AND f2.user_id = favourites.user_id)', from, to),
+		stmt(db, 'DELETE FROM favourites WHERE game_id = ?1', from),
+		stmt(db, 'UPDATE play_soon SET game_id = ?2 WHERE game_id = ?1 AND NOT EXISTS (SELECT 1 FROM play_soon s2 WHERE s2.game_id = ?2 AND s2.user_id = play_soon.user_id)', from, to),
+		stmt(db, 'DELETE FROM play_soon WHERE game_id = ?1', from),
 		stmt(db, 'UPDATE game_links SET game_id = ?2 WHERE game_id = ?1', from, to),
 		stmt(db, 'UPDATE night_games SET game_id = ?2 WHERE game_id = ?1 AND NOT EXISTS (SELECT 1 FROM night_games n2 WHERE n2.game_id = ?2 AND n2.night_id = night_games.night_id)', from, to),
 		stmt(db, 'DELETE FROM night_games WHERE game_id = ?1', from),

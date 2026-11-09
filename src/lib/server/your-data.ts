@@ -1,11 +1,12 @@
-// What Your account lets a person download (PRD "Account"): their games and wishlist here, and links
-// to their plays on each group's plays page.
+// What Your account lets a person download (PRD "Account"): their games, wishlist, favourites and Play
+// soon list here, and links to their plays on each group's plays page.
 import { all, type DB } from './db.ts';
+import { activeMark } from './interest.ts';
 import type { YourGame } from '#lib/games-csv.ts';
 import type { GameSource } from '#lib/csv.ts';
 
 type Row = {
-	list: 'shelf' | 'wishlist';
+	list: YourGame['list'];
 	name: string;
 	year: number | null;
 	source: GameSource;
@@ -20,8 +21,8 @@ type Row = {
 	note: string | null;
 };
 
-/** The person's copies and wishes, with the game as stored (not any one group's corrections). */
-export async function loadYourGames(db: DB, userId: string): Promise<YourGame[]> {
+/** The person's copies, wishes, favourites, live Play soon marks and copies hidden from a group (D66), with the game as stored (not any one group's corrections). */
+export async function loadYourGames(db: DB, userId: string, now = Date.now()): Promise<YourGame[]> {
 	const game = 'g.name, g.year, g.source, g.bgg_id, g.wikidata_id, g.min_players, g.max_players, g.min_playtime, g.max_playtime';
 	const rows = await all<Row>(
 		db,
@@ -31,8 +32,21 @@ export async function loadYourGames(db: DB, userId: string): Promise<YourGame[]>
 		 UNION ALL
 		 SELECT 'wishlist' AS list, ${game}, w.added_at, NULL AS lent_to, NULL AS note
 		 FROM wishlist w JOIN games g ON g.id = w.game_id
-		 WHERE w.user_id = ?1`,
-		userId
+		 WHERE w.user_id = ?1
+		 UNION ALL
+		 SELECT 'favourite' AS list, ${game}, f.added_at, NULL AS lent_to, NULL AS note
+		 FROM favourites f JOIN games g ON g.id = f.game_id
+		 WHERE f.user_id = ?1
+		 UNION ALL
+		 SELECT 'play soon' AS list, ${game}, s.marked_at, NULL AS lent_to, NULL AS note
+		 FROM play_soon s JOIN games g ON g.id = s.game_id
+		 WHERE s.user_id = ?1 AND ${activeMark('?2')}
+		 UNION ALL
+		 SELECT 'hidden' AS list, ${game}, h.hidden_at, NULL AS lent_to, 'from ' || gr.name AS note
+		 FROM hidden_copies h JOIN games g ON g.id = h.game_id JOIN groups gr ON gr.id = h.group_id
+		 WHERE h.user_id = ?1`,
+		userId,
+		now
 	);
 	return rows.map((r) => ({
 		list: r.list,

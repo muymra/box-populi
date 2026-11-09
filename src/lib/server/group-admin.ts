@@ -1,10 +1,10 @@
 // Group settings: rename, new join code, roles, removing members, handing over ownership and
 // deleting the group (PRD "Roles and permissions"). Every function reads the target's role fresh
 // and checks it with `can()`; callers have already run `requireRole`.
-import { generateCode } from './codes.ts';
+import { generateCode, generateLinkKey } from './codes.ts';
 import { bumpCatalogForGroup } from './catalog.ts';
 import { cleanGroupName } from './groups.ts';
-import { all, deleteGroupStatements, one, run, stmt, type DB } from './db.ts';
+import { all, deleteGroupStatements, mapRead, one, readAll, rowsOf, run, stmt, type DB, type Read } from './db.ts';
 import { can, OWNER_AWAY_DAYS, type GroupAction } from './permissions.ts';
 import type { Role } from '#lib/catalog/types.ts';
 import { isThemeId } from '#lib/themes.ts';
@@ -34,13 +34,13 @@ export async function renameGroup(db: DB, groupId: string, actor: Actor, rawName
 	return { ok: true };
 }
 
-/** Replaces the join code. People already in the group stay; the old code stops working. */
+/** Replaces the join code and the invite link's key. People already in the group stay; the old code and link stop working. */
 export async function regenerateCode(db: DB, groupId: string, actor: Actor): Promise<AdminResult & { code?: string }> {
 	if (!can(actor.role, 'regenerate_code')) return refused;
 	for (let attempt = 0; attempt < 5; attempt++) {
 		const code = generateCode();
 		try {
-			await db.batch([stmt(db, 'UPDATE groups SET code = ?1 WHERE id = ?2', code, groupId)]);
+			await db.batch([stmt(db, 'UPDATE groups SET code = ?1, link_key = ?2 WHERE id = ?3', code, generateLinkKey(), groupId)]);
 			return { ok: true, code };
 		} catch (error) {
 			if (!String(error).includes('UNIQUE')) throw error;
@@ -100,8 +100,15 @@ export async function transferOwnership(db: DB, groupId: string, actor: Actor, t
 
 /** Whether the group's owner hasn't been seen in it for OWNER_AWAY_DAYS (D50). */
 export async function ownerAway(db: DB, groupId: string, now: number): Promise<boolean> {
-	const owner = await one<{ last_seen_at: number }>(db, "SELECT last_seen_at FROM memberships WHERE group_id = ?1 AND role = 'owner'", groupId);
-	return owner == null || now - owner.last_seen_at > OWNER_AWAY_DAYS * 86_400_000;
+	return (await readAll(db, { a: ownerAwayRead(db, groupId, now) })).a;
+}
+
+/** ownerAway as a read, to share a round trip with others (`readAll`, D59). */
+export function ownerAwayRead(db: DB, groupId: string, now: number): Read<boolean> {
+	return mapRead(
+		rowsOf<{ last_seen_at: number }>(db, "SELECT last_seen_at FROM memberships WHERE group_id = ?1 AND role = 'owner'", groupId),
+		(rows) => rows[0] == null || now - rows[0].last_seen_at > OWNER_AWAY_DAYS * 86_400_000
+	);
 }
 
 /**
@@ -180,14 +187,19 @@ export async function deleteGroup(db: DB, groupId: string, actor: Actor, typedNa
 
 /** Copy counts per member, for the members list. */
 export async function gameCounts(db: DB, groupId: string): Promise<Map<string, number>> {
-	const rows = await all<{ user_id: string; n: number }>(
-		db,
-		`SELECT c.user_id, COUNT(*) AS n FROM copies c
-		 JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1
-		 GROUP BY c.user_id`,
-		groupId
+	return (await readAll(db, { c: gameCountsRead(db, groupId) })).c;
+}
+
+/** gameCounts as a read, to share a round trip with others (`readAll`, D59). */
+export function gameCountsRead(db: DB, groupId: string): Read<Map<string, number>> {
+	return mapRead(
+		rowsOf<{ user_id: string; n: number }>(
+			db,
+			`SELECT user_id, COUNT(*) AS n FROM group_copies WHERE group_id = ?1 GROUP BY user_id`,
+			groupId
+		),
+		(rows) => new Map(rows.map((r) => [r.user_id, r.n]))
 	);
-	return new Map(rows.map((r) => [r.user_id, r.n]));
 }
 
 /** The group's theme for the page, when the viewer may see the group: a member, or anyone for the demo. */

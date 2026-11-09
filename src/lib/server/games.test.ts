@@ -5,7 +5,7 @@ import { FakeBggClient } from './bgg/fake.ts';
 import { LiveBggClient, userAgent, BggAuthError } from './bgg/client.ts';
 import { BggBusyError, type BggSearchHit } from './bgg/types.ts';
 import { addCopy, addManualGame, cachedSearch, gameUsableInGroup, parseManualGame, rankHits, removeCopy, SEARCH_CACHE_MS, searchBgg } from './games.ts';
-import { loadCatalog } from './catalog.ts';
+import { catalogJson, loadCatalog } from './catalog.ts';
 
 let db: ReturnType<typeof createTestDb>;
 const NOW = 1_800_000_000_000;
@@ -54,6 +54,22 @@ describe('searchBgg with the fake client', () => {
 		await addCopy(db, 'ada', first[0].gameId, NOW);
 		const again = await searchBgg(db, new FakeBggClient(), 'Test Game Alpha', 'ada', NOW);
 		expect(again.find((r) => r.gameId === first[0].gameId)?.owned).toBe(true);
+	});
+});
+
+describe('catalogJson', () => {
+	it('builds a version once and keeps it, and a new version or build is built again', async () => {
+		await run(db, `INSERT INTO groups (id, name, code, created_at) VALUES ('gj', 'J', 'JJJJJ', 0)`);
+		await run(db, `INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES ('gj', 'ada', 'member', 0, 0)`);
+		await run(db, `INSERT INTO games (id, name, search_text) VALUES (60, 'Kept', 'kept')`);
+		await run(db, `INSERT INTO copies (user_id, game_id, added_at) VALUES ('ada', 60, 0)`);
+		const first = await catalogJson(db, 'gj', 7, 'b1');
+		expect(JSON.parse(first)).toEqual(JSON.parse(JSON.stringify(await loadCatalog(db, 'gj', 7))));
+		await run(db, `UPDATE games SET name = 'Changed' WHERE id = 60`); // a real change bumps the version
+		expect(await catalogJson(db, 'gj', 7, 'b1')).toBe(first);
+		expect(JSON.parse(await catalogJson(db, 'gj', 8, 'b1')).games[0].name).toBe('Changed');
+		await run(db, `UPDATE games SET name = 'Again' WHERE id = 60`);
+		expect(JSON.parse(await catalogJson(db, 'gj', 8, 'b2')).games[0].name).toBe('Again');
 	});
 });
 

@@ -4,12 +4,12 @@
 // but a group's owner and co-admins only have a say in their own.
 import { bumpCatalogForGroup, bumpCatalogForUser } from './catalog.ts';
 import { CODE_ALPHABET, generateCode } from './codes.ts';
-import { all, deletePersonStatements, one, stmt, type DB } from './db.ts';
+import { all, deletePersonStatements, mapRead, one, readAll, rowsOf, stmt, type DB, type Read } from './db.ts';
 import { sha256Hex, type Person } from './identity.ts';
 import type { Actor, AdminResult } from './group-admin.ts';
 import { memberRole } from './group-admin.ts';
 import { can } from './permissions.ts';
-import { giveBack, INSTANCE, ipSubject, LIMITS, take } from './ratelimit.ts';
+import { giveBack, groupSubject, ipSubject, LIMITS, take } from './ratelimit.ts';
 import type { Role } from '#lib/catalog/types.ts';
 
 import { SIGN_IN_CODE_LENGTH } from '#lib/codes.ts';
@@ -25,6 +25,11 @@ const elsewhere = (name: string): Refusal => ({
 	error: `${name} is in another group too, so only ${name} can change how they get in, from a device where they’re signed in.`
 });
 
+const intoElsewhere: Refusal = {
+	ok: false,
+	error: 'That entry is in another group too, and merging would change what that group sees. Pick an entry that’s only in this group.'
+};
+
 /** How many groups each of these people is in. */
 export async function groupCounts(db: DB, userIds: string[]): Promise<Map<string, number>> {
 	const ids = userIds.slice(0, 90);
@@ -39,13 +44,20 @@ export async function groupCounts(db: DB, userIds: string[]): Promise<Map<string
 
 /** For each member of a group: how many groups they're in, whether they've set a PIN, and when they joined. */
 export async function memberReach(db: DB, groupId: string): Promise<Map<string, { groups: number; hasPin: boolean; joinedAt: number }>> {
-	const rows = await all<{ user_id: string; groups: number; has_pin: number; joined_at: number }>(
-		db,
-		`SELECT m.user_id, m.joined_at, (SELECT COUNT(*) FROM memberships x WHERE x.user_id = m.user_id) AS groups, (u.pin_hash IS NOT NULL) AS has_pin
-		 FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.group_id = ?1`,
-		groupId
+	return (await readAll(db, { r: memberReachRead(db, groupId) })).r;
+}
+
+/** memberReach as a read, to share a round trip with others (`readAll`, D59). */
+export function memberReachRead(db: DB, groupId: string): Read<Map<string, { groups: number; hasPin: boolean; joinedAt: number }>> {
+	return mapRead(
+		rowsOf<{ user_id: string; groups: number; has_pin: number; joined_at: number }>(
+			db,
+			`SELECT m.user_id, m.joined_at, (SELECT COUNT(*) FROM memberships x WHERE x.user_id = m.user_id) AS groups, (u.pin_hash IS NOT NULL) AS has_pin
+			 FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.group_id = ?1`,
+			groupId
+		),
+		(rows) => new Map(rows.map((r) => [r.user_id, { groups: r.groups, hasPin: r.has_pin === 1, joinedAt: r.joined_at }]))
 	);
-	return new Map(rows.map((r) => [r.user_id, { groups: r.groups, hasPin: r.has_pin === 1, joinedAt: r.joined_at }]));
 }
 
 /** Which helping-back-in tools `actor` may use on a member who is in `groups` groups. */
@@ -135,7 +147,7 @@ export async function redeemSignInCode(
 		input.now,
 		[ipSubject(input.ip), LIMITS.pinFail],
 		[`pin:${input.userId}`, LIMITS.pinFailPerson],
-		[INSTANCE, LIMITS.pinFailInstance]
+		[groupSubject(input.groupId), LIMITS.pinFailGroup]
 	);
 	if (!tried.ok) return { ok: false, reason: tried.limit === LIMITS.pinFailPerson ? 'locked_person' : 'locked_address' };
 	const row = await one<{ name: string; code_hash: string; expires_at: number }>(
@@ -156,7 +168,7 @@ export async function redeemSignInCode(
 const RANK: Record<Role, number> = { member: 0, admin: 1, owner: 2 };
 
 /**
- * Merges `oldId`, an earlier entry for the same person, into `newId`: their games, wishlist, plays,
+ * Merges `oldId`, an earlier entry for the same person, into `newId`: their games, wishlist, favourites, plays,
  * nights, links and edits move over, `newId` keeps the earlier join date (and so the old colour) and
  * the higher role, and the old entry is deleted the usual way. Where both have the same thing (a game
  * on both shelves, a seat in the same play), the new entry's stays.
@@ -173,13 +185,19 @@ export async function mergeMember(
 	const [oldRole, newRole] = await Promise.all([memberRole(db, groupId, oldId), memberRole(db, groupId, newId)]);
 	if (!oldRole || !newRole) return gone;
 	if (!can(actor.role, 'merge_member', { targetRole: oldRole, targetIsSelf: oldId === actor.id })) return refused;
-	const old = await one<{ name: string; groups: number }>(
+	const people = await all<{ id: string; name: string; groups: number }>(
 		db,
-		'SELECT u.name, (SELECT COUNT(*) FROM memberships m WHERE m.user_id = u.id) AS groups FROM users u WHERE u.id = ?1',
-		oldId
+		'SELECT u.id, u.name, (SELECT COUNT(*) FROM memberships m WHERE m.user_id = u.id) AS groups FROM users u WHERE u.id IN (?1, ?2)',
+		oldId,
+		newId
 	);
-	if (!old) return gone;
+	const old = people.find((p) => p.id === oldId);
+	const into = people.find((p) => p.id === newId);
+	if (!old || !into) return gone;
 	if (old.groups !== 1) return elsewhere(old.name);
+	// The new entry's shelf, favourites and loans show in every group it's in, so an admin here could
+	// otherwise put things in front of another group (D65). Both entries must be in this group alone.
+	if (into.groups !== 1) return intoElsewhere;
 
 	const s = (sql: string) => stmt(db, sql, oldId, newId);
 	await db.batch([
@@ -188,6 +206,9 @@ export async function mergeMember(
 		s('UPDATE copies SET lent_to_user_id = ?2 WHERE lent_to_user_id = ?1'),
 		s('UPDATE copies SET lent_to_user_id = NULL WHERE user_id = ?2 AND lent_to_user_id = ?2'),
 		s('UPDATE wishlist SET user_id = ?2 WHERE user_id = ?1 AND game_id NOT IN (SELECT game_id FROM wishlist WHERE user_id = ?2)'),
+		// Favourites and Play soon (D63, D64), the same way.
+		s('UPDATE favourites SET user_id = ?2 WHERE user_id = ?1 AND game_id NOT IN (SELECT game_id FROM favourites WHERE user_id = ?2)'),
+		s('UPDATE play_soon SET user_id = ?2 WHERE user_id = ?1 AND game_id NOT IN (SELECT game_id FROM play_soon WHERE user_id = ?2)'),
 		// Plays and nights: seats and answers move unless the new entry is already in that play or night.
 		s('UPDATE play_players SET user_id = ?2 WHERE user_id = ?1 AND play_id NOT IN (SELECT play_id FROM play_players WHERE user_id = ?2)'),
 		s('UPDATE plays SET logged_by = ?2 WHERE logged_by = ?1'),

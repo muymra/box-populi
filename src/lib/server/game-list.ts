@@ -116,7 +116,7 @@ export async function matchLines(
 		all<{ game_id: number }>(db, 'SELECT game_id FROM copies WHERE user_id = ?1', userId),
 		all<{ game_id: number }>(
 			db,
-			`SELECT c.game_id FROM copies c JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1
+			`SELECT game_id FROM group_copies WHERE group_id = ?1
 			 UNION SELECT w.game_id FROM wishlist w JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1`,
 			groupId
 		)

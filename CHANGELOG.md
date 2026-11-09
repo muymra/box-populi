@@ -4,6 +4,10 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+- Favourites: a heart on any game on your group's shelf. The game page says whose favourite it is, the shelf can show only favourites (anyone's or yours) and sort by the most loved, and Play tonight leans towards what the people there love.
+- Play soon: mark a game you'd like to try, or get to the table again soon. Only you see your list. Play tonight leans towards it when you're there and says so; when someone going to a night you're going to picks what to bring, their own games on your list say only that someone going would like to play them. Up to five games; a mark clears once you've played the game, after a night it was brought to, or after eight weeks.
+- A guest who joins the group can take over their guest plays, so their wins and points count on the leaderboard. The owner or a co-admin does it from the member's row on the Group tab, with "Plays as a guest…".
+- Your games download now includes your favourites and Play soon list.
 - Fixed: a typed-in game that had a BoardGameGeek id never got BGG's details, and searching for it offered your own typed-in copy instead of the BGG game. Loading details now upgrades it, as it does Wikidata games.
 - Group codes and sign-in codes are harder to mix up. Both fields tidy what you type (capitals, no spaces; the sign-in code gets its dash). Typing a sign-in code where a group code goes shows a hint and, if sent, says where it belongs, and the other way round. The example sign-in code no longer starts like the example group code.
 - Pages ask the database once or twice instead of up to 16 times, so they cost the site less on Cloudflare's free plan and load a little faster.
@@ -13,6 +17,16 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 - Fixed: a cover taller than its box (a card game's, say) stretched its cube and pushed that game's name and caption below the rest of the row.
 - Box Populi asks BoardGameGeek less. A search for the same words within a week is answered from the instance's own copy, the Add page waits a little longer after you stop typing, and imports, loading details and Find on BoardGameGeek wait for a quiet moment between requests, so they take a few minutes longer. Searches you wait on are as quick as before.
 - The admin page shows how many requests this instance sent to BoardGameGeek today and in the last week, and how many BGG asked it to slow down.
+- Hide games from a group: on a game's page, "Hide from Office" keeps your copy off that group's shelf while your other groups still see it. Nobody there sees it or knows anything is hidden. Add games lists what you've hidden in that group and has **Hide new games here**, which shows only the games you tick and keeps anything you add later hidden there. Joining a group when you already have games can keep them all hidden until you pick.
+- Invite links now end in a key (`/join/K7M4P-…`). Someone sending a flood of wrong codes can no longer lock a group's members out of signing back in: the link keeps working, and only typed codes wait. Links you shared before keep working as they did; the Group tab shows the new one. Making a new code makes a new link too.
+- Wrong PINs are counted per group, so a flood at one group's door no longer locks every group on the site out of PIN sign-in.
+- Merging an old entry now only goes into an entry that's in this group alone, since a merge moves games and favourites that show in every group the entry is in.
+- Faster on big groups: typing in the shelf's search no longer lags with over a thousand games, Play tonight and a game night's page draw at once from the shelf you already loaded, and a game page, a night's page, the Group tab and Your account ask the database far less (new indexes, and the shelf's data is built once per change instead of once per member).
+- Fixed: changing a game's picture a second time in a group kept the first picture.
+- Fixed: typing in the shelf's search and opening a game straight away put the search in the game page's address, and Back lost it.
+- Fixed: leaving the Add page during a BoardGameGeek collection lookup kept asking BGG for up to a minute.
+- Play soon marks clear only after nights planned ahead of time, and Play tonight and the night page only see marks for games on the group's shelf.
+- The game page's picture loads first. Pages refuse to be framed by other sites.
 
 ## 0.3.4 (2026-11-09)
 

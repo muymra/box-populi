@@ -1,6 +1,6 @@
 // Game nights on the server (PRD "Game night", DECISIONS D38): planning, who's going, the bring
 // list, and reading nights back. Every function takes the group; nothing crosses groups.
-import { all, one, readAll, rowsOf, stmt, type DB, type Read } from './db.ts';
+import { all, known, mapRead, one, readAll, rowOf, rowsOf, stmt, type DB, type Read } from './db.ts';
 import { can } from './permissions.ts';
 import { GAME_COLUMNS, toCatalogGame } from './catalog.ts';
 import { buildSearchText, normalize } from '#lib/catalog/normalize.ts';
@@ -165,14 +165,28 @@ async function mayAddGames(db: DB, actor: Actor, nightId: string, createdBy: str
 
 /** Puts a going member's copy on the bring list (D38: anyone going may; that member can take it off). */
 export async function bringCopy(db: DB, groupId: string, actor: Actor, nightId: string, gameId: number, ownerId: string): Promise<Result> {
-	const night = await nightRow(db, groupId, nightId);
-	if (!night) return no('That night is gone. Reload the page.');
-	if (!(await mayAddGames(db, actor, nightId, night.created_by))) return no('Mark yourself going to add games to the night.');
-	if (!(await goingMember(db, nightId, ownerId)) || !(await isMember(db, groupId, ownerId))) return no('Only people going can bring games. Mark them going first.');
-	if (!(await one(db, 'SELECT 1 AS x FROM copies WHERE user_id = ?1 AND game_id = ?2', ownerId, gameId))) return no('That game isn’t on their shelf.');
-	if (await one(db, 'SELECT 1 AS x FROM night_games WHERE night_id = ?1 AND game_id = ?2', nightId, gameId)) return no('That game is already on the list.');
-	await stmt(db, 'INSERT INTO night_games (night_id, game_id, brought_by, added_by) VALUES (?1, ?2, ?3, ?4)', nightId, gameId, ownerId, actor.id).run();
-	return done;
+	// Every check in one round trip, then the write (D59, D65).
+	const going = 'SELECT 1 AS x FROM night_people WHERE night_id = ?1 AND user_id = ?2 AND going = 1';
+	const r = await readAll(db, {
+		night: rowOf<{ created_by: string | null }>(db, 'SELECT created_by FROM game_nights WHERE id = ?1 AND group_id = ?2', nightId, groupId),
+		actorGoing: rowOf(db, going, nightId, actor.id),
+		ownerGoing: rowOf(db, `${going} AND EXISTS (SELECT 1 FROM memberships WHERE group_id = ?3 AND user_id = ?2)`, nightId, ownerId, groupId),
+		// On their shelf in this group: a copy hidden from it isn't offered (D66).
+		copy: rowOf(db, 'SELECT 1 AS x FROM group_copies WHERE group_id = ?3 AND user_id = ?1 AND game_id = ?2', ownerId, gameId, groupId)
+	});
+	if (!r.night) return no('That night is gone. Reload the page.');
+	if (!canChangeNight(actor, { createdBy: r.night.created_by }) && !r.actorGoing) return no('Mark yourself going to add games to the night.');
+	if (!r.ownerGoing) return no('Only people going can bring games. Mark them going first.');
+	if (!r.copy) return no('That game isn’t on their shelf.');
+	const added = await stmt(
+		db,
+		'INSERT INTO night_games (night_id, game_id, brought_by, added_by) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(night_id, game_id) DO NOTHING',
+		nightId,
+		gameId,
+		ownerId,
+		actor.id
+	).run();
+	return added.meta.changes ? done : no('That game is already on the list.');
 }
 
 export type OtherGameInput = {
@@ -213,7 +227,7 @@ export async function bringOther(db: DB, groupId: string, actor: Actor, nightId:
 		db,
 		`SELECT g.id FROM games g
 		 WHERE instr('|' || g.search_text || '|', '|' || ?2 || '|') > 0 AND (
-			EXISTS (SELECT 1 FROM copies c JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1 WHERE c.game_id = g.id)
+			EXISTS (SELECT 1 FROM group_copies gc WHERE gc.group_id = ?1 AND gc.game_id = g.id)
 			OR EXISTS (SELECT 1 FROM night_games ng JOIN game_nights n ON n.id = ng.night_id AND n.group_id = ?1 WHERE ng.game_id = g.id))
 		 ORDER BY g.id LIMIT 1`,
 		groupId,
@@ -353,17 +367,36 @@ export function assembleNights(nights: NightRow[], people: NightPersonRow[], gam
  * nobody in the group.
  */
 export async function nightOnlyGames(db: DB, groupId: string, nightIds: string[]): Promise<CatalogGame[]> {
-	if (nightIds.length === 0) return [];
-	const placeholders = nightIds.slice(0, 90).map((_, i) => `?${i + 2}`).join(', ');
-	const rows = await all<Parameters<typeof toCatalogGame>[0]>(
-		db,
-		`SELECT DISTINCT ${GAME_COLUMNS} FROM night_games ng JOIN games g ON g.id = ng.game_id
-		 WHERE ng.night_id IN (${placeholders})
-		   AND NOT EXISTS (SELECT 1 FROM copies c JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1 WHERE c.game_id = g.id)`,
-		groupId,
-		...nightIds.slice(0, 90)
+	return (await readAll(db, { g: nightOnlyGamesRead(db, groupId, { ids: nightIds }) })).g;
+}
+
+/**
+ * nightOnlyGames as a read (D59), for these nights or for the group's nights between two days, so a
+ * caller can batch it before knowing which nights there are (D65).
+ */
+export function nightOnlyGamesRead(db: DB, groupId: string, nights: { ids: string[] } | { from: string; to: string }): Read<CatalogGame[]> {
+	let which: string;
+	let params: unknown[];
+	if ('ids' in nights) {
+		if (nights.ids.length === 0) return known([]);
+		const ids = nights.ids.slice(0, 90);
+		which = `ng.night_id IN (${ids.map((_, i) => `?${i + 2}`).join(', ')})`;
+		params = ids;
+	} else {
+		which = 'ng.night_id IN (SELECT id FROM game_nights WHERE group_id = ?1 AND night_on BETWEEN ?2 AND ?3)';
+		params = [nights.from, nights.to];
+	}
+	return mapRead(
+		rowsOf<Parameters<typeof toCatalogGame>[0]>(
+			db,
+			`SELECT DISTINCT ${GAME_COLUMNS} FROM night_games ng JOIN games g ON g.id = ng.game_id
+			 WHERE ${which}
+			   AND NOT EXISTS (SELECT 1 FROM group_copies gc WHERE gc.group_id = ?1 AND gc.game_id = g.id)`,
+			groupId,
+			...params
+		),
+		(rows) => rows.map((r) => ({ ...toCatalogGame(r), lastPlayed: null, copies: [{ ownerId: 'guest', lentToUserId: null, lentOut: false, addedAt: 0 }] }))
 	);
-	return rows.map((r) => ({ ...toCatalogGame(r), lastPlayed: null, copies: [{ ownerId: 'guest', lentToUserId: null, lentOut: false, addedAt: 0 }] }));
 }
 
 /** Whether a game is on a night's bring list, for logging a play of a guest's game (D38). */

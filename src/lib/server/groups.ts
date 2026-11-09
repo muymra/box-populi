@@ -1,9 +1,9 @@
 // Creating and joining groups. The caller resolves who the person is (existing session, or a
 // new person whose statements are passed in) so these run as one batch.
-import { generateCode } from './codes.ts';
+import { generateCode, generateLinkKey } from './codes.ts';
 import { bumpCatalogForGroup } from './catalog.ts';
 import { colorIndexesByJoinOrder } from '#lib/catalog/colors.ts';
-import { all, one, stmt, type DB } from './db.ts';
+import { all, one, readAll, rowsOf, stmt, type DB } from './db.ts';
 
 export function cleanGroupName(raw: unknown): string | null {
 	if (typeof raw !== 'string') return null;
@@ -31,7 +31,7 @@ export async function createGroup(
 		try {
 			await db.batch([
 				...(opts.before ?? []),
-				stmt(db, 'INSERT INTO groups (id, name, code, created_at) VALUES (?1, ?2, ?3, ?4)', groupId, opts.name, code, opts.now),
+				stmt(db, 'INSERT INTO groups (id, name, code, link_key, created_at) VALUES (?1, ?2, ?3, ?4, ?5)', groupId, opts.name, code, generateLinkKey(), opts.now),
 				stmt(
 					db,
 					"INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES (?1, ?2, 'owner', ?3, ?3)",
@@ -48,12 +48,12 @@ export async function createGroup(
 	throw new Error('Could not generate a unique group code');
 }
 
-export type JoinTarget = { id: string; name: string; memberCount: number; isDemo: boolean; suspended: boolean; archived?: boolean };
+export type JoinTarget = { id: string; name: string; memberCount: number; isDemo: boolean; suspended: boolean; archived?: boolean; linkKey?: string | null };
 
 export async function findGroupByCode(db: DB, code: string): Promise<JoinTarget | null> {
-	const row = await one<{ id: string; name: string; is_demo: number; suspended_at: number | null; archived_at: number | null; member_count: number }>(
+	const row = await one<{ id: string; name: string; is_demo: number; suspended_at: number | null; archived_at: number | null; member_count: number; link_key: string | null }>(
 		db,
-		`SELECT g.id, g.name, g.is_demo, g.suspended_at, g.archived_at, (SELECT COUNT(*) FROM memberships m WHERE m.group_id = g.id) AS member_count
+		`SELECT g.id, g.name, g.is_demo, g.suspended_at, g.archived_at, g.link_key, (SELECT COUNT(*) FROM memberships m WHERE m.group_id = g.id) AS member_count
 		 FROM groups g WHERE g.code = ?1`,
 		code
 	);
@@ -64,7 +64,8 @@ export async function findGroupByCode(db: DB, code: string): Promise<JoinTarget 
 		isDemo: row.is_demo === 1,
 		suspended: row.suspended_at != null,
 		archived: row.archived_at != null,
-		memberCount: row.member_count
+		memberCount: row.member_count,
+		linkKey: row.link_key
 	};
 }
 
@@ -84,7 +85,7 @@ export async function isMember(db: DB, groupId: string, userId: string): Promise
 
 export async function joinGroup(
 	db: DB,
-	opts: { groupId: string; userId: string; now: number; before?: D1PreparedStatement[] }
+	opts: { groupId: string; userId: string; now: number; before?: D1PreparedStatement[]; after?: D1PreparedStatement[] }
 ): Promise<void> {
 	await db.batch([
 		...(opts.before ?? []),
@@ -95,6 +96,7 @@ export async function joinGroup(
 			opts.userId,
 			opts.now
 		),
+		...(opts.after ?? []),
 		bumpCatalogForGroup(db, opts.groupId)
 	]);
 }
@@ -111,7 +113,7 @@ export async function touchLastSeen(db: DB, groupId: string, userId: string, now
 export async function groupGameCount(db: DB, groupId: string): Promise<number> {
 	const row = await one<{ n: number }>(
 		db,
-		'SELECT COUNT(DISTINCT c.game_id) AS n FROM memberships m JOIN copies c ON c.user_id = m.user_id WHERE m.group_id = ?1',
+		'SELECT COUNT(DISTINCT game_id) AS n FROM group_copies WHERE group_id = ?1',
 		groupId
 	);
 	return row?.n ?? 0;
@@ -125,42 +127,58 @@ export type GroupGlance = {
 	nights: Array<{ name: string; nightOn: string; startsAt: string | null }>;
 };
 
+/** The person's groups for the home page's cards: theirs, apart from the demo. Up to 90. */
+const GLANCE_GROUPS = `SELECT gm.group_id FROM memberships gm JOIN groups gg ON gg.id = gm.group_id WHERE gm.user_id = ?1 AND gg.is_demo = 0 LIMIT 90`;
+
 /**
  * What the home page shows on each of a person's group cards: shelf size, the members' colours and
- * the coming nights. Three queries for all the groups together, never one per group.
+ * the coming nights. Three queries for all their groups together, never one per group.
  */
-export async function groupGlances(db: DB, groupIds: string[], from: string): Promise<Map<string, GroupGlance>> {
-	const ids = groupIds.slice(0, 90);
-	const glances = new Map<string, GroupGlance>(ids.map((id) => [id, { games: 0, colors: [], nights: [] }]));
-	if (!ids.length) return glances;
-	const marks = ids.map((_, i) => `?${i + 1}`).join(', ');
-	const [games, members, nights] = await Promise.all([
-		all<{ group_id: string; n: number }>(
+export async function groupGlances(db: DB, userId: string, from: string): Promise<Map<string, GroupGlance>> {
+	return assembleGlances(await readAll(db, groupGlancesReads(db, userId, from)));
+}
+
+/** groupGlances' reads, to share a round trip with others (`readAll`, D59, D65); then `assembleGlances`. */
+export function groupGlancesReads(db: DB, userId: string, from: string) {
+	return {
+		glanceGames: rowsOf<{ group_id: string; n: number }>(
 			db,
-			`SELECT m.group_id, COUNT(DISTINCT c.game_id) AS n FROM memberships m JOIN copies c ON c.user_id = m.user_id
-			 WHERE m.group_id IN (${marks}) GROUP BY m.group_id`,
-			...ids
+			`SELECT group_id, COUNT(DISTINCT game_id) AS n FROM group_copies
+			 WHERE group_id IN (${GLANCE_GROUPS}) GROUP BY group_id`,
+			userId
 		),
-		all<{ group_id: string; user_id: string; joined_at: number }>(
+		glanceMembers: rowsOf<{ group_id: string; user_id: string; joined_at: number }>(
 			db,
-			`SELECT group_id, user_id, joined_at FROM memberships WHERE group_id IN (${marks})`,
-			...ids
+			`SELECT group_id, user_id, joined_at FROM memberships WHERE group_id IN (${GLANCE_GROUPS})`,
+			userId
 		),
-		all<{ group_id: string; name: string; night_on: string; starts_at: string | null }>(
+		glanceNights: rowsOf<{ group_id: string; name: string; night_on: string; starts_at: string | null }>(
 			db,
 			`SELECT group_id, name, night_on, starts_at FROM game_nights
-			 WHERE group_id IN (${marks}) AND night_on >= ?${ids.length + 1} ORDER BY night_on, starts_at`,
-			...ids,
+			 WHERE group_id IN (${GLANCE_GROUPS}) AND night_on >= ?2 ORDER BY night_on, starts_at`,
+			userId,
 			from
 		)
-	]);
-	for (const row of games) glances.get(row.group_id)!.games = row.n;
-	for (const id of ids) {
-		const order = colorIndexesByJoinOrder(members.filter((m) => m.group_id === id).map((m) => ({ id: m.user_id, joinedAt: m.joined_at })));
-		glances.get(id)!.colors = [...order.values()].sort((a, b) => a - b);
-	}
-	for (const n of nights) {
-		const g = glances.get(n.group_id)!;
+	};
+}
+
+export function assembleGlances(r: {
+	glanceGames: Array<{ group_id: string; n: number }>;
+	glanceMembers: Array<{ group_id: string; user_id: string; joined_at: number }>;
+	glanceNights: Array<{ group_id: string; name: string; night_on: string; starts_at: string | null }>;
+}): Map<string, GroupGlance> {
+	const glances = new Map<string, GroupGlance>();
+	const glance = (id: string) => {
+		let g = glances.get(id);
+		if (!g) glances.set(id, (g = { games: 0, colors: [], nights: [] }));
+		return g;
+	};
+	for (const row of r.glanceGames) glance(row.group_id).games = row.n;
+	const joined = new Map<string, Array<{ id: string; joinedAt: number }>>();
+	for (const m of r.glanceMembers) joined.set(m.group_id, [...(joined.get(m.group_id) ?? []), { id: m.user_id, joinedAt: m.joined_at }]);
+	for (const [id, members] of joined) glance(id).colors = [...colorIndexesByJoinOrder(members).values()].sort((a, b) => a - b);
+	for (const n of r.glanceNights) {
+		const g = glance(n.group_id);
 		if (g.nights.length < 3) g.nights.push({ name: n.name, nightOn: n.night_on, startsAt: n.starts_at });
 	}
 	return glances;

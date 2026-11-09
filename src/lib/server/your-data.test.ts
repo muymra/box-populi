@@ -29,6 +29,18 @@ beforeEach(async () => {
 	await run(db, `INSERT INTO wishlist (user_id, game_id, added_at) VALUES ('ada', 4, ?1)`, DAY);
 });
 
+describe('favourites and Play soon in your games (D63, D64)', () => {
+	it('come after the shelf and wishlist, Play soon only while it still counts', async () => {
+		const now = Date.parse('2026-11-09T12:00:00Z');
+		await run(db, `INSERT INTO favourites (user_id, game_id, added_at) VALUES ('ada', 4, ?1), ('bo', 1, ?1)`, DAY);
+		await run(db, `INSERT INTO play_soon (user_id, game_id, marked_at) VALUES ('ada', 1, ?1), ('ada', 2, ?2)`, now - 86_400_000, now - 100 * 86_400_000);
+		const games = await loadYourGames(db, 'ada', now);
+		expect(games.filter((g) => g.list === 'favourite' || g.list === 'play soon').map((g) => `${g.list}:${g.name}`)).toEqual(['favourite:Night Ferry', 'play soon:Harbour Lights']);
+		const lists = gamesCsv(games).split('\r\n').slice(1, -1).map((l) => l.split(',')[3]);
+		expect(lists).toEqual(['shelf', 'shelf', 'shelf', 'wishlist', 'favourite', 'play soon']);
+	});
+});
+
 describe('your games as a CSV', () => {
 	it('lists your shelf, then your wishlist, and nobody else’s', async () => {
 		const games = await loadYourGames(db, 'ada');

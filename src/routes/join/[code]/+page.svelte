@@ -52,7 +52,7 @@
 						<div>
 							<h2 id="new-h">{data.you ? `Join ${data.groupName}` : `New to ${data.groupName}?`}</h2>
 							{#if data.you}
-								<p>You’ll join as {data.you}, and your games go on the group’s shelf.</p>
+								<p>You’ll join as {data.you}{data.yourGames > 0 ? `, and your ${data.yourGames === 1 ? 'game goes' : `${data.yourGames} games go`} on the group’s shelf unless you keep them hidden` : ''}.</p>
 							{:else}
 								<p>Pick the name the group knows you by, and a PIN. There’s no email or password.</p>
 							{/if}
@@ -72,6 +72,21 @@
 							</div>
 							<div class="form-body">
 								<input id="newPin" class="field pin" name="pin" required inputmode="numeric" pattern={`[0-9]{${PIN_LENGTH}}`} maxlength={PIN_LENGTH} autocomplete="off" placeholder="123456" />
+							</div>
+						</div>
+					{/if}
+					{#if data.you && data.yourGames > 0}
+						<!-- Hiding per group (D66): for a work group, say, where only a few of your games belong. -->
+						<div class="form-row">
+							<div class="form-label">
+								<span class="form-q">Your games</span>
+								<span class="hint">Your other groups aren’t affected.</span>
+							</div>
+							<div class="form-body">
+								<label class="check">
+									<input type="checkbox" name="hideMine" value="1" />
+									<span>Keep my games hidden here for now. I’ll pick which to show on Add games, and games I add later start hidden here too.</span>
+								</label>
 							</div>
 						</div>
 					{/if}
@@ -170,6 +185,17 @@
 {/if}
 
 <style>
+	.check {
+		display: flex;
+		gap: var(--s-2);
+		align-items: flex-start;
+	}
+	.check input {
+		width: 20px;
+		height: 20px;
+		flex: none;
+		margin-top: 2px;
+	}
 	@media (min-width: 900px) {
 		.doors.even {
 			grid-template-columns: repeat(2, minmax(0, 1fr));

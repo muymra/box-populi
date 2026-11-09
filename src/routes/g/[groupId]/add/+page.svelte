@@ -8,6 +8,7 @@
 	import HydrateProgress from '#lib/components/HydrateProgress.svelte';
 	import ListPanel from '#lib/components/ListPanel.svelte';
 	import MatchPanel from '#lib/components/MatchPanel.svelte';
+	import ShelfHere from '#lib/components/ShelfHere.svelte';
 	import { formatPlayerRange } from '#lib/catalog/players.ts';
 	import type { PageProps } from './$types';
 
@@ -283,6 +284,14 @@
 	{:else}
 		{@render searchSection('Add a game', true)}
 		<div class="then">{@render ways('Other ways to add', null)}</div>
+	{/if}
+
+	<!-- Which of your games this group sees (D66); only you see this. -->
+	{#if data.myGames.length > 0}
+		<div class="then">
+			{#if form?.hideError}<p class="banner error" role="alert">{form.hideError}</p>{/if}
+			<ShelfHere groupName={data.group.name} hideNew={data.hideNew} games={data.myGames} />
+		</div>
 	{/if}
 </section>
 

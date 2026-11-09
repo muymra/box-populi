@@ -3,6 +3,8 @@ import { requireRead, requireRole } from '#lib/server/authz.ts';
 import { addCopy, gameUsableInGroup, gameVisibleInGroup, removeCopy } from '#lib/server/games.ts';
 import { addLink, canDeleteLink, deleteLink, parseLink } from '#lib/server/links.ts';
 import { addWish, removeWish } from '#lib/server/wishlist.ts';
+import { hiddenHereRead, setCopyHidden } from '#lib/server/hiding.ts';
+import { myPlaySoonRead, PLAY_SOON_MAX, setFavourite, setPlaySoon } from '#lib/server/interest.ts';
 import { lendCopy, returnCopy } from '#lib/server/lending.ts';
 import { editGame, mayEditGame } from '#lib/server/game-edit.ts';
 import { applyCorrection, correctionsRead } from '#lib/server/corrections.ts';
@@ -56,27 +58,29 @@ export const load: PageServerLoad = async (event) => {
 	// group owns, wants, brings to a night or has played are visible here: the cache is shared across
 	// groups, and hand-entered titles from other groups shouldn't be readable by guessing ids (same rule
 	// as gameVisibleInGroup). That check comes back with the rest, and nothing else is used unless it passes.
+	// Copies hidden from the group don't count (D66), except the viewer's own: they open it to show it again.
 	const r = await readAll(db, {
 		shared: rowOf<GameDetail>(
 			db,
 			`SELECT g.* FROM games g WHERE g.id = ?2 AND (
-			EXISTS (SELECT 1 FROM copies c JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1 WHERE c.game_id = g.id)
+			EXISTS (SELECT 1 FROM group_copies gc WHERE gc.group_id = ?1 AND gc.game_id = g.id)
+			OR EXISTS (SELECT 1 FROM copies c WHERE c.user_id = ?3 AND c.game_id = g.id)
 			OR EXISTS (SELECT 1 FROM wishlist w JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1 WHERE w.game_id = g.id)
 			OR EXISTS (SELECT 1 FROM night_games ng JOIN game_nights n ON n.id = ng.night_id AND n.group_id = ?1 WHERE ng.game_id = g.id)
 			OR EXISTS (SELECT 1 FROM plays p WHERE p.group_id = ?1 AND p.game_id = g.id))`,
 			groupId,
-			gameId
+			gameId,
+			me && access.role ? me.id : ''
 		),
 		corrections: correctionsRead(db, groupId, [gameId]),
 		owners: rowsOf<{ user_id: string; name: string; lent_to_name: string | null; lent_to_text: string | null; lent_in_group: number }>(
 			db,
 			`SELECT c.user_id, u.name, lu.name AS lent_to_name, c.lent_to_text,
 				EXISTS (SELECT 1 FROM memberships lm WHERE lm.group_id = ?1 AND lm.user_id = c.lent_to_user_id) AS lent_in_group
-			 FROM copies c
-			 JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1
+			 FROM group_copies c
 			 JOIN users u ON u.id = c.user_id
 			 LEFT JOIN users lu ON lu.id = c.lent_to_user_id
-			 WHERE c.game_id = ?2
+			 WHERE c.group_id = ?1 AND c.game_id = ?2
 			 ORDER BY u.name`,
 			groupId,
 			gameId
@@ -100,14 +104,14 @@ export const load: PageServerLoad = async (event) => {
 			groupId,
 			gameId
 		),
-		// Expansions of this game someone in the group owns; none for a game without a BGG id.
+		// Expansions of this game someone in the group owns; none for a game without a BGG id. Found
+		// through `game_bases` (D65), not by unpacking the base ids of every game the group owns.
 		expansions: rowsOf<{ id: number; name: string; year: number | null }>(
 			db,
-			`SELECT DISTINCT g.id, g.name, g.year
-			 FROM games g, json_each(g.base_bgg_ids) j
-			 JOIN copies c ON c.game_id = g.id
-			 JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1
-			 WHERE g.is_expansion = 1 AND j.value = (SELECT bgg_id FROM games WHERE id = ?2)
+			`SELECT g.id, g.name, g.year
+			 FROM game_bases b JOIN games g ON g.id = b.game_id
+			 WHERE b.base_bgg_id = (SELECT bgg_id FROM games WHERE id = ?2) AND g.is_expansion = 1
+			   AND EXISTS (SELECT 1 FROM group_copies gc WHERE gc.group_id = ?1 AND gc.game_id = g.id)
 			 ORDER BY g.name`,
 			groupId,
 			gameId
@@ -119,6 +123,19 @@ export const load: PageServerLoad = async (event) => {
 			 WHERE bgg_id IN (SELECT value FROM json_each((SELECT base_bgg_ids FROM games WHERE id = ?1 AND is_expansion = 1)))`,
 			gameId
 		),
+		// Who in the group has it as a favourite (D63).
+		favourites: rowsOf<{ id: string; name: string }>(
+			db,
+			`SELECT u.id, u.name FROM favourites f
+			 JOIN memberships m ON m.user_id = f.user_id AND m.group_id = ?1
+			 JOIN users u ON u.id = f.user_id
+			 WHERE f.game_id = ?2
+			 ORDER BY u.name`,
+			groupId,
+			gameId
+		),
+		// The viewer's own Play soon list (D64): whether this game is on it, until when, and whether it's full.
+		myPlaySoon: me ? myPlaySoonRead(db, me.id, Date.now()) : known([]),
 		members: membersRead(db, groupId),
 		plays: playsRead(db, groupId, { gameId }),
 		myCopy: me
@@ -128,7 +145,9 @@ export const load: PageServerLoad = async (event) => {
 					me.id,
 					gameId
 				)
-			: known(null)
+			: known(null),
+		// Whether the viewer's copy is hidden from this group (D66).
+		hiddenHere: me && access.role ? hiddenHereRead(db, groupId, me.id, gameId) : known(false)
 	});
 	const shared = r.shared;
 	if (!shared) error(404, 'Game not found');
@@ -136,7 +155,7 @@ export const load: PageServerLoad = async (event) => {
 	// corrected for itself before D54.
 	const correction = r.corrections.get(gameId);
 	const game = applyCorrection(shared, correction);
-	const { owners, wishers, links, expansions, bases, members, plays, myCopy } = r;
+	const { owners, wishers, favourites, myPlaySoon, links, expansions, bases, members, plays, myCopy, hiddenHere } = r;
 	const colorOf = new Map(members.map((m) => [m.id, m.colorIndex]));
 
 	const canEdit = access.role != null && !access.readonly;
@@ -175,12 +194,18 @@ export const load: PageServerLoad = async (event) => {
 		// For attaching a play to tonight's game night when the game is in its pool (D38).
 		ownerIds: owners.map((o) => o.user_id),
 		mine,
+		// The viewer's copy is hidden from this group: only they see the game here, and it can't be lent from here (D66).
+		hiddenHere: mine && hiddenHere,
 		wanted,
+		favourite: me ? favourites.some((f) => f.id === me.id) : false,
+		favourites: favourites.map((f) => ({ id: f.id, name: f.name, colorIndex: colorOf.get(f.id) ?? 0 })),
+		playSoon: myPlaySoon.find((m) => m.gameId === gameId) ?? null,
+		playSoonFull: myPlaySoon.filter((m) => m.gameId !== gameId).length >= PLAY_SOON_MAX,
 		canEditDetails,
 		editedByName,
 		myLoan: myCopy && (myCopy.lent_to_user_id || myCopy.lent_to_text) ? { toUserId: myCopy.lent_to_user_id, toText: myCopy.lent_to_text } : null,
 		// Borrowers to pick from: this group's other members, most recently active first.
-		lendTo: me ? members.filter((m) => m.id !== me.id).map((m) => ({ id: m.id, name: m.name })) : [],
+		lendTo: me && !hiddenHere ? members.filter((m) => m.id !== me.id).map((m) => ({ id: m.id, name: m.name })) : [],
 		canEdit,
 		game: {
 			id: game.id,
@@ -259,6 +284,15 @@ export const actions: Actions = {
 		redirect(303, `/g/${event.params.groupId}`);
 	},
 
+	hideHere: async (event) => {
+		const db = getDb();
+		const { groupId } = event.params;
+		await requireRole(event, db, groupId, 'member');
+		const hidden = (await event.request.formData()).get('hidden') === '1';
+		if (!(await setCopyHidden(db, groupId, event.locals.user!.id, gameIdParam(event.params.gameId), hidden, Date.now()))) error(404, 'Game not found');
+		return { hiddenChanged: true };
+	},
+
 	lend: async (event) => {
 		const db = getDb();
 		const { groupId } = event.params;
@@ -300,6 +334,24 @@ export const actions: Actions = {
 		}
 		if (!(await addWish(db, groupId, event.locals.user!.id, gameId, Date.now()))) error(404, 'Game not found');
 		return { wishChanged: true };
+	},
+
+	favourite: async (event) => {
+		const db = getDb();
+		const { groupId } = event.params;
+		await requireRole(event, db, groupId, 'member');
+		const on = (await event.request.formData()).get('on') !== '0';
+		if (!(await setFavourite(db, groupId, event.locals.user!.id, gameIdParam(event.params.gameId), on, Date.now()))) error(404, 'Game not found');
+		return { favouriteChanged: true };
+	},
+
+	playSoon: async (event) => {
+		const db = getDb();
+		const { groupId } = event.params;
+		await requireRole(event, db, groupId, 'member');
+		const on = (await event.request.formData()).get('on') !== '0';
+		const result = await setPlaySoon(db, groupId, event.locals.user!.id, gameIdParam(event.params.gameId), on, Date.now());
+		return result.ok ? { playSoonChanged: true } : fail(400, { playSoonError: result.error });
 	},
 
 	addLink: async (event) => {

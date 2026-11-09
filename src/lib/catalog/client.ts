@@ -5,10 +5,10 @@ import type { CatalogPayload } from './types.ts';
 // The last catalog loaded for each group, kept in memory for the life of the tab, so coming back to
 // the shelf from a game draws it at once (and at the same length) while it revalidates. Browser
 // only: on the server a module-level cache would be shared between requests.
-const cache = new Map<string, CatalogPayload>();
+const cache = new Map<string, { payload: CatalogPayload; etag: string | null }>();
 
 export function cachedCatalog(groupId: string): CatalogPayload | null {
-	return cache.get(groupId) ?? null;
+	return cache.get(groupId)?.payload ?? null;
 }
 
 /** The message is for people; `status` is the HTTP status. */
@@ -25,8 +25,14 @@ export async function fetchCatalog(groupId: string, fetchFn: typeof fetch = fetc
 		if (response.status === 401 || response.status === 403 || response.status === 404) cache.delete(groupId);
 		throw new CatalogError(response.status);
 	}
+	// The browser answers an unchanged catalog from its own cache as a 200 with the same ETag. Handing
+	// back the copy already in memory skips parsing it again, and the same object tells pages nothing
+	// changed (D65).
+	const etag = response.headers.get('etag');
+	const kept = cache.get(groupId);
+	if (kept && etag != null && kept.etag === etag) return kept.payload;
 	const payload: CatalogPayload = await response.json();
-	if (typeof window !== 'undefined') cache.set(groupId, payload);
+	if (typeof window !== 'undefined') cache.set(groupId, { payload, etag });
 	return payload;
 }
 

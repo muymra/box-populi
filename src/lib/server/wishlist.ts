@@ -49,10 +49,7 @@ export async function wantedGames(db: DB, groupId: string): Promise<WantedGame[]
 		 FROM wishlist w
 		 JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1
 		 JOIN games g ON g.id = w.game_id
-		 WHERE NOT EXISTS (
-		   SELECT 1 FROM copies c
-		   JOIN memberships m2 ON m2.user_id = c.user_id AND m2.group_id = ?1
-		   WHERE c.game_id = w.game_id)
+		 WHERE NOT EXISTS (SELECT 1 FROM group_copies gc WHERE gc.group_id = ?1 AND gc.game_id = w.game_id)
 		 GROUP BY g.id
 		 ORDER BY COUNT(*) DESC, g.name`,
 		groupId

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import GuestPlays from '#lib/components/GuestPlays.svelte';
 	import { onMount } from 'svelte';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '$app/forms';
@@ -14,7 +15,7 @@
 
 	let { data, form }: PageProps = $props();
 	const ROLE = { owner: 'Owner', admin: 'Co-admin', member: 'Member' } as const;
-	const inviteLink = $derived(data.code ? `${page.url.origin}/join/${data.code}` : null);
+	const inviteLink = $derived(data.invite ? `${page.url.origin}/join/${data.invite}` : null);
 	let query = $state('');
 	// The owner, and how long since they were last here, for the 60-day rule on archiving (D50).
 	const owner = $derived(data.members.find((m) => m.role === 'owner') ?? null);
@@ -26,7 +27,7 @@
 		if (open !== openRows.includes(id)) openRows = open ? [...openRows, id] : openRows.filter((r) => r !== id);
 	}
 	// The one confirmation open in the members list: whose, and for what.
-	type Confirm = 'role' | 'owner' | 'code' | 'merge' | 'remove';
+	type Confirm = 'role' | 'owner' | 'code' | 'merge' | 'guest' | 'remove';
 	let confirmFor = $state<{ id: string; kind: Confirm } | null>(null);
 	// What's typed to confirm a new owner; cleared whenever another confirmation opens.
 	let ownerTyped = $state('');
@@ -88,6 +89,13 @@
 		{/if}
 		{#if form?.memberError}<p class="banner error" role="alert">{form.memberError}</p>{/if}
 		{#if form?.merged}<p class="banner" role="status">Merged. The older entry is gone; everything it had is on the new one.</p>{/if}
+		{#if form?.guestLinked}
+			{@const g = form.guestLinked}
+			<p class="banner" role="status">
+				{g.plays} {g.plays === 1 ? 'play' : 'plays'} and {g.nights} {g.nights === 1 ? 'night' : 'nights'} now count for {g.name}.
+				{#if g.skipped.length}Skipped, since {g.name} or another of those names was already in them: {g.skipped.map((s) => `${s.label} (${s.on})`).join(', ')}.{/if}
+			</p>
+		{/if}
 		<ul class="members">
 			{#each shown as m (m.id)}
 				{@const c = playerColor(m.colorIndex)}
@@ -157,10 +165,13 @@
 										{/if}
 									</div>
 								</div>
-								{#if m.tools.includes('merge') || m.actions.includes('remove_member')}
+								{#if m.tools.includes('merge') || m.canLinkGuests || m.actions.includes('remove_member')}
 									<div class="pfoot">
 										{#if m.tools.includes('merge')}
 											<button type="button" class="link-button" aria-expanded={mine === 'merge'} onclick={() => toggle(m.id, 'merge')}>Merge into another entry…</button>
+										{/if}
+										{#if m.canLinkGuests}
+											<button type="button" class="link-button" aria-expanded={mine === 'guest'} onclick={() => toggle(m.id, 'guest')}>Plays as a guest…</button>
 										{/if}
 										{#if m.actions.includes('remove_member')}
 											<button type="button" class="link-button danger-link" aria-expanded={mine === 'remove'} onclick={() => toggle(m.id, 'remove')}>Remove from the group…</button>
@@ -218,12 +229,16 @@
 											</div>
 										{:else if mine === 'merge'}
 											{@const others = data.members
-												.filter((o) => o.id !== m.id && !o.isMe)
+												.filter((o) => o.id !== m.id && !o.isMe && o.onlyHere)
 												.sort((a, b) => Number(b.name === m.name) - Number(a.name === m.name) || b.joinedAt - a.joinedAt)}
 											<p>
 												If {m.name} joined again as someone new, this moves this entry’s games, plays, nights and wishlist to the new one and deletes this one.
 												The new one keeps this entry’s colour.
 											</p>
+											{#if others.length === 0}
+												<p class="muted">There’s no entry to merge into. The new entry has to be in this group only, since its games show in every group it’s in.</p>
+												<div class="cbtns"><button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button></div>
+											{:else}
 											<form method="POST" action="?/merge" use:enhance={closeAfter} class="cbtns">
 												<input type="hidden" name="userId" value={m.id} />
 												<label class="into">
@@ -237,6 +252,9 @@
 												<button class="btn small danger">Merge and delete this entry</button>
 												<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
 											</form>
+											{/if}
+										{:else if mine === 'guest'}
+											<GuestPlays member={m} guests={data.guests} onclose={() => (confirmFor = null)} done={closeAfter} />
 										{:else if mine === 'remove'}
 											<p>{m.name}’s games leave the shelf. They can rejoin with the code unless you make a new one.</p>
 											<div class="cbtns">

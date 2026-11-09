@@ -46,19 +46,25 @@ Every list of members (owner filter, picker, settings) is built for 50 names: se
 | Member | A signed-in user who joined a group. A user can be in several groups. |
 | Role | Per group: owner (exactly one), co-admin (any number), or member. The same person can hold different roles in different groups. In code and schema, co-admin is `admin`. |
 | Game | A BGG title (or a hand-entered one) with cached metadata. Shared across all groups. |
-| Copy | One user's ownership of one game. The catalog is the set of copies owned by group members. |
+| Copy | One user's ownership of one game. The catalog is the set of copies owned by group members, less any their owners hide from that group. |
 | Loan | A copy marked as lent, either to a member or to someone outside the app. |
 | Link | A rules document, video or other URL attached to a game within a group. |
 | Demo group | A seeded, public, read-only group used for the portfolio. |
 
 A copy belongs to the user, not the group. When someone is in two groups, their games appear in both. Leaving a group hides their copies from it without deleting them.
 
+**Hiding games from a group (D66).** A member can keep any of their games out of one group, say a work group, while their other groups still see them:
+- On a game's page, the owner of a copy sees "Hide from Office" (and "Show in Office" once hidden). A hidden copy is gone from that group's shelf, Play tonight, night suggestions and bring lists, the owner squares, game counts and Wanted's "someone here owns it", for everyone, the owner included. Plays and nights that had it keep it.
+- Nobody else learns that anything is hidden, not even a count. A hidden copy can't be lent or brought to a night from that group.
+- Add games has a "Your games in Office" panel: how many show, the hidden ones with "Show", and **Hide new games here**. Turned on, it opens a checklist of your shelf (what shows is ticked); everything unticked, and every game you add later, stays hidden in that group. Turned off, games you add show there again and what's hidden stays hidden.
+- Joining a group with "Join as Ada" when you already have games offers "Keep my games hidden here for now", which turns the switch on with nothing shown and goes on to Add games to pick.
+
 ## Scope
 
 ### Saturday: the core
 
 1. Identity without accounts: a display name, a device that stays signed in, and a six-digit PIN for getting back in through a group's link on any other device (D47).
-2. Create a group; get a code. Join a group by code or by `/join/<code>` link.
+2. Create a group; get a code. Join a group by code or by its invite link, `/join/<code>-<key>` (D65: the key lets the link work even while someone floods the site with wrong codes).
 3. Add a game by searching BGG. Add a game by hand when BGG has no match or is unreachable.
 4. Group catalog with search and filters.
 5. Game page: image, description, stats, owners.
@@ -106,7 +112,7 @@ Never cut: import, the picker, the demo group, the phone layout, and the instanc
 
 ### Not doing
 
-Ratings and reviews, a trading marketplace, chat, notifications, a native app, cross-group discovery, hosting rulebooks or images ourselves, and anything that needs payment. Rules content is linked, never copied. No hosted service: Carlo's instance serves his own circle and the demo, not the public. No links between instances, no one-click deploy button. Cloudflare Pages is the main hosting target; Docker, Workers, Vercel and Netlify builds exist too (D32). No public API, ads, donations or sponsorship links: BGG's terms prohibit services that hand its data to other applications, and count any payment or ad as commercial use.
+Ratings and reviews (a favourite's heart is a yes or no, not a score: D63), a trading marketplace, chat, notifications, a native app, cross-group discovery, hosting rulebooks or images ourselves, and anything that needs payment. Rules content is linked, never copied. No hosted service: Carlo's instance serves his own circle and the demo, not the public. No links between instances, no one-click deploy button. Cloudflare Pages is the main hosting target; Docker, Workers, Vercel and Netlify builds exist too (D32). No public API, ads, donations or sponsorship links: BGG's terms prohibit services that hand its data to other applications, and count any payment or ad as commercial use.
 
 ## Feature detail
 
@@ -135,6 +141,7 @@ Every group has exactly one owner, who starts as the creator. The owner promotes
 | Remove a co-admin | no | no | yes |
 | Delete any link | no | yes | yes |
 | Make a sign-in code for a member, or merge a member's old entry (D48) | no | for members | for anyone but themselves |
+| Move a member's guest plays to them (D37) | no | for anyone but themselves | for anyone but themselves |
 | Promote or demote co-admins | no | no | yes |
 | Transfer ownership | no | no | yes |
 | Archive or restore the group (D50) | no | once the owner has been away 60 days | yes |
@@ -200,10 +207,12 @@ Hand-entered and Wikidata games can be filled in and corrected: name, image, pla
 | Owner | One or more members, picked from a row of everyone with games on the shelf, in their player colours and in join order, so the row is also the key to the owner edge. Colours are solid for the first eight members and hatched for the next eight, so up to sixteen never share a look. For "what does Sam have?" |
 | Availability | Hide games that are lent outside the group. On by default. A copy lent to a group member counts as available. |
 | Expansions | Hidden by default. |
+| Favourites | Under More once anyone has one (D63): favourites of anyone in the group, or only my own. |
+| Play soon | Under More once the viewer has a mark (D64): only games on my own Play soon list. |
 
 Games with unknown data (hand-entered, from Wikidata, or details still loading) are never filtered out by a field they lack. When an active filter lets a game through only for that reason, it shows an "Info missing" flag. The one exception is the "best at N" toggle, which by definition only matches games that have BGG vote data.
 
-On a phone, the players and time controls sit above the results; everything else is behind a "More filters" sheet. Sorting: title, weight, play time, recently added, most owned. Each result shows the box, its player range and play time, and its owners as coloured segments on the box's edge (up to four, then "+N"); the denser Spines view adds the weight bucket. DESIGN.md has the details. Results render in pages of about 60 as you scroll, and the result count is always shown, so 1,500 games don't freeze a phone. When the two default hides leave games out, the count line says how many ("Hiding 6 lent-out games and 32 expansions") with a "Show them" link that turns both off. Going back to the shelf from a game returns to the same place in it. Filters set under More show as removable chips in the filter strip, and on a phone More is a sheet whose button says how many games the filters leave. Filter state lives in the URL, so a filtered view can be shared in chat. Filtering happens on the device once the catalog has loaded, so changing a filter is instant.
+On a phone, the players and time controls sit above the results; everything else is behind a "More filters" sheet. Sorting: title, weight, play time, recently added, most owned, most loved (the most favourites in the group). Each result shows the box, its player range and play time, and its owners as coloured segments on the box's edge (up to four, then "+N"); the denser Spines view adds the weight bucket. DESIGN.md has the details. Results render in pages of about 60 as you scroll, and the result count is always shown, so 1,500 games don't freeze a phone. When the two default hides leave games out, the count line says how many ("Hiding 6 lent-out games and 32 expansions") with a "Show them" link that turns both off. Going back to the shelf from a game returns to the same place in it. Filters set under More show as removable chips in the filter strip, and on a phone More is a sheet whose button says how many games the filters leave. Filter state lives in the URL, so a filtered view can be shared in chat. Filtering happens on the device once the catalog has loaded, so changing a filter is instant.
 
 ### Game page
 
@@ -239,7 +248,7 @@ Inputs:
 
 The result is tonight's lineup: up to three games, pulled at random, kept, or chosen by hand (D39). It sits right under the pull button as compact rows, each with players, time and complexity, whose copy it is by name, and Keep and "We played this"; on a phone the page scrolls to it (D43). The one button says what the next pull does: "Pull three games", then "Pull three others", or "Pull two more" with one kept.
 
-- **Pull.** Games voted "best" at the player count are three times as likely to be drawn as games merely in range; "recommended" games twice as likely. Pulling again fills every place in the lineup that isn't kept ("Pull two more" with one kept), avoiding games already shown until the candidates run out.
+- **Pull.** Games voted "best" at the player count are three times as likely to be drawn as games merely in range; "recommended" games twice as likely. What the people here love leans it too (D63, D64): a game someone here has as a favourite is twice as likely, each more fan here adds as much again, a Play soon mark of someone here adds one and a half, and together they're held to four times. A game someone here marked Play soon says so on its row ("Ada would like to play this soon"). Fillers and spreads weigh the same way. Pulling again fills every place in the lineup that isn't kept ("Pull two more" with one kept), avoiding games already shown until the candidates run out.
 - **Spread.** In a big room with Players on "Any", a pull covers group sizes instead of the whole room: one game each "For 2 or 3", "For 4 or 5" and "For 6 or more", labelled above the box, so people can form groups around whatever appeals. The sizes with the fewest games that suit them draw first, so a game that takes 2 to 5 isn't spent on one that had other choices. A kept or chosen game covers the size it suits (the one it was pulled for, else the first it's voted best at), and pulling again fills only the sizes still open ("Pull two more"). Fillers spread the same way.
 - **Keep.** Each game in the lineup has a Keep toggle, like a die kept between rolls. Pulling again leaves kept games where they are.
 - **Choose.** "Choose one yourself" sits under the pull button, search first: nothing is listed until someone types, then the 8 best matches from everything in the room, those that fit the limits first, then those voted best at the player count. A room of 12 games or fewer, like a typical night's pool, is listed whole instead. Choosing a game puts it in the lineup as kept, in place of a pulled game; once every place is kept, a chosen game is added, with no cap of three (20 at most, so a setup link stays short). A pull still fills the lineup only up to three, so with three or more kept, pulling is off. Unchoosing a game takes it out of the lineup. Games outside the limits can be chosen too, tagged with why ("Over 60 min", "Not for 6 players", "Too heavy"), so the group can still choose the long one.
@@ -266,6 +275,13 @@ Every game page also shows two generated links that need no upkeep: the BGG page
 
 Members mark games they want from any game page or from search results. The game page lists who wants it. The group's Wanted tab lists games members want that nobody in the group owns, with who wants each. That's the list for gift ideas and for splitting the cost of a purchase.
 
+### Favourites and Play soon
+
+Two marks a member puts on games, each one tap on the game's page beside "I own this" and "I want this". Both belong to the person, like the wishlist, so they show in every group they're in.
+
+- **Favourite** (D63). A heart on a game on the group's shelf: "I love this one", yes or no, not a score. The group sees it: "Favourite of Ada, Bram" on the game page with their colour squares, a "Favourites" filter (anyone's, or mine) and a "Most loved" sort on the shelf. No heart on the cubes, so the owner colours stay the shelf's only accent. Play tonight weights the favourites of the people who are there (see "Picker"), and a night's suggestions those of the people going. Importing BGG ratings as favourites is for later.
+- **Play soon** (D64). You'd like to try a game, or get it to the table again soon, on any game the group can see, including one nobody owns, where it just waits. It must never pressure owners to bring their games. The list is yours: the shelf's "My Play soon" filter shows it, and the game page says when each mark ends. Play tonight weights it when you're marked as here and says it's you; on a night's page, an owner going sees "Someone going would like to play this" on their own games that someone going marked, never who or how many, and everyone sees "On your Play soon list" on their own marks. At most 5 games per person. A mark clears at the first of: a logged play with you in it, the day after a night you were going to with the game on its bring list (it had its chance; one tap marks it again), or quietly 8 weeks after you marked it (marking again restarts it). You can clear it any time.
+
 ### Lending
 
 The copy's owner can mark it lent to a group member (picked from a list) or to someone else (free text). Lent to a member, the game stays available in search and shows "with Sam." Lent to someone else, it's hidden by the availability filter. Marking it returned clears the loan.
@@ -278,6 +294,7 @@ For fun, not for rankings anyone takes seriously (D37).
 - **Results.** Places (picking just the winner is enough; anyone left blank shares last place), scores (places follow from them, with "lowest score wins"), or a co-op win or loss for the whole table. Ties share a place.
 - **Points.** A group setting, 3, 2, 1 by default, set by co-admins and the owner as one to five numbers from first place down. A player scores only if someone finished below them, so last place never scores and a draw scores nothing; tied players take their shared place's points. Points are worked out when shown, so changing them rescores every play. Co-op plays score nothing and count as plays.
 - **Leaderboard.** Points, wins and plays per member, for this year or all time. Guests appear in plays but not on it, since one typed name can be two people. A member who leaves drops off it and shows as "a former member" in plays.
+- **Guest plays to a member** (D37). A guest who joins later can take over their guest plays, so their points and wins count. The owner or a co-admin does it from the member's row on the Group tab ("Plays as a guest…"), never for themselves: pick the guest names they used (spellings that differ only in capitals together, with how many plays and nights each), see every play and night that would move, and untick any that were someone else with the same name. Their places and scores move, the nights they came to become nights they went to, and the games they brought become brought by them, but not onto their shelf. A play or night that already has the member, or two of the picked names, is skipped and named in the result. Only this group's plays and nights move, and there's no undo.
 - **Where.** A trophy icon in the group bar, beside "Who goes first?" and "Dice", opens the plays page (`/g/<group>/plays`): the leaderboard, the plays (newest 100), the points setting and the export. A game's page lists its plays, when it was last played and who has won it most. The plays page lists past game nights with their plays under them ("Fri 14 Nov, Café: 4 plays"), nights where nothing was logged included, and plays outside any night on their own. The export gains a `game_night` column.
 - **Changing plays.** Whoever logged a play, anyone in it, and co-admins and the owner can edit or delete it. Demo and suspended groups can't log.
 - **Export.** A CSV file, one row per player per play: date, game, where the game's details came from, BGG id, play id, player, member or guest, place, score, won, co-op result, points. Plays you were in, or everyone's; this year or all time. Beside it, the game nights as a second file: one row per person per night (date, start, night, host, person, member or guest, going or not), and one more for each further game they brought (the game, where its details came from, BGG id, whether it stayed home); nights you were on, or everyone's. Game names and BGG ids only, nothing from BGG's statistics. BoardGameGeek is named on the rows whose game details came from BGG, and only there, and BGG titles appear exactly as BGG gives them.
@@ -311,7 +328,7 @@ Hosters need to deal with abuse and keep the instance within its free tier witho
 - People choose a display name when they create or join a group and can change it on the account page.
 - **PIN** (D47). Six digits, chosen when joining or creating a group; with any of your groups' links it gets you back in on any device. Your account sets or changes it from a signed-in device. Five wrong PINs for a person lock their name for 15 minutes; a network and the whole instance have limits too. Members' names show on a group's join page to anyone with its code, so they can tap theirs.
 - **Sign-in link** (the personal link of D25; named for what it does since D46). A backup way in: Your account makes one, for a password manager, and it works without a group's link. Making a new one stops the last and signs out every other device. Nobody is shown one when joining any more.
-- **Losing every device** is fine with your PIN: open a group's link, tap your name, type it. Without the PIN, the group's owner or a co-admin makes a one-time sign-in code (it works once, for 10 minutes), which you type at the door instead, then pick a new PIN (D48). An owner asks the host for one instead (D52). Someone who joined again as a new person is merged back: the owner or a co-admin moves the old entry's games, plays, nights and wishlist onto the new one, which keeps the old colour. Both only for people in that group alone. Nobody signs in as anyone without that person's PIN, link or a code an admin hands them.
+- **Losing every device** is fine with your PIN: open a group's link, tap your name, type it. Without the PIN, the group's owner or a co-admin makes a one-time sign-in code (it works once, for 10 minutes), which you type at the door instead, then pick a new PIN (D48). An owner asks the host for one instead (D52). Someone who joined again as a new person is merged back: the owner or a co-admin moves the old entry's games, plays, nights and wishlist onto the new one, which keeps the old colour. Both only for people in that group alone, and a merge only into an entry that's in that group alone too (D65). Nobody signs in as anyone without that person's PIN, link or a code an admin hands them.
 - **Setting a PIN:** members without one see a note on the shelf ("Set a PIN so you can get back in on any device") until they set one or choose "Not now" on that device for two weeks.
 - **Your data.** Your account downloads your shelf and wishlist as a CSV whose first three columns (game, players, minutes) paste into "Paste a list" on any Box Populi, and links to the plays and game nights you were in for each of your groups. BGG games carry their name, year and BGG id only. Deleting your account points there first, and deleting a group offers everyone's plays and game nights first, since they go with it.
 - A user can delete their account, which removes their copies, wishlist entries, memberships and sessions. Links they added stay, attributed to "former member." An owner of a group with other members must transfer ownership or delete the group first.
@@ -335,7 +352,7 @@ Hosters need to deal with abuse and keep the instance within its free tier witho
 
 ## Open questions
 
-1. Should a copy be visible to all of a user's groups, or chosen per group? Starting with all, and revisiting if someone wants a private collection in a work group.
+1. Settled (D66): a copy shows in all its owner's groups unless they hide it from one; "Hide new games here" makes a group show only what they pick.
 2. Should co-admins be able to remove other members' copies, for example to clear out a departed friend's games? Starting with no. Removing the member already hides their copies.
 3. Settled: the demo group uses invented games and people, so nothing real is public.
 

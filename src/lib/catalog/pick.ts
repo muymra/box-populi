@@ -46,6 +46,42 @@ export function fillerWeight(game: CatalogGame, players: number | null): number 
 	return pickWeight(game, players) * (game.weight != null && game.weight < FILLER_MAX_WEIGHT ? 2 : 1);
 }
 
+/**
+ * What the people here care about (D63, D64), per game: how many of them have it as a favourite, and
+ * how many marked it Play soon.
+ */
+export type Interest = { favourites: ReadonlyMap<number, number>; playSoon: ReadonlyMap<number, number> };
+export const NO_INTEREST: Interest = { favourites: new Map(), playSoon: new Map() };
+
+/** Interest never makes a game more than this many times likelier, so one loved game can't take every pull. */
+export const INTEREST_CAP = 4;
+
+/**
+ * A favourite of someone here counts like "recommended" (twice as likely), and each more fan here adds
+ * as much again; a Play soon mark, about tonight, counts a little more (one and a half). Held to INTEREST_CAP.
+ */
+export function interestWeight(gameId: number, interest: Interest): number {
+	return Math.min(INTEREST_CAP, 1 + (interest.favourites.get(gameId) ?? 0) + 1.5 * (interest.playSoon.get(gameId) ?? 0));
+}
+
+/** A draw weight that also leans towards what the people here love or want to play soon. */
+export function withInterest(
+	weigh: (game: CatalogGame, players: number | null) => number,
+	interest: Interest
+): (game: CatalogGame, players: number | null) => number {
+	return (game, players) => weigh(game, players) * interestWeight(game.id, interest);
+}
+
+/** How many of these people have each game as a favourite. */
+export function favouritesAmong(games: readonly CatalogGame[], people: ReadonlySet<string>): Map<number, number> {
+	const counts = new Map<number, number>();
+	for (const g of games) {
+		const n = (g.favouredBy ?? []).filter((id) => people.has(id)).length;
+		if (n) counts.set(g.id, n);
+	}
+	return counts;
+}
+
 export type PickResult = { games: CatalogGame[]; reset: boolean };
 
 /**
@@ -121,7 +157,8 @@ export function splitFillers(
 	players: number,
 	rng: () => number,
 	seen: ReadonlySet<number> = new Set(),
-	fixed: readonly CatalogGame[] = []
+	fixed: readonly CatalogGame[] = [],
+	weigh: (game: CatalogGame, players: number | null) => number = fillerWeight
 ): TableFiller[] | null {
 	for (let count = 2; count <= Math.min(MAX_TABLES, Math.floor(players / 2)); count++) {
 		const sizes = tableSizes(players, count);
@@ -135,7 +172,7 @@ export function splitFillers(
 		for (let i = 0; i < sizes.length && complete; i++) {
 			if (tables[i]) continue;
 			const fits = fillers.filter((g) => !used.has(g.id) && fitsPlayers(g, sizes[i]));
-			const [game] = pick(fits, sizes[i], rng, seen, 1, fillerWeight).games;
+			const [game] = pick(fits, sizes[i], rng, seen, 1, weigh).games;
 			if (game) {
 				used.add(game.id);
 				tables[i] = { players: sizes[i], game };

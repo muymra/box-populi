@@ -184,7 +184,7 @@
 		<div class="form-row">
 			<div class="form-label">
 				<span class="form-q">Your games</span>
-				<span class="hint">Your shelf and wishlist as a spreadsheet (CSV). Its first three columns paste into Paste a list on any Box Populi.</span>
+				<span class="hint">Your shelf, wishlist, favourites and Play soon list as a spreadsheet (CSV). Its first three columns paste into Paste a list on any Box Populi.</span>
 			</div>
 			<div class="form-body"><div><a class="btn" href="/me/games.csv" download>Download your games</a></div></div>
 		</div>
@@ -215,7 +215,7 @@
 			<div>
 				<h2 id="delete-h">Delete your account</h2>
 				<p>
-					Removes your name, shelf, wishlist and group memberships, and the games you typed in unless another member has them too. Links you added stay,
+					Removes your name, shelf, wishlist, favourites, Play soon list and group memberships, and the games you typed in unless another member has them too. Links you added stay,
 					credited to “former member.” Before you go, <a href="#your-data">download your games and plays</a>.
 				</p>
 			</div>

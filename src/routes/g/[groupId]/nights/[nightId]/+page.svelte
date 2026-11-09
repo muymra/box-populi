@@ -1,7 +1,7 @@
 <script lang="ts">
 	// One game night (PRD "Game night"): when and where, who's going, the bring list, suggestions of
 	// what to bring, and on the night, what stayed home and the plays logged.
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
@@ -14,12 +14,13 @@
 	import NightFields from '#lib/components/NightFields.svelte';
 	import PlayForm from '#lib/components/PlayForm.svelte';
 	import PlayList from '#lib/components/PlayList.svelte';
-	import { fetchCatalog } from '#lib/catalog/client.ts';
+	import { cachedCatalog, fetchCatalog } from '#lib/catalog/client.ts';
+	import { normalize } from '#lib/catalog/normalize.ts';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { DEFAULT_FILTERS, filterGames } from '#lib/catalog/filter.ts';
 	import { formatPlayerRange } from '#lib/catalog/players.ts';
 	import { formatPlaytime } from '#lib/catalog/buckets.ts';
-	import { pick } from '#lib/catalog/pick.ts';
+	import { favouritesAmong, pick, pickWeight, withInterest } from '#lib/catalog/pick.ts';
 	import type { CatalogGame } from '#lib/catalog/types.ts';
 	import { bringList, chatText, goingMembers, nightDate, nightGuests, nightPoolIds } from '#lib/nights.ts';
 	import { nightOf } from '#lib/table/regulars.ts';
@@ -58,12 +59,14 @@
 	});
 
 	// The catalog, for suggestions, the host's shelf and game names; the page works without it.
-	let catalog = $state<CatalogGame[] | null>(null);
+	// This tab's copy, if the shelf loaded one, draws the suggestions at once while it's checked (D65).
+	let catalog = $state.raw<CatalogGame[] | null>(untrack(() => cachedCatalog(data.group.id)?.games ?? null));
 	onMount(async () => {
 		try {
-			catalog = (await fetchCatalog(data.group.id)).games;
+			const fresh = (await fetchCatalog(data.group.id)).games;
+			if (fresh !== catalog) catalog = fresh;
 		} catch {
-			catalog = [];
+			catalog = cachedCatalog(data.group.id)?.games ?? [];
 		}
 	});
 	const gameById = $derived(new Map([...(catalog ?? []), ...data.otherGames].map((g) => [g.id, g])));
@@ -78,14 +81,35 @@
 	const goingOwners = (g: CatalogGame) => [...new Set(g.copies.filter((c) => going.includes(c.ownerId) && !c.lentOut).map((c) => c.ownerId))];
 	let suggestions = $state<CatalogGame[]>([]);
 	let seen = $state<number[]>([]);
+	// Suggestions lean towards what the people going love (D63) and would like to play soon (D64), the
+	// viewer's own marks included, so their Play soon games come up first when they pick what to bring.
+	const soonOthers = $derived(new Set(data.playSoon.others));
+	const soonMine = $derived(new Set(data.playSoon.mine));
+	const interest = $derived({
+		favourites: favouritesAmong(catalog ?? [], new Set(data.me ? [...going, data.me] : going)),
+		playSoon: new Map([...new Set([...soonOthers, ...soonMine])].map((id) => [id, 1]))
+	});
+	/**
+	 * A word on a game the viewer could bring. On their own copy, that someone going would like to play
+	 * it, never who (D64); on any game, that it's on their own Play soon list.
+	 */
+	function soonNote(g: CatalogGame): string | null {
+		if (data.me && soonOthers.has(g.id) && goingOwners(g).includes(data.me)) return 'Someone going would like to play this';
+		if (soonMine.has(g.id)) return 'On your Play soon list';
+		return null;
+	}
 	function suggest() {
 		const fit = filterGames(candidates, { ...DEFAULT_FILTERS, players, availableOnly: false }, memberIds);
-		const result = pick(fit.length ? fit : candidates, players, Math.random, new Set(seen));
+		const result = pick(fit.length ? fit : candidates, players, Math.random, new Set(seen), 3, withInterest(pickWeight, interest));
 		suggestions = result.games;
 		seen = result.reset ? result.games.map((g) => g.id) : [...seen, ...result.games.map((g) => g.id)];
 	}
 	let query = $state('');
-	const found = $derived(query.trim().length < 2 ? [] : candidates.filter((g) => g.name.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 8));
+	// Matched like the shelf's search: accents and case ignored, alternate names included.
+	const found = $derived.by(() => {
+		const q = normalize(query);
+		return q.length < 2 ? [] : candidates.filter((g) => g.search.includes(q)).slice(0, 8);
+	});
 
 	// On the night: the pool Play tonight draws from, for logging a play.
 	const pool = $derived.by(() => {
@@ -296,7 +320,8 @@
 			{#snippet gameRow(g: CatalogGame)}
 				<li>
 					<span class="title"><a href="{base}/game/{g.id}">{g.name}</a>
-						<span class="muted small num">{formatPlayerRange(g.minPlayers, g.maxPlayers) ?? '?'}p{#if formatPlaytime(g.minPlaytime, g.maxPlaytime)} · {formatPlaytime(g.minPlaytime, g.maxPlaytime)}{/if}</span></span>
+						<span class="muted small num">{formatPlayerRange(g.minPlayers, g.maxPlayers) ?? '?'}p{#if formatPlaytime(g.minPlaytime, g.maxPlaytime)} · {formatPlaytime(g.minPlaytime, g.maxPlaytime)}{/if}</span>
+						{#if soonNote(g)}<span class="muted small soon-note">{soonNote(g)}</span>{/if}</span>
 					{@render bringButton(g)}
 				</li>
 			{/snippet}

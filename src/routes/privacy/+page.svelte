@@ -19,7 +19,7 @@
 		<h2 id="short-h">The short version</h2>
 		<ul>
 			<li>No accounts, emails or passwords: a name you choose, a six-digit PIN, and a cookie on each device you use.</li>
-			<li>The people in your groups see your name, games, loans, wishlist, plays and game nights. Nobody else does.</li>
+			<li>The people in your groups see your name, games, loans, wishlist, favourites, plays and game nights. Nobody else does. You can hide any of your games from one group.</li>
 			<li>The host's admin page shows counts, not people or collections. The host runs the database, though.</li>
 			<li>You can delete your account at any time from your account page.</li>
 		</ul>
@@ -29,7 +29,7 @@
 	<ul>
 		<li>The display name you choose. Members of your groups see it, and you can change it.</li>
 		<li>
-			The games you add, what you've lent or borrowed, your wishlist and the groups you're in. If you fill in a game's details,
+			The games you add, what you've lent or borrowed, your wishlist, your favourites, the games you've marked Play soon and the groups you're in. If you fill in a game's details,
 			every group that has the game sees them, and your name shows beside them only to the groups you're in. A picture you add
 			shows only in the group where you added it.
 		</li>
@@ -64,7 +64,10 @@
 
 	<h2 id="who">Who can see it</h2>
 	<p>
-		Members of a group see each other's names, games, loans and wishlists, the links added to games, the group's game nights and its plays.
+		Members of a group see each other's names, games, loans, wishlists and favourites, the links added to games, the group's game nights and its plays.
+		Your Play soon list isn't shown to them as a list: Play tonight leans towards it and says it's yours when you're marked as here,
+		and when someone going to a night you're going to picks what to bring, their own games on your list say only that someone going would like to play them.
+		A game you hide from a group is gone from that group's shelf: its members don't see it, or that you've hidden anything. Your other groups still see it.
 		Any member can download the plays and game nights as spreadsheet files, which name everyone in them. Anyone with a group's code sees
 		its members' names on its join page, so they can tap their own. A group's owner and co-admins see who hasn't set a PIN yet.
 		Nobody outside a group can see inside it. The demo group is the exception: it's public and contains no real people.
@@ -79,11 +82,11 @@
 
 	<h2 id="deleting">Taking and deleting your data</h2>
 	<p>
-		Your account page downloads your games and wishlist, and the plays and game nights you were in for each of your groups, as spreadsheet files. The games file
+		Your account page downloads your games, wishlist, favourites, Play soon list and which games you've hidden from which group, and the plays and game nights you were in for each of your groups, as spreadsheet files. The games file
 		pastes into any other Box Populi.
 	</p>
 	<p>
-		You can delete your account from your account page. That removes your name, your shelf, wishlist, memberships and
+		You can delete your account from your account page. That removes your name, your shelf, wishlist, favourites, Play soon list, memberships and
 		sessions, your results in logged plays, your answers and bring lists on game nights, and the games you typed in yourself. A typed-in game that another member also
 		has, or that a logged play names, stays, without your name. Plays you were in stay for the others in them. Links you added stay, credited to "former member." The host has no email or other way to find you, so do it
 		from a device where you're signed in.

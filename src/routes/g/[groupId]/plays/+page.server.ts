@@ -1,11 +1,12 @@
 import { requireRead } from '#lib/server/authz.ts';
-import { loadMembers } from '#lib/server/catalog.ts';
+import { membersRead } from '#lib/server/catalog.ts';
 import { can } from '#lib/server/permissions.ts';
-import { canChangePlay, loadPlays, podiumPoints } from '#lib/server/plays.ts';
+import { canChangePlay, playsRead, podiumPointsRead } from '#lib/server/plays.ts';
 import { deletePlayAction, pointsAction, savePlayAction } from '#lib/server/play-actions.ts';
 import { getDb } from '#lib/server/platform.ts';
 import { standings } from '#lib/plays.ts';
-import { loadNights } from '#lib/server/nights.ts';
+import { assembleNights, nightReads } from '#lib/server/nights.ts';
+import { readAll } from '#lib/server/db.ts';
 import { goingMembers, nightGuests } from '#lib/nights.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -21,12 +22,15 @@ export const load: PageServerLoad = async (event) => {
 	const since = period === 'year' ? `${year}-01-01` : undefined;
 	// Up to tomorrow, since the server's date can trail the viewer's; later nights are still plans.
 	const until = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
-	const [plays, scheme, members, nights] = await Promise.all([
-		loadPlays(db, groupId, { since }),
-		podiumPoints(db, groupId),
-		loadMembers(db, groupId),
-		loadNights(db, groupId, { from: since, to: until })
-	]);
+	// One round trip after the access check (D59, D65).
+	const r = await readAll(db, {
+		plays: playsRead(db, groupId, { since }),
+		scheme: podiumPointsRead(db, groupId),
+		members: membersRead(db, groupId),
+		...nightReads(db, groupId, { from: since, to: until })
+	});
+	const { plays, scheme, members } = r;
+	const nights = assembleNights(r.nights, r.people, r.games);
 	const me = event.locals.user;
 	const actor = me && access.role && !access.readonly ? { id: me.id, role: access.role } : null;
 	const memberIds = new Set(members.map((m) => m.id));

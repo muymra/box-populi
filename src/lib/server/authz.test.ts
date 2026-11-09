@@ -65,7 +65,7 @@ describe('readGroup (D59)', () => {
 		await run(db, `UPDATE users SET pin_set_at = 123 WHERE id = 'ada'`);
 		const { access, extras } = await readGroup(as('ada'), db, 'open');
 		expect(access).toMatchObject({ role: 'owner', readonly: false, group: { id: 'open', isDemo: false } });
-		expect(extras).toEqual({ code: 'AAAAA', theme: 'nord', pinSetAt: 123, nightsBy: 'members', catalogVersion: 0 });
+		expect(extras).toEqual({ code: 'AAAAA', linkKey: null, theme: 'nord', pinSetAt: 123, nightsBy: 'members', catalogVersion: 0 });
 		expect(await requireRead(as('ada'), db, 'open')).toEqual(access);
 	});
 
@@ -86,3 +86,29 @@ describe('readGroup (D59)', () => {
 	});
 });
 
+
+describe('readGroup on one request (D65)', () => {
+	it('asks the database once for a GET, whichever loads check, and afresh on a POST', async () => {
+		await run(db, 'UPDATE memberships SET last_seen_at = ?1', Date.now()); // no "last active" write to count
+		let calls = 0;
+		const counting = new Proxy(db, {
+			get(target, key) {
+				if (key === 'prepare') return (sql: string) => (calls++, target.prepare(sql));
+				const value = Reflect.get(target, key);
+				return typeof value === 'function' ? value.bind(target) : value;
+			}
+		});
+		const request = (method: string) => {
+			const locals = { user: { id: 'ada', name: 'ada' } };
+			return { locals, request: new Request('https://example.test/g/open', { method }), url: new URL('https://example.test/g/open') } as unknown as RequestEvent;
+		};
+		const get = request('GET');
+		const [layout, page] = await Promise.all([readGroup(get, counting, 'open'), readGroup(get, counting, 'open')]);
+		expect(page).toBe(layout);
+		expect(calls).toBe(1);
+		const post = request('POST');
+		await readGroup(post, counting, 'open');
+		await readGroup(post, counting, 'open');
+		expect(calls).toBe(3);
+	});
+});

@@ -10,11 +10,11 @@
 	import CopyButton from '#lib/components/CopyButton.svelte';
 	import NightFields from '#lib/components/NightFields.svelte';
 	import WhosHere from '#lib/components/WhosHere.svelte';
-	import { fetchCatalog, storage } from '#lib/catalog/client.ts';
+	import { cachedCatalog, fetchCatalog, storage } from '#lib/catalog/client.ts';
 	import { BUCKET_LABELS, WEIGHT_BUCKETS, formatPlaytime, weightBucket, type WeightBucket } from '#lib/catalog/buckets.ts';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { MANY_PLAYERS, PLAYER_CHOICES, formatPlayerRange, maskHas, playerChoiceLabel } from '#lib/catalog/players.ts';
-	import { DEFAULT_FILTERS, filterGames } from '#lib/catalog/filter.ts';
+	import { DEFAULT_FILTERS, filterGames, keepMatching, sortGames } from '#lib/catalog/filter.ts';
 	import {
 		FILLER_MAX_MINUTES,
 		LINEUP_SIZE,
@@ -22,6 +22,7 @@
 		SPREAD_BANDS,
 		assignBands,
 		chooseInto,
+		favouritesAmong,
 		fillerWeight,
 		fitsPlayers,
 		gamesAtHand,
@@ -30,10 +31,12 @@
 		needsSplit,
 		pick,
 		pickSpread,
+		pickWeight,
 		placeFiller,
 		refill,
 		roomIsBig,
 		splitFillers,
+		withInterest,
 		type BandId,
 		type TableFiller
 	} from '#lib/catalog/pick.ts';
@@ -51,22 +54,23 @@
 	// Who's here lives on this device, shared with the start player modal in the group bar.
 	const table = getTable();
 
-	let payload = $state<CatalogPayload | null>(null);
+	// Raw state: replaced whole, never changed in place, and too big to track game by game (D65).
+	let payload = $state.raw<CatalogPayload | null>(null);
 	let loadError = $state<string | null>(null);
 	let playersOverride = $state<number | null>(null);
 	let minutes = $state<number | null>(null);
 	let ceiling = $state<WeightBucket | null>(null);
 	// Tonight's lineup (PRD "Picker"): up to three games, pulled at random or chosen, some of them kept.
-	let lineup = $state<CatalogGame[]>([]);
+	let lineup = $state.raw<CatalogGame[]>([]);
 	let kept = $state<number[]>([]);
 	let seen = $state<number[]>([]);
 	let note = $state<string | null>(null);
 	// Fillers: a few short, light games in their own row, with their own pull, Keep and Choose.
 	let includeFillers = $state(false);
-	let fillers = $state<CatalogGame[]>([]);
+	let fillers = $state.raw<CatalogGame[]>([]);
 	let keptFillers = $state<number[]>([]);
 	// When no filler takes everyone: one filler per table, for the fewest tables that work.
-	let tableFillers = $state<TableFiller[] | null>(null);
+	let tableFillers = $state.raw<TableFiller[] | null>(null);
 	let fillerSeen = $state<number[]>([]);
 	let fillerPulled = $state(false);
 	let fillerNote = $state<string | null>(null);
@@ -82,6 +86,54 @@
 	const atTable = $derived(present.length + table.guests.length);
 	// Members of a writable group can log what they ended up playing (PRD "Play log").
 	const canLog = $derived(!!data.role && !data.readonly);
+
+	// What the people here love (D63) and would like to play soon (D64) leans the pulls their way. Play
+	// soon marks are asked for only for the people here, and the table says whose they are.
+	let soonMarks = $state.raw(new Map<number, string[]>());
+	// The same people in any order are the same question: opening "Who goes first?" or reloading the
+	// table's members mustn't ask again.
+	const hereKey = $derived([...present].sort().join(','));
+	$effect(() => {
+		const ids = hereKey;
+		if (!ids || !data.role || data.readonly) {
+			soonMarks = new Map();
+			return;
+		}
+		// A newer question cancels an older one, so a slow answer can't land on top of a fresh one.
+		const asking = new AbortController();
+		const timer = setTimeout(async () => {
+			try {
+				const res = await fetch(`/api/g/${data.group.id}/play-soon?here=${encodeURIComponent(ids)}`, { signal: asking.signal });
+				if (!res.ok) return;
+				const { marks } = (await res.json()) as { marks: Array<{ gameId: number; userIds: string[] }> };
+				soonMarks = new Map(marks.map((m) => [m.gameId, m.userIds]));
+			} catch {
+				// Pulls work the same without it.
+			}
+		}, 300);
+		return () => {
+			clearTimeout(timer);
+			asking.abort();
+		};
+	});
+	const interest = $derived.by(() => {
+		const here = new Set(present);
+		const soon = new Map<number, number>();
+		for (const [gameId, ids] of soonMarks) {
+			const n = ids.filter((id) => here.has(id)).length;
+			if (n) soon.set(gameId, n);
+		}
+		return { favourites: favouritesAmong(payload?.games ?? [], here), playSoon: soon };
+	});
+	const weighMain = $derived(withInterest(pickWeight, interest));
+	const weighFiller = $derived(withInterest(fillerWeight, interest));
+	/** "Ada would like to play this soon", for a game someone here marked. */
+	function soonLine(game: CatalogGame): string | null {
+		const names = (soonMarks.get(game.id) ?? []).filter((id) => present.includes(id)).map((id) => memberMap.get(id)?.name ?? 'Someone');
+		if (!names.length) return null;
+		const who = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+		return `${who} would like to play this soon`;
+	}
 
 	// Game nights (PRD "Game night"): on a night's date, the games are that night's pool.
 	const today = nightOf(Date.now());
@@ -120,25 +172,28 @@
 	 * Every game in the room, the limits aside, for choosing by hand. Tonight's pool is in the room, so
 	 * lending and owners don't matter; at a member's home, their shelf and anything the people here bring.
 	 */
+	// The shelf by title, sorted once per catalog rather than whenever someone is ticked as here.
+	const byTitle = $derived(payload ? sortGames(payload.games, 'title') : []);
 	const room = $derived.by(() => {
 		if (!payload) return [];
 		if (pool) return filterGames(pool, { ...DEFAULT_FILTERS, availableOnly: false }, memberIds);
 		const people = host ? [...present, host] : present;
-		if (people.length) return gamesAtHand(filterGames(payload.games, { ...DEFAULT_FILTERS, availableOnly: false }, memberIds), new Set(people));
-		return filterGames(payload.games, DEFAULT_FILTERS, memberIds);
+		if (people.length) return gamesAtHand(keepMatching(byTitle, { ...DEFAULT_FILTERS, availableOnly: false }, memberIds), new Set(people));
+		return keepMatching(byTitle, DEFAULT_FILTERS, memberIds);
 	});
 	const roomIds = $derived(new Set(room.map((g) => g.id)));
 	/** What a pull draws from: tonight's pool, the host's shelf at a member's home, or the room. */
 	const shelfToPull = $derived.by(() => {
 		if (!payload || pool || !host) return room;
-		return gamesAtHand(filterGames(payload.games, { ...DEFAULT_FILTERS, availableOnly: false }, memberIds), new Set([host]));
+		return gamesAtHand(keepMatching(byTitle, { ...DEFAULT_FILTERS, availableOnly: false }, memberIds), new Set([host]));
 	});
 	/** More people here than three in four of the games take: the evening runs as several groups (D41). */
 	const bigRoom = $derived(roomIsBig(atTable, shelfToPull));
 	// In a big room nobody is put at a table (D41): Players stays "Any" until someone says how many are starting.
 	const players = $derived(playersOverride ?? (bigRoom ? null : atTable || null));
 	const weights = $derived(ceiling ? WEIGHT_BUCKETS.slice(0, WEIGHT_BUCKETS.indexOf(ceiling) + 1) : []);
-	const candidates = $derived(filterGames(shelfToPull, { ...DEFAULT_FILTERS, players, minutes, weights, availableOnly: false }, memberIds));
+	// shelfToPull is already in title order, so filtering keeps it.
+	const candidates = $derived(keepMatching(shelfToPull, { ...DEFAULT_FILTERS, players, minutes, weights, availableOnly: false }, memberIds));
 	const keptSet = $derived(new Set(kept));
 	/** A pull covers group sizes instead of one table: a big room, with nobody saying how many are starting. */
 	const spreadMode = $derived(bigRoom && playersOverride == null);
@@ -232,8 +287,11 @@
 	}
 
 	onMount(async () => {
+		// The catalog this tab already has (from the shelf) draws the page at once; it's checked for
+		// changes after the lineup is back (D65).
+		const cached = cachedCatalog(data.group.id);
 		try {
-			payload = await fetchCatalog(data.group.id);
+			payload = cached ?? (await fetchCatalog(data.group.id));
 			// A shared link wins; otherwise this device's "who's here" for this group, if it's from tonight.
 			table.load(data.group.id, tonightSeed(nightOn(data.nights, nightOf(Date.now())), new Set(data.tableMembers.map((m) => m.id))));
 			const params = page.url.searchParams;
@@ -246,8 +304,16 @@
 			);
 			if (linked) saveLineup();
 			restored = true;
+			if (cached) {
+				const fresh = await fetchCatalog(data.group.id);
+				if (fresh !== payload) payload = fresh;
+			}
 		} catch (e) {
-			loadError = e instanceof Error ? e.message : "Couldn't load the shelf.";
+			// A table already drawn from this tab's copy stays, unless the server said this tab may no longer see it.
+			if (!payload || cachedCatalog(data.group.id) == null) {
+				payload = null;
+				loadError = e instanceof Error ? e.message : "Couldn't load the shelf.";
+			}
 		}
 	});
 
@@ -299,7 +365,7 @@
 	}
 	function pullMainNow(again: boolean) {
 		if (spreadMode) {
-			const spread = pickSpread(drawable, keptGames, bandOf, Math.random, new Set(again ? seen : []));
+			const spread = pickSpread(drawable, keptGames, bandOf, Math.random, new Set(again ? seen : []), weighMain);
 			lineup = spread.slots.map((s) => s.game);
 			bandOf = Object.fromEntries(spread.slots.filter((s) => s.band).map((s) => [s.game.id, s.band as BandId]));
 			const drawn = spread.slots.filter((s) => !keptSet.has(s.game.id)).map((s) => s.game.id);
@@ -308,7 +374,7 @@
 			settleFillers(true);
 			return;
 		}
-		const result = pick(drawable, players, Math.random, new Set(again ? seen : []), open);
+		const result = pick(drawable, players, Math.random, new Set(again ? seen : []), open, weighMain);
 		lineup = refill(lineup, keptSet, result.games);
 		const drawn = result.games.map((g) => g.id);
 		seen = result.reset || !again ? drawn : [...seen, ...drawn];
@@ -362,7 +428,7 @@
 				fillerBandOf,
 				Math.random,
 				new Set(again ? fillerSeen : []),
-				fillerWeight
+				weighFiller
 			);
 			tableFillers = null;
 			fillers = spread.slots.map((s) => s.game);
@@ -373,7 +439,7 @@
 			return;
 		}
 		if (splitting && players) {
-			tableFillers = splitFillers(fillerPool, players, Math.random, new Set(again ? fillerSeen : []), keptFillerGames);
+			tableFillers = splitFillers(fillerPool, players, Math.random, new Set(again ? fillerSeen : []), keptFillerGames, weighFiller);
 			fillers = [];
 			const drawn = tableFillers?.map((t) => t.game.id).filter((id) => !keptNow.has(id)) ?? [];
 			fillerSeen = again ? [...fillerSeen, ...drawn] : drawn;
@@ -389,7 +455,7 @@
 			Math.random,
 			new Set(again ? fillerSeen : []),
 			Math.max(0, LINEUP_SIZE - keptFillers.length),
-			fillerWeight
+			weighFiller
 		);
 		fillers = refill(base, keptNow, result.games);
 		const drawn = result.games.map((g) => g.id);
@@ -454,7 +520,7 @@
 		return [...new Set(game.copies.map((c) => c.ownerId))]
 			.map((id) => memberMap.get(id))
 			.filter((m) => m != null)
-			.map((m) => ({ name: m.name, colorIndex: m.colorIndex }));
+			.map((m) => ({ id: m.id, name: m.name, colorIndex: m.colorIndex }));
 	}
 
 	// Play tonight and Plan a night share one panel as two tabs (D43). Play tonight stays mounted while
@@ -694,12 +760,13 @@
 							<span class="meta num">{factsOf(game)}</span>
 							<span class="owners">
 								{#if owners.length}
-									<span class="squares" aria-hidden="true">{#each owners.slice(0, 3) as o (o.name)}<i style:background={playerColor(o.colorIndex).fill}></i>{/each}</span>
+									<span class="squares" aria-hidden="true">{#each owners.slice(0, 3) as o (o.id)}<i style:background={playerColor(o.colorIndex).fill}></i>{/each}</span>
 									{ownerText(owners)}
 								{/if}
 								{#if label}<span class="tag best num">{label}</span>{/if}
 								{#each tags as tag (tag)}<span class="tag best">{tag}</span>{/each}
 							</span>
+							{#if soonLine(game)}<span class="soon">{soonLine(game)}</span>{/if}
 						</div>
 						<div class="acts">
 							{#if canLog}<a class="played" href="/g/{data.group.id}/game/{game.id}?log=1">We played this</a>{/if}
@@ -1299,6 +1366,10 @@
 	.squares {
 		display: inline-flex;
 		gap: 2px;
+	}
+	.soon {
+		font-size: var(--t-small);
+		color: var(--ink-2);
 	}
 	.squares i {
 		width: 10px;

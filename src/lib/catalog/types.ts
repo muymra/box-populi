@@ -48,6 +48,8 @@ export type CatalogGame = {
 	incomplete: boolean;
 	/** The last night this group logged a play of it (YYYY-MM-DD), or null. Only in a group's catalog. */
 	lastPlayed?: string | null;
+	/** Members of this group who have it as a favourite (D63). Only in a group's catalog. */
+	favouredBy?: string[];
 	copies: CatalogCopy[];
 };
 

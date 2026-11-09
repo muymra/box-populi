@@ -3,7 +3,8 @@
 // The BGG username is used for the requests and never stored.
 import { all, mapRead, readAll, rowOf, stmt, type DB, type Read } from './db.ts';
 import { bumpCatalogForGames, bumpCatalogForUser } from './catalog.ts';
-import { stubStatement, upsertThingStatement } from './games.ts';
+import { upsertThingStatement } from './games.ts';
+import { buildSearchText } from '#lib/catalog/normalize.ts';
 import { THINGS_PER_REQUEST, type BggClient, type BggCollectionItem } from './bgg/types.ts';
 
 /** BGG usernames: letters, digits, spaces, underscores, dots and hyphens. */
@@ -87,7 +88,12 @@ export async function removeFromShelf(db: DB, userId: string, gameIds: number[])
 	return { removed: deleted?.meta?.changes ?? 0 };
 }
 
-const CONFIRM_CHUNK = 50; // 50 games = 100 statements per batch, plus the catalog bump
+/**
+ * Games per batch when confirming an import. Each batch is two statements whatever its size, the
+ * games passed as one JSON value (D65), where it was two statements a game; 500 keeps that value far
+ * under D1's 2 MB limit for one, and a 1,000-game import is two round trips instead of twenty.
+ */
+const CONFIRM_CHUNK = 500;
 
 /**
  * Creates a stub for every chosen game not yet cached and the person's copy of each. Only ids that
@@ -107,19 +113,27 @@ export async function confirmImport(
 		const chunk = picked.slice(i, i + CONFIRM_CHUNK);
 		// Each batch bumps the catalog itself, so a request that stops part-way (D1 allows 50 queries
 		// per request on the free plan, about 2,000 games here) never leaves copies the catalog misses.
+		const stubs = chunk.map((item) => ({ b: item.bggId, n: item.name, s: buildSearchText(item.name), y: item.year, i: item.imageUrl ?? null, t: item.thumbUrl ?? null }));
 		await db.batch([
-			...chunk.flatMap((item) => [
-				stubStatement(db, item),
-				stmt(
-					db,
-					`INSERT INTO copies (user_id, game_id, added_at)
-					 SELECT ?1, id, ?2 FROM games WHERE bgg_id = ?3
-					 ON CONFLICT(user_id, game_id) DO NOTHING`,
-					userId,
-					now,
-					item.bggId
-				)
-			]),
+			// The same row stubStatement writes, for every game in the chunk.
+			stmt(
+				db,
+				`INSERT INTO games (bgg_id, name, search_text, year, is_expansion, image_url, thumb_url)
+				 SELECT json_extract(value, '$.b'), json_extract(value, '$.n'), json_extract(value, '$.s'), json_extract(value, '$.y'), 0,
+				        json_extract(value, '$.i'), json_extract(value, '$.t')
+				 FROM json_each(?1) WHERE true
+				 ON CONFLICT(bgg_id) DO NOTHING`,
+				JSON.stringify(stubs)
+			),
+			stmt(
+				db,
+				`INSERT INTO copies (user_id, game_id, added_at)
+				 SELECT ?1, id, ?2 FROM games WHERE bgg_id IN (SELECT value FROM json_each(?3))
+				 ON CONFLICT(user_id, game_id) DO NOTHING`,
+				userId,
+				now,
+				JSON.stringify(chunk.map((item) => item.bggId))
+			),
 			bumpCatalogForUser(db, userId)
 		]);
 	}

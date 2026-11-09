@@ -68,7 +68,11 @@ export async function newPersonStatements(db: DB, name: string, now: number, pin
 
 export async function createSession(db: DB, userId: string, now: number): Promise<string> {
 	const token = randomToken();
-	await run(db, 'INSERT INTO sessions (id, user_id, expires_at) VALUES (?1, ?2, ?3)', await sha256Hex(token), userId, now + SESSION_DAYS * DAY_MS);
+	await db.batch([
+		// The person's sessions that ran out on devices never used again; nothing else would ever delete them (D65).
+		stmt(db, 'DELETE FROM sessions WHERE user_id = ?1 AND expires_at <= ?2', userId, now),
+		stmt(db, 'INSERT INTO sessions (id, user_id, expires_at) VALUES (?1, ?2, ?3)', await sha256Hex(token), userId, now + SESSION_DAYS * DAY_MS)
+	]);
 	return token;
 }
 

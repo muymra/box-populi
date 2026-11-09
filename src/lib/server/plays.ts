@@ -100,7 +100,7 @@ export async function gameOnShelf(db: DB, groupId: string, gameId: number): Prom
 	return (
 		(await one(
 			db,
-			`SELECT 1 AS x FROM copies c JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1 WHERE c.game_id = ?2 LIMIT 1`,
+			`SELECT 1 AS x FROM group_copies WHERE group_id = ?1 AND game_id = ?2 LIMIT 1`,
 			groupId,
 			gameId
 		)) != null
@@ -294,8 +294,15 @@ export function playsRead(db: DB, groupId: string, q: PlayQuery = {}): Read<Stor
 }
 
 export async function podiumPoints(db: DB, groupId: string): Promise<number[]> {
-	const row = await one<{ podium_points: string | null }>(db, 'SELECT podium_points FROM groups WHERE id = ?1', groupId);
-	return parsePoints(row?.podium_points ?? null) ?? DEFAULT_POINTS;
+	return (await readAll(db, { p: podiumPointsRead(db, groupId) })).p;
+}
+
+/** podiumPoints as a read, to share a round trip with others (`readAll`, D59). */
+export function podiumPointsRead(db: DB, groupId: string): Read<number[]> {
+	return mapRead(
+		rowsOf<{ podium_points: string | null }>(db, 'SELECT podium_points FROM groups WHERE id = ?1', groupId),
+		(rows) => parsePoints(rows[0]?.podium_points ?? null) ?? DEFAULT_POINTS
+	);
 }
 
 export async function setPodiumPoints(db: DB, groupId: string, actor: Actor, raw: unknown): Promise<Result> {

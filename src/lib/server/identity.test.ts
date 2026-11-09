@@ -163,7 +163,7 @@ describe('group glances', () => {
 		}
 
 		expect(await groupGameCount(db, groupId)).toBe(2);
-		const glances = await groupGlances(db, [groupId, other.groupId], '2026-11-08');
+		const glances = await groupGlances(db, bram.person.id, '2026-11-08');
 		expect(glances.get(groupId)).toEqual({
 			games: 2,
 			colors: [0, 1],
@@ -173,7 +173,7 @@ describe('group glances', () => {
 			]
 		});
 		expect(glances.get(other.groupId)).toEqual({ games: 2, colors: [0], nights: [] });
-		expect((await groupGlances(db, [], '2026-11-08')).size).toBe(0);
+		expect((await groupGlances(db, 'nobody', '2026-11-08')).size).toBe(0);
 	});
 });
 

@@ -5,6 +5,7 @@ import { FakeBggClient } from './bgg/fake.ts';
 import { addCopy, addManualGame, searchBgg } from './games.ts';
 import { cleanBggUsername, confirmImport, fetchCollection, hydrateStep, pendingDetails, previewItems, removeFromShelf, shelfNotInCollection } from './importer.ts';
 import type { BggClient, BggCollectionResult } from './bgg/types.ts';
+import { buildSearchText } from '#lib/catalog/normalize.ts';
 
 let db: ReturnType<typeof createTestDb>;
 const NOW = 1_800_000_000_000;
@@ -72,6 +73,15 @@ describe('import', () => {
 			{ bgg_id: 900004, fetched_at: null }
 		]);
 		expect(await pendingDetails(db, 'ada')).toBe(2);
+		// Each stub carries what the collection said, as stubStatement writes it.
+		const rows = await all<{ bgg_id: number; name: string; search_text: string; year: number | null; image_url: string | null; thumb_url: string | null; is_expansion: number }>(
+			db,
+			'SELECT bgg_id, name, search_text, year, image_url, thumb_url, is_expansion FROM games ORDER BY bgg_id'
+		);
+		for (const row of rows) {
+			const item = collection.items.find((i) => i.bggId === row.bgg_id)!;
+			expect(row).toEqual({ bgg_id: item.bggId, name: item.name, search_text: buildSearchText(item.name), year: item.year, image_url: item.imageUrl, thumb_url: item.thumbUrl, is_expansion: 0 });
+		}
 	});
 
 	it('keeps cached details when a game is imported again', async () => {

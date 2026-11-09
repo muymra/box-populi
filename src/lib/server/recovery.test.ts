@@ -77,6 +77,8 @@ describe('merging an old entry into a new one', () => {
 		await run(db, `INSERT INTO games (id, name, search_text, is_manual, created_by) VALUES (1, 'A', 'a', 1, 'bo'), (2, 'B', 'b', 1, NULL), (3, 'C', 'c', 1, NULL)`);
 		await run(db, `INSERT INTO copies (user_id, game_id, added_at, lent_to_user_id) VALUES ('bo', 1, 0, NULL), ('bo', 2, 0, 'cy'), ('bo2', 2, 0, NULL), ('cy', 3, 0, 'bo')`);
 		await run(db, `INSERT INTO wishlist (user_id, game_id, added_at) VALUES ('bo', 3, 0)`);
+		await run(db, `INSERT INTO favourites (user_id, game_id, added_at) VALUES ('bo', 3, 0), ('bo', 2, 0), ('bo2', 2, 0)`);
+		await run(db, `INSERT INTO play_soon (user_id, game_id, marked_at) VALUES ('bo', 1, 0)`);
 		await run(db, `INSERT INTO plays (id, group_id, game_id, played_on, logged_by, created_at) VALUES ('p1', 'g1', 1, '2026-11-01', 'bo', 0)`);
 		await run(db, `INSERT INTO play_players (play_id, seat, user_id, place) VALUES ('p1', 0, 'bo', 1), ('p1', 1, 'cy', 2)`);
 		await run(db, `INSERT INTO game_nights (id, group_id, name, night_on, host_id, created_at) VALUES ('n1', 'g1', 'At Bo''s', '2026-11-20', 'bo', 0)`);
@@ -90,6 +92,8 @@ describe('merging an old entry into a new one', () => {
 		expect(await all(db, "SELECT game_id FROM copies WHERE user_id = 'bo2' ORDER BY game_id")).toEqual([{ game_id: 1 }, { game_id: 2 }]);
 		expect(await one(db, "SELECT lent_to_user_id FROM copies WHERE user_id = 'cy' AND game_id = 3")).toEqual({ lent_to_user_id: 'bo2' });
 		expect(await all(db, "SELECT game_id FROM wishlist WHERE user_id = 'bo2'")).toEqual([{ game_id: 3 }]);
+		expect(await all(db, "SELECT user_id, game_id FROM favourites ORDER BY game_id")).toEqual([{ user_id: 'bo2', game_id: 2 }, { user_id: 'bo2', game_id: 3 }]);
+		expect(await all(db, 'SELECT user_id, game_id FROM play_soon')).toEqual([{ user_id: 'bo2', game_id: 1 }]);
 		expect(await one(db, "SELECT user_id, place FROM play_players WHERE play_id = 'p1' AND seat = 0")).toEqual({ user_id: 'bo2', place: 1 });
 		expect(await one(db, "SELECT logged_by FROM plays WHERE id = 'p1'")).toEqual({ logged_by: 'bo2' });
 		expect(await one(db, "SELECT host_id FROM game_nights WHERE id = 'n1'")).toEqual({ host_id: 'bo2' });
@@ -108,11 +112,13 @@ describe('merging an old entry into a new one', () => {
 		expect(await one(db, "SELECT role FROM memberships WHERE user_id = 'bo2'")).toEqual({ role: 'admin' });
 	});
 
-	it('refuses an old entry in another group, into the actor, or beyond the actor\'s reach', async () => {
+	it('refuses either entry in another group, into the actor, or beyond the actor\'s reach', async () => {
 		expect(await mergeMember(db, 'g1', owner, { oldId: 'di', newId: 'bo2' })).toMatchObject({ ok: false, error: expect.stringContaining('another group') });
 		expect(await mergeMember(db, 'g1', owner, { oldId: 'bo', newId: 'ada' })).toMatchObject({ ok: false });
 		expect(await mergeMember(db, 'g1', admin, { oldId: 'ada', newId: 'bo2' })).toMatchObject({ ok: false });
 		expect(await mergeMember(db, 'g1', owner, { oldId: 'bo', newId: 'bo' })).toMatchObject({ ok: false });
+		// Into an entry that's in another group too: its shelf shows there (D65).
+		expect(await mergeMember(db, 'g1', owner, { oldId: 'bo', newId: 'di' })).toMatchObject({ ok: false, error: expect.stringContaining('another group') });
 		expect(await one(db, "SELECT id FROM users WHERE id = 'bo'")).toEqual({ id: 'bo' });
 	});
 });

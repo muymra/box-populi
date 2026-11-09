@@ -134,6 +134,7 @@ export async function editGame(
 				db,
 				`INSERT INTO game_corrections (group_id, game_id, image_url, edited_by, edited_at) VALUES (?1, ?2, ?3, ?4, ?5)
 				 ON CONFLICT(group_id, game_id) DO UPDATE SET
+				   image_url = excluded.image_url,
 				   name = NULL, search_text = NULL, min_players = NULL, max_players = NULL, min_playtime = NULL, max_playtime = NULL, weight = NULL,
 				   edited_by = CASE WHEN game_corrections.image_url IS excluded.image_url THEN game_corrections.edited_by ELSE excluded.edited_by END,
 				   edited_at = CASE WHEN game_corrections.image_url IS excluded.image_url THEN game_corrections.edited_at ELSE excluded.edited_at END`,

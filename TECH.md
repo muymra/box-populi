@@ -30,7 +30,7 @@ Per group: up to 50 members (5 to 15 regulars), 1,500 distinct games, 4,000 copi
 
 Cloudflare free tier, approximately: 100,000 Functions requests per day, 5 million D1 rows read per day, 100,000 D1 rows written per day (index updates count as writes), 50 subrequests per request. The 3-to-12-member version of this plan filtered in SQL and stored tags as rows. At the new scale both would hit the limits:
 
-- **Reads.** A filtered SQL query over 4,000 copies with tag subqueries reads on the order of 10,000 rows. Filtering as you type at a busy game night would spend the daily read budget in a few hundred queries. Loading the catalog once and filtering in the browser costs about 6,000 rows per full load and 3 rows per cached revalidation.
+- **Reads.** A filtered SQL query over 4,000 copies with tag subqueries reads on the order of 10,000 rows. Filtering as you type at a busy game night would spend the daily read budget in a few hundred queries. Loading the catalog once and filtering in the browser costs about 16,000 rows per build at that size (measured 2026-11-09, D65; this said 6,000 before) and one query per cached revalidation. A built catalog is kept in the server's memory per version, so only the first load after a change builds it.
 - **Writes.** With one row per tag, hydrating 1,500 games writes roughly 1,500 × 15 tag rows plus their index entries: 50,000 or more on the day a large group imports, half the daily allowance. Storing tags, alternate names and expansion links as JSON columns on `games` makes each game one row. The same day then costs about 15,000 to 20,000 rows written, copies included.
 
 If the limits bite anyway, the Workers Paid plan ($5 per month) raises them by orders of magnitude. Nothing in the design changes.
@@ -91,7 +91,7 @@ box-populi/
         normalize.ts            search normalization, buildSearchText()
         players.ts              player-count bitmasks and formatting
         buckets.ts              weight buckets, weight and time formatting
-        filter.ts               Filters, URL params, filterGames(), passedOnUnknown(), tagOptions()
+        filter.ts               Filters, URL params, filterGames() (sortGames() then keepMatching()), passedOnUnknown(), tagOptions()
         pick.ts                 picker draw, the lineup (refill, chooseInto, misfits), fillers, seededRng()
         client.ts               browser fetch of the catalog, safe localStorage
         testing.ts              builders for tests
@@ -117,8 +117,9 @@ box-populi/
         instance.ts             instance config from env, validated
         authz.ts                requireUser, requireRead, requireRole, requireActiveMember
         permissions.ts          role table as a pure function
-        codes.ts                join code generation
-        catalog.ts              payload query, catalog_version bumps
+        codes.ts                join code generation, invite link keys (D65)
+        front-door.ts           opening a group's front door from /join/<code> or /join/<code>-<key> (D65)
+        catalog.ts              payload query, the per-version JSON kept in memory, catalog_version bumps
         return-to.ts            safe return paths after sign-in
         identity.ts             people, device sessions, personal links, account deletion (D25)
         cookies.ts              session, new-link and admin cookie settings
@@ -132,6 +133,9 @@ box-populi/
         importer.ts             BGG collection import and the hydrate step
         links.ts                rules and tutorial links
         wishlist.ts             wishes and the Wanted query
+        interest.ts             favourites and Play soon: set, the 5-mark cap, which marks still count (D63, D64)
+        hiding.ts               hiding a copy from one group, "Hide new games here", the Add page's list (D66)
+        guest-plays.ts          guest plays to a member: the group's guest names, moving the chosen ones (D37)
         lending.ts              lending, returns, and the account page's loans
         plays.ts                the play log: form parsing, save, edit, delete, load, podium points
         play-actions.ts         the play log's form actions, shared by the plays and game pages
@@ -220,6 +224,11 @@ Bindings and variables come from `import { env } from 'cloudflare:workers'` (Sve
 - Taking over as owner (D51) needs no migration: `claimOwnership` in `group-admin.ts` checks `can(role, 'claim_ownership', { ownerAway })` (a co-admin only), then one batch demotes the owner only if their `last_seen_at` is still past the cutoff, and promotes the actor only if no owner is left, setting their `last_seen_at` to now; it reads the actor's role back to tell whether it happened. So an owner who came back in the meantime keeps the group, and a second co-admin can't take it from the first. The Group tab gets `canClaim`, and its `claim` action.
 - `0011_owner_sign_in_codes.sql`: rebuilds `admin_actions` (SQLite can't change a CHECK in place) to allow `owner_sign_in_code` (D52).
 - `0012_bgg_courtesy.sql`: `bgg_search_cache` (a normalized query, its ranked top 20 hits as JSON, `fetched_at`) and `bgg_daily` (requests and throttled answers per UTC day) (D58).
+- `0013_complexity_votes.sql`: moves members' complexity levels to BGG's votes, 1.5 to 1 and 4.5 to 5, on games without BGG details and in old group corrections (D62).
+- `0014_favourites_play_soon.sql`: `favourites` and `play_soon` (D63, D64; shown after `wishlist` below).
+- `0015_audit_fixes.sql` (D65): indexes `night_people(night_id)`, `plays(group_id, game_id, played_on)` and a partial `copies(lent_to_user_id)`; `groups.link_key`, the invite link's key (see "Group codes"), filled for existing groups with `randomblob`; and `game_bases` (below), with its triggers.
+- `0016_hidden_copies.sql` (D66): `hidden_copies` and `memberships.hide_new`, four triggers that keep hidden rows in step with `copies` and `memberships`, and the view `group_copies` (below). Every query about what a group holds reads the view; `hiding.ts` writes the rows.
+- Guest plays to a member (D37) needs no migration: `linkGuestPlays` in `guest-plays.ts` rewrites `play_players`, `night_people` and `night_games` guest rows to the member, checking `can(role, 'link_guest_plays')`.
 
 Timestamps are Unix milliseconds. JSON columns hold arrays and are written and read only through helpers in `db.ts`.
 
@@ -333,6 +342,50 @@ CREATE TABLE wishlist (
   PRIMARY KEY (user_id, game_id)
 );
 
+-- migrations/0016_hidden_copies.sql (D66): copies their owners hide from one group, and the switch
+-- that hides copies added later. Triggers: a new copy starts hidden in each group where its owner's
+-- hide_new is on; deleting a copy deletes its rows; a copy moved to another person or game (merging
+-- entries, Find on BoardGameGeek) takes its rows along; deleting a membership deletes that group's rows.
+CREATE TABLE hidden_copies (
+  group_id   TEXT NOT NULL REFERENCES groups(id),
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  game_id    INTEGER NOT NULL REFERENCES games(id),
+  hidden_at  INTEGER NOT NULL,
+  PRIMARY KEY (group_id, user_id, game_id)
+);
+ALTER TABLE memberships ADD COLUMN hide_new INTEGER NOT NULL DEFAULT 0;
+-- What a group holds: members' copies less those hidden from it. Never join copies to memberships for this.
+CREATE VIEW group_copies AS
+  SELECT m.group_id, c.id, c.user_id, c.game_id, c.lent_to_user_id, c.lent_to_text, c.added_at
+  FROM memberships m JOIN copies c ON c.user_id = m.user_id
+  WHERE NOT EXISTS (SELECT 1 FROM hidden_copies h WHERE h.group_id = m.group_id AND h.user_id = c.user_id AND h.game_id = c.game_id);
+
+-- migrations/0015_audit_fixes.sql (D65): which base games each expansion is for, one row per pair, so
+-- a game page finds a game's expansions by index. Derived from games.base_bgg_ids by three triggers
+-- (after insert, after update of base_bgg_ids, after delete), so no code writes it; no foreign key.
+CREATE TABLE game_bases (
+  base_bgg_id INTEGER NOT NULL,
+  game_id     INTEGER NOT NULL,
+  PRIMARY KEY (base_bgg_id, game_id)
+);
+
+-- migrations/0014_favourites_play_soon.sql: a person's favourites (D63) and Play soon marks (D64).
+-- A mark counts until the first of 8 weeks after marked_at, a logged play of the game with its
+-- person in it, or a night they were going to with the game on its bring list; `activeMark()` in
+-- interest.ts works that out when read.
+CREATE TABLE favourites (
+  user_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  game_id   INTEGER NOT NULL REFERENCES games(id),
+  added_at  INTEGER NOT NULL,
+  PRIMARY KEY (user_id, game_id)
+);
+CREATE TABLE play_soon (
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  game_id    INTEGER NOT NULL REFERENCES games(id),
+  marked_at  INTEGER NOT NULL,
+  PRIMARY KEY (user_id, game_id)
+);
+
 -- migrations/0005_game_corrections.sql: each group's image for a hand-entered or Wikidata game
 -- (D54). Before D54 groups also corrected name, players, play time and weight here (D35); saving
 -- the game's form moves those onto the games row. NULL means "as the game row says". search_text
@@ -410,7 +463,7 @@ Notes on the choices:
 
 1. `requireRead(locals, groupId)` (members, or anyone for the demo group).
 2. Read `groups.catalog_version`. ETag is `"<groupId>.<version>.<build>"`, where the build is SvelteKit's `version` from `$app/env` (new on every build and dev-server start), so a deploy that changes the payload's shape never answers 304 for a copy in the old shape. If `If-None-Match` matches, return 304.
-3. Otherwise query the group's members, then all copies owned by members joined with their games, and assemble the payload. Description and full-size image are left out; the game page loads those.
+3. Otherwise `catalogJson` (`catalog.ts`) returns the JSON kept in the server's memory for this group's version and build, or builds it: one batch reads the members, corrections, last plays, favourites, the games in `group_copies` (members' copies less those hidden from the group, D66) and, apart from them, the copies (read joined, each game's columns came back once per copy, D65), then assembles and serializes the payload and keeps it, for up to 20 groups. The payload is the same for everyone who may see the group, and every change to it bumps the version, so the first load after a change builds it and the rest in that server instance cost one query. Description and full-size image are left out; the game page loads those.
 4. Respond with `Cache-Control: private, no-cache` and the ETag. Cloudflare compresses JSON responses.
 
 ```ts
@@ -449,15 +502,15 @@ Expected size at 1,500 games: around 600 KB raw, under 150 KB compressed. Measur
 Filtering, sorting and the picker run in the browser through pure functions in `src/lib/catalog/`:
 
 - `parseFilters(URLSearchParams)` and `serializeFilters(filters)` keep filter state in the URL with short keys (`q`, `n`, `best`, `t`, `w`, `mech`, `cat`, `all`, `own`, `avail`, `exp`, `sort`).
-- `filterGames(games, filters, groupMemberIds)` applies the PRD's filter table. A game missing a field passes any filter on that field. A copy counts as available unless `lentOut` is true or it's lent to a user who isn't in `groupMemberIds`. A game is available when any of its copies is.
+- `filterGames(games, filters, groupMemberIds)` applies the PRD's filter table and sorts; `sortGames(games, sort)` and `keepMatching(games, filters, groupMemberIds)` are its two halves, so the shelf sorts once per catalog and sort order and filters the sorted list on each change, which keeps the order (D65). The search text is normalized once per pass, not per game. A game missing a field passes any filter on that field. A copy counts as available unless `lentOut` is true or it's lent to a user who isn't in `groupMemberIds`. A game is available when any of its copies is.
 - `normalize(s)` lowercases, applies NFD, strips combining marks, and collapses whitespace. The server uses the same function to build `search_text`, and the text filter is `game.search.includes(normalize(q))`.
 - Weight buckets live in `buckets.ts`: BGG's five vote labels, a weight taking the vote it rounds to: light `< 1.5`, medium-light `< 2.5`, medium `< 3.5`, medium-heavy `< 4.5`, heavy from 4.5 (D62). A member's level is stored as its vote, 1 to 5 (`BUCKET_WEIGHTS`). Fillers use their own line, `FILLER_MAX_WEIGHT` = 2, in `pick.ts`.
 
-- `hiddenByDefault(games, filters, groupMemberIds)` counts what the two default hides leave out under the other filters: `lent` (shown with availability off) and `expansions` (shown with both off, minus `lent`), so the parts add up to everything hidden.
+- `hiddenByDefault(games, filters, groupMemberIds)` counts what the two default hides leave out under the other filters: `lent` (shown with availability off) and `expansions` (shown with both off, minus `lent`), so the parts add up to everything hidden. One pass over the games.
 
-Rendering: show the count, render the first 60 results, and append 60 more when a sentinel element scrolls into view (`IntersectionObserver`). Thumbnails use `loading="lazy"` with fixed width and height to avoid layout shift.
+Rendering: show the count, render the first 60 results, and append 60 more when a sentinel element scrolls into view (`IntersectionObserver`). Thumbnails use `loading="lazy"`; each box has a fixed aspect ratio, so nothing shifts as they load. The shelf, Play tonight and a night's page hold the catalog in `$state.raw` and the shelf passes a plain snapshot of the filters: as deep state, each of thousands of games and copies was a tracked proxy, and a keystroke cost several times more (D65).
 
-Coming back to the shelf: `fetchCatalog()` keeps the last payload per group in memory for the tab's life (browser only; `cachedCatalog(groupId)` reads it), so the shelf draws at once and revalidates in `onMount`, replacing the payload only when `version` changed. A 401, 403 or 404 drops the cached copy; any other failure keeps a shelf that's already on screen. The page's `snapshot()` (from `$app/navigation`) saves how many results were rendered and `scrollY`. SvelteKit restores the scroll before the page has drawn that far and runs the snapshot's `restore` after, so `restore` puts back the length, waits a tick and scrolls itself. The filter effect resets the length only when the filters change, not on its first run.
+Coming back to the shelf: `fetchCatalog()` keeps the last payload per group, with its ETag, in memory for the tab's life (browser only; `cachedCatalog(groupId)` reads it), so the shelf draws at once and revalidates in `onMount`, replacing the payload only when `version` changed. Play tonight and a night's page start from it too. When the browser answers from its own cache with the same ETag, `fetchCatalog` returns the object it already has instead of parsing the JSON again, and the same object tells a page nothing changed. A 401, 403 or 404 drops the cached copy; any other failure keeps a shelf that's already on screen. The page's `snapshot()` (from `$app/navigation`) saves how many results were rendered and `scrollY`. SvelteKit restores the scroll before the page has drawn that far and runs the snapshot's `restore` after, so `restore` puts back the length, waits a tick and scrolls itself. The filter effect resets the length only when the filters change, not on its first run. The snapshot carries the filters too, and the URL timer is cleared when the shelf goes away: leaving within 300ms of typing used to put the search in the next page's address and leave the shelf's own entry without it.
 
 ## Identity and sessions
 
@@ -465,11 +518,11 @@ No accounts (D25). A person is a display name; a device proves who it is with a 
 
 **Creating or joining.** `/groups/new` and `/join/[code]` (action `join`) ask for a display name and a six-digit PIN when the device has no session. The action creates the `users` row with the PIN's fingerprint, the membership, a session and a personal link in one batch, and goes straight to the group (creating: its ready page). Nobody is shown the personal link at this point any more (D47); it's a backup Your account can make.
 
-**PINs (D47).** `src/lib/server/pins.ts`. Six digits (`cleanPin`), stored as `pin_hash` = SHA-256 of `<salt>:<pin>` with a 32-byte random `pin_salt` per person. A slow hash would be the textbook choice, but six digits fall to an offline search whatever the hash, and Workers' CPU limit on the free plan rules out a deliberately slow one; what protects a PIN is that it's only ever tried online, through a group's front door, under limits. `/join/[code]` lists the members (`frontDoorMembers`: names, colours, whether each has a PIN; alphabetical) to a signed-out device. Its `signin` action takes `userId` and `pin`: `signInWithPin` checks the person is a member of that group, takes a try from `pin_fail` (per address, 10 per 10 minutes), `pin_fail_person` (`pin:<userId>`, 5 per 15 minutes, so a name can't be worked through from many addresses) and `pin_fail_all` (instance, 200 per hour), and gives them back when the PIN is right. A right PIN creates a session (ending another person's session on that device) and redirects to the group. `/me` action `setPin` sets or replaces the PIN from a signed-in device; no old PIN is asked for, as with making a new sign-in link.
+**PINs (D47).** `src/lib/server/pins.ts`. Six digits (`cleanPin`), stored as `pin_hash` = SHA-256 of `<salt>:<pin>` with a 32-byte random `pin_salt` per person. A slow hash would be the textbook choice, but six digits fall to an offline search whatever the hash, and Workers' CPU limit on the free plan rules out a deliberately slow one; what protects a PIN is that it's only ever tried online, through a group's front door, under limits. `/join/[code]` lists the members (`frontDoorMembers`: names, colours, whether each has a PIN; alphabetical) to a signed-out device. Its `signin` action takes `userId` and `pin`: `signInWithPin` checks the person is a member of that group, takes a try from `pin_fail` (per address, 10 per 10 minutes), `pin_fail_person` (`pin:<userId>`, 5 per 15 minutes, so a name can't be worked through from many addresses) and `pin_fail_group` (per group, subject `group:<id>`, 200 per hour; across the instance until D65, which let one group's code lock every group out), and gives them back when the PIN is right. A right PIN creates a session (ending another person's session on that device) and redirects to the group. `/me` action `setPin` sets or replaces the PIN from a signed-in device; no old PIN is asked for, as with making a new sign-in link.
 
-**Helping someone back in (D48).** `src/lib/server/recovery.ts`, for the owner and co-admins, and only for a member who is in this group and no other (`memberReach` gives each member's group count, PIN status and join date in one query). `makeSignInCode` checks `can(role, 'make_sign_in_code')` (whom `remove_member` reaches) and makes eight characters of the join-code alphabet, shown as `HQ6T-8VNA`, stored as SHA-256 in `sign_in_codes` with a 10-minute expiry, replacing any earlier one. At the front door "Use a sign-in code" (forced for a name without a PIN) posts `adminCode` to `signin`; `redeemSignInCode` takes from the PIN limits, matches person, group, hash and expiry, deletes the code and gives the tries back; the device is signed in and sent to `/me?code=1#pin-row`, which asks for a new PIN. `mergeMember` (`can(role, 'merge_member')`; never into the actor) moves an old entry's rows to the new one in one batch: copies and wishlist the new one lacks, loans, play seats and nights the new one isn't in, plays logged, nights hosted and planned, bring lists, games typed in and edited, links and corrections; the membership keeps the earlier `joined_at` (so the old colour), the later `last_seen_at` and the higher role; then `deletePersonStatements(old)` removes what's left, and the group's and the new person's catalogs are bumped. The Group tab shows "No PIN yet" to the owner and co-admins, and the shelf nudges a member without a PIN (`myPinSet` from the group layout; "Not now" stored as `bp:pin-nudge` for 14 days).
+**Helping someone back in (D48).** `src/lib/server/recovery.ts`, for the owner and co-admins, and only for a member who is in this group and no other (`memberReach` gives each member's group count, PIN status and join date in one query). `makeSignInCode` checks `can(role, 'make_sign_in_code')` (whom `remove_member` reaches) and makes eight characters of the join-code alphabet, shown as `HQ6T-8VNA`, stored as SHA-256 in `sign_in_codes` with a 10-minute expiry, replacing any earlier one. At the front door "Use a sign-in code" (forced for a name without a PIN) posts `adminCode` to `signin`; `redeemSignInCode` takes from the PIN limits, matches person, group, hash and expiry, deletes the code and gives the tries back; the device is signed in and sent to `/me?code=1#pin-row`, which asks for a new PIN. `mergeMember` (`can(role, 'merge_member')`; never into the actor, and only into an entry that's in this group alone too, D65, since the new entry's shelf shows in all its groups) moves an old entry's rows to the new one in one batch: copies and wishlist the new one lacks, loans, play seats and nights the new one isn't in, plays logged, nights hosted and planned, bring lists, games typed in and edited, links and corrections; the membership keeps the earlier `joined_at` (so the old colour), the later `last_seen_at` and the higher role; then `deletePersonStatements(old)` removes what's left, and the group's and the new person's catalogs are bumped. The Group tab shows "No PIN yet" to the owner and co-admins, and the shelf nudges a member without a PIN (`myPinSet` from the group layout; "Not now" stored as `bp:pin-nudge` for 14 days).
 
-**Sessions.** 32 random bytes, base64url, in the cookie `bp_session` (`HttpOnly; Secure; SameSite=Lax; Path=/`, `Max-Age` 400 days, the browser maximum). `sessions.id` holds its hex SHA-256, so a leaked database holds no usable sessions. Expiry is 400 days and slides: a request finding under 200 days left extends it. `hooks.server.ts` resolves the cookie into `event.locals.user = { id, name }` and deletes the row when it finds it expired. In local dev over http, the cookie drops `Secure`.
+**Sessions.** 32 random bytes, base64url, in the cookie `bp_session` (`HttpOnly; Secure; SameSite=Lax; Path=/`, `Max-Age` 400 days, the browser maximum). `sessions.id` holds its hex SHA-256, so a leaked database holds no usable sessions. Expiry is 400 days and slides: a request finding under 200 days left extends it. Making a session deletes the person's expired ones, which devices never used again would otherwise leave behind (D65). `hooks.server.ts` resolves the cookie into `event.locals.user = { id, name }` and deletes the row when it finds it expired. In local dev over http, the cookie drops `Secure`.
 
 **Personal link.** `/key/<token>`, with 32 random bytes as the token and its SHA-256 in `personal_links`, one row per person.
 - `GET /key/<token>` shows "Sign in as Ada on this device?" and changes nothing, so chat apps that preview links can't sign anyone in. The button POSTs to the same URL, which creates a new session for that person and redirects to `/`.
@@ -513,7 +566,7 @@ The group actions live in `src/lib/server/group-admin.ts`. Each reads the target
 
 Instance limits apply in the actions: creating a group checks `GROUP_CREATION`, the caller's owned-group count against `MAX_GROUPS_PER_USER`, and 5 `group_create` tries per network address per day, given back when the form turns out invalid. Joining checks `MAX_MEMBERS_PER_GROUP` and refuses suspended and demo groups.
 
-`requireRead` is `readGroup(event, db, groupId).access`: one query reads the group, the caller's role, `last_seen_at` and, for the group layout and the catalog, the join code, theme, PIN date, `nights_by` and `catalog_version` (`extras`, never spread into page data whole). `last_seen_at` is written only when it's over an hour old (D59).
+`requireRead` is `readGroup(event, db, groupId).access`: one query reads the group, the caller's role, `last_seen_at` and, for the group layout and the catalog, the join code, theme, PIN date, `nights_by` and `catalog_version` (`extras`, never spread into page data whole). `last_seen_at` is written only when it's over an hour old (D59). On a GET, the group layout's load and the page's share one `readGroup` per group (kept on the request's `locals`), so a full page load checks access once; a POST always reads afresh, since an action may have changed the answer (D65).
 
 ## Instance administration
 
@@ -545,7 +598,8 @@ The hoster operates the database and can read all of it with `wrangler d1 execut
 - Alphabet `ABCDEFGHJKMNPQRSTUVWXYZ23456789`: 31 characters with no 0, O, 1, I or L. Five characters give about 28.6 million codes.
 - Generate with `crypto.getRandomValues` and rejection sampling (discard bytes ≥ 248 so each character is uniform). Retry on a unique-constraint collision.
 - Normalize input with trim and uppercase. Lookalike characters never appear in a code, so no substitution is needed.
-- Joining takes a try from two limits before looking the code up: 5 per 10 minutes per network address (`ipSubject`, which counts an IPv6 address by its /64) and 100 per hour across the instance (`join_fail_all`, subject `instance`). A right code gives both tries back, so only misses count. With 20 groups, the instance limit puts a lucky guess about 600 days away. The cost: someone sending 100 wrong codes an hour blocks joining for everyone until the hour passes (D34).
+- Joining takes a try from two limits before looking the code up: 5 per 10 minutes per network address (`ipSubject`, which counts an IPv6 address by its /64) and 100 per hour across the instance (`join_fail_all`, subject `instance`). A right code gives both tries back, so only misses count. With 20 groups, the instance limit puts a lucky guess about 600 days away. The cost: someone sending 100 wrong codes an hour blocks typed codes for everyone until the hour passes (D34).
+- **Invite links carry a key (D65).** `groups.link_key` is 20 hex characters (80 random bits, `generateLinkKey`), made with the group and replaced with the code. The invite link the Group tab and the ready page show is `/join/<code>-<key>` (`invitePath`; the layout sends it as `invite`, members only, like the code). `openFrontDoor` in `front-door.ts` reads the address with `parseInvite`: with a key that matches the group's (`sameLinkKey`, compared in constant time) the door opens without taking a try, so a flood of wrong codes can't lock members out through their own link; a typed code, or a link with a wrong key, goes through the two limits as above. Links shared before 0015 have no key and work as typed codes. The front door's page load and its actions all go through it.
 - The demo group's code is `DEMO0`. The `0` keeps it out of the generator's alphabet, and the join action refuses demo groups anyway.
 
 **Keeping the two codes apart.** A group code (five characters, `K7M4P`) opens a group's front door; a sign-in code (eight, shown `HQ6T-8VNA`, D48) gets one person back in at that door. `src/lib/codes.ts` holds both lengths, the alphabet and the two examples, which share no characters, for the browser; `server/codes.ts` and `server/recovery.ts` take them from it.
@@ -809,7 +863,7 @@ BGG's "Using the XML API" guide (read by Carlo on 2026-11-08) advises, under usa
 Rules that keep the load small and the app working if BGG blocks linking:
 
 - Lists (catalog, search results, picker, Wanted) use `thumb_url` only. The full `image_url` appears only on a game page.
-- Every `<img>` has `loading="lazy"`, `decoding="async"`, and fixed width and height. Nothing prefetches images.
+- Every `<img>` has `loading="lazy"` and `decoding="async"`, except the game page's own picture, which loads first (`loading="eager"`, `fetchpriority="high"`, D65). Images carry no width and height; the box around each has a fixed aspect ratio, so nothing shifts as they load. Nothing prefetches images.
 - Don't set `referrerpolicy="no-referrer"`. BGG should be able to see where the requests come from.
 - A failed image falls back to a placeholder showing the game's initials, so a blocked or broken URL never breaks a layout.
 - The demo seed script stores URLs only and never downloads images.
@@ -829,7 +883,7 @@ This is the default for a new instance (D28). With `BGG_MODE=off`, the add page 
 `pick(candidates, n, rng, exclude)` in `src/lib/catalog/pick.ts`, run in the browser on the loaded catalog:
 
 1. Candidates: the catalog filtered by players `n`, minutes, optional weight ceiling, no expansions, availability on. When members are ticked as present, keep only games with a copy owned by a present member or lent to one.
-2. Weight each candidate: 3 when best at `n`, 2 when recommended at `n`, otherwise 1.
+2. Weight each candidate: 3 when best at `n`, 2 when recommended at `n`, otherwise 1. Then `withInterest(weigh, interest)` multiplies by `interestWeight`: 1, plus 1 per person here who has it as a favourite (`favouritesAmong`, from the catalog's `favouredBy`), plus 1.5 per person here who marked it Play soon, held to `INTEREST_CAP` (4) (D63, D64). Play tonight fetches the marks from `GET /api/g/[groupId]/play-soon?here=<ids>` when the set of people here changes (by sorted ids, so reloading the same people asks nothing; a newer request aborts an older one); fillers, spreads and split tables use the same multiplier. A night's "Suggest three" does the same with the people going, its Play soon marks coming from `nightPlaySoonRead` without names.
 3. Draw without replacement, with probability proportional to weight, skipping ids in `exclude`: three, or as many places as the lineup has open. When fewer remain, clear `exclude` and draw again.
 4. `rng` is injected so tests can seed it.
 
@@ -847,7 +901,7 @@ Regulars: `bp:regulars:<groupId>` holds, per member id, the nights this device t
 
 The setup lives in the address: `n` (players), `t` (minutes), `w` (complexity ceiling) and `f=1` (add fillers), kept in step with `goto(..., { replace: true, reset: false })` like the shelf's filters. "Copy a link to this setup" copies the address plus who's here: `here` (comma-separated member ids) and `guest` (one per guest name). Opening a link with `here` or `guest` replaces who's here on this device; the address then drops them, so reloading the page, or a phone restoring the tab next week, can't bring back an old table past the 12-hour reset. Old links that carried them in the address still work the same way. Without them, the page starts from this device's who's here. The copied link also carries the kept games, `keep` and `fkeep` (comma-separated game ids, read by `parseIdList()`, at most 20 each), and the host, `at` (`cleanVenue()`); opening it replaces this device's kept games, and the address drops them too. Pulled games that weren't kept aren't in any link.
 
-Fillers: `isFiller(game)` in `pick.ts` is true when the longest listed play time is at most `FILLER_MAX_MINUTES` (30) and the weight bucket is light or unknown; a game with no play time isn't one. The candidates are the games at the table that fit the players, minus the main picks; the time and complexity limits don't apply. `pick()` takes an optional weight function, and fillers use `fillerWeight`: `pickWeight` doubled for games known to be light, so unrated short games come up half as often. Fillers keep their own `seen` list, pull, Keep and Choose, and can be pulled before any main game. A main pull pulls fillers only while their row is empty; a filler that joins the lineup leaves the filler row (and its kept ids), and if it was at a split table that table is redrawn.
+Fillers: `isFiller(game)` in `pick.ts` is true when the longest listed play time is at most `FILLER_MAX_MINUTES` (30) and the weight is under `FILLER_MAX_WEIGHT` (2) or unknown (D62 keeps D56's line); a game with no play time isn't one. The candidates are the games at the table that fit the players, minus the main picks; the time and complexity limits don't apply. `pick()` takes an optional weight function, and fillers use `fillerWeight`: `pickWeight` doubled for games known to be light, so unrated short games come up half as often. Fillers keep their own `seen` list, pull, Keep and Choose, and can be pulled before any main game. A main pull pulls fillers only while their row is empty; a filler that joins the lineup leaves the filler row (and its kept ids), and if it was at a split table that table is redrawn.
 
 Split tables: when `needsSplit(pool, players)` holds (four or more players, and every filler with a known maximum is too small for them; games with no maximum don't count either way), the picker calls `splitFillers(pool, players, rng, seen)`. It tries 2 tables, then 3, up to `MAX_TABLES` (6) or half the players, with sizes from `tableSizes()` (9 across 2 is [5, 4]). Larger tables draw first, one filler each through `pick(..., 1, fillerWeight)`, never the same game twice; the first table count where every table gets one wins. Kept fillers go in first as `fixed`, each at the largest open table it fits; one that fits none sits the split out and the page shows it after the tables, tagged "Fits no table". A chosen filler goes through `placeFiller(tables, game, kept)`, which replaces the largest unkept table it fits, or returns null so the list disables it ("Fits no open table"). Unchoosing a filler at a table draws a new one for that table only. `fitsPlayers()` matches the filter's rule, so a game with an unknown end can fill any table.
 
@@ -931,8 +985,8 @@ A writable local group with invented data, for trying the app as a member sees i
 | `/key/[token]` | GET confirms "Sign in as <name> on this device?", naming the person's groups (`listMyGroups`, demo left out); POST signs in. | rate-limited by IP |
 | `/admin/login`, `/admin` | Key sign-in; then totals, groups table, admin log and the group actions. | `requireAdmin` (except the login form) |
 | `/g/[groupId]` | Catalog. | `requireRead` |
-| `/g/[groupId]/game/[gameId]` | Game page: details, owners, links, wishlisters, expansions. | `requireRead` |
-| `/g/[groupId]/add` | BGG search, manual entry, import. | `requireRole(member)` |
+| `/g/[groupId]/game/[gameId]` | Game page: details, owners, links, wishlisters, favourites, expansions. Actions include `want`, `favourite` and `playSoon` (the viewer's own marks, D63, D64), and `hideHere` (the owner hides or shows their copy in this group, D66). A copy hidden from the group doesn't make its game visible here, except to its owner. | `requireRead`; actions `requireRole(member)` |
+| `/g/[groupId]/add` | BGG search, manual entry, import, and "Your games in <group>" (D66): actions `showHere` and `hideNew` (with the picked `show` ids when turning it on). | `requireRole(member)` |
 | `/g/[groupId]/pick` | Picker. | `requireRead` |
 | `/g/[groupId]/nights/new` | Plan a game night (name, date, start time, where). The Game night tab's Plan a night tab posts its form here; the page itself shows the form again when there's something to fix. | `requireRole(member)` and `can('plan_night')` by the group's `nights_by` |
 | `/g/[groupId]/nights/[nightId]` | One game night: who's going, guests, the bring list, suggestions, what stayed home, its plays. Actions `edit`, `delete`, `going`, `addGuest`, `removeGuest`, `bring`, `bringOther`, `unbring`, `stayedHome`. | `requireRead`; actions `requireRole(member)` plus the night rules in "Game nights" |
@@ -940,13 +994,14 @@ A writable local group with invented data, for trying the app as a member sees i
 | `GET /g/[groupId]/plays/export.csv` | The plays as CSV (`who=me|all`, `period=year|all`), or with `what=nights` the game nights (`nightsCsv` in `src/lib/nights-csv.ts`, game names from `nightGameInfo` with the group's corrections), a download for people, no CORS. | `requireRead`; `who=me` needs membership |
 | `/g/[groupId]/wanted` | The Wanted tab: games members want that nobody in the group owns, with who wants each and a "Me too" toggle. Wishes are set by the `want` action here, on the game page and on the add page (`on=0` removes). | `requireRead`; `want` needs `requireRole(member)` |
 | `/g/[groupId]/ready` | After creating a group: the invite card, then "Add your games". | `requireRead`, members only (others go to the group) |
-| `/g/[groupId]/group` | The Group tab: invite code, members list, and the settings actions (`rename`, `newCode`, `promote`, `demote`, `transfer` (with `confirmName`, the new owner's name, checked by `transferOwnership`), `remove`, `signInCode`, `merge`, `archive`, `restore` (with `allowArchived`), `delete` (once archived or suspended)). Members see the code and the list; co-admins and the owner see the controls their role allows. | `requireRead`; each action `requireRole(admin)` or `requireRole(owner)` |
+| `/g/[groupId]/group` | The Group tab: invite code, members list, and the settings actions (`rename`, `newCode`, `promote`, `demote`, `transfer` (with `confirmName`, the new owner's name, checked by `transferOwnership`), `remove`, `signInCode`, `merge`, `archive`, `restore` (with `allowArchived`), `delete` (once archived or suspended)). Members see the code and the list; co-admins and the owner see the controls their role allows. Also `guestPlays` (guest plays to a member, D37), with `guests` from `guestHistory` loaded for the owner and co-admins. | `requireRead`; each action `requireRole(admin)` or `requireRole(owner)` |
 | `/me` | Display name, PIN (`setPin`), groups, loans (what you lent, with "Mark as returned", and what you borrowed), a new sign-in link (backup), sign out of this device or everywhere, Your data (the games file and a plays link per group), account deletion. | `requireUser` |
-| `GET /me/games.csv` | Your shelf and wishlist as CSV (`loadYourGames` in `src/lib/server/your-data.ts`, `gamesCsv` in `src/lib/games-csv.ts`), a download for people, no CORS. Columns `game, players, minutes` first, the order "Paste a list" reads, so copying them from a spreadsheet adds the games on another instance; then `list` (shelf or wishlist), `year`, `game_data_from`, `bgg_id`, `wikidata_id`, `added`, `lent_to`, `note`. BGG games get name, year and BGG id only: players and minutes stay empty for them. Games as stored, not any group's corrections. | signed in, else 401 |
+| `GET /me/games.csv` | Your shelf, wishlist, favourites and live Play soon marks as CSV (`loadYourGames` in `src/lib/server/your-data.ts`, `gamesCsv` in `src/lib/games-csv.ts`), a download for people, no CORS. Columns `game, players, minutes` first, the order "Paste a list" reads, so copying them from a spreadsheet adds the games on another instance; then `list` (shelf or wishlist), `year`, `game_data_from`, `bgg_id`, `wikidata_id`, `added`, `lent_to`, `note`. BGG games get name, year and BGG id only: players and minutes stay empty for them. Games as stored, not any group's corrections. | signed in, else 401 |
 | `GET /api/g/[groupId]/catalog` | Catalog payload with ETag. | `requireRead` |
+| `GET /api/g/[groupId]/play-soon?here=<ids>` | Play soon marks of the people said to be here, by game, for Play tonight (D64); at most 60 ids, members of the group and games on its shelf only, `no-store`. Empty for visitors and read-only groups. | `requireRead` |
 | `GET /api/bgg/search` | BGG search proxy. | `requireActiveMember` (optional `groupId`), rate-limited per person |
 | `POST /api/bgg/import`, `/api/bgg/import/confirm`, `/api/bgg/hydrate` | Import flow. | `requireActiveMember` with the page's `groupId`, rate-limited per person |
-| `POST /api/bgg/match`, `/api/bgg/match/confirm` | Find on BoardGameGeek: one game's BGG matches, then merge up to 10 chosen pairs (D57). | `requireActiveMember` with the page's `groupId`; matching rate-limited per person |
+| `POST /api/bgg/match`, `/api/bgg/match/confirm` | Find on BoardGameGeek: one game's BGG matches, then merge up to 7 chosen pairs (D57; 14 statements each, favourites and Play soon included). | `requireActiveMember` with the page's `groupId`; matching rate-limited per person |
 | `POST /theme` | Saves this device's theme setting in `bp_theme`: a theme id, or `auto` to follow the group's theme and then the instance's. 204 for `Accept: application/json` (the footer select already switched the page), otherwise a 303 back to the page it came from. Group themes (`groups.theme`, migration `0003`) are set by the Group tab's `theme` action, co-admins and up, and applied in `hooks.server.ts` only for members (or anyone on the demo). | none |
 | `GET /custom-theme.css` | The custom theme's stylesheet, built from the five colours in `instance_settings` (migration `0004`) by `customThemeCss()`. Linked as `?v=<updated_at>` and cached a year; a save on `/admin` changes the version. `src/lib/server/appearance.ts` reads the settings once a minute per isolate. | none |
 | `GET /api/wikidata/search` | Wikidata title search for the add page while BGG is off; results are cached as games. | `requireActiveMember` (optional `groupId`), rate-limited per person |
@@ -976,8 +1031,9 @@ D1 binds parameters by position (`?1`, `?2` or `?`). Named parameters like `:gro
 - Bind every value; never interpolate into SQL.
 - Link URLs: parse with `new URL()`, accept only `http:` and `https:`, store the normalized string, and render with `rel="noopener noreferrer nofollow"` and `target="_blank"`.
 - BGG descriptions are stored as plain text. Never use `{@html}` anywhere in the app.
-- `returnTo` is validated as described under "Identity and sessions."
-- Join attempts, group creation, personal-link redemption and admin sign-in are rate-limited by network address; searches, list matches, BGG imports and hydrate steps per person. All through `rate_events` and `take()`, which checks and records in one INSERT so parallel requests can't all slip under a limit. Limits that count failures take a try up front and give it back when the attempt was right.
+- `returnTo` is validated as described under "Identity and sessions": a path on this site, with no control characters or backslashes, which browsers would otherwise read as another host (`/\t/evil.example`).
+- Every response from the app says `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'` (`hooks.server.ts`, D65). There's no script or style policy yet: it would block what a host's platform injects (an analytics beacon, for one), so it needs checking on a live instance first. Static files served by the host directly don't get these headers.
+- Join attempts (except through an invite link with its key, D65), group creation, personal-link redemption and admin sign-in are rate-limited by network address; searches, list matches, BGG imports and hydrate steps per person. All through `rate_events` and `take()`, which checks and records in one INSERT so parallel requests can't all slip under a limit. Limits that count failures take a try up front and give it back when the attempt was right.
 - Session tokens, personal-link tokens and the admin key are compared as SHA-256 digests; only digests are stored.
 - The personal-link GET never changes state, so link previews in chat apps can't sign anyone in.
 - The demo group is read-only on the server, not only in the UI.

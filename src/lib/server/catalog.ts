@@ -88,32 +88,51 @@ export function membersRead(db: DB, groupId: string): Read<CatalogMember[]> {
 }
 
 export async function loadCatalog(db: DB, groupId: string, version: number): Promise<CatalogPayload> {
-	// One round trip for all four (D59).
-	const { members, corrections, played, rows } = await readAll(db, {
+	// One round trip for all six (D59). The shelf is `group_copies`: members' copies, less those hidden
+	// from this group (D66), so the payload is the same for every viewer, owner included. Games and
+	// copies are read apart: joined, each game's 21 columns
+	// came back once per copy, and turning those rows into objects was most of the CPU a build cost (D65).
+	const { members, corrections, played, favourites, gameRows, copyRows } = await readAll(db, {
 		members: membersRead(db, groupId),
 		corrections: correctionsRead(db, groupId),
 		// For "not played lately" (PRD "Play log").
 		played: rowsOf<{ game_id: number; last: string }>(db, 'SELECT game_id, MAX(played_on) AS last FROM plays WHERE group_id = ?1 GROUP BY game_id', groupId),
-		rows: rowsOf<GameRow & { owner_id: string; lent_to_user_id: string | null; lent_to_text: string | null; added_at: number }>(
+		// The group's favourites (D63), for the shelf filter, the sort and Play tonight.
+		favourites: rowsOf<{ game_id: number; user_id: string }>(
 			db,
-			`SELECT ${GAME_COLUMNS}, c.user_id AS owner_id, c.lent_to_user_id, c.lent_to_text, c.added_at
-			 FROM copies c
-			 JOIN memberships m ON m.user_id = c.user_id AND m.group_id = ?1
-			 JOIN games g ON g.id = c.game_id
+			'SELECT f.game_id, f.user_id FROM favourites f JOIN memberships m ON m.user_id = f.user_id AND m.group_id = ?1',
+			groupId
+		),
+		gameRows: rowsOf<GameRow>(
+			db,
+			`SELECT ${GAME_COLUMNS} FROM games g
+			 WHERE g.id IN (SELECT game_id FROM group_copies WHERE group_id = ?1)
 			 ORDER BY g.id`,
+			groupId
+		),
+		copyRows: rowsOf<{ game_id: number; owner_id: string; lent_to_user_id: string | null; lent_to_text: string | null; added_at: number }>(
+			db,
+			`SELECT c.game_id, c.user_id AS owner_id, c.lent_to_user_id, c.lent_to_text, c.added_at
+			 FROM group_copies c WHERE c.group_id = ?1
+			 ORDER BY c.game_id, c.id`,
 			groupId
 		)
 	});
 
 	const lastPlayed = new Map(played.map((p) => [p.game_id, p.last]));
+	const favouredBy = new Map<number, string[]>();
+	for (const f of favourites) favouredBy.set(f.game_id, [...(favouredBy.get(f.game_id) ?? []), f.user_id]);
 	const games = new Map<number, CatalogGame>();
-	for (const row of rows) {
-		let game = games.get(row.id);
-		if (!game) {
-			game = { ...toCatalogGame(applyCorrection(row, corrections.get(row.id))), lastPlayed: lastPlayed.get(row.id) ?? null, copies: [] };
-			games.set(row.id, game);
-		}
-		game.copies.push({
+	for (const row of gameRows) {
+		games.set(row.id, {
+			...toCatalogGame(applyCorrection(row, corrections.get(row.id))),
+			lastPlayed: lastPlayed.get(row.id) ?? null,
+			favouredBy: favouredBy.get(row.id) ?? [],
+			copies: []
+		});
+	}
+	for (const row of copyRows) {
+		games.get(row.game_id)?.copies.push({
 			ownerId: row.owner_id,
 			lentToUserId: row.lent_to_user_id,
 			lentOut: row.lent_to_text != null,
@@ -121,6 +140,27 @@ export async function loadCatalog(db: DB, groupId: string, version: number): Pro
 		});
 	}
 	return { version, members, games: [...games.values()] };
+}
+
+/** Groups whose catalog JSON this server instance keeps; the least recently built goes first. */
+const CATALOG_CACHE_GROUPS = 20;
+const catalogCache = new Map<string, { key: string; json: string }>();
+
+/**
+ * The catalog as the JSON the endpoint sends. It's the same for everyone who may see the group, so the
+ * last one built for each group is kept in memory under its version and the build, and a member who
+ * opens the shelf after someone else costs no database reads and no work (D65). Any change to what
+ * the catalog shows already bumps the version, which is what the ETag relies on too.
+ */
+export async function catalogJson(db: DB, groupId: string, version: number, build: string): Promise<string> {
+	const key = `${version}.${build}`;
+	const kept = catalogCache.get(groupId);
+	if (kept?.key === key) return kept.json;
+	const json = JSON.stringify(await loadCatalog(db, groupId, version));
+	catalogCache.delete(groupId);
+	catalogCache.set(groupId, { key, json });
+	if (catalogCache.size > CATALOG_CACHE_GROUPS) catalogCache.delete(catalogCache.keys().next().value!);
+	return json;
 }
 
 /**

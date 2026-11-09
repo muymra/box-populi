@@ -159,6 +159,16 @@ describe('mergeMatches', () => {
 		expect(await all(db, 'SELECT game_id FROM copies WHERE user_id = ?1', 'ada')).toEqual([{ game_id: target }]);
 	});
 
+	it('moves favourites and Play soon marks to the BGG game, once per person (D63, D64)', async () => {
+		const typed = await manual('ada', 'Alpha');
+		const target = await bggGame('Test Game Alpha');
+		await run(db, 'INSERT INTO favourites (user_id, game_id, added_at) VALUES (?1, ?2, 0), (?1, ?3, 0)', 'ada', typed, target);
+		await run(db, 'INSERT INTO play_soon (user_id, game_id, marked_at) VALUES (?1, ?2, 5)', 'ada', typed);
+		expect(await mergeMatches(db, 'ada', [{ gameId: typed, targetId: target }])).toEqual({ merged: 1, skipped: 0 });
+		expect(await all(db, 'SELECT game_id FROM favourites')).toEqual([{ game_id: target }]);
+		expect(await all(db, 'SELECT game_id, marked_at FROM play_soon')).toEqual([{ game_id: target, marked_at: 5 }]);
+	});
+
 	it('skips pairs that aren’t the person’s game, or don’t point at a BGG game', async () => {
 		const mine = await manual('ada', 'Mine');
 		const other = await manual('ada', 'Also mine');

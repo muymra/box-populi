@@ -7,7 +7,7 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-	const inviteLink = $derived(data.code ? `${page.url.origin}/join/${data.code}` : null);
+	const inviteLink = $derived(data.invite ? `${page.url.origin}/join/${data.invite}` : null);
 </script>
 
 <svelte:head><title>{data.group.name} is ready · {data.instanceName}</title></svelte:head>

@@ -6,8 +6,8 @@ import { maskHas } from './players.ts';
 import { weightBucket, WEIGHT_BUCKETS, type WeightBucket } from './buckets.ts';
 import type { CatalogCopy, CatalogGame } from './types.ts';
 
-export type SortKey = 'title' | 'weight' | 'time' | 'added' | 'owned';
-export const SORT_KEYS: SortKey[] = ['title', 'weight', 'time', 'added', 'owned'];
+export type SortKey = 'title' | 'weight' | 'time' | 'added' | 'owned' | 'loved';
+export const SORT_KEYS: SortKey[] = ['title', 'weight', 'time', 'added', 'owned', 'loved'];
 
 export type Filters = {
 	q: string;
@@ -23,8 +23,16 @@ export type Filters = {
 	expansions: boolean;
 	/** Only games not played in the last STALE_DAYS, or never logged (PRD "Play log"). */
 	stale: boolean;
+	/** Only favourites (D63): anyone's in the group, or the viewer's own. */
+	favourites: 'any' | 'mine' | null;
+	/** Only games on the viewer's Play soon list (D64). */
+	playSoon: boolean;
 	sort: SortKey;
 };
+
+/** Who's looking, for the filters that are about them: their favourites and their Play soon list. */
+export type Viewer = { id: string | null; playSoon: ReadonlySet<number> };
+const NOBODY: Viewer = { id: null, playSoon: new Set() };
 
 export const STALE_DAYS = 90;
 
@@ -46,6 +54,8 @@ export const DEFAULT_FILTERS: Filters = {
 	availableOnly: true,
 	expansions: false,
 	stale: false,
+	favourites: null,
+	playSoon: false,
 	sort: 'title'
 };
 
@@ -71,6 +81,8 @@ export function parseFilters(params: Pick<URLSearchParams, 'get' | 'getAll'>): F
 		availableOnly: params.get('avail') !== '0',
 		expansions: params.get('exp') === '1',
 		stale: params.get('stale') === '1',
+		favourites: params.get('fav') === 'any' ? 'any' : params.get('fav') === 'me' ? 'mine' : null,
+		playSoon: params.get('soon') === '1',
 		sort: SORT_KEYS.includes(sort as SortKey) ? (sort as SortKey) : 'title'
 	};
 }
@@ -90,6 +102,8 @@ export function serializeFilters(f: Filters): URLSearchParams {
 	if (!f.availableOnly) p.set('avail', '0');
 	if (f.expansions) p.set('exp', '1');
 	if (f.stale) p.set('stale', '1');
+	if (f.favourites) p.set('fav', f.favourites === 'mine' ? 'me' : 'any');
+	if (f.playSoon) p.set('soon', '1');
 	if (f.sort !== 'title') p.set('sort', f.sort);
 	return p;
 }
@@ -111,15 +125,30 @@ export function matchesFilters(
 	game: CatalogGame,
 	f: Filters,
 	memberIds: ReadonlySet<string>,
-	cutoff: string = staleCutoff(Date.now())
+	cutoff: string = staleCutoff(Date.now()),
+	viewer: Viewer = NOBODY
 ): boolean {
-	if (!f.expansions && game.isExpansion) return false;
-	if (f.stale && game.lastPlayed != null && game.lastPlayed >= cutoff) return false;
+	return (
+		matchesOthers(game, f, searchFor(f), memberIds, cutoff, viewer) &&
+		(f.expansions || !game.isExpansion) &&
+		(!f.availableOnly || hasAvailableCopy(game, f, memberIds))
+	);
+}
 
-	if (f.q.trim()) {
-		const q = normalize(f.q);
-		if (q && !game.search.includes(q)) return false;
+/** The search text as the catalog stores it, worked out once per pass rather than once per game. */
+const searchFor = (f: Filters) => (f.q.trim() ? normalize(f.q) : '');
+
+/** Every filter except the two the shelf hides by default: expansions, and copies that aren't available. */
+function matchesOthers(game: CatalogGame, f: Filters, q: string, memberIds: ReadonlySet<string>, cutoff: string, viewer: Viewer): boolean {
+	if (f.stale && game.lastPlayed != null && game.lastPlayed >= cutoff) return false;
+	if (f.favourites != null) {
+		const fans = game.favouredBy ?? [];
+		if (f.favourites === 'any' && !fans.some((id) => memberIds.has(id))) return false;
+		if (f.favourites === 'mine' && (viewer.id == null || !fans.includes(viewer.id))) return false;
 	}
+	if (f.playSoon && !viewer.playSoon.has(game.id)) return false;
+
+	if (q && !game.search.includes(q)) return false;
 
 	if (f.players != null) {
 		const n = f.players;
@@ -141,11 +170,13 @@ export function matchesFilters(
 	if (!matchesTags(game.mechanics, f.mechanics, f.matchAll, game.incomplete)) return false;
 	if (!matchesTags(game.categories, f.categories, f.matchAll, game.incomplete)) return false;
 
-	const copies = f.owners.length > 0 ? game.copies.filter((c) => f.owners.includes(c.ownerId)) : game.copies;
-	if (copies.length === 0) return false;
-	if (f.availableOnly && !copies.some((c) => isCopyAvailable(c, memberIds))) return false;
+	if (f.owners.length > 0 && !game.copies.some((c) => f.owners.includes(c.ownerId))) return false;
+	return game.copies.length > 0;
+}
 
-	return true;
+/** A copy of the game, among the chosen owners' if any are chosen, that the group can borrow. */
+function hasAvailableCopy(game: CatalogGame, f: Filters, memberIds: ReadonlySet<string>): boolean {
+	return game.copies.some((c) => (f.owners.length === 0 || f.owners.includes(c.ownerId)) && isCopyAvailable(c, memberIds));
 }
 
 /**
@@ -164,19 +195,27 @@ export function passedOnUnknown(game: CatalogGame, f: Filters): boolean {
 /**
  * How many more games the shelf would show with its two default hides off (PRD "Filters": lent
  * outside the group, and expansions), so the count line can say what it leaves out. An expansion
- * that is also lent out counts as an expansion, so the two add up to everything hidden.
+ * that is also lent out counts as an expansion, so the two add up to everything hidden. One pass.
  */
 export function hiddenByDefault(
 	games: CatalogGame[],
 	f: Filters,
 	memberIds: ReadonlySet<string>,
-	now = Date.now()
+	now = Date.now(),
+	viewer: Viewer = NOBODY
 ): { lent: number; expansions: number } {
 	const cutoff = staleCutoff(now);
-	const count = (filters: Filters) => games.reduce((n, g) => n + (matchesFilters(g, filters, memberIds, cutoff) ? 1 : 0), 0);
-	const shown = count(f);
-	const withLent = f.availableOnly ? count({ ...f, availableOnly: false }) : shown;
-	const withAll = f.expansions ? withLent : count({ ...f, availableOnly: false, expansions: true });
+	const q = searchFor(f);
+	let shown = 0;
+	let withLent = 0;
+	let withAll = 0;
+	for (const g of games) {
+		if (!matchesOthers(g, f, q, memberIds, cutoff, viewer)) continue;
+		withAll++;
+		if (!f.expansions && g.isExpansion) continue;
+		withLent++;
+		if (!f.availableOnly || hasAvailableCopy(g, f, memberIds)) shown++;
+	}
 	return { lent: withLent - shown, expansions: withAll - withLent };
 }
 
@@ -189,32 +228,66 @@ function nullsLast(a: number | null, b: number | null): number {
 	return a - b;
 }
 
-export function compareGames(a: CatalogGame, b: CatalogGame, sort: SortKey): number {
-	const byTitle = collator.compare(a.name, b.name);
+/** What a sort orders by before the title; null sorts last. Larger first for added, owned and loved. */
+function sortValue(g: CatalogGame, sort: SortKey): number | null {
 	switch (sort) {
 		case 'weight':
-			return nullsLast(a.weight, b.weight) || byTitle;
+			return g.weight;
 		case 'time':
-			return nullsLast(a.maxPlaytime ?? a.minPlaytime, b.maxPlaytime ?? b.minPlaytime) || byTitle;
-		case 'added': {
-			const latest = (g: CatalogGame) => Math.max(0, ...g.copies.map((c) => c.addedAt));
-			return latest(b) - latest(a) || byTitle;
-		}
+			return g.maxPlaytime ?? g.minPlaytime;
+		case 'added':
+			return -g.copies.reduce((latest, c) => Math.max(latest, c.addedAt), 0);
 		case 'owned':
-			return b.copies.length - a.copies.length || byTitle;
+			return -g.copies.length;
+		case 'loved':
+			return -(g.favouredBy?.length ?? 0);
 		default:
-			return byTitle;
+			return 0;
 	}
+}
+
+export function compareGames(a: CatalogGame, b: CatalogGame, sort: SortKey): number {
+	return nullsLast(sortValue(a, sort), sortValue(b, sort)) || collator.compare(a.name, b.name);
+}
+
+/**
+ * The games in the shelf's order. Each game's sort value is worked out once and titles are compared
+ * only to break ties, so the shelf can sort once per catalog and sort order (not on every keystroke)
+ * and then filter, which keeps the order.
+ */
+export function sortGames(games: readonly CatalogGame[], sort: SortKey): CatalogGame[] {
+	return games
+		.map((game) => ({ game, value: sortValue(game, sort) }))
+		.sort((a, b) => nullsLast(a.value, b.value) || collator.compare(a.game.name, b.game.name))
+		.map((x) => x.game);
+}
+
+/** The games that pass the filters, in the order given. */
+export function keepMatching(
+	games: readonly CatalogGame[],
+	f: Filters,
+	memberIds: ReadonlySet<string>,
+	now = Date.now(),
+	viewer: Viewer = NOBODY
+): CatalogGame[] {
+	const cutoff = staleCutoff(now);
+	const q = searchFor(f);
+	return games.filter(
+		(g) =>
+			matchesOthers(g, f, q, memberIds, cutoff, viewer) &&
+			(f.expansions || !g.isExpansion) &&
+			(!f.availableOnly || hasAvailableCopy(g, f, memberIds))
+	);
 }
 
 export function filterGames(
 	games: CatalogGame[],
 	f: Filters,
 	memberIds: ReadonlySet<string>,
-	now = Date.now()
+	now = Date.now(),
+	viewer: Viewer = NOBODY
 ): CatalogGame[] {
-	const cutoff = staleCutoff(now);
-	return games.filter((g) => matchesFilters(g, f, memberIds, cutoff)).sort((a, b) => compareGames(a, b, f.sort));
+	return sortGames(keepMatching(games, f, memberIds, now, viewer), f.sort);
 }
 
 /** Distinct tag values across the catalog, most common first, for the filter pickers. */

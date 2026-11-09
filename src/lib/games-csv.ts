@@ -1,11 +1,11 @@
-// "Your games" as a CSV (PRD "Account"): your shelf and your wishlist, to keep or to take to another
+// "Your games" as a CSV (PRD "Account"): your shelf, wishlist, favourites and Play soon list, to keep or to take to another
 // Box Populi. The first three columns are the ones "Paste a list" reads, so copying them from a
 // spreadsheet adds the games anywhere. BGG games carry their name, year and BGG id only, never
 // BGG's players, times or statistics (TECH.md "Access and terms").
 import { csvField, csvFile, SOURCE_LABEL, type GameSource } from './csv.ts';
 
 export type YourGame = {
-	list: 'shelf' | 'wishlist';
+	list: 'shelf' | 'wishlist' | 'favourite' | 'play soon' | 'hidden';
 	name: string;
 	year: number | null;
 	source: GameSource;
@@ -30,9 +30,11 @@ export function rangeText(lo: number | null, hi: number | null): string | null {
 	return hi == null || hi === from ? String(from) : `${from}-${hi}`;
 }
 
-/** Shelf first, then the wishlist, each by name. */
+const LIST_ORDER: Record<YourGame['list'], number> = { shelf: 0, wishlist: 1, favourite: 2, 'play soon': 3, hidden: 4 };
+
+/** Shelf first, then the wishlist, favourites, Play soon and copies hidden from a group (the note says which), each by name. */
 export function gamesCsv(games: readonly YourGame[]): string {
-	const sorted = [...games].sort((a, b) => (a.list === b.list ? a.name.localeCompare(b.name) : a.list === 'shelf' ? -1 : 1));
+	const sorted = [...games].sort((a, b) => LIST_ORDER[a.list] - LIST_ORDER[b.list] || a.name.localeCompare(b.name));
 	const lines = [GAMES_CSV_COLUMNS.join(',')];
 	for (const g of sorted) {
 		const bgg = g.source === 'bgg';

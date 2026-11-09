@@ -82,16 +82,19 @@ export function deleteGroupStatements(db: DB, groupId: string): D1PreparedStatem
 		stmt(db, 'DELETE FROM night_people WHERE night_id IN (SELECT id FROM game_nights WHERE group_id = ?1)', groupId),
 		stmt(db, 'DELETE FROM game_nights WHERE group_id = ?1', groupId),
 		stmt(db, 'DELETE FROM sign_in_codes WHERE group_id = ?1', groupId),
+		stmt(db, 'DELETE FROM hidden_copies WHERE group_id = ?1', groupId),
 		stmt(db, 'DELETE FROM memberships WHERE group_id = ?1', groupId),
 		stmt(db, 'DELETE FROM groups WHERE id = ?1', groupId)
 	];
 }
 
-/** Hand-entered games person ?1 created that are on nobody's shelf, wishlist or bring list and in nobody's play log. */
+/** Hand-entered games person ?1 created that are on nobody's shelf, wishlist, favourites, Play soon or bring list and in nobody's play log. */
 const ORPHANED_OWN_GAMES = `SELECT g.id FROM games g
 	WHERE g.created_by = ?1 AND (g.is_manual = 1 OR g.source = 'manual')
 	AND NOT EXISTS (SELECT 1 FROM copies c WHERE c.game_id = g.id)
 	AND NOT EXISTS (SELECT 1 FROM wishlist w WHERE w.game_id = g.id)
+	AND NOT EXISTS (SELECT 1 FROM favourites f WHERE f.game_id = g.id AND f.user_id <> ?1)
+	AND NOT EXISTS (SELECT 1 FROM play_soon s WHERE s.game_id = g.id AND s.user_id <> ?1)
 	AND NOT EXISTS (SELECT 1 FROM plays p WHERE p.game_id = g.id)
 	AND NOT EXISTS (SELECT 1 FROM night_games ng WHERE ng.game_id = g.id)`;
 
@@ -103,9 +106,12 @@ export function deletePersonStatements(db: DB, userId: string): D1PreparedStatem
 		stmt(db, 'DELETE FROM sign_in_codes WHERE user_id = ?1', userId),
 		stmt(db, 'UPDATE sign_in_codes SET created_by = NULL WHERE created_by = ?1', userId),
 		stmt(db, 'UPDATE groups SET archived_by = NULL WHERE archived_by = ?1', userId),
+		stmt(db, 'DELETE FROM hidden_copies WHERE user_id = ?1', userId),
 		stmt(db, 'DELETE FROM memberships WHERE user_id = ?1', userId),
 		stmt(db, 'DELETE FROM copies WHERE user_id = ?1', userId),
 		stmt(db, 'DELETE FROM wishlist WHERE user_id = ?1', userId),
+		stmt(db, 'DELETE FROM favourites WHERE user_id = ?1', userId),
+		stmt(db, 'DELETE FROM play_soon WHERE user_id = ?1', userId),
 		stmt(db, 'UPDATE copies SET lent_to_user_id = NULL WHERE lent_to_user_id = ?1', userId),
 		// Their results leave every play log; the plays stay for the others in them, and a play nobody
 		// is left in goes (before the orphaned-games check below, which spares games a play names).

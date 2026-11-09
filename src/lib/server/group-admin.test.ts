@@ -65,9 +65,10 @@ describe('rename and code', () => {
 	it('replaces the code for admins only', async () => {
 		const result = await regenerateCode(db, 'g1', admin);
 		expect(result.ok).toBe(true);
-		const code = (await one<{ code: string }>(db, "SELECT code FROM groups WHERE id = 'g1'"))?.code;
-		expect(code).toBe(result.code);
-		expect(code).not.toBe('AAAAA');
+		const row = await one<{ code: string; link_key: string | null }>(db, "SELECT code, link_key FROM groups WHERE id = 'g1'");
+		expect(row?.code).toBe(result.code);
+		expect(row?.code).not.toBe('AAAAA');
+		expect(row?.link_key).toMatch(/^[0-9a-f]{20}$/); // the invite link's key is replaced too (D65)
 		expect((await regenerateCode(db, 'g1', member)).ok).toBe(false);
 	});
 });

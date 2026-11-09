@@ -11,10 +11,11 @@ export const LIMITS = {
 	groupCreate: { kind: 'group_create', max: 5, windowMs: 24 * 60 * 60_000 },
 	linkFail: { kind: 'link_fail', max: 10, windowMs: 60 * 60_000 },
 	// Wrong PINs at a group's front door (D47): per address, per person (so a person's PIN can't be
-	// worked through from many addresses), and across the instance.
+	// worked through from many addresses), and per group (subject `groupSubject`). Per group rather than
+	// across the instance (D65), so someone with one group's code can't lock every other group out.
 	pinFail: { kind: 'pin_fail', max: 10, windowMs: 10 * 60_000 },
 	pinFailPerson: { kind: 'pin_fail_person', max: 5, windowMs: 15 * 60_000 },
-	pinFailInstance: { kind: 'pin_fail_all', max: 200, windowMs: 60 * 60_000 },
+	pinFailGroup: { kind: 'pin_fail_group', max: 200, windowMs: 60 * 60_000 },
 	adminFail: { kind: 'admin_fail', max: 5, windowMs: 15 * 60_000 },
 	bggSearch: { kind: 'bgg_search', max: 30, windowMs: 60_000 },
 	wikidataSearch: { kind: 'wikidata_search', max: 30, windowMs: 60_000 },
@@ -29,6 +30,9 @@ export const LIMITS = {
 
 /** The subject for limits that count the whole instance. */
 export const INSTANCE = 'instance';
+
+/** The subject for limits that count one group's front door. */
+export const groupSubject = (groupId: string) => `group:${groupId}`;
 
 /**
  * The subject for a network address. An IPv6 address counts by its /64, the block a single

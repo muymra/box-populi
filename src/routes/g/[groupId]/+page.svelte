@@ -20,11 +20,12 @@
 	import { BUCKET_LABELS, WEIGHT_BUCKETS, type WeightBucket } from '#lib/catalog/buckets.ts';
 	import {
 		STALE_DAYS,
-		filterGames,
 		hiddenByDefault,
+		keepMatching,
 		parseFilters,
 		passedOnUnknown,
 		serializeFilters,
+		sortGames,
 		tagOptions,
 		type SortKey
 	} from '#lib/catalog/filter.ts';
@@ -41,11 +42,14 @@
 		{ value: 'weight', label: 'Lightest' },
 		{ value: 'time', label: 'Shortest' },
 		{ value: 'added', label: 'Newest' },
-		{ value: 'owned', label: 'Most owned' }
+		{ value: 'owned', label: 'Most owned' },
+		{ value: 'loved', label: 'Most loved' }
 	];
 
 	// Coming back from a game, the shelf this tab already loaded draws at once; onMount revalidates it.
-	let payload = $state<CatalogPayload | null>(cachedCatalog(page.params.groupId ?? ''));
+	// Raw state: the catalog is only ever replaced whole, and deep state would make each of its
+	// thousands of games and copies a tracked proxy, which made typing in the search lag (D65).
+	let payload = $state.raw<CatalogPayload | null>(cachedCatalog(page.params.groupId ?? ''));
 	// The "not played lately" filter appears once the group has logged a play (PRD "Play log").
 	const hasPlays = $derived(payload?.games.some((g) => g.lastPlayed != null) ?? false);
 	let loadError = $state<string | null>(null);
@@ -57,7 +61,17 @@
 
 	const memberIds = $derived(new Set(payload?.members.map((m) => m.id) ?? []));
 	const memberMap = $derived(new Map(payload?.members.map((m) => [m.id, m]) ?? []));
-	const results = $derived(payload ? filterGames(payload.games, filters, memberIds) : []);
+	// The viewer's favourites and Play soon list (D63, D64) for the filters that are about them.
+	const viewer = $derived({ id: data.myId, playSoon: new Set(data.myPlaySoon.map((m) => m.gameId)) });
+	// Sorted once per catalog and sort order, then filtered, which keeps the order; the filters as a
+	// plain object, since each game reads a dozen of them.
+	const sortKey = $derived(filters.sort);
+	const sorted = $derived(payload ? sortGames(payload.games, sortKey) : []);
+	const plainFilters = $derived($state.snapshot(filters));
+	const results = $derived(keepMatching(sorted, plainFilters, memberIds, Date.now(), viewer));
+	// The favourites filters appear once someone has a favourite, Play soon once the viewer has a mark.
+	const hasFavourites = $derived(payload?.games.some((g) => (g.favouredBy?.length ?? 0) > 0) ?? false);
+	const hasPlaySoon = $derived(data.myPlaySoon.length > 0);
 	const mechanicOptions = $derived(payload ? tagOptions(payload.games, 'mechanics').map((t) => ({ value: t, label: t })) : []);
 	const categoryOptions = $derived(payload ? tagOptions(payload.games, 'categories').map((t) => ({ value: t, label: t })) : []);
 	// Owners in join order, which is colour order, so the row reads as the shelf's colour key. Members
@@ -72,7 +86,7 @@
 	let ownersTouched = $state<string[]>([]);
 	const ownerFold = $derived(foldMembers(ownerChoices, new Set([...filters.owners, ...ownersTouched])));
 	const ownersShown = $derived(ownersExpanded ? ownerChoices : ownerFold.shown);
-	const hidden = $derived(payload ? hiddenByDefault(payload.games, filters, memberIds) : { lent: 0, expansions: 0 });
+	const hidden = $derived(payload ? hiddenByDefault(payload.games, plainFilters, memberIds, Date.now(), viewer) : { lent: 0, expansions: 0 });
 	const hiddenText = $derived(
 		[
 			hidden.lent && `${hidden.lent} lent-out ${hidden.lent === 1 ? 'game' : 'games'}`,
@@ -82,7 +96,14 @@
 			.join(' and ')
 	);
 	const moreCount = $derived(
-		filters.mechanics.length + filters.categories.length + filters.owners.length + (filters.availableOnly ? 0 : 1) + (filters.expansions ? 1 : 0) + (filters.stale ? 1 : 0)
+		filters.mechanics.length +
+			filters.categories.length +
+			filters.owners.length +
+			(filters.availableOnly ? 0 : 1) +
+			(filters.expansions ? 1 : 0) +
+			(filters.stale ? 1 : 0) +
+			(filters.favourites ? 1 : 0) +
+			(filters.playSoon ? 1 : 0)
 	);
 	const anyFilter = $derived(serializeFilters({ ...filters, sort: 'title' }).toString() !== '');
 
@@ -100,6 +121,8 @@
 		if (!filters.availableOnly) list.push({ key: 'avail', label: 'Lent-out games', remove: () => (filters.availableOnly = true) });
 		if (filters.expansions) list.push({ key: 'exp', label: 'Expansions', remove: () => (filters.expansions = false) });
 		if (filters.stale) list.push({ key: 'stale', label: 'Not played lately', remove: () => (filters.stale = false) });
+		if (filters.favourites) list.push({ key: 'fav', label: filters.favourites === 'mine' ? 'My favourites' : 'Favourites', remove: () => (filters.favourites = null) });
+		if (filters.playSoon) list.push({ key: 'soon', label: 'My Play soon', remove: () => (filters.playSoon = false) });
 		return list;
 	});
 
@@ -147,9 +170,15 @@
 	// Back from a game: how far down the shelf you were. SvelteKit restores the scroll before this
 	// page has drawn that far, so the shelf puts back its length and then the scroll itself.
 	let pendingScroll: number | null = null;
+	// The filters come along too: leaving within 300ms of typing, before the URL caught up, Back would
+	// otherwise bring back the shelf as the URL last had it.
 	snapshot({
-		capture: () => ({ limit, y: Math.round(window.scrollY) }),
+		capture: () => ({ limit, y: Math.round(window.scrollY), qs: serializeFilters(filters).toString() }),
 		restore: (saved) => {
+			if (saved.qs != null && saved.qs !== serializeFilters(filters).toString()) {
+				filters = parseFilters(new URLSearchParams(saved.qs));
+				lastQs = saved.qs; // a put-back filter isn't a new one, so the length stays
+			}
 			limit = Math.max(PAGE_SIZE, saved.limit);
 			pendingScroll = saved.y;
 			if (payload) restoreScroll();
@@ -176,6 +205,8 @@
 			const search = qs ? `?${qs}` : '';
 			if (search !== page.url.search) goto(`${page.url.pathname}${search}`, { replace: true, reset: false });
 		}, 300);
+		// Gone from the shelf before it ran, it must not rewrite the next page's address.
+		return () => clearTimeout(syncTimer);
 	});
 
 	$effect(() => {
@@ -291,6 +322,13 @@
 			<label><input type="checkbox" checked={!filters.availableOnly} onchange={(e) => (filters.availableOnly = !e.currentTarget.checked)} /> Include games lent outside the group</label>
 			<label><input type="checkbox" bind:checked={filters.expansions} /> Include expansions</label>
 			{#if hasPlays}<label><input type="checkbox" bind:checked={filters.stale} /> Not played in the last {STALE_DAYS / 30} months</label>{/if}
+			{#if hasFavourites || filters.favourites}
+				<label><input type="checkbox" checked={filters.favourites === 'any'} onchange={(e) => (filters.favourites = e.currentTarget.checked ? 'any' : null)} /> Favourites of anyone in the group</label>
+				<label><input type="checkbox" checked={filters.favourites === 'mine'} onchange={(e) => (filters.favourites = e.currentTarget.checked ? 'mine' : null)} /> My favourites</label>
+			{/if}
+			{#if hasPlaySoon || filters.playSoon}
+				<label><input type="checkbox" bind:checked={filters.playSoon} /> My Play soon: games I’d like to try or play again</label>
+			{/if}
 		</div>
 {/snippet}
 
@@ -362,13 +400,13 @@
 {:else if view === 'cubes' && results.length}
 	<ul class="shelf">
 		{#each results.slice(0, limit) as game (game.id)}
-			<li><Cube {game} href="/g/{data.group.id}/game/{game.id}" members={memberMap} {memberIds} unknown={passedOnUnknown(game, filters)} /></li>
+			<li><Cube {game} href="/g/{data.group.id}/game/{game.id}" members={memberMap} {memberIds} unknown={passedOnUnknown(game, plainFilters)} /></li>
 		{/each}
 	</ul>
 {:else if results.length}
 	<ul class="list">
 		{#each results.slice(0, limit) as game (game.id)}
-			<li><ListRow {game} href="/g/{data.group.id}/game/{game.id}" members={memberMap} {memberIds} unknown={passedOnUnknown(game, filters)} /></li>
+			<li><ListRow {game} href="/g/{data.group.id}/game/{game.id}" members={memberMap} {memberIds} unknown={passedOnUnknown(game, plainFilters)} /></li>
 		{/each}
 	</ul>
 {/if}

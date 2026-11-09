@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
+	import EyeOff from '@lucide/svelte/icons/eye-off';
 	import UsersRound from '@lucide/svelte/icons/users-round';
 	import Clock from '@lucide/svelte/icons/clock';
 	import Weight from '@lucide/svelte/icons/weight';
@@ -9,6 +10,8 @@
 	import LinkIcon from '@lucide/svelte/icons/link';
 	import Search from '@lucide/svelte/icons/search';
 	import Plus from '@lucide/svelte/icons/plus';
+	import Heart from '@lucide/svelte/icons/heart';
+	import CalendarClock from '@lucide/svelte/icons/calendar-clock';
 	import Gift from '@lucide/svelte/icons/gift';
 	import { onMount } from 'svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
@@ -49,6 +52,11 @@
 		url.searchParams.delete('log');
 		goto(`${url.pathname}${url.search}`, { replace: true, reset: false });
 	});
+	/** "4 Jan" for a Play soon mark's end, with the year once it's not this one. */
+	function soonUntil(at: number): string {
+		const d = new Date(at);
+		return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(d.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) });
+	}
 	const lastPlayed = $derived(
 		data.plays[0] ? new Date(`${data.plays[0].playedOn}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : null
 	);
@@ -358,17 +366,35 @@
 							</li>
 						{/each}
 					</ul>
+				{:else if data.hiddenHere}
+					<p class="muted">Only you: your copy is hidden from {data.group.name}.</p>
 				{:else}
 					<p class="muted">Nobody in the group owns this yet.</p>
 				{/if}
 				{#if data.wishers.length}
 					<p class="muted wanted">Wanted by {data.wishers.map((w) => w.name).join(', ')}</p>
 				{/if}
+				{#if data.favourites.length}
+					<p class="muted favoured">
+						<span class="squares" aria-hidden="true">{#each data.favourites.slice(0, 4) as f (f.id)}<i style:background={playerColor(f.colorIndex).fill}></i>{/each}</span>
+						Favourite of {data.favourites.map((f) => f.name).join(', ')}
+					</p>
+				{/if}
 				{#if data.canEdit}
 					<div class="copy-actions">
 						<form method="POST" action={data.mine ? '?/remove' : '?/add'}>
 							<button class="btn">{data.mine ? 'Remove from my games' : data.owners.length ? 'I own this too' : 'I own this'}</button>
 						</form>
+						<!-- Hiding per group (D66): only the copy's owner sees this, and nobody else learns it's hidden. -->
+						{#if data.mine}
+							<form method="POST" action="?/hideHere" use:enhance={send('hideHere')}>
+								<input type="hidden" name="hidden" value={data.hiddenHere ? '0' : '1'} />
+								<button class="btn" aria-pressed={data.hiddenHere} disabled={sending === 'hideHere'}>
+									<EyeOff size={18} aria-hidden="true" />
+									{data.hiddenHere ? `Show in ${data.group.name}` : `Hide from ${data.group.name}`}
+								</button>
+							</form>
+						{/if}
 						{#if data.mine && data.myLoan}
 							<form method="POST" action="?/returned" use:enhance={send('returned')}>
 								<button class="btn" disabled={sending === 'returned'}>Mark as returned</button>
@@ -384,8 +410,41 @@
 							</form>
 						{/if}
 					</div>
+					{#if data.hiddenHere}
+						<p class="hint">Hidden from {data.group.name}: nobody else here sees it, and it can’t be lent or brought to a night from here. Your other groups still see it.</p>
+					{/if}
+					<!-- Favourite (D63) and Play soon (D64): the viewer's own marks, said in their own words. -->
+					{#if !data.hiddenHere || data.owners.length}
+					<div class="copy-actions marks">
+						{#if data.owners.length}
+							<form method="POST" action="?/favourite" use:enhance={send('favourite')}>
+								<input type="hidden" name="on" value={data.favourite ? '0' : '1'} />
+								<button class="btn mark" aria-pressed={data.favourite} disabled={sending === 'favourite'}>
+									<Heart class="heart" size={18} aria-hidden="true" />
+									{data.favourite ? 'Your favourite' : 'Favourite'}
+								</button>
+							</form>
+						{/if}
+						<form method="POST" action="?/playSoon" use:enhance={send('playSoon')}>
+							<input type="hidden" name="on" value={data.playSoon ? '0' : '1'} />
+							<button class="btn mark" aria-pressed={data.playSoon != null} disabled={sending === 'playSoon' || (data.playSoon == null && data.playSoonFull)}>
+								<CalendarClock size={18} aria-hidden="true" />
+								{data.playSoon ? 'On Play soon' : 'Play soon'}
+							</button>
+						</form>
+					</div>
+					{#if form?.playSoonError}
+						<p class="banner error" role="alert">{form.playSoonError}</p>
+					{:else if data.playSoon}
+						<p class="hint soon-hint">On your Play soon list until {soonUntil(data.playSoon.until)}, or until you play it.</p>
+					{:else if data.playSoonFull}
+						<p class="hint soon-hint">Your Play soon list has five games. Clear one to add this.</p>
+					{:else}
+						<p class="hint soon-hint">Play soon: you’d like to try it, or get it to the table again soon. Play tonight leans towards it when you’re there; owners planning a night see only that someone going would like to play it.</p>
+					{/if}
+					{/if}
 					{#if form?.lent}<p class="banner" role="status">Marked as lent.</p>{:else if form?.returned}<p class="banner" role="status">Marked as returned.</p>{/if}
-					{#if data.mine && !data.myLoan}
+					{#if data.mine && !data.myLoan && !data.hiddenHere}
 						<details class="lend" open={!!form?.lendError}>
 							<summary class="link-button">Lend your copy…</summary>
 							<form method="POST" action="?/lend" class="lend-form" use:enhance={send('lend')}>
@@ -646,6 +705,34 @@
 	}
 	.want[aria-pressed='true'] {
 		border-color: var(--ink);
+	}
+	.marks {
+		margin-top: var(--s-2);
+	}
+	.mark[aria-pressed='true'] {
+		border-color: var(--ink);
+	}
+	.mark[aria-pressed='true'] :global(.heart) {
+		fill: currentColor;
+	}
+	.soon-hint {
+		margin: var(--s-2) 0 0;
+		max-width: 32rem;
+	}
+	.favoured {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin-top: var(--s-2);
+	}
+	.favoured .squares {
+		display: inline-flex;
+		gap: 2px;
+	}
+	.favoured .squares i {
+		width: 10px;
+		height: 10px;
+		border-radius: 3px;
 	}
 	.lend {
 		margin-top: var(--s-3);

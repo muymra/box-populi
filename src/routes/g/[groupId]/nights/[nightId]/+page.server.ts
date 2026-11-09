@@ -6,8 +6,9 @@ import {
 	bringOther,
 	canChangeNight,
 	deleteNight,
-	loadNights,
-	nightOnlyGames,
+	assembleNights,
+	nightOnlyGamesRead,
+	nightReads,
 	parseNightForm,
 	removeNightGuest,
 	setGoing,
@@ -16,31 +17,37 @@ import {
 	updateNight,
 	type Result
 } from '#lib/server/nights.ts';
-import { canChangePlay, loadPlays } from '#lib/server/plays.ts';
+import { canChangePlay, playsRead } from '#lib/server/plays.ts';
 import { getDb } from '#lib/server/platform.ts';
-import { all } from '#lib/server/db.ts';
+import { known, readAll, rowsOf } from '#lib/server/db.ts';
+import { nightPlaySoonRead } from '#lib/server/interest.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
 	const db = getDb();
 	const { groupId, nightId } = event.params;
 	const access = await requireRead(event, db, groupId);
-	const [night] = await loadNights(db, groupId, { id: nightId });
-	if (!night) error(404, 'Game night not found');
-	const [otherGames, plays, names] = await Promise.all([
-		nightOnlyGames(db, groupId, [nightId]),
-		loadPlays(db, groupId, { nightId }),
+	const me = event.locals.user;
+	// Everything in one round trip after the access check (D59, D65).
+	const r = await readAll(db, {
+		...nightReads(db, groupId, { id: nightId }),
+		otherGames: nightOnlyGamesRead(db, groupId, { ids: [nightId] }),
+		plays: playsRead(db, groupId, { nightId }),
 		// The bring list's titles, with this group's corrections, before the catalog loads in the browser.
-		all<{ id: number; name: string }>(
+		names: rowsOf<{ id: number; name: string }>(
 			db,
 			`SELECT g.id, COALESCE(gc.name, g.name) AS name FROM night_games ng JOIN games g ON g.id = ng.game_id
 			 LEFT JOIN game_corrections gc ON gc.group_id = ?1 AND gc.game_id = g.id
-			 WHERE ng.night_id = ?2`,
+			 WHERE ng.night_id = ?2 AND EXISTS (SELECT 1 FROM game_nights n WHERE n.id = ?2 AND n.group_id = ?1)`,
 			groupId,
 			nightId
-		)
-	]);
-	const me = event.locals.user;
+		),
+		// Play soon (D64): games someone going would like to play, never who, and the viewer's own marks.
+		soon: access.role && !access.readonly ? nightPlaySoonRead(db, groupId, nightId, me?.id ?? null, Date.now()) : known({ others: [], mine: [] })
+	});
+	const [night] = assembleNights(r.nights, r.people, r.games);
+	if (!night) error(404, 'Game night not found');
+	const { otherGames, plays, names, soon } = r;
 	const actor = me && access.role && !access.readonly ? { id: me.id, role: access.role } : null;
 	return {
 		night,
@@ -48,6 +55,7 @@ export const load: PageServerLoad = async (event) => {
 		gameNames: Object.fromEntries(names.map((n) => [n.id, n.name])) as Record<number, string>,
 		plays: plays.map((p) => ({ ...p, canChange: actor != null && canChangePlay(actor, p) })),
 		me: actor?.id ?? null,
+		playSoon: soon,
 		canChange: actor != null && canChangeNight(actor, night),
 		canAnswer: actor != null
 	};

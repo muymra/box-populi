@@ -11,7 +11,7 @@ import {
 	playerChoiceLabel
 } from './players.ts';
 import { BUCKET_WEIGHTS, formatPlaytime, formatWeight, WEIGHT_BUCKETS, weightBucket } from './buckets.ts';
-import { DEFAULT_FILTERS, filterGames, hiddenByDefault, parseFilters, passedOnUnknown, serializeFilters, type Filters } from './filter.ts';
+import { DEFAULT_FILTERS, filterGames, hiddenByDefault, keepMatching, parseFilters, passedOnUnknown, serializeFilters, SORT_KEYS, sortGames, type Filters } from './filter.ts';
 import {
 	MAX_CHOSEN,
 	SPREAD_BANDS,
@@ -22,8 +22,13 @@ import {
 	pickSpread,
 	roomIsBig,
 	chooseOrder,
+	favouritesAmong,
 	fillerWeight,
 	fitsPlayers,
+	INTEREST_CAP,
+	interestWeight,
+	withInterest,
+	pickWeight,
 	gamesAtHand,
 	isFiller,
 	misfits,
@@ -110,6 +115,10 @@ describe('URL filters', () => {
 	it('round-trips non-default values', () => {
 		const filters = f({ q: 'catan', players: 5, best: true, minutes: 60, weights: ['light'], mechanics: ['Worker Placement, Different Worker Types'], owners: ['u2'], availableOnly: false, sort: 'weight' });
 		expect(parseFilters(serializeFilters(filters))).toEqual(filters);
+		const mine = f({ favourites: 'mine', playSoon: true, sort: 'loved' });
+		expect(serializeFilters(mine).toString()).toBe('fav=me&soon=1&sort=loved');
+		expect(parseFilters(serializeFilters(mine))).toEqual(mine);
+		expect(parseFilters(new URLSearchParams('fav=any')).favourites).toBe('any');
 	});
 	it('writes nothing for defaults', () => {
 		expect(serializeFilters(DEFAULT_FILTERS).toString()).toBe('');
@@ -133,6 +142,24 @@ describe('player colours', () => {
 });
 
 describe('filterGames', () => {
+	it('gives the same list when the shelf sorts once and then filters, for every sort', () => {
+		const games = [
+			game({ name: 'banana', weight: 2, maxPlaytime: 30, copies: [copy('ada', { addedAt: 5 }), copy('bo', { addedAt: 9 })], favouredBy: ['ada'] }),
+			game({ name: 'Apple', weight: null, maxPlaytime: null, minPlaytime: 20, copies: [copy('bo', { addedAt: 7 })] }),
+			game({ name: 'cherry', weight: 2, maxPlaytime: 90, copies: [copy('ada', { addedAt: 9 })], favouredBy: ['ada', 'bo'] }),
+			game({ name: 'Date', weight: 1.2, maxPlaytime: 30, copies: [copy('ada', { addedAt: 1, lentOut: true })] }),
+			game({ name: 'éclair', weight: 4, maxPlaytime: 60, copies: [copy('bo', { addedAt: 3 })], isExpansion: true })
+		];
+		for (const sort of SORT_KEYS) {
+			for (const filters of [f({ sort }), f({ sort, q: 'A' }), f({ sort, availableOnly: false, expansions: true })]) {
+				expect(keepMatching(sortGames(games, sort), filters, members).map((g) => g.name)).toEqual(filterGames(games, filters, members).map((g) => g.name));
+			}
+		}
+		expect(sortGames(games, 'title').map((g) => g.name)).toEqual(['Apple', 'banana', 'cherry', 'Date', 'éclair']);
+		expect(sortGames(games, 'added').map((g) => g.name)).toEqual(['banana', 'cherry', 'Apple', 'éclair', 'Date']);
+		expect(sortGames(games, 'weight').map((g) => g.name)).toEqual(['Date', 'banana', 'cherry', 'éclair', 'Apple']);
+	});
+
 	it('matches player counts and lets unknown counts pass', () => {
 		const solo = game({ minPlayers: 1, maxPlayers: 1 });
 		const party = game({ minPlayers: 4, maxPlayers: 10 });
@@ -233,6 +260,25 @@ describe('filterGames', () => {
 		const b = game({ name: 'A', weight: 3 });
 		const c = game({ name: 'C', weight: 1 });
 		expect(filterGames([a, b, c], f({ sort: 'weight' }), members).map((g) => g.name)).toEqual(['C', 'A', 'B']);
+	});
+});
+
+describe('favourites and Play soon on the shelf (D63, D64)', () => {
+	const loved = game({ name: 'Loved', favouredBy: ['u1', 'u2'] });
+	const liked = game({ name: 'Liked', favouredBy: ['u2'] });
+	const outside = game({ name: 'Outside', favouredBy: ['gone'] });
+	const plain = game({ name: 'Plain' });
+	const all = [plain, liked, outside, loved];
+	it('filters to anyone’s favourites in the group, or the viewer’s own', () => {
+		expect(filterGames(all, f({ favourites: 'any' }), members).map((g) => g.name)).toEqual(['Liked', 'Loved']);
+		expect(filterGames(all, f({ favourites: 'mine' }), members, Date.now(), { id: 'u1', playSoon: new Set() }).map((g) => g.name)).toEqual(['Loved']);
+		expect(filterGames(all, f({ favourites: 'mine' }), members)).toEqual([]); // nobody signed in
+	});
+	it('filters to the viewer’s Play soon list', () => {
+		expect(filterGames(all, f({ playSoon: true }), members, Date.now(), { id: 'u1', playSoon: new Set([plain.id]) })).toEqual([plain]);
+	});
+	it('sorts the most loved first', () => {
+		expect(filterGames(all, f({ sort: 'loved' }), members).map((g) => g.name)).toEqual(['Loved', 'Liked', 'Outside', 'Plain']);
 	});
 });
 
@@ -342,6 +388,27 @@ describe('picker', () => {
 		const fresh = pick(games4, null, seededRng(1), new Set([games4[0].id]));
 		expect(fresh.reset).toBe(false);
 		expect(fresh.games.map((g) => g.id)).not.toContain(games4[0].id);
+	});
+});
+
+describe('what the people here love (D63, D64)', () => {
+	it('counts a favourite like "recommended", each more fan as much again, Play soon a little more, held to a cap', () => {
+		const interest = { favourites: new Map([[1, 1], [2, 2], [3, 9]]), playSoon: new Map([[4, 1], [2, 1]]) };
+		expect(interestWeight(1, interest)).toBe(2);
+		expect(interestWeight(2, interest)).toBe(INTEREST_CAP); // 1 + 2 + 1.5
+		expect(interestWeight(3, interest)).toBe(INTEREST_CAP);
+		expect(interestWeight(4, interest)).toBe(2.5);
+		expect(interestWeight(5, interest)).toBe(1);
+	});
+	it('multiplies the usual draw weight', () => {
+		const best = game({ minPlayers: 2, maxPlayers: 4, bestMask: maskFromCounts([4]) });
+		const weigh = withInterest(pickWeight, { favourites: new Map([[best.id, 1]]), playSoon: new Map() });
+		expect(weigh(best, 4)).toBe(2 * pickWeight(best, 4));
+	});
+	it('counts only the fans who are here', () => {
+		const a = game({ favouredBy: ['u1', 'u2', 'u3'] });
+		const b = game({ favouredBy: ['u3'] });
+		expect(favouritesAmong([a, b], new Set(['u1', 'u2']))).toEqual(new Map([[a.id, 2]]));
 	});
 });
 

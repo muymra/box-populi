@@ -2,12 +2,15 @@
 // group tap their name and type their PIN, on any device.
 import { fail, redirect } from '@sveltejs/kit';
 import { getDb } from '#lib/server/platform.ts';
-import { normalizeCode } from '#lib/server/codes.ts';
 import { cleanDisplayName, createSession, endSession, newPersonStatements, SESSION_COOKIE } from '#lib/server/identity.ts';
-import { findGroupByCode, groupGameCount, isMember, joinGroup, joinRefusal } from '#lib/server/groups.ts';
+import { groupGameCount, isMember, joinGroup, joinRefusal } from '#lib/server/groups.ts';
+import { openFrontDoor } from '#lib/server/front-door.ts';
+import { hideEverythingStatements } from '#lib/server/hiding.ts';
+import { one } from '#lib/server/db.ts';
+import { normalizeCode } from '#lib/server/codes.ts';
 import { cleanPin, frontDoorMembers, signInWithPin } from '#lib/server/pins.ts';
 import { cleanSignInCode, redeemSignInCode } from '#lib/server/recovery.ts';
-import { giveBack, INSTANCE, ipSubject, LIMITS, take, type Limit } from '#lib/server/ratelimit.ts';
+import { LIMITS, type Limit } from '#lib/server/ratelimit.ts';
 import { setSessionCookie } from '#lib/server/cookies.ts';
 import type { Actions, PageServerLoad, RequestEvent } from './$types';
 import { SIGN_IN_CODE_EXAMPLE } from '#lib/codes.ts';
@@ -19,28 +22,17 @@ const REFUSALS = {
 	full: 'This group is full.'
 } as const;
 
-/**
- * A try from this address and from the instance as a whole, given back when the code is right, so
- * only wrong codes count. Parallel guesses can't slip past it (ratelimit.ts `take`).
- */
-const tryJoin = (event: { getClientAddress(): string }, db: ReturnType<typeof getDb>, now: number) =>
-	take(db, now, [ipSubject(event.getClientAddress()), LIMITS.joinFail], [INSTANCE, LIMITS.joinFailInstance]);
-
 const LIMITED = (limit: Limit) =>
 	limit === LIMITS.joinFail
 		? 'This network tried too many codes that didn’t match. Wait ten minutes, then try again.'
-		: 'This site has seen too many codes that didn’t match in the last hour. Try again later.';
+		: 'This site has seen too many codes that didn’t match in the last hour. Open the invite link your group shared, which still works, or try the code again later.';
 
 export const load: PageServerLoad = async (event) => {
 	const db = getDb();
 	const now = Date.now();
-	const tried = await tryJoin(event, db, now);
-	if (!tried.ok) return { state: 'limited' as const, message: LIMITED(tried.limit) };
-
-	const code = normalizeCode(event.params.code);
-	const target = code ? await findGroupByCode(db, code) : null;
-	if (!target) return { state: 'not_found' as const };
-	await giveBack(db, tried.taken);
+	const door = await openFrontDoor(db, event.params.code, event.getClientAddress(), now);
+	if (!door.ok) return door.limited ? { state: 'limited' as const, message: LIMITED(door.limited) } : { state: 'not_found' as const };
+	const { target } = door;
 	if (event.locals.user && (await isMember(db, target.id, event.locals.user.id))) redirect(303, `/g/${target.id}`);
 
 	const refusal = joinRefusal(target, event.locals.config.maxMembersPerGroup);
@@ -53,6 +45,8 @@ export const load: PageServerLoad = async (event) => {
 		gameCount: refusal ? 0 : await groupGameCount(db, target.id),
 		/** Signed in on this device: they join as this person, with no name to type. */
 		you: event.locals.user?.name ?? null,
+		/** How many games they'd bring to the shelf, for "Keep my games hidden here for now" (D66). */
+		yourGames: event.locals.user && !refusal ? ((await one<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM copies WHERE user_id = ?1', event.locals.user.id))?.n ?? 0) : 0,
 		// The names on the door, for someone signed out who may already be in the group (D47). A
 		// suspended group still lets its members back in to read it.
 		members: signedOut && refusal !== 'demo' ? await frontDoorMembers(db, target.id) : [],
@@ -66,13 +60,13 @@ type Entered = { door: 'new' | 'back'; displayName: string; userId: string; used
 
 /** The group the code in the URL opens, or a failure to return. */
 async function door(event: RequestEvent, db: ReturnType<typeof getDb>, now: number, values: Entered) {
-	const tried = await tryJoin(event, db, now);
-	if (!tried.ok) return { failure: fail(429, { ...values, error: LIMITED(tried.limit) }) } as const;
-	const code = normalizeCode(event.params.code);
-	const target = code ? await findGroupByCode(db, code) : null;
-	if (!target) return { failure: fail(404, { ...values, error: 'That code doesn’t match a group.' }) } as const;
-	await giveBack(db, tried.taken);
-	return { target } as const;
+	const opened = await openFrontDoor(db, event.params.code, event.getClientAddress(), now);
+	if (!opened.ok) {
+		return opened.limited
+			? ({ failure: fail(429, { ...values, error: LIMITED(opened.limited) }) } as const)
+			: ({ failure: fail(404, { ...values, error: 'That code doesn’t match a group.' }) } as const);
+	}
+	return { target: opened.target } as const;
 }
 
 const PIN_ERRORS = {
@@ -97,8 +91,10 @@ export const actions: Actions = {
 		if (refusal) return fail(403, { ...values, error: REFUSALS[refusal] });
 
 		if (locals.user) {
-			await joinGroup(db, { groupId: target.id, userId: locals.user.id, now });
-			redirect(303, `/g/${target.id}`);
+			// Someone who already has games can keep them all off this group's shelf until they pick (D66).
+			const after = form.get('hideMine') === '1' ? hideEverythingStatements(db, target.id, locals.user.id, now) : [];
+			await joinGroup(db, { groupId: target.id, userId: locals.user.id, now, after });
+			redirect(303, form.get('hideMine') === '1' ? `/g/${target.id}/add` : `/g/${target.id}`);
 		}
 
 		const displayName = cleanDisplayName(values.displayName);

@@ -5,6 +5,7 @@
 	(TECH.md "Import and hydrate").
 -->
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import { page } from '$app/state';
 	import BoxFront from './BoxFront.svelte';
 	import HydrateProgress from './HydrateProgress.svelte';
@@ -37,6 +38,9 @@
 	const ownedCount = $derived(items.length - newItems.length);
 
 	const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+	// Leaving the page stops the lookup: nobody is waiting for it, and each ask is a request to BGG.
+	let left = false;
+	onDestroy(() => (left = true));
 	const post = (url: string, body: unknown) =>
 		fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
@@ -46,7 +50,7 @@
 		status = 'looking';
 		attempts = 0;
 		// BGG answers "202, still preparing" for collections it hasn't cached; keep asking for about a minute.
-		while (attempts < 12) {
+		while (attempts < 12 && !left) {
 			attempts += 1;
 			let response: Response;
 			try {
