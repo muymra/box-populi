@@ -4,6 +4,15 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+## 0.4.1 (2026-11-09)
+
+**Upgrading:** nothing to do: no migrations and no new settings. Deploy as usual. If you run a demo group, reseeding it now always refreshes what visitors see.
+
+- The shelf fills out its last row with empty compartments, so a filtered or short shelf doesn't stop partway along.
+- The Wanted tab is drawn like the shelf: compartments with depth, each box at its cover's shape, every game the same size, the most wanted marked with a "Most wanted" tag instead of a double-size box that blew its small picture up. Empty compartments fill out the last row.
+- A game's page shows its box at the cover's own shape, as the shelf does, instead of cutting every cover to one frame.
+- Fixed: reseeding the demo kept its old catalog version, so visitors and the server's in-memory copy could go on seeing the demo from before the reseed. Each seed file now carries a new version.
+
 ## 0.4.0 (2026-11-09)
 
 **Upgrading:** five migrations, 0012 to 0016. On Cloudflare, note a Time Travel bookmark and export a backup first, then apply them before deploying (SELF_HOSTING.md "Upgrading" has the commands and how to roll back). Docker, Vercel and Netlify apply them when the app starts. No new settings. Invite links now end in a key: share the new link from the Group tab; links shared before keep working.

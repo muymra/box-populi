@@ -614,12 +614,18 @@
 			grid-template-rows: auto 1fr;
 		}
 	}
+	/* The box stands at its cover's own shape, held to the shelf's limits (box-shape.ts), as it does on
+	   the shelf; a printed front, or a cover still loading, is square. */
 	.hero-box {
 		grid-area: box;
-		aspect-ratio: 1 / 1.04;
+		align-self: start;
 		box-shadow: var(--shadow-lift);
 		border-radius: var(--r-cube);
 		transform: rotate(-1.5deg);
+	}
+	.hero-box :global(.box) {
+		height: auto;
+		aspect-ratio: var(--ratio, 1);
 	}
 	.intro {
 		grid-area: intro;

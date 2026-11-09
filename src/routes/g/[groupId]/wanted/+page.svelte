@@ -1,15 +1,32 @@
 <script lang="ts">
 	// The Wanted tab (PRD "Wishlist and the Wanted view"): games members want that nobody in the group
-	// owns, as cubes on the shelf, the most wanted first. A game several people want takes a double cube.
-	// Nobody owns these, so where a cube's owner edge would be there's a dashed gap.
+	// owns, as compartments of the shelf, each box at its cover's shape, the most wanted first with a
+	// "Most wanted" pill when more than one person wants it. Nobody owns these, so where a cube's owner
+	// edge would be there's a dashed gap. Empty compartments fill out the last row.
 	import Gift from '@lucide/svelte/icons/gift';
-	import BoxFront from '#lib/components/BoxFront.svelte';
+	import Compartment from '#lib/components/Compartment.svelte';
 	import WantToggle from '#lib/components/WantToggle.svelte';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const base = $derived(`/g/${data.group.id}`);
+
+	// How many columns the shelf has at this width, read from the grid itself, so the last row can be
+	// filled with empty compartments. Two (the phone layout) until the page is in a browser.
+	let shelf = $state<HTMLElement>();
+	let columns = $state(2);
+	$effect(() => {
+		const el = shelf;
+		if (!el) return;
+		const measure = () => (columns = Math.max(1, getComputedStyle(el).gridTemplateColumns.split(' ').filter(Boolean).length));
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(el);
+		return () => observer.disconnect();
+	});
+	const spare = $derived((columns - (data.games.length % columns)) % columns);
+	const mostWanted = $derived((data.games[0]?.wantedBy.length ?? 0) > 1);
 </script>
 
 <svelte:head><title>Wanted · {data.group.name}</title></svelte:head>
@@ -27,29 +44,35 @@
 			{/if}
 		</div>
 	{:else}
-		<ul class="shelf">
+		<ul class="shelf" class:most={mostWanted} bind:this={shelf}>
 			{#each data.games as g, i (g.id)}
 				{@const names = g.wantedBy.map((w) => w.name).join(', ')}
-				<li class="cube" class:top={i === 0 && g.wantedBy.length > 1}>
-					<a
-						class="box"
+				{@const most = i === 0 && mostWanted}
+				<li>
+					<Compartment
 						href="{base}/game/{g.id}"
-						aria-label="{g.name}{g.year ? `, ${g.year}` : ''}{g.isExpansion ? ', expansion' : ''}, wanted by {names}"
+						name={g.name}
+						src={g.thumbUrl}
+						lead="{g.name}{g.year ? `, ${g.year}` : ''}{g.isExpansion ? ', expansion' : ''}{most ? ', most wanted' : ''}, wanted by {names}."
+						flag={g.isExpansion ? 'Expansion' : null}
+						badge={most ? 'Most wanted' : null}
 					>
-						<BoxFront name={g.name} src={g.thumbUrl} size={i === 0 ? 'hero' : 'cube'} />
-						{#if g.isExpansion}<span class="flag">Expansion</span>{/if}
-					</a>
-					<span class="gap-edge" aria-hidden="true"></span>
-					<div class="caption" aria-hidden="true">
-						<span class="count num">{g.wantedBy.length}</span>
-						<span class="who">
-							<span class="squares">
+						{#snippet caption()}
+							<span class="squares" aria-hidden="true">
 								{#each g.wantedBy as w (w.id)}<span style:background={playerColor(w.colorIndex).fill}></span>{/each}
 							</span>
-							<span class="names">{names}</span>
-						</span>
-					</div>
-					{#if data.canEdit}<div class="act"><WantToggle id={g.id} name={g.name} mine={g.mine} /></div>{/if}
+							<b>{g.wantedBy.length}</b> {g.wantedBy.length === 1 ? 'wants' : 'want'} it
+						{/snippet}
+						{#snippet edge()}<span class="gap-edge" aria-hidden="true"></span>{/snippet}
+					</Compartment>
+					{#if data.canEdit}<WantToggle id={g.id} name={g.name} mine={g.mine} />{/if}
+				</li>
+			{/each}
+			{#each { length: spare } as _, k (k)}
+				<li aria-hidden="true">
+					<Compartment>
+						{#snippet edge()}<span class="gap-edge blank"></span>{/snippet}
+					</Compartment>
 				</li>
 			{/each}
 		</ul>
@@ -81,7 +104,8 @@
 	.empty p {
 		margin: 0;
 	}
-	/* The shelf: cubes on the shelf-gap ground, as on the Shelf tab. */
+	/* The shelf: compartments on the shelf-gap ground, as on the Shelf tab, two across on phones and
+	   wider than the shelf's from 760px, since each holds its Me too below. */
 	.shelf {
 		list-style: none;
 		margin: var(--s-5) 0 0;
@@ -92,9 +116,9 @@
 		background: var(--gap);
 		border-radius: 6px;
 	}
-	/* The most wanted game, when several people want it, takes two cubes: the peak of the page. */
-	.cube.top {
-		grid-column: span 2;
+	/* Room above the first row for the "Most wanted" pill on its compartment's top edge. */
+	.shelf.most {
+		padding-top: 14px;
 	}
 	@media (min-width: 760px) {
 		.shelf {
@@ -102,106 +126,45 @@
 			gap: 8px;
 			padding: 8px;
 		}
-		.cube.top {
-			grid-row: span 2;
+		.shelf.most {
+			padding-top: 16px;
 		}
 	}
-	.cube {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		padding: 10px 10px 12px;
-		background: var(--cube);
-	}
-	.box {
-		position: relative;
-		display: block;
-		aspect-ratio: 1 / 1.04;
-		border-radius: var(--r-cube);
-		transition:
-			transform 0.2s var(--ease-out),
-			box-shadow 0.2s var(--ease-out);
-	}
-	.box:hover,
-	.box:focus-visible {
-		transform: translateY(-3px);
-		box-shadow: var(--shadow-lift);
-	}
-	.top .box {
-		aspect-ratio: auto;
-		flex: 1;
-		min-height: 14rem;
-	}
-	/* The shelf's flag, on the box. */
-	.flag {
-		position: absolute;
-		left: 50%;
-		bottom: 8px;
-		transform: translateX(-50%);
-		padding: 1px 7px;
-		border-radius: 999px;
-		background: var(--cube);
-		color: var(--ink);
-		font-size: 0.75rem;
-		font-weight: 700;
-		white-space: nowrap;
-		box-shadow: 0 0 0 1px var(--rule);
-	}
-	/* Where the owner edge would be: dashed, because nobody here owns it yet. */
-	.gap-edge {
-		height: 0;
-		border-top: 3px dashed var(--ink-3);
-		opacity: 0.6;
-	}
-	.caption {
+	.shelf > li {
 		display: grid;
-		grid-template-columns: auto minmax(0, 1fr);
-		align-items: center;
 		gap: 8px;
-	}
-	/* How many want it, set like a printed box title. */
-	.count {
-		font-size: 1.75rem;
-		font-weight: 800;
-		font-stretch: 82%;
-		line-height: 1;
-	}
-	.top .count {
-		font-size: clamp(2.25rem, 6vw, 3.25rem);
-	}
-	.who {
-		display: grid;
-		gap: 3px;
+		align-content: start;
+		justify-items: center;
 		min-width: 0;
 	}
+	.shelf > li > :global(.cube) {
+		justify-self: stretch;
+	}
 	.squares {
-		display: flex;
+		display: inline-flex;
 		gap: 3px;
+		vertical-align: -1px;
+		margin-right: 4px;
 	}
 	.squares span {
-		width: 12px;
-		height: 12px;
+		width: 10px;
+		height: 10px;
 		border-radius: 3px;
 	}
-	.names {
-		font-size: var(--t-small);
-		color: var(--ink-2);
-		line-height: 1.3;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+	b {
+		color: var(--ink);
+		font-weight: 800;
 	}
-	.top .names {
-		white-space: normal;
-		font-size: var(--t-body);
+	/* Where a cube's owner edge would be: dashed, because nobody here owns it yet. As tall as the shelf's
+	   owner edge, so the floors match the Shelf tab's. */
+	.gap-edge {
+		display: block;
+		height: 6px;
+		border-top: 3px dashed var(--ink-3);
+		opacity: 0.6;
+		margin-top: 3px;
 	}
-	.act {
-		margin-top: auto;
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.box:hover,
-		.box:focus-visible {
-			transform: none;
-		}
+	.gap-edge.blank {
+		visibility: hidden;
 	}
 </style>

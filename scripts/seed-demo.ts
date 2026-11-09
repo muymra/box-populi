@@ -287,7 +287,9 @@ const statements = [
 	"DELETE FROM groups WHERE id = 'demo';",
 	"DELETE FROM users WHERE id LIKE 'demo-%';",
 	insert('users', members.map((m) => ({ id: m.id, name: m.name, created_at: NOW }))),
-	`INSERT INTO groups (id, name, code, is_demo, catalog_version, created_at) VALUES ('demo', 'Demo game group', 'DEMO0', 1, ${NOW}, ${NOW});`,
+	// The catalog version is when this file was made, so every reseed is a new version: the catalog's ETag and
+	// its in-memory copy (D65) would otherwise keep serving the demo from before a reseed.
+	`INSERT INTO groups (id, name, code, is_demo, catalog_version, created_at) VALUES ('demo', 'Demo game group', 'DEMO0', 1, ${Date.now()}, ${NOW});`,
 	insert('memberships', members.map((m) => ({ group_id: 'demo', user_id: m.id, role: m.role, joined_at: NOW, last_seen_at: NOW - m.seen * DAY }))),
 	insert('games', [...games, ...wanted].map((g) => ({ ...GAME_DEFAULTS, ...g }))),
 	insert('copies', copies),

@@ -12,6 +12,8 @@
 	import KeyRound from '@lucide/svelte/icons/key-round';
 	import Modal from '#lib/components/Modal.svelte';
 	import Cube from '#lib/components/Cube.svelte';
+	import Compartment from '#lib/components/Compartment.svelte';
+	import OwnerEdge from '#lib/components/OwnerEdge.svelte';
 	import ListRow from '#lib/components/ListRow.svelte';
 	import CheckList from '#lib/components/CheckList.svelte';
 	import { cachedCatalog, fetchCatalog, storage } from '#lib/catalog/client.ts';
@@ -56,6 +58,19 @@
 	let filters = $state(parseFilters(page.url.searchParams));
 	let limit = $state(PAGE_SIZE);
 	let sentinel = $state<HTMLElement>();
+	// How many columns the shelf has at this width, read from the grid itself, so its last row can be
+	// filled with empty compartments once every result is drawn (not while more are still to come).
+	let shelfEl = $state<HTMLElement>();
+	let columns = $state(1);
+	$effect(() => {
+		const el = shelfEl;
+		if (!el) return;
+		const measure = () => (columns = Math.max(1, getComputedStyle(el).gridTemplateColumns.split(' ').filter(Boolean).length));
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(el);
+		return () => observer.disconnect();
+	});
 	let view = $state<'cubes' | 'list'>('cubes');
 	let moreOpen = $state(false);
 
@@ -69,6 +84,7 @@
 	const sorted = $derived(payload ? sortGames(payload.games, sortKey) : []);
 	const plainFilters = $derived($state.snapshot(filters));
 	const results = $derived(keepMatching(sorted, plainFilters, memberIds, Date.now(), viewer));
+	const spare = $derived(limit >= results.length ? (columns - (results.length % columns)) % columns : 0);
 	// The favourites filters appear once someone has a favourite, Play soon once the viewer has a mark.
 	const hasFavourites = $derived(payload?.games.some((g) => (g.favouredBy?.length ?? 0) > 0) ?? false);
 	const hasPlaySoon = $derived(data.myPlaySoon.length > 0);
@@ -398,9 +414,17 @@
 	</div>
 	<p class="visually-hidden" role="status">Loading the shelf…</p>
 {:else if view === 'cubes' && results.length}
-	<ul class="shelf">
+	<ul class="shelf" bind:this={shelfEl}>
 		{#each results.slice(0, limit) as game (game.id)}
 			<li><Cube {game} href="/g/{data.group.id}/game/{game.id}" members={memberMap} {memberIds} unknown={passedOnUnknown(game, plainFilters)} /></li>
+		{/each}
+		<!-- Empty compartments fill out the last row, so the shelf never stops short. -->
+		{#each { length: spare } as _, k (k)}
+			<li aria-hidden="true">
+				<Compartment>
+					{#snippet edge()}<OwnerEdge owners={[]} />{/snippet}
+				</Compartment>
+			</li>
 		{/each}
 	</ul>
 {:else if results.length}
