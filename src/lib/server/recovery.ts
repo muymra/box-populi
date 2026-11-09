@@ -12,7 +12,9 @@ import { can } from './permissions.ts';
 import { giveBack, INSTANCE, ipSubject, LIMITS, take } from './ratelimit.ts';
 import type { Role } from '#lib/catalog/types.ts';
 
-export const SIGN_IN_CODE_LENGTH = 8;
+import { SIGN_IN_CODE_LENGTH } from '#lib/codes.ts';
+
+export { SIGN_IN_CODE_LENGTH };
 export const SIGN_IN_CODE_MINUTES = 10;
 
 type Refusal = { ok: false; error: string };
@@ -56,7 +58,7 @@ export function recoveryTools(actor: Actor, target: { id: string; role: Role }, 
 	return tools;
 }
 
-/** "K7M4P2QX" as people read it: two groups of four. */
+/** "HQ6T8VNA" as people read it: two groups of four. */
 export function formatSignInCode(code: string): string {
 	return `${code.slice(0, 4)}-${code.slice(4)}`;
 }

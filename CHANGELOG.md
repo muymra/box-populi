@@ -4,7 +4,7 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
-- The group code field tidies itself as you type: capitals, no spaces or dashes, and it stops at five characters.
+- Group codes and sign-in codes are harder to mix up. Both fields tidy what you type (capitals, no spaces; the sign-in code gets its dash). Typing a sign-in code where a group code goes shows a hint and, if sent, says where it belongs, and the other way round. The example sign-in code no longer starts like the example group code.
 - Pages ask the database once or twice instead of up to 16 times, so they cost the site less on Cloudflare's free plan and load a little faster.
 - Games with box art show their name under the box on the shelf, since the art's own title is often cropped.
 - Box Populi asks BoardGameGeek less. A search for the same words within a week is answered from the instance's own copy, the Add page waits a little longer after you stop typing, and imports, loading details and Find on BoardGameGeek wait for a quiet moment between requests, so they take a few minutes longer. Searches you wait on are as quick as before.

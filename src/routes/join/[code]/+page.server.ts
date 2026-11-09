@@ -10,6 +10,7 @@ import { cleanSignInCode, redeemSignInCode } from '#lib/server/recovery.ts';
 import { giveBack, INSTANCE, ipSubject, LIMITS, take, type Limit } from '#lib/server/ratelimit.ts';
 import { setSessionCookie } from '#lib/server/cookies.ts';
 import type { Actions, PageServerLoad, RequestEvent } from './$types';
+import { SIGN_IN_CODE_EXAMPLE } from '#lib/codes.ts';
 
 const REFUSALS = {
 	demo: 'The demo group is read-only and can’t be joined. Open it from the home page instead.',
@@ -124,7 +125,12 @@ export const actions: Actions = {
 		// A code from the group's owner or a co-admin (D48) instead of the PIN: then on to pick a new PIN.
 		if (values.usedCode) {
 			const code = cleanSignInCode(rawCode);
-			if (!code) return fail(400, { ...values, error: 'A sign-in code is eight letters and numbers, like K7M4-P2QX.' });
+			if (!code) {
+				const error = normalizeCode(rawCode)
+					? `That’s a group code, the one that opens this page. A sign-in code has eight characters, like ${SIGN_IN_CODE_EXAMPLE}.`
+					: `A sign-in code is eight letters and numbers, like ${SIGN_IN_CODE_EXAMPLE}.`;
+				return fail(400, { ...values, error });
+			}
 			const result = await redeemSignInCode(db, { groupId: opened.target.id, userId, code, ip: event.getClientAddress(), now });
 			if (!result.ok) {
 				const error = result.reason === 'wrong' ? 'That code doesn’t work. It may have been used, or more than 10 minutes have passed.' : PIN_ERRORS[result.reason];

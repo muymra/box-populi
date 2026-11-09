@@ -5,6 +5,7 @@
 	import { untrack } from 'svelte';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { PIN_LENGTH } from '#lib/pin.ts';
+	import { GROUP_CODE_EXAMPLE, SIGN_IN_CODE_EXAMPLE, tidySignInCode } from '#lib/codes.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -31,7 +32,7 @@
 {:else if data.state === 'not_found'}
 	<section class="narrow">
 		<h1>No group with that code</h1>
-		<p>Check the code with whoever shared it. Codes are five letters and numbers, like K7M4P.</p>
+		<p>Check the code with whoever shared it. Codes are five letters and numbers, like {GROUP_CODE_EXAMPLE}.</p>
 		<a class="btn" href="/join">Try another code</a>
 	</section>
 {:else}
@@ -120,7 +121,18 @@
 								<span class="hint">Eight letters and numbers, from the group’s owner or a co-admin. It works once; next you pick a new PIN.</span>
 							</div>
 							<div class="form-body">
-								<input id="adminCode" class="field code" name="adminCode" required maxlength="9" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K7M4-P2QX" />
+								<input
+									id="adminCode"
+									class="field code"
+									name="adminCode"
+									required
+									maxlength="9"
+									autocomplete="off"
+									autocapitalize="characters"
+									spellcheck="false"
+									placeholder={SIGN_IN_CODE_EXAMPLE}
+									oninput={(e) => (e.currentTarget.value = tidySignInCode(e.currentTarget.value))}
+								/>
 							</div>
 						</div>
 					{:else}

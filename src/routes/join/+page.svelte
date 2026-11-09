@@ -1,9 +1,11 @@
 <script lang="ts">
 	// The group's code opens its front door (D46, D47), for joining and for coming back on a new device.
-	import { tidyCode } from '#lib/codes.ts';
+	import { GROUP_CODE_EXAMPLE, looksLikeSignInCode, tidyCode } from '#lib/codes.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
+	// The field's tidied value, to spot a sign-in code typed here.
+	let typed = $state('');
 </script>
 
 <svelte:head><title>Join a group · {data.instanceName}</title></svelte:head>
@@ -19,7 +21,7 @@
 			<div class="form-head">
 				<div>
 					<h2 id="code-h">Got a code?</h2>
-					<p>Five letters and numbers, like K7M4P. An invite link has it built in.</p>
+					<p>Five letters and numbers, like {GROUP_CODE_EXAMPLE}. An invite link has it built in.</p>
 				</div>
 			</div>
 			<div class="form-row">
@@ -34,10 +36,11 @@
 						autocomplete="off"
 						autocapitalize="characters"
 						spellcheck="false"
-						placeholder="K7M4P"
+						placeholder={GROUP_CODE_EXAMPLE}
 						value={form?.code ?? ''}
-						oninput={(e) => (e.currentTarget.value = tidyCode(e.currentTarget.value))}
+						oninput={(e) => (typed = e.currentTarget.value = tidyCode(e.currentTarget.value))}
 					/>
+					{#if looksLikeSignInCode(typed)}<p class="hint" aria-live="polite">Group codes have five characters. Got an eight-character sign-in code? It goes on your group’s page, after you tap your name.</p>{/if}
 				</div>
 			</div>
 			{#if form?.error}<div class="form-block"><p class="banner error" role="alert">{form.error}</p></div>{/if}

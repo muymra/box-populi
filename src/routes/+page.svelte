@@ -5,7 +5,7 @@
 	// invented games, a short list of the rest, and running your own.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { tidyCode } from '#lib/codes.ts';
+	import { GROUP_CODE_EXAMPLE, looksLikeSignInCode, tidyCode } from '#lib/codes.ts';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import Code from '@lucide/svelte/icons/code';
 	import BoxFront from '#lib/components/BoxFront.svelte';
@@ -18,6 +18,8 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+	// What's in the "Join with a code" field, tidied, to spot a sign-in code typed there.
+	let joinCode = $state('');
 
 	// The link preview for a demo instance's home page, the link people pass around to show Box Populi
 	// (Discord, Messenger, Instagram and the like read these). The image is this page's hero at 1200×630
@@ -200,7 +202,7 @@
 		<figure class="piece pair" aria-label="Example: a group's join code, and coming back by tapping your name and typing a PIN">
 			<div class="code-card" aria-hidden="true">
 				<span class="muted">Join code</span>
-				<span class="code num">K7M4P</span>
+				<span class="code num">{GROUP_CODE_EXAMPLE}</span>
 			</div>
 			<div class="link-card" aria-hidden="true">
 				<span class="link-label">Already in Sandbox?</span>
@@ -301,11 +303,12 @@
 							autocomplete="off"
 							autocapitalize="characters"
 							spellcheck="false"
-							placeholder="K7M4P"
-							oninput={(e) => (e.currentTarget.value = tidyCode(e.currentTarget.value))}
+							placeholder={GROUP_CODE_EXAMPLE}
+							oninput={(e) => (joinCode = e.currentTarget.value = tidyCode(e.currentTarget.value))}
 						/>
 						<button class="btn">Join</button>
 					</form>
+					{#if looksLikeSignInCode(joinCode)}<p class="hint" aria-live="polite">Group codes have five characters. Got an eight-character sign-in code? It goes on your group’s page, after you tap your name.</p>{/if}
 				</div>
 			</div>
 			{#if data.canCreate}
