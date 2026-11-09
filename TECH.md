@@ -487,7 +487,7 @@ Helpers in `src/lib/server/authz.ts`, used by every load function, action and en
 | `requireUser(event)` | a device with a session; otherwise redirect to `/signin?returnTo=<current path>` | `/me` |
 | `requireRead(event, groupId)` | members of the group, or anyone when `is_demo = 1` | every group page load and the catalog endpoint |
 | `requireRole(event, groupId, minRole)` | members with role at least `minRole` (`member` < `admin` < `owner`); always refuses demo groups; refuses suspended groups except for leaving and for the owner deleting the group | every mutation |
-| `requireActiveMember(event, groupId \| null)` | with a group id, the same as `requireRole(member)`; without one, a person with at least one membership in a group that's neither suspended nor the demo (403 otherwise) | the per-person endpoints: `/api/bgg/search`, `/api/bgg/import`, `/api/bgg/import/confirm`, `/api/bgg/hydrate`, `/api/wikidata/search` |
+| `requireActiveMember(event, groupId \| null)` | with a group id, the same as `requireRole(member)`; without one, a person with at least one membership in a group that's neither suspended nor the demo (403 otherwise) | the per-person endpoints: `/api/bgg/search`, `/api/bgg/import`, `/api/bgg/import/confirm`, `/api/bgg/hydrate`, `/api/bgg/match`, `/api/bgg/match/confirm`, `/api/wikidata/search` |
 | `requireAdmin(event)` (in `admin/+page.server.ts`) | a valid `bp_admin` cookie; otherwise 404, so the page doesn't announce itself (hosters sign in at `/admin/login`) | `/admin` and its actions |
 
 Each group helper returns the group row and the caller's role. A missing group and a non-member get the same 404, so group IDs can't be probed. Being the instance admin grants nothing inside groups: `requireRead` and `requireRole` ignore `isAdmin`.
@@ -693,17 +693,26 @@ All three endpoints take the add page's `groupId` and call `requireActiveMember`
 `POST /api/bgg/import` with `{ username, groupId }` (rate-limited to 20 `bgg_import` calls per 10 minutes per person, since one lookup can poll up to 12 times):
 
 1. Call `collection?username=<u>&own=1` once. On 202, return `{ status: 'pending' }` with HTTP 202; the page asks again every 5 seconds, up to 12 times (one paced BGG request each), then shows a retry button.
-2. Ready: return the preview list with `alreadyOwned` flags. Store nothing. The username is not stored.
+2. Ready: return the preview list with `owned` flags, and `missing`: the BGG games on the caller's shelf that the collection doesn't list (`shelfNotInCollection`, games with a BGG id only, each with whether it's lent out), unless the collection is empty, which more likely means a wrong or private username. Store nothing. The username is not stored.
 
-`POST /api/bgg/import/confirm` with `{ username, bggIds, groupId }` (takes a `bgg_import` try too, since fetching the collection can make up to three BGG requests):
+`POST /api/bgg/import/confirm` with `{ username, bggIds, removeGameIds, groupId }`, either list possibly empty but not both. Adding takes a `bgg_import` try too, since fetching the collection can make up to three BGG requests; removing alone makes no BGG request and takes none:
 
 1. Fetch the collection again. BGG has it ready by now, and this avoids trusting names sent by the client. Keep only the requested ids that are in it.
 2. In batches of statements: `INSERT ... ON CONFLICT(bgg_id) DO NOTHING` a stub for each game (name, year, thumbnail, image, `search_text` from the name, `fetched_at` NULL), then insert the copies (`ON CONFLICT DO NOTHING`), with a catalog bump in every batch. Each statement binds one row; D1 caps bound parameters at 100 per statement.
-3. Return `{ status: 'added', added, pending }`: games added to the shelf, and how many of the person's games still wait for details. While BGG is still building the collection, `202 { status: 'pending' }`.
+3. After the add, delete the caller's own copies of `removeGameIds` with a catalog bump (`removeFromShelf`, the same as "Remove from my games" on each). Removal comes second so a busy BGG returns the whole step for a retry.
+4. Return `{ status: 'added', added, removed, pending }`: games added to the shelf, copies taken off, and how many of the person's games still wait for details. While BGG is still building the collection, `202 { status: 'pending' }`.
 
 `POST /api/bgg/hydrate` with `{ groupId }` (rate-limited to 60 `bgg_hydrate` calls per 10 minutes per person, 1,200 games' worth): select up to 20 games with `fetched_at IS NULL AND bgg_id IS NOT NULL` among the caller's copies, call `things()`, update the rows, bump the catalog of every group where anyone has a copy of those games (other people may own the same stubs), and return `{ updated, remaining }`. On `BggBusyError`, answer 503 with `{ error, retryAfterMs }`; past the rate limit, 429 with `retryAfterMs` of 60 seconds. The client loops until `remaining` is 0. It calls again as soon as each step returns, since the server-side pacer sets the rate. On a 503 or 429 with `retryAfterMs` it waits that long or its own backoff, whichever is longer (5 seconds doubling to 60), then carries on. A 1,000-game import takes 50 steps: at least 100 seconds, likely three to four minutes, behind a progress bar. A larger import pauses at the rate limit and resumes by itself.
 
 Hydrate is idempotent and resumable. Any page that sees the caller owns stubs shows "Finish loading game details," which restarts the loop. Two members hydrating the same stub at once is harmless.
+
+### Find on BoardGameGeek
+
+Built 2026-11-09 (D57), in `src/lib/server/bgg-match.ts` and `MatchPanel.svelte`. Hydrate only reaches games with a BGG id, so a member's typed-in games, and Wikidata games without a BGG id, stay without weight, mechanics or best-at data after the token arrives. While BGG is on, the add page loads them (`unmatchedGames`: on the caller's shelf, `is_manual = 1 OR source <> 'bgg'`, minus Wikidata games that have a BGG id, which hydrate handles) and shows their count with a "Find them on BoardGameGeek" fold.
+
+1. `POST /api/bgg/match` with `{ groupId, gameId }`, one game per call (rate-limited to 120 `bgg_match` calls per 10 minutes per person): refuse unless the game is one of the caller's unmatched games (404), then run `searchBgg` on its name with the top five hits, which stores each hit as a BGG row and fetches details for the ones not cached. When nothing is found, search once more with a shorter title (`shorterTitle`: without a trailing parenthetical, or the part before a colon or a spaced dash). Return `{ gameId, candidates }`, exact titles first (`normalize` equal), then the most rated. Busy and limit answers are the hydrate loop's: 503 or 429 with `retryAfterMs`, and the page waits and retries the same game. Nothing changes on the caller's shelf in this step.
+2. The page lists every game looked up so far with its first candidate selected (a select when there are more), the box front, year, players and a "View on BoardGameGeek" link. Exact titles come ticked, others don't. The member can stop part-way and review, and look up the rest later.
+3. `POST /api/bgg/match/confirm` with `{ groupId, pairs: [{ gameId, targetId }] }`, up to 10 pairs per call. A pair counts only when `gameId` is one of the caller's unmatched games and `targetId` is a BGG row (`source = 'bgg'`, `is_manual = 0`, a BGG id); the rest are skipped. Each pair is ten statements in one batch, in order: move copies, wishes and bring-list rows to the BGG game unless that person or night already has it (then delete the typed-in row), move links and plays, delete the game's group corrections, delete the typed-in game. Then bump the catalogs of every group with a copy of the targets, and the caller's. Return `{ merged, skipped }`. No BGG request is made: step 1 stored the targets.
 
 ### Public-sources mode
 
@@ -789,7 +798,7 @@ Search and import show "BGG isn't responding. Try again, or add the game by hand
 
 ### Running without a token
 
-This is the default for a new instance (D28). With `BGG_MODE=off`, the add page searches Wikidata (`GAME_SOURCE=wikidata`, the default) or offers manual entry only (`GAME_SOURCE=manual`). A note explains that BGG search and import aren't set up on this instance, and instance admins also see it on `/admin`. Everything else works, minus mechanics, themes, weight and best-at data on hand-entered games. This lets a new hoster launch while their BGG application waits for approval. Switching to `live` later doesn't migrate manual games to BGG ones; a member who wants full data removes the manual copy and adds the BGG game.
+This is the default for a new instance (D28). With `BGG_MODE=off`, the add page searches Wikidata (`GAME_SOURCE=wikidata`, the default) or offers manual entry only (`GAME_SOURCE=manual`). A note explains that BGG search and import aren't set up on this instance, and instance admins also see it on `/admin`. Everything else works, minus mechanics, themes, weight and best-at data on hand-entered games. This lets a new hoster launch while their BGG application waits for approval. Switching to `live` later upgrades Wikidata games that carry a BGG id through the hydrate loop. Typed-in games, and Wikidata games without one, are matched by their members through "Find on BoardGameGeek" (above, D57).
 
 ## Picker
 
@@ -913,6 +922,7 @@ A writable local group with invented data, for trying the app as a member sees i
 | `GET /api/g/[groupId]/catalog` | Catalog payload with ETag. | `requireRead` |
 | `GET /api/bgg/search` | BGG search proxy. | `requireActiveMember` (optional `groupId`), rate-limited per person |
 | `POST /api/bgg/import`, `/api/bgg/import/confirm`, `/api/bgg/hydrate` | Import flow. | `requireActiveMember` with the page's `groupId`, rate-limited per person |
+| `POST /api/bgg/match`, `/api/bgg/match/confirm` | Find on BoardGameGeek: one game's BGG matches, then merge up to 10 chosen pairs (D57). | `requireActiveMember` with the page's `groupId`; matching rate-limited per person |
 | `POST /theme` | Saves this device's theme setting in `bp_theme`: a theme id, or `auto` to follow the group's theme and then the instance's. 204 for `Accept: application/json` (the footer select already switched the page), otherwise a 303 back to the page it came from. Group themes (`groups.theme`, migration `0003`) are set by the Group tab's `theme` action, co-admins and up, and applied in `hooks.server.ts` only for members (or anyone on the demo). | none |
 | `GET /custom-theme.css` | The custom theme's stylesheet, built from the five colours in `instance_settings` (migration `0004`) by `customThemeCss()`. Linked as `?v=<updated_at>` and cached a year; a save on `/admin` changes the version. `src/lib/server/appearance.ts` reads the settings once a minute per isolate. | none |
 | `GET /api/wikidata/search` | Wikidata title search for the add page while BGG is off; results are cached as games. | `requireActiveMember` (optional `groupId`), rate-limited per person |

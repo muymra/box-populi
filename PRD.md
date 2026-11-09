@@ -172,10 +172,15 @@ Rules that follow from the table:
 3. The preview lists every owned game with checkboxes, all ticked. Games the member already has in Box Populi stay ticked but can't be changed, and the count says how many are already on their shelf.
 4. On confirm, copies are created at once and appear in the catalog by name and cover. A progress bar shows details (player counts, weight, mechanics) filling in, about 20 games per step.
 5. If the member closes the page mid-way, the next page they open shows "Finish loading game details" and resumes.
+6. Running the import again is how a member adds games they've bought since: the preview says how many are new, and only those come ticked. The import never takes games off the shelf by itself. Under the new games, the preview lists games on the member's shelf that the BGG collection doesn't have ("Sold or traded? Tick the ones you no longer have"), none ticked, with a "Lent out" tag where it applies; ticked ones come off the shelf in the same step. Typed-in games can't be compared and aren't listed. The form explains this behind a "More" link.
 
 ### Pasting a list
 
 For moving a collection over from a spreadsheet or notes app. Members paste one title per line, optionally followed by players and minutes after a `|` or a tab, up to 200 lines. Each line is checked before anything is added: against their own shelf, then the group's games, then games the instance already knows from BGG or Wikidata, then Wikidata itself when the instance uses it. The preview shows what each line matched, offers Wikidata's closest title as a swap for anything unknown, and lets members untick lines. Unmatched lines become hand-entered games. Other groups' hand-entered games never match, so the list can't reveal them. If adding stops part-way, the list stays with what was added marked, and trying again sends only the rest.
+
+### Finding typed-in games on BGG
+
+When an instance turns BGG on after running without it, members' typed-in games, and Wikidata games without a BGG id, still lack complexity, mechanics and best-at data. The add page says how many of a member's games are like that and offers "Find them on BoardGameGeek" (D57). Each title is looked up on BGG in turn, at BGG's pace, behind a progress bar that can be stopped part-way. The member sees the likeliest match for each, with its box, year and a link to its BGG page, can pick another from the top five, and ticks the right ones; only exact titles come ticked. Each ticked game becomes the BGG game for everyone who has it: copies, wishes, links, bring lists and plays move across. Games with no match on BGG stay as they are.
 
 ### Correcting games
 

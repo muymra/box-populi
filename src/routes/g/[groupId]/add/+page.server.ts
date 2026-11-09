@@ -3,6 +3,7 @@ import { requireRole } from '#lib/server/authz.ts';
 import { one } from '#lib/server/db.ts';
 import { addCopy, addManualGame, gameUsableInGroup, parseManualGame } from '#lib/server/games.ts';
 import { pendingDetails } from '#lib/server/importer.ts';
+import { unmatchedGames } from '#lib/server/bgg-match.ts';
 import { activeGameSource } from '#lib/server/instance.ts';
 import { addWish, removeWish } from '#lib/server/wishlist.ts';
 import { getDb } from '#lib/server/platform.ts';
@@ -14,7 +15,10 @@ export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user!;
 	const mine = await one<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM copies WHERE user_id = ?1', user.id);
 	const pending = event.locals.config.bggMode === 'off' ? 0 : await pendingDetails(db, user.id);
-	return { bggMode: event.locals.config.bggMode, source: activeGameSource(event.locals.config), myGameCount: mine?.n ?? 0, userId: user.id, pending };
+	const source = activeGameSource(event.locals.config);
+	// Typed-in and Wikidata games to find on BGG (D57), only while BGG is on.
+	const unmatched = source === 'bgg' ? await unmatchedGames(db, user.id) : [];
+	return { bggMode: event.locals.config.bggMode, source, myGameCount: mine?.n ?? 0, userId: user.id, pending, unmatched };
 };
 
 export const actions: Actions = {

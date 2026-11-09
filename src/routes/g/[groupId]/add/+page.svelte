@@ -7,6 +7,7 @@
 	import ImportPanel from '#lib/components/ImportPanel.svelte';
 	import HydrateProgress from '#lib/components/HydrateProgress.svelte';
 	import ListPanel from '#lib/components/ListPanel.svelte';
+	import MatchPanel from '#lib/components/MatchPanel.svelte';
 	import { formatPlayerRange } from '#lib/catalog/players.ts';
 	import type { PageProps } from './$types';
 
@@ -215,6 +216,14 @@
 		<HydrateProgress pending={data.pending} shelfHref="/g/{data.group.id}" />
 	{/if}
 
+	<!-- Typed-in and Wikidata games have no BGG id, so loading details never reaches them (D57). One
+	     line until it's opened: a few homemade games that will never match shouldn't take the page. -->
+	{#if bggOn && data.unmatched.length > 0}
+		<section class="panel unmatched" aria-label="Games without BoardGameGeek details">
+			<MatchPanel groupId={data.group.id} shelfHref="/g/{data.group.id}" games={data.unmatched} />
+		</section>
+	{/if}
+
 	<!-- The ways to add a whole collection, and adding one by hand, as rows of a form panel. -->
 	{#snippet ways(title: string, lede: string | null)}
 		<section class="form-panel ways" aria-labelledby="ways-h">
@@ -228,7 +237,7 @@
 				<div class="form-row" role="group" aria-labelledby="import-q">
 					<div class="form-label">
 						<span id="import-q" class="form-q">Import</span>
-						<span class="hint">Every game you own on BoardGameGeek, in one go.</span>
+						<span class="hint">Every game you own on BoardGameGeek, in one go. Run it again to add new ones.</span>
 					</div>
 					<div class="form-body">{@render importBlock()}</div>
 				</div>
@@ -333,6 +342,10 @@
 	}
 	.add > :global(.hydrate) {
 		margin-bottom: var(--s-4);
+	}
+	.unmatched {
+		margin-bottom: var(--s-4);
+		padding: var(--s-3) var(--s-4);
 	}
 	.status {
 		min-height: 1.5rem;

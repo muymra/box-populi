@@ -20,6 +20,9 @@ export const LIMITS = {
 	wikidataSearch: { kind: 'wikidata_search', max: 30, windowMs: 60_000 },
 	listMatch: { kind: 'list_match', max: 40, windowMs: 10 * 60_000 }, // a 200-line list is 20 calls
 	bggImport: { kind: 'bgg_import', max: 20, windowMs: 10 * 60_000 }, // one lookup can poll up to 12 times, then one confirm
+	// Find on BoardGameGeek: one typed-in game per call, a search and a details request each (D57).
+	// About a game every four seconds at BGG's pace, so this only bites past 120 games; then the page pauses.
+	bggMatch: { kind: 'bgg_match', max: 120, windowMs: 10 * 60_000 },
 	// Each step fills in 20 games, so 1,200 games per 10 minutes; past that the page pauses, then carries on.
 	bggHydrate: { kind: 'bgg_hydrate', max: 60, windowMs: 10 * 60_000 }
 } satisfies Record<string, Limit>;

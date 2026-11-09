@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
 import { all, one, run } from './db.ts';
 import { FakeBggClient } from './bgg/fake.ts';
-import { addCopy, searchBgg } from './games.ts';
-import { cleanBggUsername, confirmImport, fetchCollection, hydrateStep, pendingDetails, previewItems } from './importer.ts';
+import { addCopy, addManualGame, searchBgg } from './games.ts';
+import { cleanBggUsername, confirmImport, fetchCollection, hydrateStep, pendingDetails, previewItems, removeFromShelf, shelfNotInCollection } from './importer.ts';
 import type { BggClient, BggCollectionResult } from './bgg/types.ts';
 
 let db: ReturnType<typeof createTestDb>;
@@ -126,5 +126,34 @@ describe('import', () => {
 		expect(after.g1).toBe(before.g1 + 1);
 		expect(after.g2).toBe(before.g2 + 1);
 		expect(after.g3).toBe(before.g3);
+	});
+});
+
+describe('a repeat import', () => {
+	it('lists BGG games on the shelf that the collection doesn’t, with loans marked, and never typed-in games', async () => {
+		const collection = await fetchCollection(fake, 'ada');
+		if (collection.status !== 'ready') throw new Error('expected ready');
+		const [alpha] = await searchBgg(db, fake, 'Test Game Alpha', 'ada', NOW); // 900001, in the collection
+		const [card] = await searchBgg(db, fake, 'Test Game Alpha Card Game', 'ada', NOW); // 900005, not in it
+		await addCopy(db, 'ada', alpha.gameId, NOW);
+		await addCopy(db, 'ada', card.gameId, NOW);
+		await run(db, `UPDATE copies SET lent_to_text = 'a neighbour' WHERE user_id = 'ada' AND game_id = ?1`, card.gameId);
+		await addManualGame(db, 'ada', { name: 'Homemade Quiz', minPlayers: null, maxPlayers: null, minPlaytime: null, maxPlaytime: null, imageUrl: null }, NOW);
+
+		const missing = await shelfNotInCollection(db, 'ada', collection.items);
+		expect(missing.map((m) => [m.bggId, m.name, m.lent])).toEqual([[900005, 'Test Game Alpha Card Game', true]]);
+	});
+
+	it('removes only the person’s own copies of the ticked games, and bumps their catalogs', async () => {
+		await run(db, `INSERT INTO users (id, name, created_at) VALUES ('bob', 'Bob', 0)`);
+		const [card] = await searchBgg(db, fake, 'Test Game Alpha Card Game', 'ada', NOW);
+		await addCopy(db, 'ada', card.gameId, NOW);
+		await addCopy(db, 'bob', card.gameId, NOW);
+		const before = (await one<{ v: number }>(db, `SELECT catalog_version AS v FROM groups WHERE id = 'g1'`))!.v;
+
+		expect(await removeFromShelf(db, 'ada', [card.gameId, card.gameId, 999_999])).toEqual({ removed: 1 });
+		expect(await all(db, 'SELECT user_id FROM copies WHERE game_id = ?1', card.gameId)).toEqual([{ user_id: 'bob' }]);
+		expect((await one<{ v: number }>(db, `SELECT catalog_version AS v FROM groups WHERE id = 'g1'`))!.v).toBeGreaterThan(before);
+		expect(await removeFromShelf(db, 'ada', [])).toEqual({ removed: 0 });
 	});
 });

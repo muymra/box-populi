@@ -34,7 +34,7 @@ The steps follow Cloudflare Pages, the main path and the one tested end to end. 
 
 ## 1. Apply for BGG access (optional, do it first)
 
-Go to `https://boardgamegeek.com/applications` and register a non-commercial application. Describe your own instance: who it's for, roughly how many people, and that it's Box Populi from `https://github.com/muymra/box-populi`. Carlo's application covers his instance only. When it's approved, create a token on the application's page and store it as `BGG_TOKEN` (step 5). The instance turns on BGG search, import and game details as soon as the token is there; until then it runs with manual entry.
+Go to `https://boardgamegeek.com/applications` and register a non-commercial application. Describe your own instance: who it's for, roughly how many people, and that it's Box Populi from `https://github.com/muymra/box-populi`. Carlo's application covers his instance only. When it's approved, create a token on the application's page and store it as `BGG_TOKEN` (step 5). The instance turns on BGG search, import and game details as soon as the token is there; until then it runs with manual entry. Games members added before that keep working: those from Wikidata fill in BGG's details by themselves, and members find their typed-in ones from the Add games page ("Find them on BoardGameGeek").
 
 ## 2. Get the code
 

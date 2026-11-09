@@ -98,8 +98,8 @@ export type SearchResult = {
  * BGG title search for the add page (TECH.md "Search"): one `search` call, then one `thing` call
  * for the top hits that aren't cached yet. Every hit ends up as a games row, so it can be added.
  */
-export async function searchBgg(db: DB, client: BggClient, query: string, userId: string, now: number): Promise<SearchResult[]> {
-	const top = rankHits(await client.search(query), query);
+export async function searchBgg(db: DB, client: BggClient, query: string, userId: string, now: number, limit = 10): Promise<SearchResult[]> {
+	const top = rankHits(await client.search(query), query, limit);
 	if (top.length === 0) return [];
 	const ids = top.map((h) => h.bggId);
 	const placeholders = ids.map((_, i) => `?${i + 1}`).join(', ');

@@ -53,6 +53,40 @@ export async function previewItems(db: DB, userId: string, items: BggCollectionI
 		.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
 }
 
+export type ShelfOnly = { gameId: number; bggId: number; name: string; year: number | null; thumbUrl: string | null; lent: boolean };
+
+/**
+ * Games on the person's shelf that this BGG collection doesn't list as owned: sold, traded or given
+ * away, or simply never marked "Own" on BGG. Offered for removal in a repeat import's preview, never
+ * removed by themselves. Only games with a BGG id can be compared; typed-in games never appear.
+ */
+export async function shelfNotInCollection(db: DB, userId: string, items: BggCollectionItem[]): Promise<ShelfOnly[]> {
+	const inCollection = new Set(items.map((i) => i.bggId));
+	const rows = await all<{ id: number; bgg_id: number; name: string; year: number | null; thumb_url: string | null; lent: number }>(
+		db,
+		`SELECT g.id, g.bgg_id, g.name, g.year, g.thumb_url,
+			(c.lent_to_user_id IS NOT NULL OR c.lent_to_text IS NOT NULL) AS lent
+		 FROM copies c JOIN games g ON g.id = c.game_id
+		 WHERE c.user_id = ?1 AND g.bgg_id IS NOT NULL`,
+		userId
+	);
+	return rows
+		.filter((r) => !inCollection.has(r.bgg_id))
+		.map((r) => ({ gameId: r.id, bggId: r.bgg_id, name: r.name, year: r.year, thumbUrl: r.thumb_url, lent: r.lent === 1 }))
+		.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
+}
+
+/** Takes the person's own copies of these games off their shelf, the same as "Remove from my games" on each. */
+export async function removeFromShelf(db: DB, userId: string, gameIds: number[]): Promise<{ removed: number }> {
+	const ids = [...new Set(gameIds)];
+	if (ids.length === 0) return { removed: 0 };
+	const [deleted] = await db.batch([
+		stmt(db, 'DELETE FROM copies WHERE user_id = ?1 AND game_id IN (SELECT value FROM json_each(?2))', userId, JSON.stringify(ids)),
+		bumpCatalogForUser(db, userId)
+	]);
+	return { removed: deleted?.meta?.changes ?? 0 };
+}
+
 const CONFIRM_CHUNK = 50; // 50 games = 100 statements per batch, plus the catalog bump
 
 /**

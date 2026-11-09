@@ -358,3 +358,10 @@ Replaces D15's thresholds. Complexity is light under 2, medium from 2 to under 4
 **Why:** "not too heavy" in the picker and the Heavy button on the shelf now leave out only the long, dense games.
 **Trade-offs accepted:** Medium covers most of a typical shelf, so the Medium button narrows less. Games from 3 to 4 that were heavy are medium now, and a member's earlier rating of 3 (before D55) reads as medium.
 **Revisit if:** the Medium button stops being useful on real shelves; a fourth level is the next step.
+
+## D57. Typed-in and Wikidata games can be merged into BGG games (2026-11-09)
+
+Replaces "switching to live later doesn't migrate manual games" (TECH.md "Public-sources mode"). Once BGG is on, the add page lists a member's games that have no BGG id (typed in, or from Wikidata without one) and offers "Find them on BoardGameGeek": each title goes through the normal BGG search, one game per request at BGG's pace, the likeliest match is shown with its box and year, and only exact titles come ticked. Each ticked game is merged into the BGG game: copies, wishes, links, bring lists and plays move across, group corrections are dropped (BGG games are never corrected), and the typed-in row is deleted. Where someone already has the BGG game, their typed-in copy, wish or bring-list entry is the one dropped. Carlo chose this on 2026-11-09 over removing and re-adding games one by one, after his own instance went live with 63 typed-in games and the hydrate loop, which needs a BGG id, never reached them.
+**Why:** every hoster who follows SELF_HOSTING.md launches without a token and adds one later, so every instance that switches has this gap.
+**Trade-offs accepted:** the game is shared (D54), so merging moves other members' copies of it too, the same reach a correction has. A duplicate copy's note and loan go with the typed-in row. Matching costs two BGG requests per game (search, then details for the top five), about four seconds each at the instance pace.
+**Revisit if:** members merge into the wrong game often; an undo would need the typed-in row kept instead of deleted.

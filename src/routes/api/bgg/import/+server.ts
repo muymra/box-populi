@@ -1,7 +1,7 @@
 // Step 1 of the import: preview a BGG collection. Stores nothing; the username is not kept.
 import { getBggClient } from '#lib/server/bgg/client.ts';
 import { bggFailure, jsonError, OFF_MESSAGE, refuseInactive } from '#lib/server/bgg/http.ts';
-import { cleanBggUsername, fetchCollection, previewItems } from '#lib/server/importer.ts';
+import { cleanBggUsername, fetchCollection, previewItems, shelfNotInCollection } from '#lib/server/importer.ts';
 import { getDb } from '#lib/server/platform.ts';
 import { LIMITS, take } from '#lib/server/ratelimit.ts';
 import type { RequestHandler } from './$types';
@@ -27,7 +27,10 @@ export const POST: RequestHandler = async (event) => {
 		const result = await fetchCollection(client, username, 1);
 		if (result.status === 'pending') return Response.json({ status: 'pending' }, { status: 202 });
 		if (result.status === 'not_found') return jsonError(404, `BoardGameGeek has no user called “${username}”.`);
-		return Response.json({ status: 'ready', items: await previewItems(db, user.id, result.items) }, { headers: { 'cache-control': 'no-store' } });
+		// Games on the shelf the collection doesn't list, offered for removal. Not for an empty
+		// collection: that's more likely a wrong or private username than a sold-off shelf.
+		const missing = result.items.length ? await shelfNotInCollection(db, user.id, result.items) : [];
+		return Response.json({ status: 'ready', items: await previewItems(db, user.id, result.items), missing }, { headers: { 'cache-control': 'no-store' } });
 	} catch (e) {
 		return bggFailure(e);
 	}

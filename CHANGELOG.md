@@ -4,6 +4,9 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+- Games you typed in, or added from Wikidata, can now be found on BoardGameGeek once your instance has a BGG token. The Add games page says how many of your games have no BoardGameGeek details and looks each one up for you. Tick the right matches and each becomes the BoardGameGeek game, with complexity, mechanics and best-at counts, keeping its copies, links and plays.
+- Running the BoardGameGeek import again now also lists the games on your shelf that aren't in your BoardGameGeek collection anymore. Tick the ones you've sold or traded and they come off your shelf in the same step; nothing is removed unless you tick it. The import says you can run it again for new games, and a repeat import's preview counts the new games first.
+
 ## 0.3.2 (2026-11-08)
 
 **Upgrading:** nothing to do: no migrations and no new settings. Deploy as usual.
