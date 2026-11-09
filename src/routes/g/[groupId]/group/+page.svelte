@@ -102,7 +102,7 @@
 				{#snippet person()}
 					<span class="cube-chip" style:background={c.fill} style:color={c.ink} aria-hidden="true">{m.name.slice(0, 1).toUpperCase()}</span>
 					<span class="who">
-						<strong>{m.name}{#if m.isMe}<span class="muted">{' (you)'}</span>{/if}{#if m.noPin}{' '}<span class="tag">No PIN yet</span>{/if}</strong>
+						<strong><a class="profile-link" href="/g/{data.group.id}/members/{m.id}">{m.name}</a>{#if m.isMe}<span class="muted">{' (you)'}</span>{/if}{#if m.noPin}{' '}<span class="tag">No PIN yet</span>{/if}</strong>
 						<span class="muted">
 							{ROLE[m.role]}{' · '}<span class="num">{m.games}</span> {m.games === 1 ? 'game' : 'games'}{' · '}{c.hatched ? 'striped ' : ''}{c.name.toLowerCase()}{' · '}<span class="nowrap">{lastActive(m.lastSeenAt, data.now)}</span>
 						</span>

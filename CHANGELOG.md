@@ -4,6 +4,7 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+- Member profiles: tap a member's name (Group tab, a game's page, the leaderboard, play rows, a night's page) for their page in the group: how often you've played together and who wins, games you both love, their games you haven't played yet, their record and wants. Your name in the top bar opens your own, which adds figures only you see: your year by month, your win rate by table size, who you play with most, how much of your shelf gets played, and your Play soon list. It shows only what the group could already see.
 - The showcase home page (`INSTANCE_MODE=demo`) draws its example shelves the way the shelf looks now and has a part on favourites and Play soon; its link preview is retaken to match. The demo group's members have favourites, so the demo shows the heart, the Favourites filters and the Most loved sort. Reseed the demo after upgrading to get them.
 ## 0.4.1 (2026-11-09)
 

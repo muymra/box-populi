@@ -5,5 +5,29 @@
       "maxFindings": 5,
       "maxChars": 8000
     }
+  },
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/profiles/form-guide.html"
+        ],
+        "createdAt": "2026-11-09T15:15:01.424Z",
+        "reason": "agent: decision sketch only; the flagged .switch and .sp children are full-height 40px/46px flex segments with vertically centred text, copying the app's view switch and Spines"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/profiles/sheet.html"
+        ],
+        "createdAt": "2026-11-09T15:21:53.820Z",
+        "reason": "agent: decision sketch only; the flagged divs are the dimmed Group tab rows behind the modal, 58px tall with vertically centred text under a border-top"
+      }
+    ]
   }
 }

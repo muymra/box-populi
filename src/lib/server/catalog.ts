@@ -5,7 +5,7 @@ import { applyCorrection, correctionsRead } from './corrections.ts';
 import { colorIndexesByJoinOrder } from '#lib/catalog/colors.ts';
 import type { CatalogGame, CatalogMember, CatalogPayload, PollSource, Role } from '#lib/catalog/types.ts';
 
-type GameRow = {
+export type GameRow = {
 	id: number;
 	bgg_id: number | null;
 	name: string;

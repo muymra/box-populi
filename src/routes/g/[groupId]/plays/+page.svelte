@@ -53,7 +53,7 @@
 					{@const c = m ? playerColor(m.colorIndex) : null}
 					<li class="step p{place}" value={place}>
 						<span class="block" style:background={c?.fill} style:color={c?.ink} aria-hidden="true"><span class="num">{place}</span></span>
-						<span class="who">{m?.name ?? 'a former member'}</span>
+						<span class="who">{#if m}<a href="{base}/members/{m.id}">{m.name}</a>{:else}a former member{/if}</span>
 						<span class="score num"><strong>{s.points}</strong> {s.points === 1 ? 'point' : 'points'}</span>
 						<span class="muted small num">{s.wins} {s.wins === 1 ? 'win' : 'wins'} · {s.plays} {s.plays === 1 ? 'play' : 'plays'}</span>
 					</li>
@@ -69,7 +69,7 @@
 							{@const m = memberById.get(s.userId)}
 							<tr>
 								<td class="num rank">{i + 4}</td>
-								<th scope="row"><span class="dot" style:background={m ? playerColor(m.colorIndex).fill : null}></span>{m?.name ?? 'a former member'}</th>
+								<th scope="row"><span class="dot" style:background={m ? playerColor(m.colorIndex).fill : null}></span>{#if m}<a href="{base}/members/{m.id}">{m.name}</a>{:else}a former member{/if}</th>
 								<td class="num strong">{s.points}</td>
 								<td class="num">{s.wins}</td>
 								<td class="num">{s.plays}</td>

@@ -361,7 +361,7 @@
 							{@const c = playerColor(o.colorIndex)}
 							<li>
 								<span class="chip" style:background={c.fill} style:color={c.ink} aria-hidden="true">{o.name.slice(0, 1).toUpperCase()}</span>
-								<span class="who"><strong>{o.name}</strong></span>
+								<span class="who"><strong><a href="{base}/members/{o.id}">{o.name}</a></strong></span>
 								{#if o.status}<span class="tag">{o.status}</span>{/if}
 							</li>
 						{/each}
@@ -372,12 +372,12 @@
 					<p class="muted">Nobody in the group owns this yet.</p>
 				{/if}
 				{#if data.wishers.length}
-					<p class="muted wanted">Wanted by {data.wishers.map((w) => w.name).join(', ')}</p>
+					<p class="muted wanted">Wanted by {#each data.wishers as w, i (w.id)}{i ? ', ' : ''}<a href="{base}/members/{w.id}">{w.name}</a>{/each}</p>
 				{/if}
 				{#if data.favourites.length}
 					<p class="muted favoured">
 						<span class="squares" aria-hidden="true">{#each data.favourites.slice(0, 4) as f (f.id)}<i style:background={playerColor(f.colorIndex).fill}></i>{/each}</span>
-						Favourite of {data.favourites.map((f) => f.name).join(', ')}
+						Favourite of {#each data.favourites as f, i (f.id)}{i ? ', ' : ''}<a href="{base}/members/{f.id}">{f.name}</a>{/each}
 					</p>
 				{/if}
 				{#if data.canEdit}

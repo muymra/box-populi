@@ -37,7 +37,9 @@
 	const isCurrent = (href: string) =>
 		href === base
 			? current === base || current.startsWith(`${base}/game/`)
-			: current.startsWith(href) || (href === `${base}/pick` && current.startsWith(`${base}/nights`));
+			: current.startsWith(href) ||
+				(href === `${base}/pick` && current.startsWith(`${base}/nights`)) ||
+				(href === `${base}/group` && current.startsWith(`${base}/members/`));
 
 	// The group switcher (PRD "Groups and codes"): for someone in two or more live groups, the group
 	// name opens a list of them. Switching keeps the tab you're on, so Game night leads to Game night.
@@ -50,14 +52,28 @@
 		if (first === 'nights') return '/pick';
 		return TABS.includes(first) ? `/${first}` : '';
 	});
-	afterNavigate(() => (switchOpen = false));
+	// Your name opens a small menu (Carlo's pick, 2026-11-09): your profile in this group (D61), or
+	// your account. Outside a group, and for someone just looking at the demo, it's a plain link.
+	let meOpen = $state(false);
+	let meEl = $state<HTMLElement>();
+	let meButton = $state<HTMLButtonElement>();
+	afterNavigate(() => {
+		switchOpen = false;
+		meOpen = false;
+	});
 	function closeOutside(e: PointerEvent) {
 		if (switchOpen && switchEl && !switchEl.contains(e.target as Node)) switchOpen = false;
+		if (meOpen && meEl && !meEl.contains(e.target as Node)) meOpen = false;
 	}
 	function closeOnEscape(e: KeyboardEvent) {
-		if (switchOpen && e.key === 'Escape') {
+		if (e.key !== 'Escape') return;
+		if (switchOpen) {
 			switchOpen = false;
 			switchButton?.focus();
+		}
+		if (meOpen) {
+			meOpen = false;
+			meButton?.focus();
 		}
 	}
 
@@ -128,7 +144,21 @@
 			<Trophy size={22} strokeWidth={2} aria-hidden="true" />
 		</a>
 	</div>
-	{#if data.user}
+	{#if data.user && data.role}
+		<div class="me-wrap" bind:this={meEl}>
+			<button type="button" class="me" aria-expanded={meOpen} aria-controls="me-menu" bind:this={meButton} onclick={() => (meOpen = !meOpen)}
+				><span class="me-name">{data.user.name}</span><ChevronDown size={16} strokeWidth={2.25} aria-hidden="true" /></button
+			>
+			{#if meOpen}
+				<nav class="switch-menu me-menu" id="me-menu" aria-label="You">
+					<ul>
+						<li><a href="{base}/members/{data.myId}" aria-current={current === `${base}/members/${data.myId}` ? 'page' : undefined}><span class="name">Your profile in {data.group.name}</span></a></li>
+						<li><a href="/me"><span class="name">Your account</span></a></li>
+					</ul>
+				</nav>
+			{/if}
+		</div>
+	{:else if data.user}
 		<a href="/me" class="me">{data.user.name}</a>
 	{:else if data.demoMode}
 		<a href={SOURCE_URL} class="me" rel="noopener">Run your own</a>
@@ -343,6 +373,47 @@
 	.me:hover {
 		text-decoration: underline;
 	}
+	/* Your name as the menu's button: plain text like the link it replaced, with the switcher's fill while open. */
+	.me-wrap {
+		display: flex;
+		flex: none;
+		min-width: 0;
+	}
+	button.me {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		margin: 0;
+		border: 0;
+		border-radius: var(--r-ctl);
+		background: none;
+		padding: 8px 4px 8px 8px;
+		cursor: pointer;
+	}
+	button.me:hover,
+	button.me[aria-expanded='true'] {
+		background: var(--gap);
+		text-decoration: none;
+	}
+	.me-name {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	button.me :global(svg) {
+		flex: none;
+		color: var(--ink-2);
+		transition: transform 0.15s var(--ease-out);
+	}
+	button.me[aria-expanded='true'] :global(svg) {
+		transform: rotate(180deg);
+	}
+	/* The switcher's card, hung from the bar's right gutter under your name. */
+	.switch-menu.me-menu {
+		left: auto;
+		right: var(--s-4);
+	}
 	.note {
 		margin: var(--s-3) 0 0;
 		font-size: var(--t-small);
@@ -401,7 +472,8 @@
 		.logo {
 			max-width: 72px;
 		}
-		.me {
+		.me,
+		.me-wrap {
 			flex: 0 1 auto;
 			min-width: 2.5rem;
 			max-width: 6rem;
@@ -454,7 +526,8 @@
 			background: var(--gap);
 			color: var(--ink);
 		}
-		.me {
+		.me,
+		.me-wrap {
 			margin-left: var(--s-3);
 			padding-left: var(--s-4);
 			border-left: 1px solid var(--rule);
@@ -475,7 +548,8 @@
 		.tool {
 			width: 40px;
 		}
-		.me {
+		.me,
+		.me-wrap {
 			margin-left: 0;
 			padding-left: var(--s-3);
 		}

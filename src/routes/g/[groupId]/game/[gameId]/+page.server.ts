@@ -232,6 +232,7 @@ export const load: PageServerLoad = async (event) => {
 			detailsPending: game.bgg_id != null && game.fetched_at == null
 		},
 		owners: owners.map((o) => ({
+			id: o.user_id,
 			name: o.name,
 			isMe: o.user_id === me?.id,
 			colorIndex: colorOf.get(o.user_id) ?? 0,
@@ -243,7 +244,7 @@ export const load: PageServerLoad = async (event) => {
 						: `Lent to ${o.lent_to_name}`
 					: null
 		})),
-		wishers: wishers.map((w) => ({ name: w.name, colorIndex: colorOf.get(w.id) ?? 0 })),
+		wishers: wishers.map((w) => ({ id: w.id, name: w.name, colorIndex: colorOf.get(w.id) ?? 0 })),
 		links: links.map((l) => ({
 			id: l.id,
 			kind: l.kind,

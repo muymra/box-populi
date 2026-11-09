@@ -46,12 +46,12 @@
 	const host = $derived(night.hostId ? memberById.get(night.hostId) : undefined);
 	const list = $derived(bringList(night, memberIds));
 	const byBringer = $derived.by(() => {
-		const groups = new Map<string, { label: string; color: string | null; games: typeof list }>();
+		const groups = new Map<string, { label: string; id: string | null; color: string | null; games: typeof list }>();
 		for (const g of list) {
 			const key = g.guestName ? `g:${g.guestName}` : `m:${g.broughtBy}`;
 			const m = g.broughtBy ? memberById.get(g.broughtBy) : undefined;
 			const label = g.guestName ?? m?.name ?? 'a former member';
-			const entry = groups.get(key) ?? { label, color: m ? playerColor(m.colorIndex).fill : null, games: [] };
+			const entry = groups.get(key) ?? { label, id: m?.id ?? null, color: m ? playerColor(m.colorIndex).fill : null, games: [] };
 			entry.games = [...entry.games, g];
 			groups.set(key, entry);
 		}
@@ -209,7 +209,7 @@
 									</button>
 								</form>
 							{:else}
-								<span class="person" class:going={a === true} class:no={a === false}><span class="dot" style:background={c.fill}></span>{m.name}</span>
+								<a class="person" href="{base}/members/{m.id}" class:going={a === true} class:no={a === false}><span class="dot" style:background={c.fill}></span>{m.name}</a>
 							{/if}
 						</li>
 					{/each}
@@ -262,7 +262,7 @@
 		{#each byBringer as b (b.label)}
 			<div class="form-row" role="group" aria-label="What {b.label} brings">
 				<div class="form-label">
-					<span class="form-q bringer"><span class="dot" class:guest={!b.color} style:background={b.color}></span>{b.label}</span>
+					<span class="form-q bringer"><span class="dot" class:guest={!b.color} style:background={b.color}></span>{#if b.id}<a href="{base}/members/{b.id}">{b.label}</a>{:else}{b.label}{/if}</span>
 				</div>
 				<ul class="form-body games">
 					{#each b.games as g (g.gameId)}
@@ -559,6 +559,13 @@
 	}
 	button.person {
 		cursor: pointer;
+	}
+	/* Read-only, each person is the way to their profile (D61); struck through stays struck through. */
+	a.person:not(.no) {
+		text-decoration: none;
+	}
+	a.person:hover {
+		border-color: var(--ink-3);
 	}
 	.person.going {
 		background: var(--mark);
