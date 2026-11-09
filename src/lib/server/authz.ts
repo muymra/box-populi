@@ -35,7 +35,12 @@ export function requireUser(event: RequestEvent): NonNullable<App.Locals['user']
 	return event.locals.user;
 }
 
-async function loadGroup(db: DB, groupId: string) {
+/**
+ * The group, and the caller's place in it, in one query: every group page and endpoint runs this,
+ * and on Cloudflare's free plan each database call costs CPU time out of a small budget (D59). The
+ * join code, theme and PIN date ride along for the group layout, which needed four more calls for them.
+ */
+async function loadGroup(db: DB, groupId: string, userId: string | null) {
 	return one<{
 		id: string;
 		name: string;
@@ -44,18 +49,27 @@ async function loadGroup(db: DB, groupId: string) {
 		suspended_reason: string | null;
 		archived_at: number | null;
 		archived_by_name: string | null;
+		code: string;
+		theme: string | null;
+		role: Role | null;
+		last_seen_at: number | null;
+		pin_set_at: number | null;
 	}>(
 		db,
-		`SELECT g.id, g.name, g.is_demo, g.suspended_at, g.suspended_reason, g.archived_at, u.name AS archived_by_name
-		 FROM groups g LEFT JOIN users u ON u.id = g.archived_by WHERE g.id = ?1`,
-		groupId
+		`SELECT g.id, g.name, g.is_demo, g.suspended_at, g.suspended_reason, g.archived_at, u.name AS archived_by_name,
+		        g.code, g.theme, m.role, m.last_seen_at, me.pin_set_at
+		 FROM groups g
+		 LEFT JOIN users u ON u.id = g.archived_by
+		 LEFT JOIN memberships m ON m.group_id = g.id AND m.user_id = ?2
+		 LEFT JOIN users me ON me.id = ?2
+		 WHERE g.id = ?1`,
+		groupId,
+		userId
 	);
 }
 
-async function memberRole(db: DB, groupId: string, userId: string): Promise<Role | null> {
-	const row = await one<{ role: Role }>(db, 'SELECT role FROM memberships WHERE group_id = ?1 AND user_id = ?2', groupId, userId);
-	return row?.role ?? null;
-}
+/** How stale `last_seen_at` may get before a visit writes it again: once an hour is enough for "last active". */
+const SEEN_EVERY_MS = 3_600_000;
 
 function info(row: NonNullable<Awaited<ReturnType<typeof loadGroup>>>): GroupInfo {
 	return {
@@ -70,22 +84,30 @@ function info(row: NonNullable<Awaited<ReturnType<typeof loadGroup>>>): GroupInf
 	};
 }
 
+/** What the group layout reads alongside the access check. Never spread into page data whole: the code is for members only. */
+export type GroupExtras = { code: string; theme: string | null; pinSetAt: number | null };
+
 /** Members of the group, or anyone for the demo group. */
 export async function requireRead(event: RequestEvent, db: DB, groupId: string): Promise<GroupAccess> {
-	const row = await loadGroup(db, groupId);
+	return (await readGroup(event, db, groupId)).access;
+}
+
+/** requireRead, plus the join code, theme and the caller's PIN date from the same row (D59). */
+export async function readGroup(event: RequestEvent, db: DB, groupId: string): Promise<{ access: GroupAccess; extras: GroupExtras }> {
+	const userId = event.locals.user?.id ?? null;
+	const row = await loadGroup(db, groupId, userId);
 	if (!row) error(404, 'Group not found');
 	const group = info(row);
+	const extras: GroupExtras = { code: row.code, theme: row.theme, pinSetAt: row.pin_set_at };
 
-	if (group.isDemo) {
-		const role = event.locals.user ? await memberRole(db, groupId, event.locals.user.id) : null;
-		return { group, role, readonly: true };
-	}
+	if (group.isDemo) return { access: { group, role: row.role ?? null, readonly: true }, extras };
 
 	const user = requireUser(event);
-	const role = await memberRole(db, groupId, user.id);
-	if (!role) error(404, 'Group not found');
-	await touchLastSeen(db, groupId, user.id, Date.now());
-	return { group, role, readonly: group.suspended || group.archived };
+	if (!row.role) error(404, 'Group not found');
+	// A write only when it's due, rather than an UPDATE that usually matches nothing on every request.
+	const now = Date.now();
+	if ((row.last_seen_at ?? 0) < now - SEEN_EVERY_MS) await touchLastSeen(db, groupId, user.id, now);
+	return { access: { group, role: row.role, readonly: group.suspended || group.archived }, extras };
 }
 
 /**

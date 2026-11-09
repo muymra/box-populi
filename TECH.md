@@ -35,6 +35,8 @@ Cloudflare free tier, approximately: 100,000 Functions requests per day, 5 milli
 
 If the limits bite anyway, the Workers Paid plan ($5 per month) raises them by orders of magnitude. Nothing in the design changes.
 
+**CPU time is the tightest limit (D59).** The free plan allows 10ms of CPU per request, applied loosely: measured on 2026-11-09 on a live instance with a few hundred games, ordinary page-data requests cost 4 to 48ms and a full shelf load 37 to 44ms, and Cloudflare stopped a few of them with error 1102 once traffic was steady. So the app keeps requests few and cheap: links preload on tap, not hover; the shelf isn't server-rendered; icons are static files; the access check is one query. To measure, `wrangler pages deployment tail <id> --project-name <p> --format json` reports `cpuTime` and an `outcome` of `exceededCpu` per request.
+
 ## Architecture
 
 ```
@@ -509,6 +511,8 @@ The group actions live in `src/lib/server/group-admin.ts`. Each reads the target
 `requireRead` (authz.ts) touches `memberships.last_seen_at` on group routes when the stored value is more than an hour old. That's one write per member per hour at most.
 
 Instance limits apply in the actions: creating a group checks `GROUP_CREATION`, the caller's owned-group count against `MAX_GROUPS_PER_USER`, and 5 `group_create` tries per network address per day, given back when the form turns out invalid. Joining checks `MAX_MEMBERS_PER_GROUP` and refuses suspended and demo groups.
+
+`requireRead` is `readGroup(event, db, groupId).access`: one query reads the group, the caller's role, `last_seen_at` and, for the group layout, the join code, theme and PIN date (`extras`, never spread into page data whole). `last_seen_at` is written only when it's over an hour old (D59).
 
 ## Instance administration
 
@@ -989,6 +993,7 @@ Run with `pnpm test` (Vitest). Tests sit next to their code as `*.test.ts`.
 | Player-poll parsing misreads edge cases | Fixtures for the odd cases; no-data fallback. |
 | Catalog payload too large on slow phones | Measure at 1,500 games. Trim alternate names first, then send tag ids with a dictionary. |
 | A large group's import day nears the D1 write limit | One row per game keeps it near 20,000 writes. Workers Paid is the fallback. |
+| Requests exceed the free plan's 10ms of CPU and Cloudflare answers error 1102 | Measured 2026-11-09; fewer requests and one-query access checks (D59). Workers Paid is the fallback. |
 | A personal link leaks (pasted in the wrong chat) | Regenerating it from the account page revokes it at once; "sign out everywhere" also ends existing sessions. |
 | Someone loses every device without saving their link | Rejoin with the group code and re-import; a group admin removes the old entry. Accepted trade-off (D25). |
 | A hoster misconfigures their instance | `instance.ts` names the missing variable on every page. SELF_HOSTING.md lists every step, and each is checked by doing it once on a fresh Cloudflare account. |

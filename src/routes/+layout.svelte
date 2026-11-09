@@ -33,6 +33,8 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
+	<!-- In static/, so iPhones find it without asking the app for guessed names (D59). -->
+	<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 	<title>{data.instanceName}</title>
 	{#if data.customTheme != null}<link rel="stylesheet" href="/custom-theme.css?v={data.customTheme}" />{/if}
 </svelte:head>

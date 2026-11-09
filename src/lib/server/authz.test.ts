@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { RequestEvent } from '@sveltejs/kit';
 import { createTestDb } from './testing/d1.ts';
-import { run } from './db.ts';
-import { requireActiveMember } from './authz.ts';
+import { one, run } from './db.ts';
+import { readGroup, requireActiveMember, requireRead } from './authz.ts';
 import { refuseInactive } from './bgg/http.ts';
 
 let db: ReturnType<typeof createTestDb>;
@@ -55,3 +55,34 @@ describe('requireActiveMember', () => {
 		expect((await refuseInactive(as('bo'), db, 42))?.status).toBe(403);
 	});
 });
+
+describe('readGroup (D59)', () => {
+	const anonymous = { locals: { user: null }, url: new URL('https://example.test/g/demo') } as unknown as RequestEvent;
+	const seen = async () => (await one<{ last_seen_at: number }>(db, `SELECT last_seen_at FROM memberships WHERE group_id = 'open' AND user_id = 'ada'`))!.last_seen_at;
+
+	it('reads the group, the role and the layout’s extras in one go', async () => {
+		await run(db, `UPDATE groups SET theme = 'nord' WHERE id = 'open'`);
+		await run(db, `UPDATE users SET pin_set_at = 123 WHERE id = 'ada'`);
+		const { access, extras } = await readGroup(as('ada'), db, 'open');
+		expect(access).toMatchObject({ role: 'owner', readonly: false, group: { id: 'open', isDemo: false } });
+		expect(extras).toEqual({ code: 'AAAAA', theme: 'nord', pinSetAt: 123 });
+		expect(await requireRead(as('ada'), db, 'open')).toEqual(access);
+	});
+
+	it('keeps the demo open to anyone, with no role for visitors, and hides other groups', async () => {
+		expect((await readGroup(anonymous, db, 'demo')).access).toMatchObject({ role: null, readonly: true });
+		expect((await readGroup(as('bo'), db, 'demo')).access.role).toBe('owner');
+		expect(await status(readGroup(as('cy'), db, 'open'))).toBe(404);
+		expect(await status(readGroup(as('ada'), db, 'nope'))).toBe(404);
+		expect(await status(readGroup(anonymous, db, 'open'))).toBe(303);
+	});
+
+	it('writes last_seen_at only when it’s over an hour old', async () => {
+		await readGroup(as('ada'), db, 'open');
+		const first = await seen();
+		expect(first).toBeGreaterThan(0);
+		await readGroup(as('ada'), db, 'open');
+		expect(await seen()).toBe(first);
+	});
+});
+
