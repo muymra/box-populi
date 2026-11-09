@@ -4,6 +4,8 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+- Docs: SELF_HOSTING.md step 1 walks through BGG's application form field by field, with example answers.
+
 ## 0.3.3 (2026-11-09)
 
 **Upgrading:** nothing to do: no migrations and no new settings. Deploy as usual.

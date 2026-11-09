@@ -34,7 +34,38 @@ The steps follow Cloudflare Pages, the main path and the one tested end to end. 
 
 ## 1. Apply for BGG access (optional, do it first)
 
-Go to `https://boardgamegeek.com/applications` and register a non-commercial application. Describe your own instance: who it's for, roughly how many people, and that it's Box Populi from `https://github.com/muymra/box-populi`. Carlo's application covers his instance only. When it's approved, create a token on the application's page and store it as `BGG_TOKEN` (step 5). The instance turns on BGG search, import and game details as soon as the token is there; until then it runs with manual entry. Games members added before that keep working: those from Wikidata fill in BGG's details by themselves, and members find their typed-in ones from the Add games page ("Find them on BoardGameGeek").
+Sign in to BoardGameGeek, go to `https://boardgamegeek.com/applications` and apply for a new application. Read BGG's [Using the XML API](https://boardgamegeek.com/using_the_xml_api) first; the form asks you to. Every instance needs its own application: Carlo's covers his instance only, and BGG doesn't allow one token to serve several instances (TECH.md "Many instances, one piece of software").
+
+The form asks for your instance's address before you've deployed it. Choose your Cloudflare Pages project name now: the address will be `https://<your-project-name>.pages.dev` once you create the project in step 3, unless the name is taken.
+
+| Field | What to put |
+|---|---|
+| Application name | Box Populi and your group, so BGG can tell instances apart: "Box Populi for Thursday Night Tabletop". |
+| Your full legal name | Yours. |
+| Your organization's name, if applicable | Empty if you run it for friends; the club's name if you run it for a club. |
+| Your organization's website | Your instance's address, or a club's website. The form takes yours if you aren't an organization. |
+| Your organization's location (City/town) | Your town: type it, then pick it from the list. |
+| Contact email | One you read: BGG says it "must be actively monitored", and its answer comes there. Use the same address you'll set as `INSTANCE_CONTACT` (step 4), which goes out with every request to BGG. |
+| Describe your organization's (or your own) activities... | Who you are and how you use BoardGameGeek. Example below. |
+| Detailed description of your application(s)... | What Box Populi does and how it uses the API, in plain words. Example below. |
+| Is your application available to the public? | Yes. BGG counts code in a public repository as public, and Box Populi's is, even when your instance is only for your group. |
+| A link to your application or its source code | `https://github.com/muymra/box-populi` |
+| Your API client(s) | Your instance's address. |
+| Is your endeavor commercial in nature? | No, as long as no money is involved. BGG counts donations or a tip jar, ads, paid features, and running it for a store, café or convention, even a non-profit one, as commercial (see "What you take on"). |
+| Any other information | That it's open-source software each hoster registers for separately, and how it treats BGG's data. Example below. |
+| API Terms of Use | Read the [XML API Terms of Use](https://boardgamegeek.com/wiki/page/XML_API_Terms_of_Use), then tick the box. |
+
+Examples to adapt. Put in your own group and numbers, and leave out anything that isn't true of your instance.
+
+> **Your activities:** I'm a board game hobbyist and keep my collection on BoardGameGeek. I play with a group of about a dozen friends, and I host a copy of Box Populi, open-source software, so the group can see which games we own between us.
+
+> **Your application:** Box Populi is a shared catalog for one board game group. Members add the games they own, by searching for a title or importing their own BGG collection by username, and the group can then see who owns what and find a game for the evening by players, play time and complexity. About 12 people will use it.
+>
+> It calls the XML API from its server only: `search` when someone looks up a title, `thing` for game details (up to 20 ids per request), and `collection` when a member imports their own collection. Results are stored in the instance's database and reused, so pages never call BGG and a game's details are fetched once. Requests are at least two seconds apart across the whole instance, and it backs off when BGG throttles. Every page credits BoardGameGeek and links to it, BGG's data is shown as BGG gives it and can't be edited, and box art is linked from BGG rather than copied.
+
+> **Other information:** Box Populi is open source (MIT) and self-hosted. Each person who runs a copy registers their own application, as your guide asks, and no instance fetches data for another. There's no public API, no ads, payments or donations, and no BGG data goes to AI services. Requests carry the User-Agent `BoxPopuli/<version> (<instance address>; <contact>; +https://github.com/muymra/box-populi)`. Until you approve this, the instance uses Wikidata and hand entry.
+
+Approval is done by hand. BGG warns it can take a week or more; Carlo's took three days (applied 2026-11-06, token 2026-11-09). When it's approved, open the application on `boardgamegeek.com/applications`, create a token there and store it as `BGG_TOKEN` (step 5). The instance turns on BGG search, import and game details as soon as the token is there; until then it runs with manual entry. Games members added before that keep working: those from Wikidata fill in BGG's details by themselves, and members find their typed-in ones from the Add games page ("Find them on BoardGameGeek").
 
 ## 2. Get the code
 
