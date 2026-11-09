@@ -72,6 +72,7 @@ box-populi/
     ensure-local-config.ts      creates the two gitignored config files on install
     seed-demo.ts                writes seed/demo.sql
     gen-themes.ts               writes src/lib/themes.css from themes.ts
+    restore-order.ts            reorders a `wrangler d1 export` so it loads into an empty D1 database (tables first)
   seed/demo.sql                 generated demo data, gitignored
   src/
     app.d.ts                    App.Locals: config, user, isAdmin, deviceTheme, theme, instanceTheme, appearance

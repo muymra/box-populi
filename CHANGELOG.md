@@ -4,6 +4,10 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+## 0.4.0 (2026-11-09)
+
+**Upgrading:** five migrations, 0012 to 0016. On Cloudflare, note a Time Travel bookmark and export a backup first, then apply them before deploying (SELF_HOSTING.md "Upgrading" has the commands and how to roll back). Docker, Vercel and Netlify apply them when the app starts. No new settings. Invite links now end in a key: share the new link from the Group tab; links shared before keep working.
+
 - Favourites: a heart on any game on your group's shelf. The game page says whose favourite it is, the shelf can show only favourites (anyone's or yours) and sort by the most loved, and Play tonight leans towards what the people there love.
 - Play soon: mark a game you'd like to try, or get to the table again soon. Only you see your list. Play tonight leans towards it when you're there and says so; when someone going to a night you're going to picks what to bring, their own games on your list say only that someone going would like to play them. Up to five games; a mark clears once you've played the game, after a night it was brought to, or after eight weeks.
 - A guest who joins the group can take over their guest plays, so their wins and points count on the leaderboard. The owner or a co-admin does it from the member's row on the Group tab, with "Plays as a guest…".
@@ -27,6 +31,7 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 - Fixed: leaving the Add page during a BoardGameGeek collection lookup kept asking BGG for up to a minute.
 - Play soon marks clear only after nights planned ahead of time, and Play tonight and the night page only see marks for games on the group's shelf.
 - The game page's picture loads first. Pages refuse to be framed by other sites.
+- Docs: SELF_HOSTING.md explains rolling back an upgrade with D1's Time Travel, and loading an export into an empty D1 database with `scripts/restore-order.ts` (an export used to stop on its own table order).
 
 ## 0.3.4 (2026-11-09)
 

@@ -112,8 +112,10 @@
 					<p>Which of your games should {groupName} see? Ticked games show. Everything else, and anything you add later, stays hidden here.</p>
 					<div class="picker-tools">
 						<input class="field" type="search" placeholder="Find a game" aria-label="Find a game" bind:value={filter} />
-						<button type="button" class="link-button" onclick={() => (picked = new Set(games.map((g) => g.id)))}>Tick all</button>
-						<button type="button" class="link-button" onclick={() => (picked = new Set())}>Untick all</button>
+						<span class="ticks">
+							<button type="button" class="link-button" onclick={() => (picked = new Set(games.map((g) => g.id)))}>Tick all</button>
+							<button type="button" class="link-button" onclick={() => (picked = new Set())}>Untick all</button>
+						</span>
 					</div>
 					<ul class="pick-list">
 						{#each games as g (g.id)}
@@ -184,6 +186,10 @@
 	.picker-tools .field {
 		flex: 1 1 14rem;
 		min-width: 0;
+	}
+	.ticks {
+		display: inline-flex;
+		gap: var(--s-3);
 	}
 	.pick-list {
 		grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));

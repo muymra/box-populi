@@ -210,12 +210,14 @@ Cloudflare Pages:
 ```sh
 git pull
 pnpm install
+pnpm exec wrangler d1 time-travel info DB     # note the bookmark: the database as it is now
+pnpm exec wrangler d1 export DB --remote --output backup-$(date +%F).sql
 pnpm exec wrangler d1 migrations apply DB --remote
 pnpm build
 pnpm exec wrangler pages deploy
 ```
 
-Apply migrations before deploying: new code can read columns an old database doesn't have.
+Apply migrations before deploying: new code can read columns an old database doesn't have. If the new version misbehaves, put the database back with the bookmark (`pnpm exec wrangler d1 time-travel restore DB --bookmark=<bookmark>`), then check out the version you had (`git checkout v0.3.4`, say) and deploy it.
 
 - **Cloudflare Workers:** the same, with `pnpm exec wrangler deploy` as the last step.
 - **Docker:** `git pull && docker compose up -d --build`. The app applies new migrations when it starts.
@@ -245,7 +247,16 @@ Export the database to a file:
 pnpm exec wrangler d1 export DB --remote --output backup-$(date +%F).sql
 ```
 
-D1 also keeps a short point-in-time history (Time Travel) you can restore from with `pnpm exec wrangler d1 time-travel`. Check Cloudflare's docs for the current retention on your plan.
+D1 also keeps a short point-in-time history (Time Travel): `pnpm exec wrangler d1 time-travel info DB` gives a bookmark for the database as it is now, and `pnpm exec wrangler d1 time-travel restore DB --bookmark=<bookmark>` (or `--timestamp=<time>`) puts it back. That's the quickest way back after an upgrade. Check Cloudflare's docs for how far back it reaches on your plan.
+
+To load an export into a new, empty D1 database, reorder it first: an export makes each table and fills it in the order the tables were created, so some rows arrive before a table they point at exists, and D1 refuses them. `scripts/restore-order.ts` puts every table definition first:
+
+```sh
+node scripts/restore-order.ts backup-2026-11-09.sql > restore.sql
+pnpm exec wrangler d1 execute DB --remote --file restore.sql
+```
+
+On Docker or Node, an export also loads into a fresh SQLite file with the `sqlite3` command line, which doesn't enforce foreign keys while loading.
 
 ## Limits
 
