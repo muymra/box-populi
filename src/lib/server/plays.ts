@@ -15,6 +15,7 @@ import {
 	placesFromScores,
 	type Coop,
 	type Play,
+	type PlayOutcome,
 	type PlayPlayer
 } from '#lib/plays.ts';
 import type { Role } from '#lib/catalog/types.ts';
@@ -222,7 +223,7 @@ export async function deletePlay(db: DB, groupId: string, actor: Actor, playId: 
 	return { ok: true, value: undefined };
 }
 
-export type PlayQuery = { gameId?: number; since?: string; withUser?: string; nightId?: string; limit?: number };
+export type PlayQuery = { gameId?: number; since?: string; withUser?: string; alsoWith?: string; nightId?: string; limit?: number };
 
 /** Plays in a group, newest first, with their players in the order entered and the group's name for each game. */
 export async function loadPlays(db: DB, groupId: string, q: PlayQuery = {}): Promise<StoredPlay[]> {
@@ -232,10 +233,12 @@ export async function loadPlays(db: DB, groupId: string, q: PlayQuery = {}): Pro
 /** loadPlays as a read, to share a round trip with others (`readAll`, D59). */
 export function playsRead(db: DB, groupId: string, q: PlayQuery = {}): Read<StoredPlay[]> {
 	const params: unknown[] = [groupId];
-	const where = ['group_id = ?1'];
+	// For one night's plays the `+` keeps SQLite on plays_night instead of walking the group's (D70).
+	const where = [q.nightId ? '+group_id = ?1' : 'group_id = ?1'];
 	if (q.gameId != null) where.push(`game_id = ?${params.push(q.gameId)}`);
 	if (q.since) where.push(`played_on >= ?${params.push(q.since)}`);
 	if (q.withUser) where.push(`id IN (SELECT play_id FROM play_players WHERE user_id = ?${params.push(q.withUser)})`);
+	if (q.alsoWith) where.push(`id IN (SELECT play_id FROM play_players WHERE user_id = ?${params.push(q.alsoWith)})`);
 	if (q.nightId) where.push(`night_id = ?${params.push(q.nightId)}`);
 	const limit = q.limit != null ? ` LIMIT ${Math.max(1, Math.floor(q.limit))}` : '';
 	type PlayRow = {
@@ -292,6 +295,38 @@ export function playsRead(db: DB, groupId: string, q: PlayQuery = {}): Read<Stor
 					plays.set(r.id, play);
 				}
 				play.players.push({ userId: r.user_id, guestName: r.guest_name, place: r.place, score: r.score });
+			}
+			return [...plays.values()];
+		}
+	);
+}
+
+/**
+ * Who finished where in a group's plays, newest first, without games, nights' names or scores: what
+ * standings, a night's "went" and a profile's figures need (D70). On a long history it reads a little
+ * less than playsRead and returns well under half as much. `withUser` starts from that person's seats.
+ */
+export function playOutcomesRead(db: DB, groupId: string, q: { since?: string; withUser?: string } = {}): Read<PlayOutcome[]> {
+	const params: unknown[] = [groupId];
+	const since = q.since ? ` AND p.played_on >= ?${params.push(q.since)}` : '';
+	const from = q.withUser
+		? `play_players me CROSS JOIN plays p CROSS JOIN play_players pp
+		   WHERE me.user_id = ?${params.push(q.withUser)} AND p.id = me.play_id AND p.group_id = ?1${since} AND pp.play_id = p.id`
+		: `plays p CROSS JOIN play_players pp WHERE p.group_id = ?1${since} AND pp.play_id = p.id`;
+	type Row = { id: string; played_on: string; coop: Coop | null; night_id: string | null; user_id: string | null; guest_name: string | null; place: number | null };
+	return mapRead(
+		rowsOf<Row>(
+			db,
+			`SELECT p.id, p.played_on, p.coop, p.night_id, pp.user_id, pp.guest_name, pp.place FROM ${from}
+			 ORDER BY p.played_on DESC, p.created_at DESC, p.id, pp.seat`,
+			...params
+		),
+		(rows) => {
+			const plays = new Map<string, PlayOutcome>();
+			for (const r of rows) {
+				let play = plays.get(r.id);
+				if (!play) plays.set(r.id, (play = { id: r.id, playedOn: r.played_on, coop: r.coop, nightId: r.night_id, players: [] }));
+				play.players.push({ userId: r.user_id, guestName: r.guest_name, place: r.place });
 			}
 			return [...plays.values()];
 		}

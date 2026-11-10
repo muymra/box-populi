@@ -579,7 +579,7 @@
 						game={{ id: logGame, name: gameName(logGame) }}
 						{members}
 						{table}
-						nightId={night.id}
+						night={{ id: night.id, name: night.name, nightOn: night.nightOn }}
 						day={night.nightOn}
 						nights={data.nightList}
 						people={{ members: came.members, guests: came.guests }}

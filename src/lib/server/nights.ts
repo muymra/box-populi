@@ -2,7 +2,7 @@
 // list, and reading nights back. Every function takes the group; nothing crosses groups.
 import { all, known, mapRead, one, readAll, rowOf, rowsOf, stmt, type DB, type Read } from './db.ts';
 import { can } from './permissions.ts';
-import { GAME_COLUMNS, toCatalogGame } from './catalog.ts';
+import { GAME_COLUMNS, bumpCatalogForGroup, toCatalogGame } from './catalog.ts';
 import { buildSearchText, normalize } from '#lib/catalog/normalize.ts';
 import { MAX_GUESTS, cleanGuestName } from '#lib/table/here.ts';
 import { MAX_NIGHT_NAME, cleanTime, type Night, type NightGame, type NightPerson } from '#lib/nights.ts';
@@ -53,8 +53,18 @@ export function mayPlanNights(role: Role, nightsBy: string | null): boolean {
 }
 
 async function nightRow(db: DB, groupId: string, nightId: string) {
-	return one<{ created_by: string | null }>(db, 'SELECT created_by FROM game_nights WHERE id = ?1 AND group_id = ?2', nightId, groupId);
+	return one<{ created_by: string | null; night_on: string }>(db, 'SELECT created_by, night_on FROM game_nights WHERE id = ?1 AND group_id = ?2', nightId, groupId);
 }
+
+/**
+ * Whether a night is over everywhere (D70). The page counts a night as tonight until 6 a.m. the next
+ * morning (`nightOf`), and the last place to get there is UTC-12, 18 hours behind the server's clock.
+ * After that its going list, guests and bring list stay as they were: who came is what changes (D67).
+ */
+function nightIsOver(nightOn: string, now: number): boolean {
+	return nightOn < new Date(now - 18 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+const OVER = 'That night is over, so its list stays as it was. Say who came instead.';
 
 /** Whoever planned the night, and co-admins and the owner. */
 export function canChangeNight(actor: Actor, night: { createdBy: string | null }): boolean {
@@ -84,20 +94,32 @@ export async function createNight(db: DB, groupId: string, actor: Actor, input: 
 	return ok(id);
 }
 
-export async function updateNight(db: DB, groupId: string, actor: Actor, nightId: string, input: NightInput): Promise<Result> {
+export async function updateNight(db: DB, groupId: string, actor: Actor, nightId: string, input: NightInput, now = Date.now()): Promise<Result> {
 	const night = await nightRow(db, groupId, nightId);
 	if (!night) return no('That night is gone. Reload the page.');
 	if (!canChangeNight(actor, { createdBy: night.created_by })) return no('Only whoever planned the night and co-admins can change it.');
 	if (input.hostId && !(await isMember(db, groupId, input.hostId))) return no('Pick a host from the group, or “somewhere else”.');
-	await stmt(
-		db,
-		'UPDATE game_nights SET name = ?1, night_on = ?2, starts_at = ?3, host_id = ?4 WHERE id = ?5',
-		input.name,
-		input.nightOn,
-		input.startsAt,
-		input.hostId,
-		nightId
-	).run();
+	const moved = input.nightOn !== night.night_on;
+	// Its plays were played at the night, so they move with it (D70); a play can't be dated after today.
+	const hasPlays = moved && (await one(db, 'SELECT 1 AS x FROM plays WHERE night_id = ?1 AND +group_id = ?2 LIMIT 1', nightId, groupId)) != null;
+	if (hasPlays && !nightHasCome(input.nightOn, now)) return no('This night has plays logged, so it can’t move to a later day than today.');
+	await db.batch([
+		stmt(
+			db,
+			'UPDATE game_nights SET name = ?1, night_on = ?2, starts_at = ?3, host_id = ?4 WHERE id = ?5',
+			input.name,
+			input.nightOn,
+			input.startsAt,
+			input.hostId,
+			nightId
+		),
+		...(hasPlays
+			? [
+					stmt(db, 'UPDATE plays SET played_on = ?1 WHERE night_id = ?2 AND +group_id = ?3', input.nightOn, nightId, groupId),
+					bumpCatalogForGroup(db, groupId)
+				]
+			: [])
+	]);
 	return done;
 }
 
@@ -116,9 +138,10 @@ export async function deleteNight(db: DB, groupId: string, actor: Actor, nightId
 }
 
 /** Marks a member going or not. Anyone answers for themselves; the planner and co-admins for others too. */
-export async function setGoing(db: DB, groupId: string, actor: Actor, nightId: string, userId: string, going: boolean): Promise<Result> {
+export async function setGoing(db: DB, groupId: string, actor: Actor, nightId: string, userId: string, going: boolean, now = Date.now()): Promise<Result> {
 	const night = await nightRow(db, groupId, nightId);
 	if (!night) return no('That night is gone. Reload the page.');
+	if (nightIsOver(night.night_on, now)) return no(OVER);
 	if (userId !== actor.id && !canChangeNight(actor, { createdBy: night.created_by })) return no('Only whoever planned the night and co-admins can answer for someone else.');
 	if (!(await isMember(db, groupId, userId))) return no('That person isn’t in this group.');
 	// Updated in place, so a "came" mark on the row (D67) survives a change of answer.
@@ -141,11 +164,11 @@ export function canMarkCame(actor: Actor, userId: string | null): boolean {
 }
 
 /**
- * Whether a night's date has come, by the server's clock plus a day (people are ahead of UTC), so who
- * came can be checked from the night itself on.
+ * Whether a night's date has come anywhere: UTC+14, the furthest ahead, reaches a date 14 hours before
+ * the server's clock does. Who came can be checked from the night itself on (D67, D70).
  */
 function nightHasCome(nightOn: string, now: number): boolean {
-	return nightOn <= new Date(now + 30 * 60 * 60 * 1000).toISOString().slice(0, 10);
+	return nightOn <= new Date(now + 14 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 /**
@@ -231,8 +254,10 @@ async function guestsOf(db: DB, nightId: string): Promise<string[]> {
 }
 
 /** Adds a guest by name; any member can. Returns the cleaned name. */
-export async function addNightGuest(db: DB, groupId: string, nightId: string, raw: unknown): Promise<Result<string>> {
-	if (!(await nightRow(db, groupId, nightId))) return no('That night is gone. Reload the page.');
+export async function addNightGuest(db: DB, groupId: string, nightId: string, raw: unknown, now = Date.now()): Promise<Result<string>> {
+	const night = await nightRow(db, groupId, nightId);
+	if (!night) return no('That night is gone. Reload the page.');
+	if (nightIsOver(night.night_on, now)) return no('That night is over. Co-admins can add someone who came.');
 	const name = cleanGuestName(String(raw ?? ''));
 	if (!name) return no('Type the guest’s name.');
 	const guests = await guestsOf(db, nightId);
@@ -243,8 +268,10 @@ export async function addNightGuest(db: DB, groupId: string, nightId: string, ra
 }
 
 /** Takes a guest off the night, with the games they were bringing. */
-export async function removeNightGuest(db: DB, groupId: string, nightId: string, name: string): Promise<Result> {
-	if (!(await nightRow(db, groupId, nightId))) return no('That night is gone. Reload the page.');
+export async function removeNightGuest(db: DB, groupId: string, nightId: string, name: string, now = Date.now()): Promise<Result> {
+	const night = await nightRow(db, groupId, nightId);
+	if (!night) return no('That night is gone. Reload the page.');
+	if (nightIsOver(night.night_on, now)) return no(OVER);
 	await db.batch([
 		stmt(db, 'DELETE FROM night_games WHERE night_id = ?1 AND guest_name = ?2', nightId, name),
 		stmt(db, 'DELETE FROM night_people WHERE night_id = ?1 AND guest_name = ?2', nightId, name)
@@ -262,17 +289,19 @@ async function mayAddGames(db: DB, actor: Actor, nightId: string, createdBy: str
 }
 
 /** Puts a going member's copy on the bring list (D38: anyone going may; that member can take it off). */
-export async function bringCopy(db: DB, groupId: string, actor: Actor, nightId: string, gameId: number, ownerId: string): Promise<Result> {
+export async function bringCopy(db: DB, groupId: string, actor: Actor, nightId: string, gameId: number, ownerId: string, now = Date.now()): Promise<Result> {
 	// Every check in one round trip, then the write (D59, D65).
 	const going = 'SELECT 1 AS x FROM night_people WHERE night_id = ?1 AND user_id = ?2 AND going = 1';
 	const r = await readAll(db, {
-		night: rowOf<{ created_by: string | null }>(db, 'SELECT created_by FROM game_nights WHERE id = ?1 AND group_id = ?2', nightId, groupId),
+		night: rowOf<{ created_by: string | null; night_on: string }>(db, 'SELECT created_by, night_on FROM game_nights WHERE id = ?1 AND group_id = ?2', nightId, groupId),
 		actorGoing: rowOf(db, going, nightId, actor.id),
 		ownerGoing: rowOf(db, `${going} AND EXISTS (SELECT 1 FROM memberships WHERE group_id = ?3 AND user_id = ?2)`, nightId, ownerId, groupId),
 		// On their shelf in this group: a copy hidden from it isn't offered (D66).
 		copy: rowOf(db, 'SELECT 1 AS x FROM group_copies WHERE group_id = ?3 AND user_id = ?1 AND game_id = ?2', ownerId, gameId, groupId)
 	});
 	if (!r.night) return no('That night is gone. Reload the page.');
+	// A game added afterwards would clear the Play soon marks of the people who went (D64, D70).
+	if (nightIsOver(r.night.night_on, now)) return no(OVER);
 	if (!canChangeNight(actor, { createdBy: r.night.created_by }) && !r.actorGoing) return no('Mark yourself going to add games to the night.');
 	if (!r.ownerGoing) return no('Only people going can bring games. Mark them going first.');
 	if (!r.copy) return no('That game isn’t on their shelf.');
@@ -305,6 +334,7 @@ export type OtherGameInput = {
 export async function bringOther(db: DB, groupId: string, actor: Actor, nightId: string, input: OtherGameInput, now = Date.now()): Promise<Result> {
 	const night = await nightRow(db, groupId, nightId);
 	if (!night) return no('That night is gone. Reload the page.');
+	if (nightIsOver(night.night_on, now)) return no(OVER);
 	if (!(await mayAddGames(db, actor, nightId, night.created_by))) return no('Mark yourself going to add games to the night.');
 	const title = input.title.replace(/\s+/g, ' ').trim();
 	if (!title || title.length > 120 || /\p{C}/u.test(title)) return no('Type the game’s name, up to 120 characters.');
@@ -387,9 +417,14 @@ export async function unbring(db: DB, groupId: string, actor: Actor, nightId: st
 	return done;
 }
 
-/** On the night: a game that stayed home, or turned up after all. Any member can tick it. */
-export async function setStayedHome(db: DB, groupId: string, nightId: string, gameId: number, stayedHome: boolean): Promise<Result> {
-	if (!(await nightRow(db, groupId, nightId))) return no('That night is gone. Reload the page.');
+/**
+ * On the night: a game that stayed home, or turned up after all. Any member can tick it, until the
+ * night is over: unticking it afterwards would clear the Play soon marks of the people who went (D70).
+ */
+export async function setStayedHome(db: DB, groupId: string, nightId: string, gameId: number, stayedHome: boolean, now = Date.now()): Promise<Result> {
+	const night = await nightRow(db, groupId, nightId);
+	if (!night) return no('That night is gone. Reload the page.');
+	if (nightIsOver(night.night_on, now)) return no(OVER);
 	await stmt(db, 'UPDATE night_games SET stayed_home = ?1 WHERE night_id = ?2 AND game_id = ?3', stayedHome ? 1 : 0, nightId, gameId).run();
 	return done;
 }
@@ -401,7 +436,8 @@ export async function setNightPlanners(db: DB, groupId: string, actor: Actor, va
 	return done;
 }
 
-export type NightQuery = { from?: string; to?: string; id?: string };
+/** `games: false` leaves the bring lists out, for a page that shows only who went, like the plays page (D70). */
+export type NightQuery = { from?: string; to?: string; id?: string; games?: false };
 
 type NightRow = { id: string; name: string; night_on: string; starts_at: string | null; host_id: string | null; created_by: string | null };
 type NightPersonRow = { night_id: string; user_id: string | null; guest_name: string | null; going: number; came: number | null };
@@ -430,11 +466,14 @@ export function nightReads(db: DB, groupId: string, q: NightQuery = {}): NightRe
 			...params
 		),
 		people: rowsOf<NightPersonRow>(db, `SELECT night_id, user_id, guest_name, going, came FROM night_people WHERE night_id IN (${ids}) ORDER BY rowid`, ...params),
-		games: rowsOf<NightGameRow>(
-			db,
-			`SELECT night_id, game_id, brought_by, guest_name, added_by, stayed_home FROM night_games WHERE night_id IN (${ids}) ORDER BY rowid`,
-			...params
-		)
+		games:
+			q.games === false
+				? (known([]) as Read<NightGameRow[]>)
+				: rowsOf<NightGameRow>(
+						db,
+						`SELECT night_id, game_id, brought_by, guest_name, added_by, stayed_home FROM night_games WHERE night_id IN (${ids}) ORDER BY rowid`,
+						...params
+					)
 	};
 }
 
@@ -515,14 +554,22 @@ export async function nightDay(db: DB, groupId: string, nightId: string): Promis
 	return (await one<{ night_on: string }>(db, 'SELECT night_on FROM game_nights WHERE id = ?1 AND group_id = ?2', nightId, groupId))?.night_on ?? null;
 }
 
-/** The group's nights up to `until` (YYYY-MM-DD), newest first: what a play can be put on (STATUS item 42). */
-export function nightListRead(db: DB, groupId: string, until: string): Read<Array<{ id: string; name: string; nightOn: string }>> {
+/** How far back the log form offers game nights (D70). An older night's play is logged from its own page. */
+export const NIGHT_LIST_DAYS = 90;
+
+/**
+ * The group's nights from the last 90 days up to tomorrow, newest first: what a new play can be put on
+ * (STATUS item 42). The form adds the play's own night and the page's night when they're older (D70).
+ */
+export function nightListRead(db: DB, groupId: string, now: number): Read<Array<{ id: string; name: string; nightOn: string }>> {
+	const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 	return mapRead(
 		rowsOf<{ id: string; name: string; night_on: string }>(
 			db,
-			'SELECT id, name, night_on FROM game_nights WHERE group_id = ?1 AND night_on <= ?2 ORDER BY night_on DESC, starts_at LIMIT 500',
+			'SELECT id, name, night_on FROM game_nights WHERE group_id = ?1 AND night_on BETWEEN ?2 AND ?3 ORDER BY night_on DESC, starts_at LIMIT 200',
 			groupId,
-			until
+			day(now - NIGHT_LIST_DAYS * 86_400_000),
+			day(now + 86_400_000)
 		),
 		(rows) => rows.map((r) => ({ id: r.id, name: r.name, nightOn: r.night_on }))
 	);

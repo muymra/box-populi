@@ -36,7 +36,7 @@ export const load: PageServerLoad = async (event) => {
 	// Everything in one round trip after the access check (D59, D65).
 	const r = await readAll(db, {
 		// The nights a play can be put on (STATUS item 42).
-		nightList: nightListRead(db, groupId, new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)),
+		nightList: nightListRead(db, groupId, Date.now()),
 		...nightReads(db, groupId, { id: nightId }),
 		otherGames: nightOnlyGamesRead(db, groupId, { ids: [nightId] }),
 		plays: playsRead(db, groupId, { nightId }),

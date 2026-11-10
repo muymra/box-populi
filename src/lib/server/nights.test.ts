@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
 import { deleteGroupStatements, deletePersonStatements, one, run } from './db.ts';
 import {
@@ -20,8 +20,17 @@ import {
 } from './nights.ts';
 import { loadPlays, savePlay } from './plays.ts';
 import { gameVisibleInGroup } from './games.ts';
-import { chatText, cleanTime, goingMembers, nightOn, nightPoolIds, type Night } from '#lib/nights.ts';
+import { chatText, cleanTime, goingMembers, nightOn, nightOptions, nightPoolIds, type Night } from '#lib/nights.ts';
 import { copy, game } from '#lib/catalog/testing.ts';
+
+// These nights are on 2026-11-14; the night actions lock once a night is over (D70), so the clock is pinned before it.
+beforeEach(() => {
+	vi.useFakeTimers({ toFake: ['Date'] });
+	vi.setSystemTime(Date.UTC(2026, 10, 10, 12));
+});
+afterEach(() => {
+	vi.useRealTimers();
+});
 
 describe('night rules', () => {
 	const night = (over: Partial<Night> = {}): Night => ({
@@ -196,3 +205,14 @@ describe('planning nights', () => {
 		expect(await one(db, 'SELECT COUNT(*) AS n FROM night_people')).toEqual({ n: 0 });
 	});
 });
+
+describe('the log form’s nights (D70)', () => {
+	const n = (id: string) => ({ id, name: id, nightOn: '2026-01-01' });
+	it('adds the play’s own night and the page’s night when the recent list doesn’t have them, once each', () => {
+		expect(nightOptions([n('a'), n('b')], n('old'), null).map((x) => x.id)).toEqual(['a', 'b', 'old']);
+		expect(nightOptions([n('a')], n('a'), n('page')).map((x) => x.id)).toEqual(['a', 'page']);
+		expect(nightOptions([], n('old'), n('old')).map((x) => x.id)).toEqual(['old']);
+		expect(nightOptions([n('a')], null, null).map((x) => x.id)).toEqual(['a']);
+	});
+});
+

@@ -21,6 +21,18 @@ export type Play = {
 	night?: { id: string; name: string } | null;
 };
 
+/**
+ * Who finished where in a play, and at which night: all that standings, a night's "went" and a
+ * profile's figures read, so a long history is read without games, names or scores (D70).
+ */
+export type PlayOutcome = {
+	id: string;
+	playedOn: string;
+	coop: Coop | null;
+	nightId: string | null;
+	players: Array<Pick<PlayPlayer, 'userId' | 'guestName' | 'place'>>;
+};
+
 export const DEFAULT_POINTS = [3, 2, 1];
 export const MAX_POINT_PLACES = 5;
 export const MAX_POINTS = 100;
@@ -76,7 +88,7 @@ export type Standing = { userId: string; points: number; wins: number; plays: nu
  * The leaderboard: members only (guests and people who left aren't on it), most points first, then
  * most wins, then fewer plays. Co-op plays count as plays and score nothing.
  */
-export function standings(plays: readonly Play[], scheme: readonly number[], memberIds: ReadonlySet<string>): Standing[] {
+export function standings(plays: readonly Pick<PlayOutcome, 'coop' | 'players'>[], scheme: readonly number[], memberIds: ReadonlySet<string>): Standing[] {
 	const table = new Map<string, Standing>();
 	for (const play of plays) {
 		const places = play.players.map((p) => p.place);

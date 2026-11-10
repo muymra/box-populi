@@ -53,6 +53,12 @@ export type CatalogGame = {
 	copies: CatalogCopy[];
 };
 
+/** What a game's cube draws (Cube.svelte), so a page of cubes outside the shelf sends no more (D70). */
+export type CubeGame = Pick<
+	CatalogGame,
+	'id' | 'name' | 'year' | 'thumbUrl' | 'minPlayers' | 'maxPlayers' | 'minPlaytime' | 'maxPlaytime' | 'isExpansion' | 'isManual' | 'copies'
+>;
+
 export type CatalogPayload = {
 	version: number;
 	members: CatalogMember[];

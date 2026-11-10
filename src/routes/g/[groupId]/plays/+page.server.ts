@@ -1,7 +1,7 @@
 import { requireRead } from '#lib/server/authz.ts';
 import { membersRead } from '#lib/server/catalog.ts';
 import { can } from '#lib/server/permissions.ts';
-import { canChangePlay, playsRead, podiumPointsRead } from '#lib/server/plays.ts';
+import { canChangePlay, playOutcomesRead, playsRead, podiumPointsRead } from '#lib/server/plays.ts';
 import { deletePlayAction, pointsAction, savePlayAction } from '#lib/server/play-actions.ts';
 import { getDb } from '#lib/server/platform.ts';
 import { standings } from '#lib/plays.ts';
@@ -25,18 +25,21 @@ export const load: PageServerLoad = async (event) => {
 	// One round trip after the access check (D59, D65).
 	const r = await readAll(db, {
 		// The nights a play can be put on (STATUS item 42).
-		nightList: nightListRead(db, groupId, new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)),
-		plays: playsRead(db, groupId, { since }),
+		nightList: nightListRead(db, groupId, Date.now()),
+		// Who finished where in every play of the period, for the standings and "· 5 went"; in full, only
+		// the plays the page lists. "All time" read every play in full and ran over the CPU allowance (D70).
+		outcomes: playOutcomesRead(db, groupId, { since }),
+		plays: playsRead(db, groupId, { since, limit: LISTED }),
 		scheme: podiumPointsRead(db, groupId),
 		members: membersRead(db, groupId),
-		...nightReads(db, groupId, { from: since, to: until })
+		...nightReads(db, groupId, { from: since, to: until, games: false })
 	});
-	const { plays, scheme, members } = r;
+	const { outcomes, plays, scheme, members } = r;
 	const nights = assembleNights(r.nights, r.people, r.games);
 	const me = event.locals.user;
 	const actor = me && access.role && !access.readonly ? { id: me.id, role: access.role } : null;
 	const memberIds = new Set(members.map((m) => m.id));
-	const listed = plays.slice(0, LISTED).map((p) => ({ ...p, canChange: actor != null && canChangePlay(actor, p) }));
+	const listed = plays.map((p) => ({ ...p, canChange: actor != null && canChangePlay(actor, p) }));
 
 	// The history (PRD "Play log"): each night with its plays, nights where nothing was logged
 	// included, and plays outside any night on their own, newest first.
@@ -46,8 +49,8 @@ export const load: PageServerLoad = async (event) => {
 	const entries: Entry[] = [];
 	const nightEntry = new Map<string, Extract<Entry, { kind: 'night' }>>();
 	// "· 5 went" counts who came (D67): anyone in a play on the night, then who was marked, or who said they'd go.
-	const playsByNight = new Map<string, typeof plays>();
-	for (const p of plays) if (p.night) playsByNight.set(p.night.id, [...(playsByNight.get(p.night.id) ?? []), p]);
+	const playsByNight = new Map<string, typeof outcomes>();
+	for (const p of outcomes) if (p.nightId) playsByNight.set(p.nightId, [...(playsByNight.get(p.nightId) ?? []), p]);
 	for (const n of nights) {
 		const came = cameList(n, memberIds, nightPlayers(playsByNight.get(n.id) ?? []));
 		const entry = { kind: 'night' as const, id: n.id, name: n.name, date: n.nightOn, people: came.members.length + came.guests.length, plays: [] as typeof listed };
@@ -69,9 +72,9 @@ export const load: PageServerLoad = async (event) => {
 		period,
 		year,
 		scheme,
-		standings: standings(plays, scheme, new Set(members.map((m) => m.id))),
+		standings: standings(outcomes, scheme, memberIds),
 		entries,
-		totalPlays: plays.length,
+		totalPlays: outcomes.length,
 		nightCount: nights.length,
 		listed: LISTED,
 		canSetPoints: actor != null && can(actor.role, 'set_points'),

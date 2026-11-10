@@ -521,7 +521,7 @@
 				game={{ id: g.id, name: g.name }}
 				members={data.tableMembers}
 				{table}
-				nightId={tonight?.id ?? null}
+				night={tonight ? { id: tonight.id, name: tonight.name, nightOn: tonight.nightOn } : null}
 				nights={data.nightList}
 				ondone={(saved) => {
 					logOpen = false;

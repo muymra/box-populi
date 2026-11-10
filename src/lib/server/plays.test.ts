@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
 import { deleteGroupStatements, deletePersonStatements, one, run } from './db.ts';
-import { deletePlay, loadPlays, parsePlayForm, podiumPoints, savePlay, setPodiumPoints, type Actor } from './plays.ts';
+import { deletePlay, loadPlays, parsePlayForm, playOutcomesRead, playsRead, podiumPoints, savePlay, setPodiumPoints, type Actor } from './plays.ts';
+import { readAll } from './db.ts';
 import { loadCatalog } from './catalog.ts';
 import {
 	csvField,
@@ -200,6 +201,27 @@ describe('saving plays', () => {
 		expect(plays[0]).toMatchObject({ gameName: 'Alpha', loggedBy: 'ada', players: [{ userId: 'ada', place: 1 }, { guestName: 'Sam', place: 2 }] });
 		const catalog = await loadCatalog(db, 'g1', await version());
 		expect(catalog.games.find((g) => g.id === 1)?.lastPlayed).toBe('2026-11-07');
+	});
+
+	it('reads who finished where the same as the full read, in the same order, for a person or a period (D70)', async () => {
+		const day = (playedOn: string, players: Parameters<typeof input>[0]) => ({ ...input(players), playedOn });
+		await savePlay(db, 'g1', ada, 1, day('2026-01-03', [{ userId: 'ada', guestName: null, place: 2, score: null }, { userId: 'bo', guestName: null, place: 1, score: null }]));
+		await savePlay(db, 'g1', ada, 1, day('2026-03-01', [{ userId: 'bo', guestName: null, place: 1, score: null }, { userId: null, guestName: 'Sam', place: 2, score: null }]));
+		await savePlay(db, 'g1', ada, 1, day('2026-03-01', [{ userId: 'ada', guestName: null, place: 1, score: null }, { userId: 'cy', guestName: null, place: 1, score: null }]));
+		await savePlay(db, 'g1', ada, 1, { ...day('2025-12-31', []), coop: 'won', players: [{ userId: 'ada', guestName: null, place: null, score: null }] });
+		const outcome = (p: { id: string; playedOn: string; coop: unknown; players: Array<{ userId: string | null; guestName: string | null; place: number | null }> }) => ({
+			id: p.id,
+			playedOn: p.playedOn,
+			coop: p.coop,
+			players: p.players.map(({ userId, guestName, place }) => ({ userId, guestName, place }))
+		});
+		for (const q of [{}, { withUser: 'ada' }, { withUser: 'bo' }, { since: '2026-01-01' }, { since: '2026-01-01', withUser: 'ada' }]) {
+			const r = await readAll(db, { full: playsRead(db, 'g1', q), lean: playOutcomesRead(db, 'g1', q) });
+			expect(r.lean.map(outcome)).toEqual(r.full.map(outcome));
+		}
+		// The full read for two people at once: the plays with both in them.
+		const both = await readAll(db, { p: playsRead(db, 'g1', { withUser: 'ada', alsoWith: 'bo' }) });
+		expect(both.p.map((p) => p.playedOn)).toEqual(['2026-01-03']);
 	});
 
 	it('refuses games off the shelf and players from outside the group', async () => {

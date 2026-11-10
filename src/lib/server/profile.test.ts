@@ -3,6 +3,7 @@ import { createTestDb } from './testing/d1.ts';
 import { readAll, run } from './db.ts';
 import { assembleNightsBeen, assemblePlaySoon, assembleProfileGames, assembleWants, profileReads, setOwnMark } from './profile.ts';
 import { gameVisibleInGroup } from './games.ts';
+import { playOutcomesRead } from './plays.ts';
 import { setCopyHidden } from './hiding.ts';
 
 let db: ReturnType<typeof createTestDb>;
@@ -30,12 +31,14 @@ beforeEach(async () => {
 });
 
 async function profile(subject: string, viewer: string | null, group = 'g1') {
-	const r = await readAll(db, profileReads(db, group, subject, viewer, TODAY, NOW));
+	const r = await readAll(db, { ...profileReads(db, group, subject, viewer, TODAY, NOW), plays: playOutcomesRead(db, group, { withUser: subject }) });
+	const played = new Set(r.plays.flatMap((p) => (p.nightId ? [p.nightId] : [])));
+	const viewerPlayed = viewer && viewer !== subject ? new Set(r.viewerPlayNights.map((n) => n.night_id)) : played;
 	return {
 		membership: r.membership,
 		games: assembleProfileGames(r.gameRows, r.copyRows, r.corrections),
 		wants: assembleWants(r.wantRows, r.corrections),
-		nights: assembleNightsBeen(r.nightRows),
+		nights: r.membership ? assembleNightsBeen(r.nightRows, r.membership.joined_at, played, viewerPlayed) : [],
 		playSoon: assemblePlaySoon(r.playSoonRows)
 	};
 }
@@ -93,6 +96,30 @@ describe('a profile shows only what the group already sees (D61)', () => {
 			{ nightOn: '2026-07-01', subjectWent: true, viewerWent: true },
 			{ nightOn: '2026-10-01', subjectWent: false, viewerWent: true }
 		]);
+	});
+
+	it('counts a night as been by anyone in a play logged on it, even before they joined or after saying no', async () => {
+		await run(
+			db,
+			`INSERT INTO game_nights (id, group_id, name, night_on, created_at) VALUES
+			 ('n1', 'g1', 'Before Bo', '2026-03-01', 0), ('n3', 'g1', 'Café', '2026-10-01', 0), ('n6', 'g1', 'Pub', '2026-10-15', 0), ('n5', 'g2', 'Office', '2026-10-01', 0)`
+		);
+		// Bo said no to n3 but played there; he played at n1 as a guest's plays taken over, before joining.
+		// Ada played at n6 without answering; Bo's office night doesn't count here.
+		await run(db, `INSERT INTO night_people (night_id, user_id, going, came) VALUES ('n3', 'bo', 0, 0), ('n3', 'ada', 1, NULL)`);
+		await run(
+			db,
+			`INSERT INTO plays (id, group_id, game_id, played_on, night_id, created_at) VALUES
+			 ('p1', 'g1', 1, '2026-03-01', 'n1', 0), ('p3', 'g1', 1, '2026-10-01', 'n3', 0), ('p6', 'g1', 3, '2026-10-15', 'n6', 0), ('p5', 'g2', 2, '2026-10-01', 'n5', 0)`
+		);
+		await run(db, `INSERT INTO play_players (play_id, seat, user_id) VALUES ('p1', 0, 'bo'), ('p3', 0, 'bo'), ('p6', 0, 'ada'), ('p5', 0, 'bo')`);
+		expect((await profile('bo', 'ada')).nights).toEqual([
+			{ nightOn: '2026-03-01', subjectWent: true, viewerWent: false },
+			{ nightOn: '2026-10-01', subjectWent: true, viewerWent: true },
+			{ nightOn: '2026-10-15', subjectWent: false, viewerWent: true }
+		]);
+		// Ada joined in January, so March's night counts for her too, though she wasn't there.
+		expect((await profile('ada', 'ada')).nights.filter((n) => n.subjectWent).map((n) => n.nightOn)).toEqual(['2026-10-01', '2026-10-15']);
 	});
 
 	it('shows Play soon only on your own profile', async () => {

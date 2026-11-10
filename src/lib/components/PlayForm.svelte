@@ -14,12 +14,13 @@
 	import DayGrid from './DayGrid.svelte';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { ordinal, placesFromScores, type Coop, type PlayPlayer } from '#lib/plays.ts';
+	import { nightOptions } from '#lib/nights.ts';
 	import { nightOf } from '#lib/table/regulars.ts';
 	import { addDays, dayName, shortDay } from '#lib/days.ts';
 	import { Selection, type Table } from '#lib/table/table.svelte.ts';
 
 	type Member = { id: string; name: string; colorIndex: number };
-	type Initial = { id: string; playedOn: string; coop: Coop | null; lowestWins: boolean; players: PlayPlayer[]; night?: { id: string } | null };
+	type Initial = { id: string; playedOn: string; coop: Coop | null; lowestWins: boolean; players: PlayPlayer[]; night?: { id: string; name: string } | null };
 	type NightOption = { id: string; name: string; nightOn: string };
 	let {
 		action,
@@ -27,7 +28,7 @@
 		members,
 		table,
 		initial = null,
-		nightId = null,
+		night = null,
 		nights = [],
 		day = null,
 		people = null,
@@ -39,8 +40,8 @@
 		table: Table;
 		initial?: Initial | null;
 		/** The game night a new play belongs to (D38); an edit starts from the play's own. */
-		nightId?: string | null;
-		/** The group's game nights up to today, so a play can be put on the one held on its day. */
+		night?: NightOption | null;
+		/** The group's recent game nights, so a play can be put on the one held on its day. */
 		nights?: NightOption[];
 		/** The day a new play starts on, such as a past night's date; today otherwise. */
 		day?: string | null;
@@ -73,7 +74,7 @@
 						table.regulars
 					),
 			playedOn: initial?.playedOn ?? day ?? today,
-			night: initial ? (initial.night?.id ?? null) : nightId,
+			night: initial ? (initial.night?.id ?? null) : (night?.id ?? null),
 			// An existing play that wasn't at its day's night stays off it until someone ticks it.
 			untickedDay: initial && !initial.night ? initial.playedOn : null,
 			result: (initial?.coop ?? (from.some((p) => p.score != null) ? 'scores' : 'places')) as 'places' | 'scores' | Coop,
@@ -92,7 +93,9 @@
 	// The game night on the play's day: ticked unless unticked for that day; with two that day, the one picked.
 	let chosenNight = $state(start.night);
 	let untickedDay = $state<string | null>(start.untickedDay);
-	const nightsThatDay = $derived(nights.filter((n) => n.nightOn === playedOn));
+	// The page's list holds recent nights only (D70); the play's own night and the page's night are always offered.
+	const options = $derived(nightOptions(nights, initial?.night ? { ...initial.night, nightOn: initial.playedOn } : null, night));
+	const nightsThatDay = $derived(options.filter((n) => n.nightOn === playedOn));
 	const atNight = $derived(untickedDay === playedOn ? null : (nightsThatDay.find((n) => n.id === chosenNight) ?? nightsThatDay[0] ?? null));
 	function setNight(id: string | null) {
 		if (id) {

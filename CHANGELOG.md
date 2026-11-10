@@ -14,6 +14,10 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 - A game's links section is now "Rules, videos and files", with "Add a link", so score sheets, player aids and 3D-printable inserts have a place too. The title's example follows the kind you pick.
 - Your own profile lists your favourites, and you can take a game off your favourites, Play soon or wants from there. A removed game stays on the list, struck through, with Undo until you leave the page.
 - Members keep their colour when someone leaves the group; a new member takes a free colour. There's a third round of colours, dotted, so up to 24 members look different (members 17 and up in a big group get new looks). On a profile, when you and the other person share a colour, their side of "You and Bram" is striped so the two of you differ. Migration `0019_member_colors.sql`; nobody's colour changes on the upgrade.
+- Once a game night is over, its going list, guests and bring list stay as they were, and "stayed home" can't be changed: who came is what you change afterwards. This stops anyone rewriting who came, or clearing someone's Play soon mark, after the fact.
+- Moving a game night to another day moves its plays with it. A night with plays can't move past today.
+- Editing a play on an older game night no longer takes it off the night. The log form offers the last 90 days of nights; log a play on an older night from that night's page.
+- Profiles, a night's page, game pages and the plays page ask the database for much less on a big group, and a profile's shelves show 60 more games a press. Striped and dotted member colours show in older browsers too.
 ## 0.4.1 (2026-11-09)
 
 **Upgrading:** nothing to do: no migrations and no new settings. Deploy as usual. If you run a demo group, reseeding it now always refreshes what visitors see.

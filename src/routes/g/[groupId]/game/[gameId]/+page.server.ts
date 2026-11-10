@@ -62,7 +62,7 @@ export const load: PageServerLoad = async (event) => {
 	// Copies hidden from the group don't count (D66), except the viewer's own: they open it to show it again.
 	const r = await readAll(db, {
 		// The nights a play can be put on (STATUS item 42).
-		nightList: nightListRead(db, groupId, new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)),
+		nightList: nightListRead(db, groupId, Date.now()),
 		shared: rowOf<GameDetail>(
 			db,
 			`SELECT g.* FROM games g WHERE g.id = ?2 AND (

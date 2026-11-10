@@ -31,16 +31,13 @@ const PROFILE_GAMES = `SELECT c.game_id FROM group_copies c WHERE c.group_id = ?
 	UNION SELECT f.game_id FROM favourites f
 	WHERE f.user_id = ?2 AND EXISTS (SELECT 1 FROM group_copies c WHERE c.group_id = ?1 AND c.game_id = f.game_id)`;
 
-/** SQL for "person `who` came to night `n`" (D67). */
-const CAME = (who: string) => `(EXISTS (SELECT 1 FROM night_people np WHERE np.night_id = n.id AND np.user_id = ${who} AND COALESCE(np.came, np.going) = 1)
-	OR EXISTS (SELECT 1 FROM plays p CROSS JOIN play_players pp WHERE p.night_id = n.id AND pp.play_id = p.id AND +pp.user_id = ${who}))`;
-
+type NightMarkRow = { id: string; night_on: string; subject_mark: number | null; viewer_mark: number | null };
 type FlagRow = GameRow & { subject_owns: number; subject_loves: number; viewer_loves: number; played_here: number; viewer_played: number };
 type CopyRow = { game_id: number; owner_id: string; lent_to_user_id: string | null; lent_to_text: string | null; added_at: number };
 
 /**
- * Everything a profile reads, for one `readAll` after the access check (D59): five statements, the same
- * whoever's looking. `today` is YYYY-MM-DD: nights up to it count as been.
+ * Everything a profile reads, for one `readAll` after the access check (D59): up to eight statements.
+ * `today` is YYYY-MM-DD: nights up to it count as been.
  */
 export function profileReads(db: DB, groupId: string, subjectId: string, viewerId: string | null, today: string, now: number) {
 	return {
@@ -62,8 +59,11 @@ export function profileReads(db: DB, groupId: string, subjectId: string, viewerI
 		),
 		copyRows: rowsOf<CopyRow>(
 			db,
+			// From the profile's games to their copies: led by members instead, SQLite probed every member's
+			// copies for every game, about 32,000 rows for a heavy player at the planned scale (D70).
 			`SELECT c.game_id, c.user_id AS owner_id, c.lent_to_user_id, c.lent_to_text, c.added_at
-			 FROM group_copies c WHERE c.group_id = ?1 AND c.game_id IN (${PROFILE_GAMES})
+			 FROM (${PROFILE_GAMES}) ids CROSS JOIN group_copies c
+			 WHERE c.group_id = ?1 AND c.game_id = ids.game_id
 			 ORDER BY c.game_id, c.id`,
 			groupId,
 			subjectId
@@ -80,21 +80,34 @@ export function profileReads(db: DB, groupId: string, subjectId: string, viewerI
 			subjectId,
 			viewerId
 		),
-		// The group's nights since they joined (and any before, from guest plays taken over, D37) up to
-		// today, and who came (D67): in a play logged on it, or marked as having come, or, unmarked, going.
-		nightRows: rowsOf<{ night_on: string; subject_went: number; viewer_went: number }>(
+		// The group's nights up to today, with the person's and the viewer's mark on each: came, or,
+		// unmarked, going (D67). Being in a play logged on a night also counts; that part comes from their
+		// plays, so this asks only night_people, two probes a night (D70). assembleNightsBeen keeps the
+		// nights since they joined, and any before that they came to (guest plays taken over, D37).
+		nightRows: rowsOf<NightMarkRow>(
 			db,
-			`SELECT n.night_on, ${CAME('?2')} AS subject_went, ${CAME('?3')} AS viewer_went
+			`SELECT n.id, n.night_on,
+			   (SELECT COALESCE(np.came, np.going) FROM night_people np WHERE np.night_id = n.id AND np.user_id = ?2) AS subject_mark,
+			   (SELECT COALESCE(np.came, np.going) FROM night_people np WHERE np.night_id = n.id AND np.user_id = ?3) AS viewer_mark
 			 FROM game_nights n
 			 WHERE n.group_id = ?1 AND n.night_on <= ?4
-			   AND (n.night_on >= (SELECT date(m.joined_at / 1000, 'unixepoch') FROM memberships m WHERE m.group_id = ?1 AND m.user_id = ?2)
-			        OR ${CAME('?2')})
 			 ORDER BY n.night_on`,
 			groupId,
 			subjectId,
 			viewerId,
 			today
 		),
+		// The nights the viewer played at, for "nights you both went to"; the person's come from their plays.
+		viewerPlayNights:
+			viewerId && viewerId !== subjectId
+				? rowsOf<{ night_id: string }>(
+						db,
+						`SELECT DISTINCT p.night_id FROM play_players pp CROSS JOIN plays p
+						 WHERE pp.user_id = ?2 AND p.id = pp.play_id AND p.group_id = ?1 AND p.night_id IS NOT NULL`,
+						groupId,
+						viewerId
+					)
+				: (known([]) as Read<Array<{ night_id: string }>>),
 		// Only on your own profile: your live Play soon marks on games on this shelf (D64), with when each ends.
 		playSoonRows:
 			viewerId === subjectId
@@ -141,8 +154,22 @@ export function assembleWants(rows: Array<GameRow & { viewer_wants: number }>, c
 	});
 }
 
-export function assembleNightsBeen(rows: Array<{ night_on: string; subject_went: number; viewer_went: number }>): ProfileNight[] {
-	return rows.map((r) => ({ nightOn: r.night_on, subjectWent: r.subject_went === 1, viewerWent: r.viewer_went === 1 }));
+/**
+ * The nights a profile counts, from `nightRows`: since the person joined, and any before that they came
+ * to. Someone came if they're marked as having come (or, unmarked, said they'd go), or played there.
+ */
+export function assembleNightsBeen(
+	rows: NightMarkRow[],
+	joinedAt: number,
+	subjectPlayed: ReadonlySet<string>,
+	viewerPlayed: ReadonlySet<string>
+): ProfileNight[] {
+	const joined = new Date(joinedAt).toISOString().slice(0, 10);
+	return rows.flatMap((r) => {
+		const subjectWent = r.subject_mark === 1 || subjectPlayed.has(r.id);
+		if (r.night_on < joined && !subjectWent) return [];
+		return [{ nightOn: r.night_on, subjectWent, viewerWent: r.viewer_mark === 1 || viewerPlayed.has(r.id) }];
+	});
 }
 
 export function assemblePlaySoon(rows: Array<{ game_id: number; marked_at: number; name: string }>): PlaySoonHere[] {

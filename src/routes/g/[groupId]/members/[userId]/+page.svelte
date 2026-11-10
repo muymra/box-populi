@@ -60,6 +60,8 @@
 
 <svelte:head><title>{s.name} · {data.group.name}</title></svelte:head>
 
+<!-- SvelteKit reuses this page from one member to the next; the key starts each profile fresh, folded shelves and all. -->
+{#key s.id}
 <article class="profile">
 	<a class="back" href="{base}/group"><ChevronLeft size={18} aria-hidden="true" /> Group</a>
 
@@ -305,6 +307,7 @@
 		</div>
 	</div>
 </article>
+{/key}
 
 <style>
 	.profile {

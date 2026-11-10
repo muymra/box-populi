@@ -1,10 +1,13 @@
 // What a member's profile works out from their plays in one group (D61): their record, how they do
 // against the person looking, and, on your own profile only, the figures under "Only you see this".
 // Every figure comes from plays the group can already see; nothing here is stored.
-import { isWin, type Play } from './plays.ts';
+import { isWin, type PlayOutcome } from './plays.ts';
+
+/** What the figures read from a play: when, co-op or not, and who finished where. */
+type Played = Pick<PlayOutcome, 'playedOn' | 'coop' | 'players'>;
 
 /** Plays and competitive wins: a win as the leaderboard counts it, first with someone below (co-op wins aren't wins). */
-export function record(plays: readonly Play[], userId: string): { plays: number; wins: number } {
+export function record(plays: readonly Played[], userId: string): { plays: number; wins: number } {
 	let n = 0;
 	let wins = 0;
 	for (const play of plays) {
@@ -31,7 +34,7 @@ export type HeadToHead = {
 };
 
 /** How `viewerId` and `subjectId` do when they play together. Plays newest first, as `playsRead` gives them. */
-export function headToHead(plays: readonly Play[], viewerId: string, subjectId: string): HeadToHead {
+export function headToHead(plays: readonly Played[], viewerId: string, subjectId: string): HeadToHead {
 	const out: HeadToHead = { together: 0, last: null, youWon: 0, theyWon: 0, othersWon: 0, coop: 0, coopWon: 0 };
 	for (const play of plays) {
 		const you = play.players.find((p) => p.userId === viewerId);
@@ -60,7 +63,7 @@ export type Month = { plays: number; nights: number };
  * Your plays and the game nights you went to in each month of `year`, January first. `nights` are the
  * dates (YYYY-MM-DD) of the nights you went to.
  */
-export function byMonth(plays: readonly Play[], nights: readonly string[], userId: string, year: number): Month[] {
+export function byMonth(plays: readonly Played[], nights: readonly string[], userId: string, year: number): Month[] {
 	const months: Month[] = Array.from({ length: 12 }, () => ({ plays: 0, nights: 0 }));
 	const prefix = `${year}-`;
 	for (const play of plays) {
@@ -81,7 +84,7 @@ export const TABLE_SIZES = [2, 3, 4, 5] as const;
 export type SizeRate = { size: (typeof TABLE_SIZES)[number]; plays: number; wins: number };
 
 /** Your competitive plays and wins by how many played, guests included; plays without places don't count. */
-export function winRateBySize(plays: readonly Play[], userId: string): SizeRate[] {
+export function winRateBySize(plays: readonly Played[], userId: string): SizeRate[] {
 	const rows = TABLE_SIZES.map((size) => ({ size, plays: 0, wins: 0 }));
 	for (const play of plays) {
 		if (play.coop != null || play.players.length < 2) continue;
@@ -102,7 +105,7 @@ export type CoPlayer = { userId: string; together: number; ahead: number; behind
  * both have a place, how often you finished ahead of them and behind. Only `memberIds` (people still in
  * the group); guests and former members are left out.
  */
-export function coPlayers(plays: readonly Play[], userId: string, memberIds: ReadonlySet<string>, limit = 5): CoPlayer[] {
+export function coPlayers(plays: readonly Played[], userId: string, memberIds: ReadonlySet<string>, limit = 5): CoPlayer[] {
 	const rows = new Map<string, CoPlayer>();
 	for (const play of plays) {
 		const me = play.players.find((p) => p.userId === userId);

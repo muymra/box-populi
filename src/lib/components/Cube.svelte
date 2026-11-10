@@ -5,7 +5,7 @@
 	import { formatPlaytime } from '#lib/catalog/buckets.ts';
 	import { formatPlayersShort } from '#lib/catalog/players.ts';
 	import { isCopyAvailable } from '#lib/catalog/filter.ts';
-	import type { CatalogGame, CatalogMember } from '#lib/catalog/types.ts';
+	import type { CatalogMember, CubeGame } from '#lib/catalog/types.ts';
 
 	/** `unknown`: an active filter let this game through only because it lacks that detail. */
 	let {
@@ -14,7 +14,7 @@
 		members,
 		memberIds,
 		unknown = false
-	}: { game: CatalogGame; href: string; members: Map<string, CatalogMember>; memberIds: ReadonlySet<string>; unknown?: boolean } = $props();
+	}: { game: CubeGame; href: string; members: Map<string, CatalogMember>; memberIds: ReadonlySet<string>; unknown?: boolean } = $props();
 
 	const owners = $derived(
 		[...new Set(game.copies.map((c) => c.ownerId))]

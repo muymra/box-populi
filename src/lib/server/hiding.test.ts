@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
 import { all, deleteGroupStatements, deletePersonStatements, one, readAll, run } from './db.ts';
 import { hideEverythingStatements, myShelfHereReads, setCopyHidden, setHideNew } from './hiding.ts';
@@ -14,6 +14,15 @@ import { bringCopy, createNight, nightOnlyGames, setGoing } from './nights.ts';
 import { leaveGroup } from './identity.ts';
 import { confirmImport } from './importer.ts';
 import { loadYourGames } from './your-data.ts';
+
+// These nights are on 2026-11-14; the night actions lock once a night is over (D70), so the clock is pinned before it.
+beforeEach(() => {
+	vi.useFakeTimers({ toFake: ['Date'] });
+	vi.setSystemTime(Date.UTC(2026, 10, 10, 12));
+});
+afterEach(() => {
+	vi.useRealTimers();
+});
 
 let db: ReturnType<typeof createTestDb>;
 const NOW = 1_800_000_000_000;

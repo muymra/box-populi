@@ -1,15 +1,20 @@
 // Colour roles of the cube-shelf world (DESIGN.md). Pure, shared by server and browser.
 
-/** Wooden-cube player colours. Each member keeps one from the day they join (D69); see playerColor(). */
+/**
+ * Wooden-cube player colours. Each member keeps one from the day they join (D69); see playerColor().
+ * `shade` paints the stripes and dots: the colour 62% with black (black's is 75% with white), written out
+ * rather than mixed with color-mix(), which Safari before 16.2 and Chrome before 111 can't read, and
+ * which then drop the whole background (D70).
+ */
 export const PLAYER_COLORS = [
-	{ name: 'red', bg: '#c8402e', ink: '#ffffff' },
-	{ name: 'blue', bg: '#2f62b0', ink: '#ffffff' },
-	{ name: 'pink', bg: '#b23f78', ink: '#ffffff' },
-	{ name: 'green', bg: '#2e7d4f', ink: '#ffffff' },
-	{ name: 'purple', bg: '#6f4f96', ink: '#ffffff' },
-	{ name: 'orange', bg: '#b14f17', ink: '#ffffff' },
-	{ name: 'teal', bg: '#17706f', ink: '#ffffff' },
-	{ name: 'black', bg: '#2b2a28', ink: '#ffffff' }
+	{ name: 'red', bg: '#c8402e', ink: '#ffffff', shade: '#7c281d' },
+	{ name: 'blue', bg: '#2f62b0', ink: '#ffffff', shade: '#1d3d6d' },
+	{ name: 'pink', bg: '#b23f78', ink: '#ffffff', shade: '#6e274a' },
+	{ name: 'green', bg: '#2e7d4f', ink: '#ffffff', shade: '#1d4e31' },
+	{ name: 'purple', bg: '#6f4f96', ink: '#ffffff', shade: '#45315d' },
+	{ name: 'orange', bg: '#b14f17', ink: '#ffffff', shade: '#6e310e' },
+	{ name: 'teal', bg: '#17706f', ink: '#ffffff', shade: '#0e4545' },
+	{ name: 'black', bg: '#2b2a28', ink: '#ffffff', shade: '#605f5e' }
 ] as const;
 
 /** The three rounds the eight colours go through: solid, then striped, then dotted. */
@@ -35,7 +40,7 @@ export function playerColor(index: number): PlayerColor {
 	const look = ((index % DISTINCT_LOOKS) + DISTINCT_LOOKS) % DISTINCT_LOOKS;
 	const base = PLAYER_COLORS[look % n];
 	const pattern = PATTERNS[Math.floor(look / n)];
-	const shade = base.name === 'black' ? `color-mix(in srgb, ${base.bg} 75%, white)` : `color-mix(in srgb, ${base.bg} 62%, black)`;
+	const shade = base.shade;
 	const fill =
 		pattern === 'striped'
 			? `repeating-linear-gradient(135deg, ${base.bg} 0 3px, ${shade} 3px 5px)`

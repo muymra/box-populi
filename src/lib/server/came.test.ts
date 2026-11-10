@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
 import { all, run } from './db.ts';
-import { addCameGuest, confirmCame, loadNights, setCame } from './nights.ts';
+import { addCameGuest, addNightGuest, bringOther, confirmCame, loadNights, removeNightGuest, setCame, setGoing, setStayedHome, updateNight } from './nights.ts';
+import { myPlaySoonRead } from './interest.ts';
+import { readAll } from './db.ts';
 import { cameChecked, cameList, nightPlayers } from '#lib/nights.ts';
 
 let db: ReturnType<typeof createTestDb>;
@@ -98,11 +100,68 @@ describe('who came to a night (D67)', () => {
 	});
 });
 
+// The evening of n1 (Fri 6 Nov), when its lists can still change.
+const EVENING = Date.UTC(2026, 10, 6, 20);
+
 describe('changing an answer on the night', () => {
 	it('keeps a "came" mark on the row', async () => {
-		const { setGoing } = await import('./nights.ts');
-		await setCame(db, 'g1', ada, 'n1', { userId: 'ada' }, false, NOW);
-		expect((await setGoing(db, 'g1', ada, 'n1', 'ada', false)).ok).toBe(true);
+		await setCame(db, 'g1', ada, 'n1', { userId: 'ada' }, false, EVENING);
+		expect((await setGoing(db, 'g1', ada, 'n1', 'ada', false, EVENING)).ok).toBe(true);
 		expect((await came()).find((r) => r.who === 'ada')).toEqual({ who: 'ada', going: 0, came: 0 });
 	});
 });
+
+describe('a night that’s over (D70)', () => {
+	it('keeps its going list and guests as they were, so who came changes only through who came', async () => {
+		const before = await came();
+		expect(await setGoing(db, 'g1', bo, 'n1', 'ada', false, NOW)).toEqual({ ok: false, error: expect.stringContaining('over') }); // Bo planned it
+		expect((await setGoing(db, 'g1', ada, 'n1', 'ada', false, NOW)).ok).toBe(false);
+		expect((await addNightGuest(db, 'g1', 'n1', 'Lou', NOW)).ok).toBe(false);
+		expect((await removeNightGuest(db, 'g1', 'n1', 'Sam', NOW)).ok).toBe(false);
+		expect(await came()).toEqual(before);
+	});
+
+	it('is over once 6 a.m. the next morning has come in UTC-12, the last place to get there', async () => {
+		expect((await setGoing(db, 'g1', ada, 'n1', 'ada', false, Date.UTC(2026, 10, 7, 17, 59))).ok).toBe(true);
+		expect((await setGoing(db, 'g1', ada, 'n1', 'ada', true, Date.UTC(2026, 10, 7, 18, 1))).ok).toBe(false);
+	});
+
+	it('keeps its bring list as it was, so nobody clears a Play soon mark afterwards', async () => {
+		// Ada marked Alpha before the night; it was on the list but stayed home, so her mark still counts.
+		await run(db, `INSERT INTO night_games (night_id, game_id, brought_by, added_by, stayed_home) VALUES ('n1', 1, 'ada', 'ada', 1)`);
+		await run(db, `INSERT INTO play_soon (user_id, game_id, marked_at) VALUES ('ada', 1, ${Date.UTC(2026, 10, 1)})`);
+		const marks = async () => (await readAll(db, { m: myPlaySoonRead(db, 'ada', NOW) })).m.map((m) => m.gameId);
+		expect(await marks()).toEqual([1]);
+		expect((await setStayedHome(db, 'g1', 'n1', 1, false, NOW)).ok).toBe(false);
+		const other = { title: 'Late Arrival', minPlayers: null, maxPlayers: null, minPlaytime: null, maxPlaytime: null, bringer: 'm:ada' };
+		expect((await bringOther(db, 'g1', ada, 'n1', other, NOW)).ok).toBe(false);
+		expect(await marks()).toEqual([1]);
+		// On the night itself, ticking still works.
+		expect((await setStayedHome(db, 'g1', 'n1', 1, false, EVENING)).ok).toBe(true);
+	});
+
+	it('takes who came from the night’s date in UTC+14, the first place to reach it, and not before', async () => {
+		expect((await setCame(db, 'g1', ada, 'n2', { userId: 'ada' }, true, Date.UTC(2026, 10, 18, 18))).ok).toBe(false); // was allowed with 30 hours
+		expect((await setCame(db, 'g1', ada, 'n2', { userId: 'ada' }, true, Date.UTC(2026, 10, 19, 9, 59))).ok).toBe(false);
+		expect((await setCame(db, 'g1', ada, 'n2', { userId: 'ada' }, true, Date.UTC(2026, 10, 19, 10))).ok).toBe(true);
+	});
+});
+
+describe('moving a night to another day (D70)', () => {
+	const cafe = (nightOn: string) => ({ name: 'Café', nightOn, startsAt: null, hostId: null });
+	const version = async () => (await all<{ v: number }>(db, "SELECT catalog_version AS v FROM groups WHERE id = 'g1'"))[0].v;
+
+	it('moves its plays with it, since they were played at the night', async () => {
+		const v = await version();
+		expect((await updateNight(db, 'g1', bo, 'n1', cafe('2026-11-05'), NOW)).ok).toBe(true);
+		expect(await all(db, "SELECT played_on, night_id FROM plays WHERE id = 'p1'")).toEqual([{ played_on: '2026-11-05', night_id: 'n1' }]);
+		expect(await version()).toBeGreaterThan(v); // "last played" on the shelf follows
+	});
+
+	it('won’t move a night with plays past today, and moves one without plays anywhere', async () => {
+		expect((await updateNight(db, 'g1', bo, 'n1', cafe('2026-11-25'), NOW)).ok).toBe(false);
+		expect(await all(db, "SELECT played_on FROM plays WHERE id = 'p1'")).toEqual([{ played_on: '2026-11-06' }]);
+		expect((await updateNight(db, 'g1', bo, 'n2', cafe('2026-11-25'), NOW)).ok).toBe(true);
+	});
+});
+

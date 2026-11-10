@@ -187,3 +187,15 @@ export function chatText(
 	lines.push(url);
 	return lines.join('\n');
 }
+
+/**
+ * The game nights the log form offers: the page's list of recent ones, plus the play's own night and
+ * the night a new play is logged at, which can be older than the list (D70). Without them, saving an
+ * older play would quietly take it off its night.
+ */
+export function nightOptions<N extends { id: string }>(recent: readonly N[], ...always: Array<N | null>): N[] {
+	const out = [...recent];
+	for (const n of always) if (n && !out.some((m) => m.id === n.id)) out.push(n);
+	return out;
+}
+

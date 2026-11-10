@@ -1,21 +1,22 @@
 <!--
 	A few of someone's games as the shelf's own compartments (Cube.svelte), on the shelf-gap ground, two
-	across on phones and auto-filling from 760px like the Wanted tab. The first eight, then "Show all";
-	empty compartments fill out the last row, as on the Shelf tab.
+	across on phones and auto-filling from 760px like the Wanted tab. The first eight, then 60 more a
+	press (D70), as the shelf draws its pages; empty compartments fill out the last row, as on the Shelf tab.
 -->
 <script lang="ts">
 	import Cube from '#lib/components/Cube.svelte';
 	import Compartment from '#lib/components/Compartment.svelte';
 	import OwnerEdge from '#lib/components/OwnerEdge.svelte';
-	import type { CatalogGame, CatalogMember } from '#lib/catalog/types.ts';
+	import type { CatalogMember, CubeGame } from '#lib/catalog/types.ts';
 
 	const FIRST = 8;
-	let { games, base, members }: { games: CatalogGame[]; base: string; members: CatalogMember[] } = $props();
+	const MORE = 60;
+	let { games, base, members }: { games: CubeGame[]; base: string; members: CatalogMember[] } = $props();
 
 	const byId = $derived(new Map(members.map((m) => [m.id, m])));
 	const memberIds = $derived(new Set(members.map((m) => m.id)));
-	let all = $state(false);
-	const shown = $derived(all ? games : games.slice(0, FIRST));
+	let limit = $state(FIRST);
+	const shown = $derived(games.slice(0, limit));
 
 	let shelf = $state<HTMLElement>();
 	let columns = $state(2);
@@ -44,7 +45,9 @@
 	{/each}
 </ul>
 {#if games.length > FIRST}
-	<button type="button" class="link-button more" onclick={() => (all = !all)}>{all ? 'Show fewer' : `Show all ${games.length}`}</button>
+	<button type="button" class="link-button more" onclick={() => (limit = limit >= games.length ? FIRST : limit + MORE)}>
+		{limit >= games.length ? 'Show fewer' : games.length - limit <= MORE ? `Show all ${games.length}` : `Show ${MORE} more of ${games.length}`}
+	</button>
 {/if}
 
 <style>

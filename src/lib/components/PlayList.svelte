@@ -120,8 +120,10 @@
 	{/each}
 </ol>
 
-<Modal bind:open={editOpen} title={editing ? `Edit ${editing.gameName}` : 'Edit play'}>
-	{#if editOpen && editing}
+<!-- Mounted once a play is opened for editing: a page of many lists, like the plays page, would otherwise hold a dialog for each (D70). -->
+{#if editing}
+<Modal bind:open={editOpen} title={`Edit ${editing.gameName}`}>
+	{#if editOpen}
 		<PlayForm
 			action="/g/{groupId}/plays?/editPlay"
 			game={{ id: editing.gameId, name: editing.gameName }}
@@ -133,6 +135,7 @@
 		/>
 	{/if}
 </Modal>
+{/if}
 
 <style>
 	.plays {
