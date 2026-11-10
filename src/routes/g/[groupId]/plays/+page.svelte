@@ -112,7 +112,13 @@
 					</li>
 				{/each}
 			</ol>
-			{#if data.totalPlays > data.listed}<p class="muted">The newest {data.listed} are shown; the export has them all.</p>{/if}
+			<!-- Plain links, so a page of the history works without JavaScript and can be bookmarked (D70). -->
+			{#if data.older || data.before}
+				<p class="pages">
+					{#if data.older}<a href="?period={data.period}&before={data.older}#plays-h">Show older</a>{/if}
+					{#if data.before}<a href="?period={data.period}#plays-h">Back to the newest</a>{/if}
+				</p>
+			{/if}
 		{:else}
 			<p class="muted">No plays logged {data.period === 'year' ? `in ${data.year}` : 'yet'}.</p>
 		{/if}
@@ -404,6 +410,13 @@
 	}
 	.points .field {
 		width: 10rem;
+	}
+	.pages {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--s-2) var(--s-5);
+		margin-top: var(--s-4);
+		font-weight: 650;
 	}
 	.export {
 		display: flex;

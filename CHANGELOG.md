@@ -17,6 +17,7 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 - Once a game night is over, its going list, guests and bring list stay as they were, and "stayed home" can't be changed: who came is what you change afterwards. This stops anyone rewriting who came, or clearing someone's Play soon mark, after the fact.
 - Moving a game night to another day moves its plays with it. A night with plays can't move past today.
 - Editing a play on an older game night no longer takes it off the night. The log form offers the last 90 days of nights; log a play on an older night from that night's page.
+- The plays page shows the play history a page at a time, newest first, with "Show older" at the end; older game nights no longer say "No plays logged" when they had plays. The leaderboard is worked out in the database, so "All time" stays fast on a long history.
 - Profiles, a night's page, game pages and the plays page ask the database for much less on a big group, and a profile's shelves show 60 more games a press. Striped and dotted member colours show in older browsers too.
 ## 0.4.1 (2026-11-09)
 

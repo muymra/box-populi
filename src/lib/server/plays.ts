@@ -4,6 +4,7 @@ import { all, mapRead, one, readAll, rowsOf, stmt, type DB, type Read } from './
 import { bumpCatalogForGroup } from './catalog.ts';
 import { can } from './permissions.ts';
 import { gameOnNight, nightDay } from './nights.ts';
+import { FIRST_DAY, LAST_DAY, pageStart } from './log-pages.ts';
 import { cleanGuestName } from '#lib/table/here.ts';
 import {
 	DEFAULT_POINTS,
@@ -16,7 +17,8 @@ import {
 	type Coop,
 	type Play,
 	type PlayOutcome,
-	type PlayPlayer
+	type PlayPlayer,
+	type StandingCounts
 } from '#lib/plays.ts';
 import type { Role } from '#lib/catalog/types.ts';
 
@@ -223,7 +225,11 @@ export async function deletePlay(db: DB, groupId: string, actor: Actor, playId: 
 	return { ok: true, value: undefined };
 }
 
-export type PlayQuery = { gameId?: number; since?: string; withUser?: string; alsoWith?: string; nightId?: string; limit?: number };
+/**
+ * `page`: the newest `page` plays from `since` up to before `before`, widened to every play on the oldest
+ * one's date (log-pages.ts), so a night is never cut in half (D70).
+ */
+export type PlayQuery = { gameId?: number; since?: string; before?: string; page?: number; withUser?: string; alsoWith?: string; nightId?: string; limit?: number };
 
 /** Plays in a group, newest first, with their players in the order entered and the group's name for each game. */
 export async function loadPlays(db: DB, groupId: string, q: PlayQuery = {}): Promise<StoredPlay[]> {
@@ -236,7 +242,14 @@ export function playsRead(db: DB, groupId: string, q: PlayQuery = {}): Read<Stor
 	// For one night's plays the `+` keeps SQLite on plays_night instead of walking the group's (D70).
 	const where = [q.nightId ? '+group_id = ?1' : 'group_id = ?1'];
 	if (q.gameId != null) where.push(`game_id = ?${params.push(q.gameId)}`);
-	if (q.since) where.push(`played_on >= ?${params.push(q.since)}`);
+	if (q.page) {
+		const since = `?${params.push(q.since ?? FIRST_DAY)}`;
+		const before = `?${params.push(q.before ?? LAST_DAY)}`;
+		where.push(`played_on >= ${pageStart(since, before, q.page)}`, `played_on < ${before}`);
+	} else {
+		if (q.since) where.push(`played_on >= ?${params.push(q.since)}`);
+		if (q.before) where.push(`played_on < ?${params.push(q.before)}`);
+	}
 	if (q.withUser) where.push(`id IN (SELECT play_id FROM play_players WHERE user_id = ?${params.push(q.withUser)})`);
 	if (q.alsoWith) where.push(`id IN (SELECT play_id FROM play_players WHERE user_id = ?${params.push(q.alsoWith)})`);
 	if (q.nightId) where.push(`night_id = ?${params.push(q.nightId)}`);
@@ -330,6 +343,66 @@ export function playOutcomesRead(db: DB, groupId: string, q: { since?: string; w
 			}
 			return [...plays.values()];
 		}
+	);
+}
+
+/**
+ * The leaderboard's numbers per member of the group, counted in SQL from every play since `since`
+ * (D70): about 50 rows back however long the history, where reading every play's players cost a group
+ * at the planned scale over 10ms of Worker CPU on "All time". `standingsFromCounts` applies the scheme.
+ * A play scores when it's competitive and everyone has a place; a place scores unless it's the worst.
+ */
+export function standingsRead(db: DB, groupId: string, since?: string): Read<StandingCounts[]> {
+	type Row = { user_id: string; plays: number; wins: number; s1: number; s2: number; s3: number; s4: number; s5: number; latest: string };
+	const scores = (k: number) => `SUM(s.coop IS NULL AND s.unplaced = 0 AND s.place < s.worst AND s.place = ${k}) AS s${k}`;
+	return mapRead(
+		rowsOf<Row>(
+			db,
+			// Each play's worst place and unplaced seats first, then its seats: at the planned scale this reads
+			// about 53,000 rows for "All time", where window functions read 64,000.
+			`WITH per AS (
+			   SELECT p.id, p.coop, p.played_on, p.created_at, MAX(pp.place) AS worst, COUNT(*) - COUNT(pp.place) AS unplaced
+			   FROM plays p CROSS JOIN play_players pp
+			   WHERE p.group_id = ?1 AND p.played_on >= ?2 AND pp.play_id = p.id
+			   GROUP BY p.id
+			 ),
+			 seats AS (
+			   SELECT per.coop, per.played_on, per.created_at, per.worst, per.unplaced, pp.user_id, pp.place
+			   FROM per CROSS JOIN play_players pp WHERE pp.play_id = per.id
+			 )
+			 SELECT s.user_id, COUNT(*) AS plays, SUM(s.coop IS NULL AND s.place = 1 AND s.worst > 1) AS wins,
+			        ${[1, 2, 3, 4, 5].map(scores).join(', ')},
+			        MAX(s.played_on || printf('%016d', s.created_at)) AS latest
+			 FROM seats s
+			 WHERE s.user_id IN (SELECT user_id FROM memberships WHERE group_id = ?1)
+			 GROUP BY s.user_id`,
+			groupId,
+			since ?? FIRST_DAY
+		),
+		(rows) => rows.map((r) => ({ userId: r.user_id, plays: r.plays, wins: r.wins ?? 0, scored: [r.s1 ?? 0, r.s2 ?? 0, r.s3 ?? 0, r.s4 ?? 0, r.s5 ?? 0], latest: r.latest }))
+	);
+}
+
+/**
+ * About a page of the play log (D70): its first date, whether anything older is left in the period
+ * (plays or nights), and the period's play and night counts. Nights count up to `until`.
+ */
+export function playsPageRead(db: DB, groupId: string, q: { since?: string; before?: string; until: string; n: number }): Read<{ start: string; older: boolean; plays: number; nights: number }> {
+	const start = pageStart('?2', '?3', q.n);
+	return mapRead(
+		rowsOf<{ start: string; older: number; plays: number; nights: number }>(
+			db,
+			`SELECT ${start} AS start,
+			   EXISTS (SELECT 1 FROM plays WHERE group_id = ?1 AND played_on >= ?2 AND played_on < ${start})
+			   OR EXISTS (SELECT 1 FROM game_nights WHERE group_id = ?1 AND night_on >= ?2 AND night_on < ${start}) AS older,
+			   (SELECT COUNT(*) FROM plays WHERE group_id = ?1 AND played_on >= ?2) AS plays,
+			   (SELECT COUNT(*) FROM game_nights WHERE group_id = ?1 AND night_on >= ?2 AND night_on <= ?4) AS nights`,
+			groupId,
+			q.since ?? FIRST_DAY,
+			q.before ?? LAST_DAY,
+			q.until
+		),
+		(rows) => ({ start: rows[0].start, older: rows[0].older === 1, plays: rows[0].plays, nights: rows[0].nights })
 	);
 }
 

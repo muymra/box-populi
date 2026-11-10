@@ -3,10 +3,10 @@ import { requireRead, requireRole } from '#lib/server/authz.ts';
 import { membersRead } from '#lib/server/catalog.ts';
 import { readAll } from '#lib/server/db.ts';
 import { getDb } from '#lib/server/platform.ts';
-import { playOutcomesRead, playsRead, podiumPointsRead } from '#lib/server/plays.ts';
+import { playOutcomesRead, playsRead, podiumPointsRead, standingsRead } from '#lib/server/plays.ts';
 import { assembleNightsBeen, assemblePlaySoon, assembleProfileGames, assembleWants, profileReads, setOwnMark, type ProfileGame } from '#lib/server/profile.ts';
 import type { CubeGame } from '#lib/catalog/types.ts';
-import { standings } from '#lib/plays.ts';
+import { standingsFromCounts } from '#lib/plays.ts';
 import { byMonth, coPlayers, headToHead, record, winRateBySize } from '#lib/profile.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -25,11 +25,11 @@ export const load: PageServerLoad = async (event) => {
 	const together = viewerId && viewerId !== userId ? viewerId : undefined;
 	const r = await readAll(db, {
 		members: membersRead(db, groupId),
-		// The figures and the standings need only who finished where; the three plays the page lists are
-		// read in full (D70). At the planned scale that halves what a heavy player's profile reads.
+		// The figures need only who finished where, and the year's standings are counted in SQL; the three
+		// plays the page lists are read in full (D70).
 		plays: playOutcomesRead(db, groupId, { withUser: userId }),
 		latestPlays: playsRead(db, groupId, { withUser: userId, alsoWith: together, limit: 3 }),
-		yearPlays: playOutcomesRead(db, groupId, { since: `${year}-01-01` }),
+		yearStandings: standingsRead(db, groupId, `${year}-01-01`),
 		scheme: podiumPointsRead(db, groupId),
 		...profileReads(db, groupId, userId, viewerId, today, now)
 	});
@@ -37,7 +37,7 @@ export const load: PageServerLoad = async (event) => {
 	if (!subject || !r.membership) error(404, 'Not in this group');
 
 	const memberIds = new Set(r.members.map((m) => m.id));
-	const table = standings(r.yearPlays, r.scheme, memberIds);
+	const table = standingsFromCounts(r.yearStandings, r.scheme);
 	const rank = table.findIndex((s) => s.userId === userId);
 	const games = assembleProfileGames(r.gameRows, r.copyRows, r.corrections);
 	const own = games.filter((g) => g.subjectOwns);

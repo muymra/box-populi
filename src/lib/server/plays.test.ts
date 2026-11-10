@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
-import { deleteGroupStatements, deletePersonStatements, one, run } from './db.ts';
-import { deletePlay, loadPlays, parsePlayForm, playOutcomesRead, playsRead, podiumPoints, savePlay, setPodiumPoints, type Actor } from './plays.ts';
-import { readAll } from './db.ts';
+import { deleteGroupStatements, deletePersonStatements, one, readAll, run } from './db.ts';
+import { deletePlay, loadPlays, parsePlayForm, playOutcomesRead, playsPageRead, playsRead, podiumPoints, savePlay, setPodiumPoints, standingsRead, type Actor } from './plays.ts';
+import { assembleNights, nightReads } from './nights.ts';
 import { loadCatalog } from './catalog.ts';
 import {
 	csvField,
@@ -14,6 +14,7 @@ import {
 	playPoints,
 	playsCsv,
 	standings,
+	standingsFromCounts,
 	type Play
 } from '#lib/plays.ts';
 
@@ -321,3 +322,92 @@ describe('where a played game’s details came from', () => {
 		expect(sources).toEqual({ Invented: 'manual', Real: 'bgg', Wiki: 'wikidata' });
 	});
 });
+
+describe('the leaderboard counted in SQL (D70)', () => {
+	let db: ReturnType<typeof createTestDb>;
+	// Ada, Bo, Cy and Dee are members; Eve left the group, so she's off the board though her seats stay.
+	beforeEach(async () => {
+		db = createTestDb();
+		await run(db, `INSERT INTO users (id, name, created_at) VALUES ('ada', 'Ada', 0), ('bo', 'Bo', 0), ('cy', 'Cy', 0), ('dee', 'Dee', 0), ('eve', 'Eve', 0)`);
+		await run(db, `INSERT INTO groups (id, name, code, created_at) VALUES ('g1', 'G', 'AAAAA', 0)`);
+		await run(db, `INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES ('g1', 'ada', 'owner', 0, 0), ('g1', 'bo', 'member', 1, 0), ('g1', 'cy', 'member', 2, 0), ('g1', 'dee', 'member', 3, 0)`);
+		await run(db, `INSERT INTO games (id, name, search_text) VALUES (1, 'Alpha', 'alpha')`);
+		// [id, date, created_at, coop, seats as user or guest with a place]
+		const plays: Array<[string, string, number, string | null, Array<[string | null, string | null, number | null]>]> = [
+			['p1', '2025-12-20', 1, null, [['ada', null, 1], ['bo', null, 2], ['cy', null, 3]]],
+			['p2', '2026-01-05', 2, null, [['bo', null, 1], ['ada', null, 1], ['cy', null, 3]]], // a tie for first
+			['p3', '2026-02-01', 3, null, [['cy', null, 1], [null, 'Sam', 2]]], // a guest below: Cy wins
+			['p4', '2026-02-10', 4, 'won', [['ada', null, null], ['dee', null, null]]], // co-op: plays, no points
+			['p5', '2026-03-01', 5, null, [['dee', null, 1], ['bo', null, null], ['ada', null, 2]]], // someone unplaced: no points, Dee still wins
+			['p6', '2026-03-15', 6, null, [['eve', null, 1], ['dee', null, 2]]], // Eve left
+			['p7', '2026-04-01', 7, null, [['bo', null, 1], ['cy', null, 2], ['dee', null, 3], ['ada', null, 4], [null, 'Lou', 5], [null, 'Max', 6], [null, 'Ned', 7]]], // more places than any scheme
+			['p8', '2026-04-02', 8, null, [['cy', null, 1], ['dee', null, 1]]] // everyone tied for first: worst place, no points, no win
+		];
+		for (const [id, day, at, coop, seats] of plays) {
+			await run(db, `INSERT INTO plays (id, group_id, game_id, played_on, coop, created_at) VALUES ('${id}', 'g1', 1, '${day}', ${coop ? `'${coop}'` : 'NULL'}, ${at})`);
+			for (const [i, [user, guest, place]] of seats.entries())
+				await run(db, `INSERT INTO play_players (play_id, seat, user_id, guest_name, place) VALUES ('${id}', ${i}, ${user ? `'${user}'` : 'NULL'}, ${guest ? `'${guest}'` : 'NULL'}, ${place ?? 'NULL'})`);
+		}
+	});
+
+	it('gives the same table as the rules in plain code, for any scheme and period', async () => {
+		const members = new Set(['ada', 'bo', 'cy', 'dee']);
+		for (const scheme of [[3, 2, 1], [5, 1], [10, 6, 4, 2, 1], [0]]) {
+			for (const since of [undefined, '2026-01-01', '2026-03-01']) {
+				const r = await readAll(db, { counts: standingsRead(db, 'g1', since), plays: playOutcomesRead(db, 'g1', { since }) });
+				expect(standingsFromCounts(r.counts, scheme)).toEqual(standings(r.plays, scheme, members));
+			}
+		}
+	});
+});
+
+describe('the play log a page at a time (D70)', () => {
+	let db: ReturnType<typeof createTestDb>;
+	// 30 nights, a few days apart, each with 6 to 10 plays on its date, and plays on days between them.
+	beforeEach(async () => {
+		db = createTestDb();
+		await run(db, `INSERT INTO users (id, name, created_at) VALUES ('ada', 'Ada', 0)`);
+		await run(db, `INSERT INTO groups (id, name, code, created_at) VALUES ('g1', 'G', 'AAAAA', 0)`);
+		await run(db, `INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES ('g1', 'ada', 'owner', 0, 0)`);
+		await run(db, `INSERT INTO games (id, name, search_text) VALUES (1, 'Alpha', 'alpha')`);
+		const day = (n: number) => new Date(Date.UTC(2026, 0, 1) + n * 86_400_000).toISOString().slice(0, 10);
+		let k = 0;
+		for (let n = 0; n < 30; n++) {
+			await run(db, `INSERT INTO game_nights (id, group_id, name, night_on, created_at) VALUES ('n${n}', 'g1', 'Night ${n}', '${day(n * 3)}', 0)`);
+			for (let i = 0; i < 6 + (n % 5); i++) await run(db, `INSERT INTO plays (id, group_id, game_id, played_on, night_id, created_at) VALUES ('q${k++}', 'g1', 1, '${day(n * 3)}', 'n${n}', ${k})`);
+			await run(db, `INSERT INTO plays (id, group_id, game_id, played_on, created_at) VALUES ('q${k++}', 'g1', 1, '${day(n * 3 + 1)}', ${k})`);
+		}
+		await run(db, `INSERT INTO play_players (play_id, seat, user_id, place) SELECT id, 0, 'ada', 1 FROM plays`);
+	});
+
+	it('shows each play and each night once, with every play of a night on the night’s page', async () => {
+		const total = (await readAll(db, { n: playsPageRead(db, 'g1', { until: '2026-12-31', n: 100 }) })).n.plays;
+		expect(total).toBe(270);
+		const seenPlays: string[] = [];
+		const seenNights: string[] = [];
+		let before: string | undefined;
+		for (let pages = 0; pages < 10; pages++) {
+			const r = await readAll(db, {
+				page: playsPageRead(db, 'g1', { before, until: '2026-12-31', n: 100 }),
+				plays: playsRead(db, 'g1', { before, page: 100 }),
+				...nightReads(db, 'g1', { to: '2026-12-31', games: false, page: { before, n: 100 } })
+			});
+			const nights = assembleNights(r.nights, r.people, r.games);
+			for (const n of nights) {
+				const onNight = r.plays.filter((p) => p.night?.id === n.id).length;
+				const all = (await loadPlays(db, 'g1')).filter((p) => p.night?.id === n.id).length;
+				expect(onNight).toBe(all);
+			}
+			seenPlays.push(...r.plays.map((p) => p.id));
+			seenNights.push(...nights.map((n) => n.id));
+			if (r.page.older) expect(r.plays.length).toBeGreaterThanOrEqual(100);
+			if (!r.page.older) break;
+			before = r.page.start;
+		}
+		expect(seenPlays.length).toBe(270);
+		expect(new Set(seenPlays).size).toBe(270);
+		expect(seenNights.length).toBe(30);
+		expect(new Set(seenNights).size).toBe(30);
+	});
+});
+

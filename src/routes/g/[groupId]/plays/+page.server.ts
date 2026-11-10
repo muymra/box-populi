@@ -1,16 +1,17 @@
 import { requireRead } from '#lib/server/authz.ts';
 import { membersRead } from '#lib/server/catalog.ts';
 import { can } from '#lib/server/permissions.ts';
-import { canChangePlay, playOutcomesRead, playsRead, podiumPointsRead } from '#lib/server/plays.ts';
+import { canChangePlay, playsPageRead, playsRead, podiumPointsRead, standingsRead } from '#lib/server/plays.ts';
+import { beforeParam } from '#lib/server/log-pages.ts';
 import { deletePlayAction, pointsAction, savePlayAction } from '#lib/server/play-actions.ts';
 import { getDb } from '#lib/server/platform.ts';
-import { standings } from '#lib/plays.ts';
+import { standingsFromCounts } from '#lib/plays.ts';
 import { assembleNights, nightListRead, nightReads } from '#lib/server/nights.ts';
 import { readAll } from '#lib/server/db.ts';
 import { cameList, nightPlayers } from '#lib/nights.ts';
 import type { Actions, PageServerLoad } from './$types';
 
-/** Plays listed on the page; the export has them all. */
+/** Plays on a page of the timeline, widened to whole days; "Show older" pages back (D70). */
 const LISTED = 100;
 
 export const load: PageServerLoad = async (event) => {
@@ -20,21 +21,23 @@ export const load: PageServerLoad = async (event) => {
 	const period = event.url.searchParams.get('period') === 'all' ? 'all' : 'year';
 	const year = new Date().getUTCFullYear();
 	const since = period === 'year' ? `${year}-01-01` : undefined;
+	const before = beforeParam(event.url.searchParams.get('before'));
 	// Up to tomorrow, since the server's date can trail the viewer's; later nights are still plans.
 	const until = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
 	// One round trip after the access check (D59, D65).
 	const r = await readAll(db, {
 		// The nights a play can be put on (STATUS item 42).
 		nightList: nightListRead(db, groupId, Date.now()),
-		// Who finished where in every play of the period, for the standings and "· 5 went"; in full, only
-		// the plays the page lists. "All time" read every play in full and ran over the CPU allowance (D70).
-		outcomes: playOutcomesRead(db, groupId, { since }),
-		plays: playsRead(db, groupId, { since, limit: LISTED }),
+		// The leaderboard counted in SQL, and one page of the timeline: its plays, whole days of them, and
+		// the nights of the same dates. "All time" read every play and ran over the CPU allowance (D70).
+		standings: standingsRead(db, groupId, since),
+		page: playsPageRead(db, groupId, { since, before, until, n: LISTED }),
+		plays: playsRead(db, groupId, { since, before, page: LISTED }),
 		scheme: podiumPointsRead(db, groupId),
 		members: membersRead(db, groupId),
-		...nightReads(db, groupId, { from: since, to: until, games: false })
+		...nightReads(db, groupId, { from: since, to: until, games: false, page: { before, n: LISTED } })
 	});
-	const { outcomes, plays, scheme, members } = r;
+	const { plays, scheme, members } = r;
 	const nights = assembleNights(r.nights, r.people, r.games);
 	const me = event.locals.user;
 	const actor = me && access.role && !access.readonly ? { id: me.id, role: access.role } : null;
@@ -49,8 +52,9 @@ export const load: PageServerLoad = async (event) => {
 	const entries: Entry[] = [];
 	const nightEntry = new Map<string, Extract<Entry, { kind: 'night' }>>();
 	// "· 5 went" counts who came (D67): anyone in a play on the night, then who was marked, or who said they'd go.
-	const playsByNight = new Map<string, typeof outcomes>();
-	for (const p of outcomes) if (p.nightId) playsByNight.set(p.nightId, [...(playsByNight.get(p.nightId) ?? []), p]);
+	// A page holds whole days, so every play of its nights is here.
+	const playsByNight = new Map<string, typeof plays>();
+	for (const p of plays) if (p.night) playsByNight.set(p.night.id, [...(playsByNight.get(p.night.id) ?? []), p]);
 	for (const n of nights) {
 		const came = cameList(n, memberIds, nightPlayers(playsByNight.get(n.id) ?? []));
 		const entry = { kind: 'night' as const, id: n.id, name: n.name, date: n.nightOn, people: came.members.length + came.guests.length, plays: [] as typeof listed };
@@ -72,11 +76,13 @@ export const load: PageServerLoad = async (event) => {
 		period,
 		year,
 		scheme,
-		standings: standings(outcomes, scheme, memberIds),
+		standings: standingsFromCounts(r.standings, scheme),
 		entries,
-		totalPlays: outcomes.length,
-		nightCount: nights.length,
-		listed: LISTED,
+		totalPlays: r.page.plays,
+		nightCount: r.page.nights,
+		before: before ?? null,
+		// "Show older" pages back from this page's first date while anything older is left in the period.
+		older: r.page.older ? r.page.start : null,
 		canSetPoints: actor != null && can(actor.role, 'set_points'),
 		isMember: me != null && access.role != null
 	};

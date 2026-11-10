@@ -86,7 +86,9 @@ export type Standing = { userId: string; points: number; wins: number; plays: nu
 
 /**
  * The leaderboard: members only (guests and people who left aren't on it), most points first, then
- * most wins, then fewer plays. Co-op plays count as plays and score nothing.
+ * most wins, then fewer plays. Co-op plays count as plays and score nothing. The pages count in SQL
+ * instead (`standingsRead`, then `standingsFromCounts`); this is the rule in plain code, which the
+ * tests hold the SQL to.
  */
 export function standings(plays: readonly Pick<PlayOutcome, 'coop' | 'players'>[], scheme: readonly number[], memberIds: ReadonlySet<string>): Standing[] {
 	const table = new Map<string, Standing>();
@@ -103,6 +105,21 @@ export function standings(plays: readonly Pick<PlayOutcome, 'coop' | 'players'>[
 		});
 	}
 	return [...table.values()].sort((a, b) => b.points - a.points || b.wins - a.wins || a.plays - b.plays);
+}
+
+/**
+ * One member's numbers for the leaderboard, counted in SQL (`standingsRead`, D70): their plays, wins,
+ * and how often they finished 1st to 5th in a play that scores (competitive, everyone placed, not last).
+ * `latest` orders exact ties: whoever played most recently first, as `standings()` meets them.
+ */
+export type StandingCounts = { userId: string; plays: number; wins: number; scored: readonly number[]; latest: string };
+
+/** The leaderboard from `StandingCounts`, by the same rules and order as `standings()`. */
+export function standingsFromCounts(rows: readonly StandingCounts[], scheme: readonly number[]): Standing[] {
+	return rows
+		.map((r) => ({ userId: r.userId, points: r.scored.reduce((sum, n, i) => sum + n * (scheme[i] ?? 0), 0), wins: r.wins, plays: r.plays, latest: r.latest }))
+		.sort((a, b) => b.points - a.points || b.wins - a.wins || a.plays - b.plays || b.latest.localeCompare(a.latest) || a.userId.localeCompare(b.userId))
+		.map(({ userId, points, wins, plays }) => ({ userId, points, wins, plays }));
 }
 
 /** "1st", "2nd", "3rd", "4th", "11th", "22nd" */

@@ -3,6 +3,7 @@
 import { all, known, mapRead, one, readAll, rowOf, rowsOf, stmt, type DB, type Read } from './db.ts';
 import { can } from './permissions.ts';
 import { GAME_COLUMNS, bumpCatalogForGroup, toCatalogGame } from './catalog.ts';
+import { FIRST_DAY, LAST_DAY, pageStart } from './log-pages.ts';
 import { buildSearchText, normalize } from '#lib/catalog/normalize.ts';
 import { MAX_GUESTS, cleanGuestName } from '#lib/table/here.ts';
 import { MAX_NIGHT_NAME, cleanTime, type Night, type NightGame, type NightPerson } from '#lib/nights.ts';
@@ -436,8 +437,12 @@ export async function setNightPlanners(db: DB, groupId: string, actor: Actor, va
 	return done;
 }
 
-/** `games: false` leaves the bring lists out, for a page that shows only who went, like the plays page (D70). */
-export type NightQuery = { from?: string; to?: string; id?: string; games?: false };
+/**
+ * `games: false` leaves the bring lists out, for a page that shows only who went, like the plays page.
+ * `page` keeps the nights of one page of the play log: from its first date (log-pages.ts) up to `to`, or
+ * up to before `page.before` (D70).
+ */
+export type NightQuery = { from?: string; to?: string; id?: string; games?: false; page?: { before?: string; n: number } };
 
 type NightRow = { id: string; name: string; night_on: string; starts_at: string | null; host_id: string | null; created_by: string | null };
 type NightPersonRow = { night_id: string; user_id: string | null; guest_name: string | null; going: number; came: number | null };
@@ -454,7 +459,12 @@ export async function loadNights(db: DB, groupId: string, q: NightQuery = {}): P
 export function nightReads(db: DB, groupId: string, q: NightQuery = {}): NightReads {
 	const params: unknown[] = [groupId];
 	const where = ['group_id = ?1'];
-	if (q.from) where.push(`night_on >= ?${params.push(q.from)}`);
+	if (q.page) {
+		const since = `?${params.push(q.from ?? FIRST_DAY)}`;
+		const before = `?${params.push(q.page.before ?? LAST_DAY)}`;
+		where.push(`night_on >= ${pageStart(since, before, q.page.n)}`);
+		if (q.page.before) where.push(`night_on < ${before}`);
+	} else if (q.from) where.push(`night_on >= ?${params.push(q.from)}`);
 	if (q.to) where.push(`night_on <= ?${params.push(q.to)}`);
 	if (q.id) where.push(`id = ?${params.push(q.id)}`);
 	const ids = `SELECT id FROM game_nights WHERE ${where.join(' AND ')}`;
