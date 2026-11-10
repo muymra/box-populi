@@ -6,6 +6,11 @@ declare global {
 	/** The release version from package.json, set at build time in vite.config.ts (DECISIONS D44). */
 	const __APP_VERSION__: string;
 	namespace App {
+		interface Error {
+			message: string;
+			/** A short reference for an unexpected error, also in the log line with its details (src/lib/error-ref.ts). */
+			ref?: string;
+		}
 		interface Locals {
 			config: InstanceConfig;
 			/** The person this device is signed in as (DECISIONS D25), or null. */

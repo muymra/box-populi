@@ -165,14 +165,16 @@
 		error = null;
 		return async ({ result: res, update }) => {
 			sending = false;
-			// The actions live on the plays page; stay on whichever page the form was opened from.
+			// The actions live on the plays page; stay on whichever page the form was opened from. No reset:
+			// Svelte's bindings follow a form reset, and the day chips' bind:group would turn the date to
+			// null under the still-open form, which then fails to draw (STATUS item 50).
 			if (res.type === 'success') {
-				await update({ navigate: false });
+				await update({ navigate: false, reset: false });
 				ondone(true);
 			} else if (res.type === 'failure') {
 				error = String(res.data?.playError ?? 'That didn’t save. Try again.');
 			} else {
-				await update({ navigate: false });
+				await update({ navigate: false, reset: false });
 			}
 		};
 	};

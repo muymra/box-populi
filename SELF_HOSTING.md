@@ -262,6 +262,16 @@ On Docker or Node, an export also loads into a fresh SQLite file with the `sqlit
 
 On the free plan an instance comfortably serves a few groups of up to 50 members and 1,500 games each. The admin page shows totals so you can see growth. If you outgrow the free tier, Cloudflare's Workers Paid plan raises the limits without any change to Box Populi.
 
+## When something goes wrong
+
+An unexpected error shows "Something went wrong" with a line like "Error 500 · ref K7M4PQ". The same reference is in your instance's logs, with what failed and where:
+
+- **Cloudflare Pages:** in the dashboard, open the project's deployment and its real-time logs, or run `pnpm exec wrangler pages deployment tail` from your folder, then repeat what failed. Search for `box-populi error K7M4PQ`.
+- **Docker:** `docker compose logs app | grep K7M4PQ`.
+- **Vercel or Netlify:** the project's function logs.
+
+A reference starting with `B` happened in the browser; it's in the browser's console instead. When you report a problem upstream, include the reference's log line.
+
 ## Handling requests
 
 - **"Delete my account":** people do it themselves from their account page. You hold no email or other way to identify them, so point them there.

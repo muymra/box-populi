@@ -991,6 +991,10 @@ ORDER BY COUNT(*) DESC, g.name;
 
 D1 binds parameters by position (`?1`, `?2` or `?`). Named parameters like `:group` aren't supported.
 
+## Errors
+
+An unexpected error gets a reference (STATUS item 50): `handleError` in `src/hooks.server.ts` (and its browser twin in `src/hooks.client.ts`) makes six characters from the join codes' alphabet (`errorRef` in `src/lib/error-ref.ts`; a browser one starts with `B`), logs `[box-populi error <ref>] <status> <method> <route> (<kind>)` with the error and its stack, and returns `{ message, ref }`. The error pages show "Error 500 · ref K7M4PQ" in one small line. Errors the code raises with `error(...)` already carry a specific message and get no reference, and neither does a 404. The logs are the platform's: `wrangler pages deployment tail` or the dashboard's real-time logs on Cloudflare (SELF_HOSTING.md "When something goes wrong"), standard output on Node and Docker.
+
 ## Security
 
 - Bind every value; never interpolate into SQL.
