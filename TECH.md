@@ -106,6 +106,8 @@ The release version lives in `package.json` (D44). `vite.config.ts` reads it and
 4. Push `main` with `--follow-tags`, then deploy each instance as SELF_HOSTING.md "Upgrading" says: a Time Travel bookmark and an export before any migration, the migrations, the deploy, and for the demo the reseed.
 5. A GitHub release from the CHANGELOG section (`gh release create vX.Y.Z --verify-tag`), and the session log's entries moved to `docs/history/session-log.md`.
 
+A patch while `main` holds unreleased work (0.5.1 was cut this way): branch from the last tag (`git worktree add -b release/X.Y <dir> vX.Y.Z`), cherry-pick the fix, give CHANGELOG a section for the patch there, bump `package.json`, commit and tag. Merge the branch into `main` so the tag is on its history, moving the fix's lines out of "Unreleased" into the patch's section, and push `main` with `--follow-tags`. In each instance clone, `git checkout -B main vX.Y.Z` before deploying. Pages deploys to Production only from a branch named `main`, and a detached checkout of the tag goes up as a Preview. The next release's `git pull origin main` fast-forwards from there.
+
 ## Hosting targets
 
 Built 2026-11-06 (D32). One codebase, five places to run it; `BOX_TARGET` at build time picks the SvelteKit adapter and swaps `#lib/server/platform.ts` (a Vite alias in `vite.config.ts`). Nothing else in the app knows where it runs.
