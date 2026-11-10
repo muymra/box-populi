@@ -1,9 +1,9 @@
 import { requireRead } from '#lib/server/authz.ts';
 import { membersRead } from '#lib/server/catalog.ts';
 import { can } from '#lib/server/permissions.ts';
-import { canChangePlay, playYearsRead, playsPageRead, playsRead, podiumPointsRead, standingsRead } from '#lib/server/plays.ts';
+import { canChangePlay, playYearsRead, playsPageRead, playsRead, playRulesRead, standingsRead } from '#lib/server/plays.ts';
 import { beforeParam, lastDayOf, parsePeriod } from '#lib/server/log-pages.ts';
-import { deletePlayAction, pointsAction, savePlayAction } from '#lib/server/play-actions.ts';
+import { coopAction, deletePlayAction, pointsAction, savePlayAction } from '#lib/server/play-actions.ts';
 import { getDb } from '#lib/server/platform.ts';
 import { standingsFromCounts } from '#lib/plays.ts';
 import { assembleNights, nightListRead, nightReads } from '#lib/server/nights.ts';
@@ -36,11 +36,11 @@ export const load: PageServerLoad = async (event) => {
 		years: playYearsRead(db, groupId, year),
 		page: playsPageRead(db, groupId, { since, before, until, n: LISTED }),
 		plays: playsRead(db, groupId, { since, before, page: LISTED }),
-		scheme: podiumPointsRead(db, groupId),
+		rules: playRulesRead(db, groupId, event.locals.config.defaultPoints),
 		members: membersRead(db, groupId),
 		...nightReads(db, groupId, { from: since, to: until, games: false, page: { before, n: LISTED } })
 	});
-	const { plays, scheme, members } = r;
+	const { plays, rules, members } = r;
 	const nights = assembleNights(r.nights, r.people, r.games);
 	const me = event.locals.user;
 	const actor = me && access.role && !access.readonly ? { id: me.id, role: access.role } : null;
@@ -86,8 +86,8 @@ export const load: PageServerLoad = async (event) => {
 		year,
 		lastYear: r.years.lastYear,
 		earlierYears,
-		scheme,
-		standings: standingsFromCounts(r.standings, scheme),
+		rules,
+		standings: standingsFromCounts(r.standings, rules),
 		entries,
 		totalPlays: r.page.plays,
 		nightCount: r.page.nights,
@@ -103,5 +103,6 @@ export const actions: Actions = {
 	logPlay: savePlayAction,
 	editPlay: savePlayAction,
 	deletePlay: deletePlayAction,
-	points: pointsAction
+	points: pointsAction,
+	coop: coopAction
 };

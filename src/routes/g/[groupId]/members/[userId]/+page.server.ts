@@ -3,7 +3,7 @@ import { requireRead, requireRole } from '#lib/server/authz.ts';
 import { membersRead } from '#lib/server/catalog.ts';
 import { readAll } from '#lib/server/db.ts';
 import { getDb } from '#lib/server/platform.ts';
-import { playOutcomesRead, playsRead, podiumPointsRead, standingsRead } from '#lib/server/plays.ts';
+import { playOutcomesRead, playsRead, playRulesRead, standingsRead } from '#lib/server/plays.ts';
 import { assembleNightsBeen, assemblePlaySoon, assembleProfileGames, assembleWants, profileReads, setOwnMark, type ProfileGame } from '#lib/server/profile.ts';
 import type { CubeGame } from '#lib/catalog/types.ts';
 import { standingsFromCounts } from '#lib/plays.ts';
@@ -30,14 +30,14 @@ export const load: PageServerLoad = async (event) => {
 		plays: playOutcomesRead(db, groupId, { withUser: userId }),
 		latestPlays: playsRead(db, groupId, { withUser: userId, alsoWith: together, limit: 3 }),
 		yearStandings: standingsRead(db, groupId, `${year}-01-01`),
-		scheme: podiumPointsRead(db, groupId),
-		...profileReads(db, groupId, userId, viewerId, today, now)
+		rules: playRulesRead(db, groupId, event.locals.config.defaultPoints),
+		...profileReads(db, groupId, userId, viewerId, today, now, event.locals.config.playSoon)
 	});
 	const subject = r.members.find((m) => m.id === userId);
 	if (!subject || !r.membership) error(404, 'Not in this group');
 
 	const memberIds = new Set(r.members.map((m) => m.id));
-	const table = standingsFromCounts(r.yearStandings, r.scheme);
+	const table = standingsFromCounts(r.yearStandings, r.rules);
 	const rank = table.findIndex((s) => s.userId === userId);
 	const games = assembleProfileGames(r.gameRows, r.copyRows, r.corrections);
 	const own = games.filter((g) => g.subjectOwns);
@@ -46,7 +46,7 @@ export const load: PageServerLoad = async (event) => {
 	const subjectPlayed = playedAt(r.plays);
 	const nights = assembleNightsBeen(r.nightRows, r.membership.joined_at, subjectPlayed, together ? new Set(r.viewerPlayNights.map((n) => n.night_id)) : subjectPlayed);
 	const went = nights.filter((n) => n.subjectWent);
-	const { plays, wins } = record(r.plays, userId);
+	const { plays, wins } = record(r.plays, userId, r.rules);
 	const ownBase = own.filter((g) => !g.isExpansion);
 	// The shelves send only what a cube draws: a whole catalog game is about 570 bytes, and a long
 	// shelf ran to hundreds of kilobytes of page data (D70).
@@ -104,7 +104,7 @@ export const load: PageServerLoad = async (event) => {
 					neverPlayed: cubes(ownBase.filter((g) => !g.playedHere)),
 					lovedUnplayed: cubes(hearts.filter((g) => !g.viewerPlayed)),
 					favourites: hearts.map((g) => ({ gameId: g.id, name: g.name })),
-					playSoon: assemblePlaySoon(r.playSoonRows)
+					playSoon: assemblePlaySoon(r.playSoonRows, event.locals.config.playSoon)
 				}
 			: null
 	};
@@ -119,7 +119,7 @@ export const actions: Actions = {
 		const form = await event.request.formData();
 		const gameId = Number(form.get('gameId'));
 		if (!Number.isSafeInteger(gameId) || gameId <= 0) error(400, 'Bad game id');
-		const result = await setOwnMark(db, groupId, event.locals.user!.id, userId, { kind: form.get('kind'), gameId, on: form.get('on') === '1' }, Date.now());
+		const result = await setOwnMark(db, groupId, event.locals.user!.id, userId, { kind: form.get('kind'), gameId, on: form.get('on') === '1' }, Date.now(), event.locals.config.playSoon);
 		if (!result.ok) {
 			if (result.status === 403) error(403, result.error);
 			return fail(result.status, { markError: result.error, markGameId: gameId });

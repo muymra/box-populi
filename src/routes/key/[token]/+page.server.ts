@@ -42,7 +42,7 @@ export const actions: Actions = {
 		const oldToken = event.cookies.get(SESSION_COOKIE);
 		if (oldToken && event.locals.user?.id !== person.id) await endSession(db, oldToken);
 		if (event.locals.user?.id !== person.id) {
-			setSessionCookie(event.cookies, event.url, await createSession(db, person.id, now));
+			setSessionCookie(event.cookies, event.url, await createSession(db, person.id, now, event.locals.config.sessionDays), event.locals.config.sessionDays);
 		}
 		redirect(303, safeReturnTo(event.url.searchParams.get('returnTo')));
 	}

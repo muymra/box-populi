@@ -1,6 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { readGroup, requireRole } from '#lib/server/authz.ts';
-import { OWNER_AWAY_DAYS } from '#lib/server/permissions.ts';
 import { membersRead } from '#lib/server/catalog.ts';
 import {
 	archiveGroup,
@@ -8,6 +7,8 @@ import {
 	deleteGroup,
 	ownerAwayRead,
 	restoreGroup,
+	setFillerRule,
+	setStaleDays,
 	gameCountsRead,
 	memberActions,
 	regenerateCode,
@@ -40,7 +41,7 @@ export const load: PageServerLoad = async (event) => {
 		members: membersRead(db, groupId),
 		counts: gameCountsRead(db, groupId),
 		reach: memberReachRead(db, groupId),
-		away: access.role === 'admin' ? ownerAwayRead(db, groupId, Date.now()) : known(false),
+		away: access.role === 'admin' ? ownerAwayRead(db, groupId, Date.now(), event.locals.config.ownerAwayDays) : known(false),
 		// Guest plays to a member (D37): the guest names and what they were in, for the owner and co-admins.
 		...(manages ? guestHistoryReads(db, groupId) : { guestPlays: known([]), guestNights: known([]) })
 	});
@@ -53,14 +54,14 @@ export const load: PageServerLoad = async (event) => {
 		canManage: actor != null && actor.role !== 'member',
 		// Deleting stays open to the owner of a suspended group.
 		// Archiving (D50): the owner archives and restores, and a co-admin once the owner has been away
-		// 60 days; the owner deletes, once archived. A co-admin who may not is told why.
+		// OWNER_AWAY_DAYS (60 unless the instance sets it); the owner deletes, once archived. A co-admin who may not is told why.
 		canArchive: actor != null && (actor.role === 'owner' || (actor.role === 'admin' && away)) && !access.group.isDemo,
 		archiveWaits: actor != null && actor.role === 'admin' && !away && !access.group.isDemo,
-		// Taking over as owner (D51): a co-admin, once the owner has been away 60 days.
+		// Taking over as owner (D51): a co-admin, once the owner has been away OWNER_AWAY_DAYS.
 		canClaim: actor != null && actor.role === 'admin' && away && !access.group.isDemo,
 		restoreWaits: me != null && access.role === 'admin' && access.group.archived && !access.group.suspended && !away,
-		/** For saying the 60-day rule out loud wherever it applies. */
-		ownerAwayDays: OWNER_AWAY_DAYS,
+		/** For saying the days-away rule out loud wherever it applies. */
+		ownerAwayDays: event.locals.config.ownerAwayDays,
 		ownerIsAway: away,
 		canRestore:
 			me != null &&
@@ -122,6 +123,16 @@ export const actions: Actions = {
 	nightsBy: async (event) => {
 		const result = await act(event, 'admin', (db, id, actor, form) => setNightPlanners(db, id, actor, form.get('nightsBy')));
 		return result.ok ? { nightsBySaved: true } : fail(400, { nightsByError: result.error });
+	},
+
+	stale: async (event) => {
+		const result = await act(event, 'admin', (db, id, actor, form) => setStaleDays(db, id, actor, form.get('staleDays')));
+		return result.ok ? { staleSaved: true } : fail(400, { staleError: result.error });
+	},
+
+	filler: async (event) => {
+		const result = await act(event, 'admin', (db, id, actor, form) => setFillerRule(db, id, actor, form.get('fillerMinutes'), form.get('fillerWeight')));
+		return result.ok ? { fillerSaved: true } : fail(400, { fillerError: result.error });
 	},
 
 	theme: async (event) => {
@@ -191,17 +202,17 @@ export const actions: Actions = {
 	},
 
 	claim: async (event) => {
-		const result = await act(event, 'admin', (db, id, actor) => claimOwnership(db, id, actor, Date.now()));
+		const result = await act(event, 'admin', (db, id, actor) => claimOwnership(db, id, actor, Date.now(), event.locals.config.ownerAwayDays));
 		return result.ok ? { claimed: true } : fail(400, { claimError: result.error });
 	},
 
 	archive: async (event) => {
-		const result = await act(event, 'admin', (db, id, actor) => archiveGroup(db, id, actor, Date.now()));
+		const result = await act(event, 'admin', (db, id, actor) => archiveGroup(db, id, actor, Date.now(), event.locals.config.ownerAwayDays));
 		return result.ok ? { archived: true } : fail(400, { archiveError: result.error });
 	},
 
 	restore: async (event) => {
-		const result = await act(event, 'admin', (db, id, actor) => restoreGroup(db, id, actor, Date.now()), { allowArchived: true });
+		const result = await act(event, 'admin', (db, id, actor) => restoreGroup(db, id, actor, Date.now(), event.locals.config.ownerAwayDays), { allowArchived: true });
 		return result.ok ? { restored: true } : fail(400, { archiveError: result.error });
 	},
 

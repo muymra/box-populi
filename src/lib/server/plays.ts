@@ -7,7 +7,9 @@ import { gameOnNight, nightDay } from './nights.ts';
 import { FIRST_DAY, LAST_DAY, pageStart } from './log-pages.ts';
 import { cleanGuestName } from '#lib/table/here.ts';
 import {
-	DEFAULT_POINTS,
+	DEFAULT_COOP_WIN_POINTS,
+	MAX_POINTS,
+	type PlayRules,
 	MAX_PLAY_PLAYERS,
 	MAX_SCORE,
 	fillPlaces,
@@ -21,6 +23,7 @@ import {
 	type StandingCounts
 } from '#lib/plays.ts';
 import type { Role } from '#lib/catalog/types.ts';
+import { wholeNumberIn } from '#lib/numbers.ts';
 
 export type Actor = { id: string; role: Role };
 export type PlayInput = { playedOn: string; coop: Coop | null; lowestWins: boolean; players: PlayPlayer[]; nightId?: string | null };
@@ -351,9 +354,10 @@ export function playOutcomesRead(db: DB, groupId: string, q: { since?: string; w
  * (D70): about 50 rows back however long the history, where reading every play's players cost a group
  * at the planned scale over 10ms of Worker CPU on "All time". `standingsFromCounts` applies the scheme.
  * A play scores when it's competitive and everyone has a place; a place scores unless it's the worst.
+ * Co-op wins are counted apart (`coop_wins`), so `standingsFromCounts` can apply the group's rules to them.
  */
 export function standingsRead(db: DB, groupId: string, since?: string, before?: string): Read<StandingCounts[]> {
-	type Row = { user_id: string; plays: number; wins: number; s1: number; s2: number; s3: number; s4: number; s5: number; latest: string };
+	type Row = { user_id: string; plays: number; wins: number; coop_wins: number; s1: number; s2: number; s3: number; s4: number; s5: number; latest: string };
 	const scores = (k: number) => `SUM(s.coop IS NULL AND s.unplaced = 0 AND s.place < s.worst AND s.place = ${k}) AS s${k}`;
 	return mapRead(
 		rowsOf<Row>(
@@ -371,6 +375,7 @@ export function standingsRead(db: DB, groupId: string, since?: string, before?: 
 			   FROM per CROSS JOIN play_players pp WHERE pp.play_id = per.id
 			 )
 			 SELECT s.user_id, COUNT(*) AS plays, SUM(s.coop IS NULL AND s.place = 1 AND s.worst > 1) AS wins,
+			        SUM(s.coop IS 'won') AS coop_wins,
 			        ${[1, 2, 3, 4, 5].map(scores).join(', ')},
 			        MAX(s.played_on || printf('%016d', s.created_at)) AS latest
 			 FROM seats s
@@ -380,7 +385,7 @@ export function standingsRead(db: DB, groupId: string, since?: string, before?: 
 			since ?? FIRST_DAY,
 			before ?? LAST_DAY
 		),
-		(rows) => rows.map((r) => ({ userId: r.user_id, plays: r.plays, wins: r.wins ?? 0, scored: [r.s1 ?? 0, r.s2 ?? 0, r.s3 ?? 0, r.s4 ?? 0, r.s5 ?? 0], latest: r.latest }))
+		(rows) => rows.map((r) => ({ userId: r.user_id, plays: r.plays, wins: r.wins ?? 0, coopWins: r.coop_wins ?? 0, scored: [r.s1 ?? 0, r.s2 ?? 0, r.s3 ?? 0, r.s4 ?? 0, r.s5 ?? 0], latest: r.latest }))
 	);
 }
 
@@ -426,15 +431,27 @@ export function playYearsRead(db: DB, groupId: string, thisYear: number): Read<{
 	);
 }
 
-export async function podiumPoints(db: DB, groupId: string): Promise<number[]> {
-	return (await readAll(db, { p: podiumPointsRead(db, groupId) })).p;
+/**
+ * The group's scoring (D71): its podium points, or the instance's `DEFAULT_POINTS` when it hasn't set
+ * its own, and its co-op rules.
+ */
+export async function playRules(db: DB, groupId: string, defaultPoints: readonly number[]): Promise<PlayRules> {
+	return (await readAll(db, { r: playRulesRead(db, groupId, defaultPoints) })).r;
 }
 
-/** podiumPoints as a read, to share a round trip with others (`readAll`, D59). */
-export function podiumPointsRead(db: DB, groupId: string): Read<number[]> {
+/** playRules as a read, to share a round trip with others (`readAll`, D59). */
+export function playRulesRead(db: DB, groupId: string, defaultPoints: readonly number[]): Read<PlayRules> {
 	return mapRead(
-		rowsOf<{ podium_points: string | null }>(db, 'SELECT podium_points FROM groups WHERE id = ?1', groupId),
-		(rows) => parsePoints(rows[0]?.podium_points ?? null) ?? DEFAULT_POINTS
+		rowsOf<{ podium_points: string | null; coop_win_points: number; coop_wins_count: number }>(
+			db,
+			'SELECT podium_points, coop_win_points, coop_wins_count FROM groups WHERE id = ?1',
+			groupId
+		),
+		(rows) => ({
+			points: parsePoints(rows[0]?.podium_points ?? null) ?? defaultPoints,
+			coopWinPoints: rows[0]?.coop_win_points ?? DEFAULT_COOP_WIN_POINTS,
+			coopWinsCount: (rows[0]?.coop_wins_count ?? 1) === 1
+		})
 	);
 }
 
@@ -443,5 +460,14 @@ export async function setPodiumPoints(db: DB, groupId: string, actor: Actor, raw
 	const scheme = parsePoints(raw);
 	if (!scheme) return { ok: false, error: 'Give one to five whole numbers from 0 to 100, first place first, like 3, 2, 1.' };
 	await stmt(db, 'UPDATE groups SET podium_points = ?1 WHERE id = ?2', formatPoints(scheme), groupId).run();
+	return { ok: true, value: undefined };
+}
+
+/** What a co-op win scores each player (0 to MAX_POINTS) and whether it counts as a win (D71). Same people as the points. */
+export async function setCoopRules(db: DB, groupId: string, actor: Actor, form: { points: unknown; counts: unknown }): Promise<Result> {
+	if (!can(actor.role, 'set_points')) return { ok: false, error: 'Only co-admins and the owner can change the points.' };
+	const points = wholeNumberIn(form.points, 0, MAX_POINTS);
+	if (points == null) return { ok: false, error: `Give a whole number from 0 to ${MAX_POINTS} for a co-op win.` };
+	await stmt(db, 'UPDATE groups SET coop_win_points = ?1, coop_wins_count = ?2 WHERE id = ?3', points, form.counts === 'on' ? 1 : 0, groupId).run();
 	return { ok: true, value: undefined };
 }

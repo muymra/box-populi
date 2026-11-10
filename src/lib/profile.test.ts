@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { byMonth, coPlayers, headToHead, record, winRateBySize } from './profile.ts';
-import type { Play, PlayPlayer } from './plays.ts';
+import { DEFAULT_PLAY_RULES, type Play, type PlayPlayer } from './plays.ts';
 
 const m = (userId: string, place: number | null = null): PlayPlayer => ({ userId, guestName: null, place, score: null });
 const g = (guestName: string, place: number | null = null): PlayPlayer => ({ userId: null, guestName, place, score: null });
@@ -28,10 +28,13 @@ const plays = [
 ];
 
 describe('record', () => {
-	it('counts plays and competitive wins, with a shared first as a win and co-op wins left out', () => {
-		expect(record(plays, 'bram')).toEqual({ plays: 6, wins: 2 });
-		expect(record(plays, 'ada')).toEqual({ plays: 6, wins: 3 });
-		expect(record(plays, 'nobody')).toEqual({ plays: 0, wins: 0 });
+	it('counts plays and wins, with a shared first and a co-op win as wins and a co-op loss not', () => {
+		expect(record(plays, 'bram', DEFAULT_PLAY_RULES)).toEqual({ plays: 6, wins: 3 });
+		expect(record(plays, 'ada', DEFAULT_PLAY_RULES)).toEqual({ plays: 6, wins: 4 });
+		expect(record(plays, 'nobody', DEFAULT_PLAY_RULES)).toEqual({ plays: 0, wins: 0 });
+		expect(record([play('2026-01-01', [m('ada'), m('bram')], 'lost')], 'ada', DEFAULT_PLAY_RULES)).toEqual({ plays: 1, wins: 0 });
+		// A group that doesn't count co-op wins (D71).
+		expect(record(plays, 'bram', { ...DEFAULT_PLAY_RULES, coopWinsCount: false })).toEqual({ plays: 6, wins: 2 });
 	});
 });
 

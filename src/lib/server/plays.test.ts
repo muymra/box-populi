@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
 import { deleteGroupStatements, deletePersonStatements, one, readAll, run } from './db.ts';
-import { deletePlay, loadPlays, parsePlayForm, playOutcomesRead, playsPageRead, playsRead, podiumPoints, savePlay, setPodiumPoints, playYearsRead, standingsRead, type Actor } from './plays.ts';
+import { deletePlay, loadPlays, parsePlayForm, playOutcomesRead, playsPageRead, playsRead, playRules, savePlay, setCoopRules, setPodiumPoints, playYearsRead, standingsRead, type Actor } from './plays.ts';
 import { assembleNights, nightReads } from './nights.ts';
 import { loadCatalog } from './catalog.ts';
 import {
@@ -15,8 +15,13 @@ import {
 	playsCsv,
 	standings,
 	standingsFromCounts,
-	type Play
+	DEFAULT_PLAY_RULES,
+	type Play,
+	type PlayRules
 } from '#lib/plays.ts';
+
+/** The default rules with other podium points. */
+const scored = (points: number[]): PlayRules => ({ ...DEFAULT_PLAY_RULES, points });
 
 describe('play rules', () => {
 	it('ranks scores with shared places, low or high, and puts missing scores last', () => {
@@ -65,33 +70,46 @@ describe('play rules', () => {
 	});
 	const p = (userId: string | null, place: number | null, guestName: string | null = null, score: number | null = null) => ({ userId, guestName, place, score });
 
-	it('builds standings from members only, co-op scoring nothing', () => {
+	it('builds standings from members only, a co-op win a win and 1 point each, a loss neither', () => {
 		const plays = [
 			play({ players: [p('ada', 1), p('bo', 2), p(null, 3, 'Sam')] }),
 			play({ players: [p('bo', 1), p('ada', 2)] }),
 			play({ players: [p('bo', 1), p('ada', 2), p('gone', 3)] }),
-			play({ coop: 'won', players: [p('ada', null), p('bo', null)] })
+			play({ coop: 'won', players: [p('ada', null), p('bo', null)] }),
+			play({ coop: 'lost', players: [p('ada', null), p('bo', null)] })
 		];
-		expect(standings(plays, [3, 2, 1], new Set(['ada', 'bo']))).toEqual([
-			{ userId: 'bo', points: 8, wins: 2, plays: 4 },
-			{ userId: 'ada', points: 5, wins: 1, plays: 4 }
+		expect(standings(plays, DEFAULT_PLAY_RULES, new Set(['ada', 'bo']))).toEqual([
+			{ userId: 'bo', points: 9, wins: 3, plays: 5 },
+			{ userId: 'ada', points: 6, wins: 2, plays: 5 }
 		]);
+		// The co-op point doesn't follow the podium points.
+		expect(standings(plays.slice(3), scored([10, 5]), new Set(['ada']))).toEqual([{ userId: 'ada', points: 1, wins: 1, plays: 2 }]);
+		// A group's own co-op rule (D71): 2 points, not a win; or nothing at all.
+		const coop = plays.slice(3);
+		expect(standings(coop, { ...DEFAULT_PLAY_RULES, coopWinPoints: 2, coopWinsCount: false }, new Set(['ada']))).toEqual([{ userId: 'ada', points: 2, wins: 0, plays: 2 }]);
+		expect(standings(coop, { ...DEFAULT_PLAY_RULES, coopWinPoints: 0, coopWinsCount: false }, new Set(['ada']))).toEqual([{ userId: 'ada', points: 0, wins: 0, plays: 2 }]);
 	});
 
 	it('exports one CSV row per player, defusing formulas in typed text and quoting', () => {
 		const csv = playsCsv(
 			[
 				play({ id: 'p1', gameName: 'Alpha, the "Game"', players: [p('ada', 1, null, 40), p(null, 2, '=cmd()', 30)] }),
-				play({ id: 'p2', gameName: '=Typed', coop: 'lost', players: [p('gone', null)] })
+				play({ id: 'p2', gameName: '=Typed', coop: 'lost', players: [p('gone', null)] }),
+				play({ id: 'p3', coop: 'won', players: [p('ada', null), p(null, null, 'Sam')] })
 			],
-			[3, 2, 1],
+			DEFAULT_PLAY_RULES,
 			(id) => (id === 'ada' ? 'Ada' : null)
 		);
 		expect(csv.startsWith('﻿date,game_night,night_id,game,game_data_from,bgg_id,play_id,player,player_type,place,score,won,coop_result,points\r\n')).toBe(true);
 		const lines = csv.slice(1).trim().split('\r\n');
 		expect(lines[1]).toBe('2026-11-07,,,"Alpha, the ""Game""",typed in,,p1,Ada,member,1,40,yes,,3');
 		expect(lines[2]).toBe(`2026-11-07,,,"Alpha, the ""Game""",typed in,,p1,'=cmd(),guest,2,30,no,,0`);
-		expect(lines[3]).toBe("2026-11-07,,,'=Typed,typed in,,p2,a former member,former member,,,no,lost,");
+		expect(lines[3]).toBe("2026-11-07,,,'=Typed,typed in,,p2,a former member,former member,,,no,lost,0");
+		expect(lines[4]).toBe('2026-11-07,,,Alpha,typed in,,p3,Ada,member,,,yes,won,1');
+		expect(lines[5]).toBe('2026-11-07,,,Alpha,typed in,,p3,Sam,guest,,,yes,won,1');
+		// A group that doesn't count co-op wins still exports a co-op win as won (D71).
+		const notCounted = playsCsv([play({ id: 'p4', coop: 'won', players: [p('ada', null)] })], { ...DEFAULT_PLAY_RULES, coopWinsCount: false, coopWinPoints: 0 }, () => 'Ada');
+		expect(notCounted.slice(1).trim().split('\r\n')[1]).toBe('2026-11-07,,,Alpha,typed in,,p4,Ada,member,,,yes,won,0');
 		expect(csvField(-5)).toBe('-5');
 		expect(csvField('-5')).toBe("'-5");
 	});
@@ -102,13 +120,13 @@ describe('play rules', () => {
 				play({ id: 'b', gameName: '-ism', bggId: 13, gameSource: 'bgg', players: [p('ada', 1)] }),
 				play({ id: 'w', gameName: 'Wiki', bggId: 13, gameSource: 'wikidata', players: [p('ada', 1)] })
 			],
-			[3, 2, 1],
+			DEFAULT_PLAY_RULES,
 			() => 'Ada'
 		);
 		const lines = csv.slice(1).trim().split('\r\n');
 		expect(lines[1].startsWith('2026-11-07,,,-ism,BoardGameGeek,13,b,')).toBe(true);
 		expect(lines[2].startsWith('2026-11-07,,,Wiki,Wikidata,13,w,')).toBe(true);
-		expect(playsCsv([play({ players: [p('ada', 1)] })], [3, 2, 1], () => 'Ada')).not.toContain('BoardGameGeek');
+		expect(playsCsv([play({ players: [p('ada', 1)] })], DEFAULT_PLAY_RULES, () => 'Ada')).not.toContain('BoardGameGeek');
 	});
 });
 
@@ -286,12 +304,23 @@ describe('saving plays', () => {
 		expect(await loadPlays(db, 'g1', { gameId: 2 })).toEqual([]);
 	});
 
-	it('keeps podium points per group, set by co-admins', async () => {
-		expect(await podiumPoints(db, 'g1')).toEqual([3, 2, 1]);
+	it('keeps podium points per group, set by co-admins, with the instance’s for groups that set none', async () => {
+		expect((await playRules(db, 'g1', [3, 2, 1])).points).toEqual([3, 2, 1]);
+		expect((await playRules(db, 'g1', [10, 5])).points).toEqual([10, 5]);
 		expect((await setPodiumPoints(db, 'g1', bo, '5,3,1')).ok).toBe(false);
 		expect((await setPodiumPoints(db, 'g1', cy, 'lots')).ok).toBe(false);
 		expect((await setPodiumPoints(db, 'g1', cy, '5 3 1')).ok).toBe(true);
-		expect(await podiumPoints(db, 'g1')).toEqual([5, 3, 1]);
+		expect((await playRules(db, 'g1', [10, 5])).points).toEqual([5, 3, 1]);
+	});
+
+	it('keeps the co-op rule per group, set by co-admins (D71)', async () => {
+		expect(await playRules(db, 'g1', [3, 2, 1])).toEqual({ points: [3, 2, 1], coopWinPoints: 1, coopWinsCount: true });
+		expect((await setCoopRules(db, 'g1', bo, { points: '2', counts: null })).ok).toBe(false);
+		for (const bad of ['', '-1', '101', '1.5', 'two', null]) expect((await setCoopRules(db, 'g1', cy, { points: bad, counts: 'on' })).ok).toBe(false);
+		expect((await setCoopRules(db, 'g1', cy, { points: ' 2 ', counts: null })).ok).toBe(true);
+		expect(await playRules(db, 'g1', [3, 2, 1])).toMatchObject({ coopWinPoints: 2, coopWinsCount: false });
+		expect((await setCoopRules(db, 'g1', cy, { points: '0', counts: 'on' })).ok).toBe(true);
+		expect(await playRules(db, 'g1', [3, 2, 1])).toMatchObject({ coopWinPoints: 0, coopWinsCount: true });
 	});
 
 	it('clears plays with their group, and a deleted person’s results from the rest', async () => {
@@ -337,11 +366,12 @@ describe('the leaderboard counted in SQL (D70)', () => {
 			['p1', '2025-12-20', 1, null, [['ada', null, 1], ['bo', null, 2], ['cy', null, 3]]],
 			['p2', '2026-01-05', 2, null, [['bo', null, 1], ['ada', null, 1], ['cy', null, 3]]], // a tie for first
 			['p3', '2026-02-01', 3, null, [['cy', null, 1], [null, 'Sam', 2]]], // a guest below: Cy wins
-			['p4', '2026-02-10', 4, 'won', [['ada', null, null], ['dee', null, null]]], // co-op: plays, no points
+			['p4', '2026-02-10', 4, 'won', [['ada', null, null], ['dee', null, null]]], // a co-op win: a win and a point each
 			['p5', '2026-03-01', 5, null, [['dee', null, 1], ['bo', null, null], ['ada', null, 2]]], // someone unplaced: no points, Dee still wins
 			['p6', '2026-03-15', 6, null, [['eve', null, 1], ['dee', null, 2]]], // Eve left
 			['p7', '2026-04-01', 7, null, [['bo', null, 1], ['cy', null, 2], ['dee', null, 3], ['ada', null, 4], [null, 'Lou', 5], [null, 'Max', 6], [null, 'Ned', 7]]], // more places than any scheme
-			['p8', '2026-04-02', 8, null, [['cy', null, 1], ['dee', null, 1]]] // everyone tied for first: worst place, no points, no win
+			['p8', '2026-04-02', 8, null, [['cy', null, 1], ['dee', null, 1]]], // everyone tied for first: worst place, no points, no win
+			['p9', '2026-04-03', 9, 'lost', [['bo', null, null], ['cy', null, null], [null, 'Sam', null]]] // a co-op loss: plays only
 		];
 		for (const [id, day, at, coop, seats] of plays) {
 			await run(db, `INSERT INTO plays (id, group_id, game_id, played_on, coop, created_at) VALUES ('${id}', 'g1', 1, '${day}', ${coop ? `'${coop}'` : 'NULL'}, ${at})`);
@@ -350,12 +380,20 @@ describe('the leaderboard counted in SQL (D70)', () => {
 		}
 	});
 
-	it('gives the same table as the rules in plain code, for any scheme and period', async () => {
+	it('gives the same table as the rules in plain code, for any rules and period', async () => {
 		const members = new Set(['ada', 'bo', 'cy', 'dee']);
-		for (const scheme of [[3, 2, 1], [5, 1], [10, 6, 4, 2, 1], [0]]) {
-			for (const since of [undefined, '2026-01-01', '2026-03-01']) {
-				const r = await readAll(db, { counts: standingsRead(db, 'g1', since), plays: playOutcomesRead(db, 'g1', { since }) });
-				expect(standingsFromCounts(r.counts, scheme)).toEqual(standings(r.plays, scheme, members));
+		const coopRules = [
+			{ coopWinPoints: 1, coopWinsCount: true },
+			{ coopWinPoints: 0, coopWinsCount: false },
+			{ coopWinPoints: 7, coopWinsCount: false }
+		];
+		for (const points of [[3, 2, 1], [5, 1], [10, 6, 4, 2, 1], [0]]) {
+			for (const coop of coopRules) {
+				const rules = { points, ...coop };
+				for (const since of [undefined, '2026-01-01', '2026-03-01']) {
+					const r = await readAll(db, { counts: standingsRead(db, 'g1', since), plays: playOutcomesRead(db, 'g1', { since }) });
+					expect(standingsFromCounts(r.counts, rules)).toEqual(standings(r.plays, rules, members));
+				}
 			}
 		}
 	});
@@ -369,7 +407,7 @@ describe('the leaderboard counted in SQL (D70)', () => {
 		});
 		const in2025 = r.plays.filter((p) => p.playedOn < '2026-01-01');
 		expect(in2025.map((p) => p.id)).toEqual(['p1']);
-		expect(standingsFromCounts(r.counts, [3, 2, 1])).toEqual(standings(in2025, [3, 2, 1], new Set(['ada', 'bo', 'cy', 'dee'])));
+		expect(standingsFromCounts(r.counts, DEFAULT_PLAY_RULES)).toEqual(standings(in2025, DEFAULT_PLAY_RULES, new Set(['ada', 'bo', 'cy', 'dee'])));
 		expect(r.years).toEqual({ first: '2025-12-20', lastYear: true });
 		expect(r.later).toEqual({ first: '2025-12-20', lastYear: false });
 	});

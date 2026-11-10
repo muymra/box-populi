@@ -16,13 +16,13 @@
 	import { MANY_PLAYERS, PLAYER_CHOICES, formatPlayerRange, maskHas, playerChoiceLabel } from '#lib/catalog/players.ts';
 	import { DEFAULT_FILTERS, filterGames, keepMatching, sortGames } from '#lib/catalog/filter.ts';
 	import {
-		FILLER_MAX_MINUTES,
 		LINEUP_SIZE,
 		MAX_CHOSEN,
 		SPREAD_BANDS,
 		assignBands,
 		chooseInto,
 		favouritesAmong,
+		fillerLine,
 		fillerWeight,
 		fitsPlayers,
 		gamesAtHand,
@@ -126,7 +126,9 @@
 		return { favourites: favouritesAmong(payload?.games ?? [], here), playSoon: soon };
 	});
 	const weighMain = $derived(withInterest(pickWeight, interest));
-	const weighFiller = $derived(withInterest(fillerWeight, interest));
+	/** This group's filler rule (D71), from the layout. */
+	const fillerOf = $derived((game: CatalogGame, players: number | null) => fillerWeight(game, players, data.filler));
+	const weighFiller = $derived(withInterest(fillerOf, interest));
 	/** "Ada would like to play this soon", for a game someone here marked. */
 	function soonLine(game: CatalogGame): string | null {
 		const names = (soonMarks.get(game.id) ?? []).filter((id) => present.includes(id)).map((id) => memberMap.get(id)?.name ?? 'Someone');
@@ -218,7 +220,7 @@
 	// splits across tables (`splitFillers`).
 	const fillerPool = $derived.by(() => {
 		const main = new Set(lineup.map((g) => g.id));
-		return shelfToPull.filter((g) => isFiller(g) && !main.has(g.id));
+		return shelfToPull.filter((g) => isFiller(g, data.filler) && !main.has(g.id));
 	});
 	const fillerCandidates = $derived(players ? fillerPool.filter((g) => fitsPlayers(g, players)) : fillerPool);
 	const splitting = $derived(needsSplit(fillerPool, players));
@@ -266,7 +268,7 @@
 	}
 
 	const lineupKey = () => `bp:lineup:${data.group.id}`;
-	/** Kept games stay on this device until 12 hours after the last change, like who's here. */
+	/** Kept games stay on this device until HERE_RESET_HOURS after the last change, like who's here. */
 	function saveLineup() {
 		storage.set(lineupKey(), serializeLineup({ main: kept, fillers: keptFillers, at: venue }, Date.now()));
 	}
@@ -300,7 +302,7 @@
 			applyLineup(
 				linked
 					? { main: parseIdList(params.get('keep')), fillers: parseIdList(params.get('fkeep')), at: cleanVenue(params.get('at')) }
-					: parseLineup(storage.get(lineupKey()), Date.now())
+					: parseLineup(storage.get(lineupKey()), Date.now(), data.hereResetMs)
 			);
 			if (linked) saveLineup();
 			restored = true;
@@ -474,7 +476,7 @@
 		const size = tableFillers[index].players;
 		const used = new Set(tableFillers.map((t) => t.game.id));
 		const fits = fillerPool.filter((g) => !used.has(g.id) && fitsPlayers(g, size));
-		const [game] = pick(fits, size, Math.random, new Set(fillerSeen), 1, fillerWeight).games;
+		const [game] = pick(fits, size, Math.random, new Set(fillerSeen), 1, fillerOf).games;
 		if (!game) return;
 		tableFillers = tableFillers.map((t, j) => (j === index ? { players: t.players, game } : t));
 		fillerSeen = [...fillerSeen, game.id];
@@ -844,7 +846,7 @@
 				{#if includeFillers}
 					<section class="fillers" bind:this={fillersEl} aria-labelledby="fillers-h" aria-live="polite">
 						<h3 id="fillers-h">Fillers</h3>
-						<p class="hint">{FILLER_MAX_MINUTES} minutes or less and light, for while people arrive or between longer games.</p>
+						<p class="hint">{fillerLine(data.filler)}, for while people arrive or between longer games.</p>
 						{#if tableFillers}
 							{@const total = tableFillers.reduce((sum, t) => sum + t.players, 0)}
 							<p class="muted split-note">No filler here takes {total} players, so split into {tableFillers.length} tables.</p>
@@ -871,7 +873,7 @@
 								{/each}
 							</ul>
 						{:else if fillerPulled || fillerPool.length === 0}
-							<p class="muted">No short, light games{players ? ` for ${players} players` : ''} here. Fillers list {FILLER_MAX_MINUTES} minutes or less and are light, or nobody has set how complex they are.</p>
+							<p class="muted">No fillers{players ? ` for ${players} players` : ''} here. A filler lists {fillerLine(data.filler)}, or nobody has set how complex it is.</p>
 						{/if}
 						<div class="again">
 							{#if splitting || fillerOpen > 0}

@@ -29,6 +29,8 @@ describe("who's here", () => {
 		const raw = serializeHere({ members: ['u1'], guests: ['Sam'] }, NOW);
 		expect(parseHere(raw, NOW + HERE_TTL_MS - 1).members).toEqual(['u1']);
 		expect(parseHere(raw, NOW + HERE_TTL_MS)).toEqual({ members: [], guests: [] });
+		// A longer HERE_RESET_HOURS keeps it (D71).
+		expect(parseHere(raw, NOW + HERE_TTL_MS, 24 * 3_600_000).members).toEqual(['u1']);
 	});
 	it('treats the old array format, junk and a far-future time as empty', () => {
 		expect(parseHere('["u1","u2"]', NOW)).toEqual({ members: [], guests: [] });
@@ -162,6 +164,9 @@ describe('kept lineup', () => {
 		const raw = serializeLineup({ main: [12, 40], fillers: [7] }, NOW);
 		expect(parseLineup(raw, NOW + 1000)).toEqual({ main: [12, 40], fillers: [7], at: null });
 		expect(parseLineup(raw, NOW + HERE_TTL_MS)).toEqual(EMPTY_LINEUP);
+		// The instance's HERE_RESET_HOURS (D71): two hours here.
+		expect(parseLineup(raw, NOW + 2 * 3_600_000 - 1, 2 * 3_600_000).main).toEqual([12, 40]);
+		expect(parseLineup(raw, NOW + 2 * 3_600_000, 2 * 3_600_000)).toEqual(EMPTY_LINEUP);
 		expect(parseLineup('{"main":[1]}', NOW)).toEqual(EMPTY_LINEUP); // no timestamp
 		expect(parseLineup('not json', NOW)).toEqual(EMPTY_LINEUP);
 	});

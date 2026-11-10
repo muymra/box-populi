@@ -102,6 +102,13 @@ In `wrangler.jsonc` under `"vars"`:
 | `GAME_SOURCE` | `wikidata`. While you have no BGG token, members search Wikidata for games; set `manual` to have them type everything instead. |
 | `MAX_GROUPS_PER_USER` | Default `5`. |
 | `MAX_MEMBERS_PER_GROUP` | Default `100`. |
+| `DEFAULT_POINTS` | Default `3,2,1`: the podium points of every group that hasn't set its own, first place first. Each group's owner and co-admins can still set theirs. |
+| `OWNER_AWAY_DAYS` | Default `60`: how long a group's owner can be away before a co-admin may archive the group or take it over. |
+| `PLAY_SOON_DAYS` | Default `56` (8 weeks): how long a member's Play soon mark lasts when nothing clears it. |
+| `PLAY_SOON_MAX` | Default `5`: how many games a member's Play soon list holds. |
+| `HERE_RESET_HOURS` | Default `12`: hours after the last change that who's here and kept games reset on a device. |
+| `ADMIN_SESSION_HOURS` | Default `12`: how long your sign-in to `/admin` lasts. |
+| `SESSION_DAYS` | Default `400`, the most browsers allow: how long a device stays signed in after it was last used. Lower it for shared devices. |
 | `BGG_MODE` | Leave it empty. BGG turns on when the `BGG_TOKEN` secret exists. Set `off` to keep BGG off even with a token. |
 | `BGG_MIN_INTERVAL_MS` | Default `2000`, the minimum. Imports and other bulk work wait 5 seconds, or this if it's longer. Raise it if BGG asks you to, or if `/admin` shows requests throttled. |
 

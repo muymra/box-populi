@@ -2,6 +2,8 @@
 // Pure: takes the env record, returns a typed config or a list of problems to show the hoster.
 
 import { DEFAULT_THEME, isThemeId } from '#lib/themes.ts';
+import { DEFAULT_POINTS, formatPoints, parsePoints } from '#lib/plays.ts';
+import { wholeNumberIn } from '#lib/numbers.ts';
 
 export type BggMode = 'live' | 'off' | 'fake';
 
@@ -24,12 +26,33 @@ export type InstanceConfig = {
 	theme: string;
 	/** Where game details come from while BGG is off (D31): Wikidata, or only what members type. */
 	gameSource: 'wikidata' | 'manual';
+	/** Podium points for groups that haven't set their own (D71). */
+	defaultPoints: number[];
+	/** How long the owner can be away before a co-admin may archive the group or take over (D50, D51, D71). */
+	ownerAwayDays: number;
+	/** How long a device stays signed in since it was last used (D25, D71). Browsers cap cookies at 400 days. */
+	sessionDays: number;
+	/** How long a Play soon mark lasts when nothing clears it, and how many a person can have (D64, D71). */
+	playSoon: PlaySoonRule;
+	/** Hours after the last change that who's here and kept games reset on a device (D36, D71). */
+	hereResetHours: number;
+	/** Hours the hoster's sign-in to /admin lasts (D71). */
+	adminSessionHours: number;
 };
+
+/** A Play soon mark's life in days, and the most marks a person can have at once (D64, D71). */
+export type PlaySoonRule = { days: number; max: number };
 
 export type ConfigResult = { ok: true; config: InstanceConfig } | { ok: false; errors: string[] };
 
 export const MIN_BGG_INTERVAL_MS = 2000;
 export const MIN_ADMIN_KEY_LENGTH = 24;
+export const DEFAULT_OWNER_AWAY_DAYS = 60;
+/** Browsers cap cookie lifetimes at 400 days, so a longer session would end with its cookie anyway. */
+export const MAX_SESSION_DAYS = 400;
+export const DEFAULT_PLAY_SOON: PlaySoonRule = { days: 56, max: 5 };
+export const DEFAULT_HERE_RESET_HOURS = 12;
+export const DEFAULT_ADMIN_SESSION_HOURS = 12;
 const EXAMPLE_CONTACT = 'mailto:you@example.com';
 
 function str(env: Record<string, unknown>, key: string): string {
@@ -40,15 +63,26 @@ function str(env: Record<string, unknown>, key: string): string {
 export function parseInstanceConfig(env: Record<string, unknown>, opts: { dev: boolean }): ConfigResult {
 	const errors: string[] = [];
 
-	const int = (key: string, fallback: number, min: number): number => {
+	const int = (key: string, fallback: number, min: number, max = Number.MAX_SAFE_INTEGER): number => {
 		const raw = str(env, key);
 		if (!raw) return fallback;
-		if (!/^\d+$/.test(raw) || Number(raw) < min) {
-			errors.push(`${key} must be a whole number of at least ${min} (got "${raw}").`);
+		const n = wholeNumberIn(raw, min, max);
+		if (n == null) {
+			errors.push(
+				max === Number.MAX_SAFE_INTEGER
+					? `${key} must be a whole number of at least ${min} (got "${raw}").`
+					: `${key} must be a whole number from ${min} to ${max} (got "${raw}").`
+			);
 			return fallback;
 		}
-		return Number(raw);
+		return n;
 	};
+
+	const pointsRaw = str(env, 'DEFAULT_POINTS');
+	const defaultPoints = pointsRaw ? parsePoints(pointsRaw) : DEFAULT_POINTS;
+	if (!defaultPoints) {
+		errors.push(`DEFAULT_POINTS must be one to five whole numbers from 0 to 100, first place first, like "${formatPoints(DEFAULT_POINTS)}" (got "${pointsRaw}").`);
+	}
 
 	const instanceContact = str(env, 'INSTANCE_CONTACT');
 	if (!instanceContact) {
@@ -119,7 +153,13 @@ export function parseInstanceConfig(env: Record<string, unknown>, opts: { dev: b
 		instanceMode: instanceModeRaw === 'demo' ? 'demo' : 'standard',
 		searchEngines: searchEnginesRaw === 'block' ? 'block' : 'allow',
 		theme: isThemeId(themeRaw) ? themeRaw : DEFAULT_THEME,
-		gameSource: gameSourceRaw === 'manual' ? 'manual' : 'wikidata'
+		gameSource: gameSourceRaw === 'manual' ? 'manual' : 'wikidata',
+		defaultPoints: defaultPoints ?? DEFAULT_POINTS,
+		ownerAwayDays: int('OWNER_AWAY_DAYS', DEFAULT_OWNER_AWAY_DAYS, 1, 3650),
+		sessionDays: int('SESSION_DAYS', MAX_SESSION_DAYS, 1, MAX_SESSION_DAYS),
+		playSoon: { days: int('PLAY_SOON_DAYS', DEFAULT_PLAY_SOON.days, 1, 365), max: int('PLAY_SOON_MAX', DEFAULT_PLAY_SOON.max, 1, 20) },
+		hereResetHours: int('HERE_RESET_HOURS', DEFAULT_HERE_RESET_HOURS, 1, 168),
+		adminSessionHours: int('ADMIN_SESSION_HOURS', DEFAULT_ADMIN_SESSION_HOURS, 1, 720)
 	};
 
 	return errors.length ? { ok: false, errors } : { ok: true, config };

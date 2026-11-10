@@ -21,7 +21,7 @@ export type Filters = {
 	owners: string[];
 	availableOnly: boolean;
 	expansions: boolean;
-	/** Only games not played in the last STALE_DAYS, or never logged (PRD "Play log"). */
+	/** Only games not played in the group's window (`staleDays`, 90 by default), or never logged (PRD "Play log", D71). */
 	stale: boolean;
 	/** Only favourites (D63): anyone's in the group, or the viewer's own. */
 	favourites: 'any' | 'mine' | null;
@@ -34,11 +34,21 @@ export type Filters = {
 export type Viewer = { id: string | null; playSoon: ReadonlySet<number> };
 const NOBODY: Viewer = { id: null, playSoon: new Set() };
 
-export const STALE_DAYS = 90;
+/** How far back "Not played lately" looks when the group hasn't changed it (D71). */
+export const DEFAULT_STALE_DAYS = 90;
+export const STALE_DAYS_RANGE = { min: 7, max: 730 } as const;
 
-/** The first night that still counts as played lately. */
-export function staleCutoff(now: number): string {
-	return new Date(now - STALE_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+/** The first night that still counts as played lately, `days` back from `now`. */
+export function staleCutoff(now: number, days = DEFAULT_STALE_DAYS): string {
+	return new Date(now - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+/** The window in words, for "Not played in the last …": "3 months", "2 weeks", "week", "45 days". */
+export function staleLabel(days: number): string {
+	const unit = (n: number, one: string) => (n === 1 ? one : `${n} ${one}s`);
+	if (days % 30 === 0) return unit(days / 30, 'month');
+	if (days % 7 === 0) return unit(days / 7, 'week');
+	return `${days} days`;
 }
 
 export const DEFAULT_FILTERS: Filters = {
@@ -121,20 +131,6 @@ function matchesTags(gameTags: string[], wanted: string[], all: boolean, incompl
 	return all ? wanted.every((t) => gameTags.includes(t)) : wanted.some((t) => gameTags.includes(t));
 }
 
-export function matchesFilters(
-	game: CatalogGame,
-	f: Filters,
-	memberIds: ReadonlySet<string>,
-	cutoff: string = staleCutoff(Date.now()),
-	viewer: Viewer = NOBODY
-): boolean {
-	return (
-		matchesOthers(game, f, searchFor(f), memberIds, cutoff, viewer) &&
-		(f.expansions || !game.isExpansion) &&
-		(!f.availableOnly || hasAvailableCopy(game, f, memberIds))
-	);
-}
-
 /** The search text as the catalog stores it, worked out once per pass rather than once per game. */
 const searchFor = (f: Filters) => (f.q.trim() ? normalize(f.q) : '');
 
@@ -202,9 +198,10 @@ export function hiddenByDefault(
 	f: Filters,
 	memberIds: ReadonlySet<string>,
 	now = Date.now(),
-	viewer: Viewer = NOBODY
+	viewer: Viewer = NOBODY,
+	staleDays = DEFAULT_STALE_DAYS
 ): { lent: number; expansions: number } {
-	const cutoff = staleCutoff(now);
+	const cutoff = staleCutoff(now, staleDays);
 	const q = searchFor(f);
 	let shown = 0;
 	let withLent = 0;
@@ -268,9 +265,10 @@ export function keepMatching(
 	f: Filters,
 	memberIds: ReadonlySet<string>,
 	now = Date.now(),
-	viewer: Viewer = NOBODY
+	viewer: Viewer = NOBODY,
+	staleDays = DEFAULT_STALE_DAYS
 ): CatalogGame[] {
-	const cutoff = staleCutoff(now);
+	const cutoff = staleCutoff(now, staleDays);
 	const q = searchFor(f);
 	return games.filter(
 		(g) =>
@@ -285,9 +283,10 @@ export function filterGames(
 	f: Filters,
 	memberIds: ReadonlySet<string>,
 	now = Date.now(),
-	viewer: Viewer = NOBODY
+	viewer: Viewer = NOBODY,
+	staleDays = DEFAULT_STALE_DAYS
 ): CatalogGame[] {
-	return sortGames(keepMatching(games, f, memberIds, now, viewer), f.sort);
+	return sortGames(keepMatching(games, f, memberIds, now, viewer, staleDays), f.sort);
 }
 
 /** Distinct tag values across the catalog, most common first, for the filter pickers. */

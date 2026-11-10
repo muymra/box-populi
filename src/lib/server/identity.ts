@@ -8,9 +8,6 @@ import type { Role } from '#lib/catalog/types.ts';
 export const SESSION_COOKIE = 'bp_session';
 export const NEW_LINK_COOKIE = 'bp_new_link';
 export const DAY_MS = 86_400_000;
-/** Browsers cap cookie lifetimes at 400 days. */
-export const SESSION_DAYS = 400;
-const EXTEND_BELOW_DAYS = 200;
 
 export type Person = { id: string; name: string };
 
@@ -41,10 +38,10 @@ export async function pinHash(pin: string, salt: string): Promise<string> {
 
 /**
  * Statements that create a person with a session on this device and a personal link, and a PIN when
- * they chose one (D47).
+ * they chose one (D47). The session lasts `sessionDays`, the instance's SESSION_DAYS (D71).
  * Run them in one batch together with whatever membership the person is joining with.
  */
-export async function newPersonStatements(db: DB, name: string, now: number, pin: string | null = null) {
+export async function newPersonStatements(db: DB, name: string, now: number, sessionDays: number, pin: string | null = null) {
 	const id = crypto.randomUUID();
 	const sessionToken = randomToken();
 	const linkToken = randomToken();
@@ -60,26 +57,29 @@ export async function newPersonStatements(db: DB, name: string, now: number, pin
 			salt,
 			pin ? now : null
 		),
-		stmt(db, 'INSERT INTO sessions (id, user_id, expires_at) VALUES (?1, ?2, ?3)', await sha256Hex(sessionToken), id, now + SESSION_DAYS * DAY_MS),
+		stmt(db, 'INSERT INTO sessions (id, user_id, expires_at) VALUES (?1, ?2, ?3)', await sha256Hex(sessionToken), id, now + sessionDays * DAY_MS),
 		stmt(db, 'INSERT INTO personal_links (user_id, token_hash, created_at) VALUES (?1, ?2, ?3)', id, await sha256Hex(linkToken), now)
 	];
 	return { person: { id, name } as Person, sessionToken, linkToken, statements };
 }
 
-export async function createSession(db: DB, userId: string, now: number): Promise<string> {
+export async function createSession(db: DB, userId: string, now: number, sessionDays: number): Promise<string> {
 	const token = randomToken();
 	await db.batch([
 		// The person's sessions that ran out on devices never used again; nothing else would ever delete them (D65).
 		stmt(db, 'DELETE FROM sessions WHERE user_id = ?1 AND expires_at <= ?2', userId, now),
-		stmt(db, 'INSERT INTO sessions (id, user_id, expires_at) VALUES (?1, ?2, ?3)', await sha256Hex(token), userId, now + SESSION_DAYS * DAY_MS)
+		stmt(db, 'INSERT INTO sessions (id, user_id, expires_at) VALUES (?1, ?2, ?3)', await sha256Hex(token), userId, now + sessionDays * DAY_MS)
 	]);
 	return token;
 }
 
 export type ResolvedSession = { person: Person; extended: boolean };
 
-/** Looks up the device's session. Deletes it if expired; slides the expiry forward when it's past half. */
-export async function resolveSession(db: DB, token: string | undefined, now: number): Promise<ResolvedSession | null> {
+/**
+ * Looks up the device's session. Deletes it if expired; slides the expiry forward when it's past half
+ * of `sessionDays`, and pulls it in when the instance has shortened SESSION_DAYS since it was set (D71).
+ */
+export async function resolveSession(db: DB, token: string | undefined, now: number, sessionDays: number): Promise<ResolvedSession | null> {
 	if (!token || token.length > 100) return null;
 	const hash = await sha256Hex(token);
 	const row = await one<{ user_id: string; name: string; expires_at: number }>(
@@ -93,8 +93,9 @@ export async function resolveSession(db: DB, token: string | undefined, now: num
 		return null;
 	}
 	let extended = false;
-	if (row.expires_at - now < EXTEND_BELOW_DAYS * DAY_MS) {
-		await run(db, 'UPDATE sessions SET expires_at = ?1 WHERE id = ?2', now + SESSION_DAYS * DAY_MS, hash);
+	const left = row.expires_at - now;
+	if (left < (sessionDays / 2) * DAY_MS || left > sessionDays * DAY_MS) {
+		await run(db, 'UPDATE sessions SET expires_at = ?1 WHERE id = ?2', now + sessionDays * DAY_MS, hash);
 		extended = true;
 	}
 	return { person: { id: row.user_id, name: row.name }, extended };

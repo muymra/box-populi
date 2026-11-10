@@ -14,6 +14,7 @@ import { bringCopy, createNight, nightOnlyGames, setGoing } from './nights.ts';
 import { leaveGroup } from './identity.ts';
 import { confirmImport } from './importer.ts';
 import { loadYourGames } from './your-data.ts';
+import { DEFAULT_PLAY_SOON } from './instance.ts';
 
 // These nights are on 2026-11-14; the night actions lock once a night is over (D70), so the clock is pinned before it.
 beforeEach(() => {
@@ -78,8 +79,8 @@ describe('hiding a copy from one group (D66)', () => {
 		expect((await lendCopy(db, 'g1', 'ada', 1, { toUserId: 'bo' })).ok).toBe(true);
 
 		await run(db, `INSERT INTO play_soon (user_id, game_id, marked_at) VALUES ('bo', 1, ${NOW})`);
-		expect(await playSoonOfPeople(db, 'g2', ['bo'], NOW)).toEqual([]);
-		expect(await playSoonOfPeople(db, 'g1', ['bo'], NOW)).toEqual([{ gameId: 1, userIds: ['bo'] }]);
+		expect(await playSoonOfPeople(db, 'g2', ['bo'], NOW, DEFAULT_PLAY_SOON)).toEqual([]);
+		expect(await playSoonOfPeople(db, 'g1', ['bo'], NOW, DEFAULT_PLAY_SOON)).toEqual([{ gameId: 1, userIds: ['bo'] }]);
 
 		const night = await createNight(db, 'g2', { id: 'bo', role: 'owner' }, { name: 'Lunch', nightOn: '2026-11-14', startsAt: null, hostId: null });
 		if (!night.ok) throw new Error(night.error);
@@ -153,7 +154,7 @@ describe('keeping hidden rows in step (D66)', () => {
 
 	it('lists them in the games download, with the group', async () => {
 		await setCopyHidden(db, 'g2', 'ada', 1, true, NOW);
-		const hidden = (await loadYourGames(db, 'ada', NOW)).filter((g) => g.list === 'hidden');
+		const hidden = (await loadYourGames(db, 'ada', NOW, DEFAULT_PLAY_SOON)).filter((g) => g.list === 'hidden');
 		expect(hidden.map((g) => [g.name, g.note])).toEqual([['Alpha', 'from Office']]);
 	});
 });

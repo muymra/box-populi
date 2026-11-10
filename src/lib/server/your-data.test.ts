@@ -4,6 +4,7 @@ import { run } from './db.ts';
 import { loadYourGames } from './your-data.ts';
 import { parseListLine } from './game-list.ts';
 import { gamesCsv, rangeText } from '#lib/games-csv.ts';
+import { DEFAULT_PLAY_SOON } from './instance.ts';
 
 let db: ReturnType<typeof createTestDb>;
 const DAY = Date.UTC(2026, 10, 8);
@@ -34,7 +35,7 @@ describe('favourites and Play soon in your games (D63, D64)', () => {
 		const now = Date.parse('2026-11-09T12:00:00Z');
 		await run(db, `INSERT INTO favourites (user_id, game_id, added_at) VALUES ('ada', 4, ?1), ('bo', 1, ?1)`, DAY);
 		await run(db, `INSERT INTO play_soon (user_id, game_id, marked_at) VALUES ('ada', 1, ?1), ('ada', 2, ?2)`, now - 86_400_000, now - 100 * 86_400_000);
-		const games = await loadYourGames(db, 'ada', now);
+		const games = await loadYourGames(db, 'ada', now, DEFAULT_PLAY_SOON);
 		expect(games.filter((g) => g.list === 'favourite' || g.list === 'play soon').map((g) => `${g.list}:${g.name}`)).toEqual(['favourite:Night Ferry', 'play soon:Harbour Lights']);
 		const lists = gamesCsv(games).split('\r\n').slice(1, -1).map((l) => l.split(',')[3]);
 		expect(lists).toEqual(['shelf', 'shelf', 'shelf', 'wishlist', 'favourite', 'play soon']);
@@ -43,7 +44,7 @@ describe('favourites and Play soon in your games (D63, D64)', () => {
 
 describe('your games as a CSV', () => {
 	it('lists your shelf, then your wishlist, and nobody else’s', async () => {
-		const games = await loadYourGames(db, 'ada');
+		const games = await loadYourGames(db, 'ada', Date.now(), DEFAULT_PLAY_SOON);
 		expect(games.map((g) => `${g.list}:${g.name}`).sort()).toEqual(['shelf:=Ember Tavern', 'shelf:Harbour Lights', 'shelf:Quiet Orchard', 'wishlist:Night Ferry']);
 		const lines = gamesCsv(games).split('\r\n');
 		expect(lines[0]).toBe('﻿game,players,minutes,list,year,game_data_from,bgg_id,wikidata_id,added,lent_to,note');
@@ -56,12 +57,12 @@ describe('your games as a CSV', () => {
 	});
 
 	it('keeps BGG’s players, times and weight out', async () => {
-		const csv = gamesCsv(await loadYourGames(db, 'ada'));
+		const csv = gamesCsv(await loadYourGames(db, 'ada', Date.now(), DEFAULT_PLAY_SOON));
 		expect(csv).not.toMatch(/2\.4|3\.1|2-5|45-90|3-6/);
 	});
 
 	it('reads back through Paste a list from its first three columns', async () => {
-		const games = await loadYourGames(db, 'ada');
+		const games = await loadYourGames(db, 'ada', Date.now(), DEFAULT_PLAY_SOON);
 		const orchard = games.find((g) => g.name === 'Quiet Orchard')!;
 		const line = ['Quiet Orchard', rangeText(orchard.minPlayers, orchard.maxPlayers), rangeText(orchard.minPlaytime, orchard.maxPlaytime)].join('\t');
 		expect(parseListLine(line)).toEqual({ title: 'Quiet Orchard', minPlayers: 1, maxPlayers: 1, minPlaytime: 20, maxPlaytime: 20 });

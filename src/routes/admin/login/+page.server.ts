@@ -1,5 +1,5 @@
 import { error, fail, redirect } from '@sveltejs/kit';
-import { ADMIN_HOURS, adminCookieValue, isAdminKey } from '#lib/server/admin.ts';
+import { adminCookieValue, isAdminKey } from '#lib/server/admin.ts';
 import { setAdminCookie } from '#lib/server/cookies.ts';
 import { getDb } from '#lib/server/platform.ts';
 import { giveBack, ipSubject, LIMITS, take } from '#lib/server/ratelimit.ts';
@@ -10,6 +10,7 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
 	if (!locals.config.adminKey) error(404, 'Not found');
 	if (locals.isAdmin) redirect(303, '/admin');
 	setHeaders({ 'cache-control': 'no-store' });
+	return { hours: locals.config.adminSessionHours };
 };
 
 export const actions: Actions = {
@@ -23,8 +24,9 @@ export const actions: Actions = {
 		const key = String((await event.request.formData()).get('key') ?? '');
 		if (!(await isAdminKey(adminKey, key))) return fail(400, { error: 'That isn’t the admin key.' });
 		await giveBack(db, tried.taken);
-		const expiresAt = now + ADMIN_HOURS * 3_600_000;
-		setAdminCookie(event.cookies, event.url, await adminCookieValue(adminKey, expiresAt));
+		const hours = event.locals.config.adminSessionHours;
+		const expiresAt = now + hours * 3_600_000;
+		setAdminCookie(event.cookies, event.url, await adminCookieValue(adminKey, expiresAt), hours);
 		redirect(303, '/admin');
 	}
 };

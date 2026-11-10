@@ -5,6 +5,7 @@ import { error, redirect, type RequestEvent } from '@sveltejs/kit';
 import { one, type DB } from './db.ts';
 import { atLeast } from './permissions.ts';
 import { touchLastSeen } from './groups.ts';
+import type { FillerRule } from '#lib/catalog/pick.ts';
 import type { Role } from '#lib/catalog/types.ts';
 
 export type GroupInfo = {
@@ -53,6 +54,9 @@ async function loadGroup(db: DB, groupId: string, userId: string | null) {
 		link_key: string | null;
 		theme: string | null;
 		nights_by: string | null;
+		filler_max_minutes: number;
+		filler_max_weight: number;
+		stale_days: number;
 		catalog_version: number;
 		role: Role | null;
 		last_seen_at: number | null;
@@ -60,7 +64,7 @@ async function loadGroup(db: DB, groupId: string, userId: string | null) {
 	}>(
 		db,
 		`SELECT g.id, g.name, g.is_demo, g.suspended_at, g.suspended_reason, g.archived_at, u.name AS archived_by_name,
-		        g.code, g.link_key, g.theme, g.nights_by, g.catalog_version, m.role, m.last_seen_at, me.pin_set_at
+		        g.code, g.link_key, g.theme, g.nights_by, g.filler_max_minutes, g.filler_max_weight, g.stale_days, g.catalog_version, m.role, m.last_seen_at, me.pin_set_at
 		 FROM groups g
 		 LEFT JOIN users u ON u.id = g.archived_by
 		 LEFT JOIN memberships m ON m.group_id = g.id AND m.user_id = ?2
@@ -88,7 +92,18 @@ function info(row: NonNullable<Awaited<ReturnType<typeof loadGroup>>>): GroupInf
 }
 
 /** What the group layout reads alongside the access check. Never spread into page data whole: the code is for members only. */
-export type GroupExtras = { code: string; linkKey: string | null; theme: string | null; pinSetAt: number | null; nightsBy: string | null; catalogVersion: number };
+export type GroupExtras = {
+	code: string;
+	linkKey: string | null;
+	theme: string | null;
+	pinSetAt: number | null;
+	nightsBy: string | null;
+	/** What Play tonight calls a filler here (D71). */
+	filler: FillerRule;
+	/** How far back the shelf's "Not played lately" looks (D71). */
+	staleDays: number;
+	catalogVersion: number;
+};
 
 /** Members of the group, or anyone for the demo group. */
 export async function requireRead(event: RequestEvent, db: DB, groupId: string): Promise<GroupAccess> {
@@ -127,6 +142,8 @@ async function checkGroup(event: RequestEvent, db: DB, groupId: string): Promise
 		theme: row.theme,
 		pinSetAt: row.pin_set_at,
 		nightsBy: row.nights_by,
+		filler: { maxMinutes: row.filler_max_minutes, maxWeight: row.filler_max_weight },
+		staleDays: row.stale_days,
 		catalogVersion: row.catalog_version
 	};
 

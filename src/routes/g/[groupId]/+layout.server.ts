@@ -33,7 +33,7 @@ export const load: LayoutServerLoad = async (event) => {
 		// The switcher in the top bar (PRD "Groups and codes").
 		groups: access.role && user ? myGroupsRead(db, user.id) : known([]),
 		// The viewer's own Play soon list (D64), for the shelf's "My Play soon" filter. Never anyone else's.
-		myPlaySoon: access.role && user ? myPlaySoonRead(db, user.id, Date.now()) : known([]),
+		myPlaySoon: access.role && user ? myPlaySoonRead(db, user.id, Date.now(), event.locals.config.playSoon) : known([]),
 		...nightReads(db, access.group.id, { from: day(-1) }),
 		// Games on nights around today that no member owns, so Play tonight can draw from a guest's game.
 		nightGames: nightOnlyGamesRead(db, access.group.id, { from: day(-1), to: day(1) }),
@@ -63,6 +63,11 @@ export const load: LayoutServerLoad = async (event) => {
 		myPinSet: access.role && event.locals.user ? extras.pinSetAt != null : true,
 		contact: event.locals.config.instanceContact,
 		pendingDetails: reads.pending,
-		myPlaySoon: reads.myPlaySoon
+		myPlaySoon: reads.myPlaySoon,
+		// What Play tonight calls a filler in this group, and how far back "Not played lately" looks (D71).
+		filler: extras.filler,
+		staleDays: extras.staleDays,
+		// When who's here and kept games reset on a device (D36, D71).
+		hereResetMs: event.locals.config.hereResetHours * 3_600_000
 	};
 };

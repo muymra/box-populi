@@ -29,15 +29,15 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	// Who is this device? (DECISIONS D25)
 	const token = event.cookies.get(SESSION_COOKIE);
-	const session = token ? await resolveSession(getDb(), token, Date.now()) : null;
+	const session = token ? await resolveSession(getDb(), token, Date.now(), config.config.sessionDays) : null;
 	if (token && !session) clearSessionCookie(event.cookies, event.url);
-	if (token && session?.extended) setSessionCookie(event.cookies, event.url, token);
+	if (token && session?.extended) setSessionCookie(event.cookies, event.url, token, config.config.sessionDays);
 	event.locals.user = session?.person ?? null;
 
 	// The hoster, signed in with ADMIN_KEY. Grants nothing inside groups (TECH.md "Authorization").
 	const adminCookie = event.cookies.get(ADMIN_COOKIE);
 	const adminKey = config.config.adminKey;
-	event.locals.isAdmin = adminCookie != null && adminKey != null && (await verifyAdminCookie(adminKey, adminCookie, Date.now()));
+	event.locals.isAdmin = adminCookie != null && adminKey != null && (await verifyAdminCookie(adminKey, adminCookie, Date.now(), config.config.adminSessionHours));
 	if (adminCookie && !event.locals.isAdmin) clearAdminCookie(event.cookies, event.url);
 
 	// The theme goes into the HTML before it's sent, so the page never flashes the default colours.

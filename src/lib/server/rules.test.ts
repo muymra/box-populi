@@ -132,8 +132,44 @@ describe('instance config', () => {
 			groupCreation: 'admins',
 			maxGroupsPerUser: 5,
 			maxMembersPerGroup: 100,
-			bggMinIntervalMs: 2000
+			bggMinIntervalMs: 2000,
+			defaultPoints: [3, 2, 1],
+			ownerAwayDays: 60,
+			sessionDays: 400,
+			playSoon: { days: 56, max: 5 },
+			hereResetHours: 12,
+			adminSessionHours: 12
 		});
+	});
+
+	it('reads the starting points, the days an owner may be away and how long a device stays signed in (D71)', () => {
+		const result = parseInstanceConfig(
+			{ ...base, DEFAULT_POINTS: '5, 3, 1, 0', OWNER_AWAY_DAYS: '30', SESSION_DAYS: '90', PLAY_SOON_DAYS: '14', PLAY_SOON_MAX: '3', HERE_RESET_HOURS: '6', ADMIN_SESSION_HOURS: '2' },
+			{ dev: false }
+		);
+		expect(result.ok && result.config).toMatchObject({
+			defaultPoints: [5, 3, 1, 0],
+			ownerAwayDays: 30,
+			sessionDays: 90,
+			playSoon: { days: 14, max: 3 },
+			hereResetHours: 6,
+			adminSessionHours: 2
+		});
+		for (const [key, value] of [
+			['DEFAULT_POINTS', 'first wins'],
+			['DEFAULT_POINTS', '1,2,3,4,5,6'],
+			['OWNER_AWAY_DAYS', '0'],
+			['SESSION_DAYS', '401'],
+			['SESSION_DAYS', '0'],
+			['PLAY_SOON_DAYS', '366'],
+			['PLAY_SOON_MAX', '21'],
+			['HERE_RESET_HOURS', '169'],
+			['ADMIN_SESSION_HOURS', '0']
+		]) {
+			const bad = parseInstanceConfig({ ...base, [key]: value }, { dev: false });
+			expect(bad.ok).toBe(false);
+			if (!bad.ok) expect(bad.errors.join('\n')).toContain(key);
+		}
 	});
 
 	it('names every problem', () => {

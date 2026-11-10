@@ -14,6 +14,8 @@ import {
 	setCoAdmin,
 	transferOwnership,
 	setGroupTheme,
+	setFillerRule,
+	setStaleDays,
 	groupThemeFor,
 	type Actor
 } from './group-admin.ts';
@@ -109,39 +111,75 @@ describe('removing members', () => {
 
 describe('archiving the group', () => {
 	it('lets the owner archive and restore, and records who and when', async () => {
-		expect((await archiveGroup(db, 'g1', member, 5)).ok).toBe(false);
-		expect(await archiveGroup(db, 'g1', owner, 5)).toEqual({ ok: true });
+		expect((await archiveGroup(db, 'g1', member, 5, 60)).ok).toBe(false);
+		expect(await archiveGroup(db, 'g1', owner, 5, 60)).toEqual({ ok: true });
 		expect(await one(db, "SELECT archived_at, archived_by FROM groups WHERE id = 'g1'")).toEqual({ archived_at: 5, archived_by: 'ada' });
-		expect((await archiveGroup(db, 'g1', owner, 6)).ok).toBe(false);
-		expect((await restoreGroup(db, 'g1', member, 7)).ok).toBe(false);
-		expect(await restoreGroup(db, 'g1', owner, 7)).toEqual({ ok: true });
+		expect((await archiveGroup(db, 'g1', owner, 6, 60)).ok).toBe(false);
+		expect((await restoreGroup(db, 'g1', member, 7, 60)).ok).toBe(false);
+		expect(await restoreGroup(db, 'g1', owner, 7, 60)).toEqual({ ok: true });
 		expect(await one(db, "SELECT archived_at, archived_by FROM groups WHERE id = 'g1'")).toEqual({ archived_at: null, archived_by: null });
-		expect((await restoreGroup(db, 'g1', owner, 8)).ok).toBe(false);
+		expect((await restoreGroup(db, 'g1', owner, 8, 60)).ok).toBe(false);
 	});
 
 	it('lets a co-admin archive and restore only once the owner has been away 60 days', async () => {
 		const day = 86_400_000;
 		// The owner was last seen at 0.
-		expect(await ownerAway(db, 'g1', 59 * day)).toBe(false);
-		expect((await archiveGroup(db, 'g1', admin, 59 * day)).ok).toBe(false);
-		expect(await ownerAway(db, 'g1', 61 * day)).toBe(true);
-		expect(await archiveGroup(db, 'g1', admin, 61 * day)).toEqual({ ok: true });
-		expect(await restoreGroup(db, 'g1', admin, 62 * day)).toEqual({ ok: true });
+		expect(await ownerAway(db, 'g1', 59 * day, 60)).toBe(false);
+		expect((await archiveGroup(db, 'g1', admin, 59 * day, 60)).ok).toBe(false);
+		expect(await ownerAway(db, 'g1', 61 * day, 60)).toBe(true);
+		expect(await archiveGroup(db, 'g1', admin, 61 * day, 60)).toEqual({ ok: true });
+		expect(await restoreGroup(db, 'g1', admin, 62 * day, 60)).toEqual({ ok: true });
 		// Back, the owner takes the decision again.
 		await run(db, "UPDATE memberships SET last_seen_at = ?1 WHERE user_id = 'ada'", 62 * day);
-		expect((await archiveGroup(db, 'g1', admin, 63 * day)).ok).toBe(false);
+		expect((await archiveGroup(db, 'g1', admin, 63 * day, 60)).ok).toBe(false);
+	});
+
+	it('waits the instance’s OWNER_AWAY_DAYS instead when it sets one (D71)', async () => {
+		const day = 86_400_000;
+		expect(await ownerAway(db, 'g1', 11 * day, 10)).toBe(true);
+		expect(await ownerAway(db, 'g1', 9 * day, 10)).toBe(false);
+		expect(await claimOwnership(db, 'g1', admin, 9 * day, 10)).toMatchObject({ ok: false, error: expect.stringContaining('10 days') });
+		expect(await archiveGroup(db, 'g1', admin, 11 * day, 10)).toEqual({ ok: true });
+		expect(await restoreGroup(db, 'g1', admin, 12 * day, 10)).toEqual({ ok: true });
+		expect(await claimOwnership(db, 'g1', admin, 12 * day, 10)).toEqual({ ok: true });
+	});
+});
+
+describe('not played lately', () => {
+	it('looks back 90 days until co-admins or the owner change it (D71)', async () => {
+		const days = async () => (await one<{ d: number }>(db, "SELECT stale_days AS d FROM groups WHERE id = 'g1'"))?.d;
+		expect(await days()).toBe(90);
+		expect((await setStaleDays(db, 'g1', member, '30')).ok).toBe(false);
+		for (const bad of ['6', '731', '30.5', '', 'month', null]) expect((await setStaleDays(db, 'g1', admin, bad)).ok).toBe(false);
+		expect(await setStaleDays(db, 'g1', admin, ' 30 ')).toEqual({ ok: true });
+		expect(await days()).toBe(30);
+	});
+});
+
+describe('fillers', () => {
+	const rule = async () => one<{ m: number; w: number }>(db, "SELECT filler_max_minutes AS m, filler_max_weight AS w FROM groups WHERE id = 'g1'");
+	it('starts at 30 minutes and under 2, and takes co-admins’ and the owner’s changes (D71)', async () => {
+		expect(await rule()).toEqual({ m: 30, w: 2 });
+		expect((await setFillerRule(db, 'g1', member, '45', '2.5')).ok).toBe(false);
+		for (const [m, w] of [['4', '2'], ['241', '2'], ['30.5', '2'], ['', '2'], ['30', '0.5'], ['30', '5.5'], ['30', 'light'], [null, null]]) {
+			expect((await setFillerRule(db, 'g1', admin, m, w)).ok).toBe(false);
+		}
+		expect(await setFillerRule(db, 'g1', admin, ' 45 ', '2,54')).toEqual({ ok: true });
+		expect(await rule()).toEqual({ m: 45, w: 2.5 });
+		expect(await setFillerRule(db, 'g1', owner, '20', '5')).toEqual({ ok: true });
+		expect(await rule()).toEqual({ m: 20, w: 5 });
 	});
 });
 
 describe('taking over as owner', () => {
 	const day = 86_400_000;
 	it('lets a co-admin take over once the owner has been away 60 days; the owner becomes a co-admin', async () => {
-		expect((await claimOwnership(db, 'g1', member, 61 * day)).ok).toBe(false);
-		expect((await claimOwnership(db, 'g1', owner, 61 * day)).ok).toBe(false);
-		expect(await claimOwnership(db, 'g1', admin, 59 * day)).toMatchObject({ ok: false, error: expect.stringContaining('60 days') });
+		expect((await claimOwnership(db, 'g1', member, 61 * day, 60)).ok).toBe(false);
+		expect((await claimOwnership(db, 'g1', owner, 61 * day, 60)).ok).toBe(false);
+		expect(await claimOwnership(db, 'g1', admin, 59 * day, 60)).toMatchObject({ ok: false, error: expect.stringContaining('60 days') });
 		expect(await roles()).toMatchObject({ ada: 'owner', cy: 'admin' });
 		const before = await version();
-		expect(await claimOwnership(db, 'g1', admin, 61 * day)).toEqual({ ok: true });
+		expect(await claimOwnership(db, 'g1', admin, 61 * day, 60)).toEqual({ ok: true });
 		expect(await roles()).toEqual({ ada: 'admin', bo: 'member', cy: 'owner', di: 'member' });
 		expect(await version()).toBeGreaterThan(before!);
 		expect(await one(db, "SELECT last_seen_at FROM memberships WHERE group_id = 'g1' AND user_id = 'cy'")).toEqual({ last_seen_at: 61 * day });
@@ -149,8 +187,8 @@ describe('taking over as owner', () => {
 
 	it('leaves a second co-admin to wait 60 days from the first one taking over', async () => {
 		await run(db, "UPDATE memberships SET role = 'admin' WHERE user_id = 'di'");
-		expect(await claimOwnership(db, 'g1', admin, 61 * day)).toEqual({ ok: true });
-		expect((await claimOwnership(db, 'g1', { id: 'di', role: 'admin' }, 62 * day)).ok).toBe(false);
+		expect(await claimOwnership(db, 'g1', admin, 61 * day, 60)).toEqual({ ok: true });
+		expect((await claimOwnership(db, 'g1', { id: 'di', role: 'admin' }, 62 * day, 60)).ok).toBe(false);
 		expect(await roles()).toMatchObject({ cy: 'owner', di: 'admin' });
 	});
 });
@@ -163,7 +201,7 @@ describe('deleting the group', () => {
 		expect((await deleteGroup(db, 'g1', admin, 'Thursday Club')).ok).toBe(false);
 		// Only once it's archived (D50).
 		expect(await deleteGroup(db, 'g1', owner, 'Thursday Club')).toMatchObject({ ok: false, error: expect.stringContaining('Archive') });
-		expect(await archiveGroup(db, 'g1', owner, 5)).toEqual({ ok: true });
+		expect(await archiveGroup(db, 'g1', owner, 5, 60)).toEqual({ ok: true });
 		expect((await deleteGroup(db, 'g1', admin, 'Thursday Club')).ok).toBe(false);
 		expect((await deleteGroup(db, 'g1', owner, 'Thursday')).ok).toBe(false);
 		expect(await deleteGroup(db, 'g1', owner, ' thursday  club ')).toEqual({ ok: true });

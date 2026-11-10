@@ -21,7 +21,7 @@
 	import { foldMembers } from '#lib/table/regulars.ts';
 	import { BUCKET_LABELS, WEIGHT_BUCKETS, type WeightBucket } from '#lib/catalog/buckets.ts';
 	import {
-		STALE_DAYS,
+		staleLabel,
 		hiddenByDefault,
 		keepMatching,
 		parseFilters,
@@ -83,7 +83,7 @@
 	const sortKey = $derived(filters.sort);
 	const sorted = $derived(payload ? sortGames(payload.games, sortKey) : []);
 	const plainFilters = $derived($state.snapshot(filters));
-	const results = $derived(keepMatching(sorted, plainFilters, memberIds, Date.now(), viewer));
+	const results = $derived(keepMatching(sorted, plainFilters, memberIds, Date.now(), viewer, data.staleDays));
 	const spare = $derived(limit >= results.length ? (columns - (results.length % columns)) % columns : 0);
 	// The favourites filters appear once someone has a favourite, Play soon once the viewer has a mark.
 	const hasFavourites = $derived(payload?.games.some((g) => (g.favouredBy?.length ?? 0) > 0) ?? false);
@@ -102,7 +102,7 @@
 	let ownersTouched = $state<string[]>([]);
 	const ownerFold = $derived(foldMembers(ownerChoices, new Set([...filters.owners, ...ownersTouched])));
 	const ownersShown = $derived(ownersExpanded ? ownerChoices : ownerFold.shown);
-	const hidden = $derived(payload ? hiddenByDefault(payload.games, plainFilters, memberIds, Date.now(), viewer) : { lent: 0, expansions: 0 });
+	const hidden = $derived(payload ? hiddenByDefault(payload.games, plainFilters, memberIds, Date.now(), viewer, data.staleDays) : { lent: 0, expansions: 0 });
 	const hiddenText = $derived(
 		[
 			hidden.lent && `${hidden.lent} lent-out ${hidden.lent === 1 ? 'game' : 'games'}`,
@@ -337,7 +337,7 @@
 			{/if}
 			<label><input type="checkbox" checked={!filters.availableOnly} onchange={(e) => (filters.availableOnly = !e.currentTarget.checked)} /> Include games lent outside the group</label>
 			<label><input type="checkbox" bind:checked={filters.expansions} /> Include expansions</label>
-			{#if hasPlays}<label><input type="checkbox" bind:checked={filters.stale} /> Not played in the last {STALE_DAYS / 30} months</label>{/if}
+			{#if hasPlays}<label><input type="checkbox" bind:checked={filters.stale} /> Not played in the last {staleLabel(data.staleDays)}</label>{/if}
 			{#if hasFavourites || filters.favourites}
 				<label><input type="checkbox" checked={filters.favourites === 'any'} onchange={(e) => (filters.favourites = e.currentTarget.checked ? 'any' : null)} /> Favourites of anyone in the group</label>
 				<label><input type="checkbox" checked={filters.favourites === 'mine'} onchange={(e) => (filters.favourites = e.currentTarget.checked ? 'mine' : null)} /> My favourites</label>

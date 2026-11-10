@@ -1,12 +1,14 @@
 // Cookie settings in one place (TECH.md "Identity and sessions").
 import type { Cookies } from '@sveltejs/kit';
-import { NEW_LINK_COOKIE, SESSION_COOKIE, SESSION_DAYS } from './identity.ts';
-import { ADMIN_COOKIE, ADMIN_HOURS } from './admin.ts';
+import { NEW_LINK_COOKIE, SESSION_COOKIE } from './identity.ts';
+import { MAX_SESSION_DAYS } from './instance.ts';
+import { ADMIN_COOKIE } from './admin.ts';
 
 const base = (url: URL) => ({ path: '/', httpOnly: true, sameSite: 'lax' as const, secure: url.protocol === 'https:' });
 
-export function setSessionCookie(cookies: Cookies, url: URL, token: string): void {
-	cookies.set(SESSION_COOKIE, token, { ...base(url), maxAge: SESSION_DAYS * 86_400 });
+/** `days` is the instance's SESSION_DAYS (`config.sessionDays`), so the cookie ends with the session. */
+export function setSessionCookie(cookies: Cookies, url: URL, token: string, days: number): void {
+	cookies.set(SESSION_COOKIE, token, { ...base(url), maxAge: days * 86_400 });
 }
 
 export function clearSessionCookie(cookies: Cookies, url: URL): void {
@@ -29,8 +31,8 @@ export function takeNewLink(cookies: Cookies, url: URL): string | null {
  * The instance admin's sign-in. Path=/ rather than /admin so `GROUP_CREATION=admins` can see it on
  * /groups/new; SameSite=Strict so no other site can trigger an admin request.
  */
-export function setAdminCookie(cookies: Cookies, url: URL, value: string): void {
-	cookies.set(ADMIN_COOKIE, value, { ...base(url), sameSite: 'strict', maxAge: ADMIN_HOURS * 3600 });
+export function setAdminCookie(cookies: Cookies, url: URL, value: string, hours: number): void {
+	cookies.set(ADMIN_COOKIE, value, { ...base(url), sameSite: 'strict', maxAge: hours * 3600 });
 }
 
 export function clearAdminCookie(cookies: Cookies, url: URL): void {
@@ -41,7 +43,7 @@ export const THEME_COOKIE = 'bp_theme';
 
 /** This device's colour theme, for a year and a bit like the session. */
 export function setThemeCookie(cookies: Cookies, url: URL, theme: string): void {
-	cookies.set(THEME_COOKIE, theme, { ...base(url), maxAge: SESSION_DAYS * 86_400 });
+	cookies.set(THEME_COOKIE, theme, { ...base(url), maxAge: MAX_SESSION_DAYS * 86_400 });
 }
 
 /**

@@ -452,7 +452,7 @@
 					{:else if data.playSoon}
 						<p class="hint soon-hint">On your Play soon list until {soonUntil(data.playSoon.until)}, or until you play it.</p>
 					{:else if data.playSoonFull}
-						<p class="hint soon-hint">Your Play soon list has five games. Clear one to add this.</p>
+						<p class="hint soon-hint">Your Play soon list has {data.playSoonMax} {data.playSoonMax === 1 ? 'game' : 'games'}. Clear one to add this.</p>
 					{:else}
 						<p class="hint soon-hint">Play soon: you’d like to try it, or get it to the table again soon. Play tonight leans towards it when you’re there; owners planning a night see only that someone going would like to play it.</p>
 					{/if}

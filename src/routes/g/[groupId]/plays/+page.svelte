@@ -14,7 +14,16 @@
 	const table = getTable();
 	const base = $derived(`/g/${data.group.id}`);
 	const memberById = $derived(new Map(data.tableMembers.map((m) => [m.id, m])));
-	const pointsLine = $derived(data.scheme.map((p, i) => `${ordinal(i + 1)} ${p}`).join(', '));
+	const pointsLine = $derived(data.rules.points.map((p, i) => `${ordinal(i + 1)} ${p}`).join(', '));
+	/** The group's co-op rule in a sentence (D71). */
+	const coopLine = $derived.by(() => {
+		const { coopWinPoints: n, coopWinsCount: counts } = data.rules;
+		const scores = `scores ${n} for everyone at the table`;
+		if (counts && n > 0) return `A co-op win counts as a win and ${scores}.`;
+		if (counts) return 'A co-op win counts as a win and scores nothing.';
+		if (n > 0) return `A co-op win ${scores}, but doesn’t count as a win.`;
+		return 'A co-op win scores nothing and doesn’t count as a win.';
+	});
 	const podium = $derived(data.standings.slice(0, 3));
 	const rest = $derived(data.standings.slice(3));
 	/** Second, first, third, left to right, as a podium stands; places that don't exist are left out. */
@@ -144,14 +153,14 @@
 				<span class="hint">Guests appear in plays but not on the leaderboard.</span>
 			</div>
 			<div class="form-body">
-				<p>{pointsLine}. Last place never scores, so a draw scores nothing; co-op plays count as plays.</p>
+				<p>{pointsLine}. Last place never scores, so a draw scores nothing.</p>
 				{#if data.canSetPoints}
 					<details class="points" open={!!form?.pointsError}>
 						<summary class="link-button">Change the points…</summary>
 						<form method="POST" action="?/points" use:enhance class="inline">
 							<label>
 								<span class="visually-hidden">Points from first place down</span>
-								<input class="field num" name="points" value={formatPoints(data.scheme)} inputmode="numeric" autocomplete="off" />
+								<input class="field num" name="points" value={formatPoints(data.rules.points)} inputmode="numeric" autocomplete="off" />
 							</label>
 							<button class="btn small">Save</button>
 						</form>
@@ -159,6 +168,31 @@
 					</details>
 					{#if form?.pointsSaved}<p class="banner" role="status">Points saved. The leaderboard uses them for every play.</p>{/if}
 					{#if form?.pointsError}<p class="banner error" role="alert">{form.pointsError}</p>{/if}
+				{/if}
+			</div>
+		</div>
+		<div class="form-row">
+			<div class="form-label">
+				<span class="form-q">Co-op</span>
+				<span class="hint">A loss scores nothing. Either way it counts as a play.</span>
+			</div>
+			<div class="form-body">
+				<p>{coopLine}</p>
+				{#if data.canSetPoints}
+					<details class="points" open={!!form?.coopError}>
+						<summary class="link-button">Change the co-op rule…</summary>
+						<form method="POST" action="?/coop" use:enhance={() => async ({ update }) => update({ reset: false })} class="inline coop">
+							<label class="coop-points">
+								<span>A win scores</span>
+								<input class="field num" name="coopPoints" value={data.rules.coopWinPoints} inputmode="numeric" autocomplete="off" />
+							</label>
+							<label class="check"><input type="checkbox" name="coopCounts" checked={data.rules.coopWinsCount} /> Counts as a win</label>
+							<button class="btn small">Save</button>
+						</form>
+						<p class="hint">Points for each player, 0 to 100, whatever the podium gives. Changing it rescores every play.</p>
+					</details>
+					{#if form?.coopSaved}<p class="banner" role="status">Saved. The leaderboard uses it for every co-op play.</p>{/if}
+					{#if form?.coopError}<p class="banner error" role="alert">{form.coopError}</p>{/if}
 				{/if}
 			</div>
 		</div>
@@ -441,6 +475,30 @@
 	}
 	.points .field {
 		width: 10rem;
+	}
+	.points .coop {
+		flex-wrap: wrap;
+		align-items: center;
+		max-width: none;
+		gap: var(--s-2) var(--s-4);
+	}
+	.coop-points {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--s-2);
+	}
+	.points .coop .field {
+		width: 4.5rem;
+	}
+	.check {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--s-2);
+	}
+	.check input {
+		width: 18px;
+		height: 18px;
+		accent-color: var(--ink);
 	}
 	.pages {
 		display: flex;

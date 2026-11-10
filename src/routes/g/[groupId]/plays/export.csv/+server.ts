@@ -4,7 +4,7 @@
 import { error } from '@sveltejs/kit';
 import { requireRead } from '#lib/server/authz.ts';
 import { loadMembers } from '#lib/server/catalog.ts';
-import { loadPlays, playOutcomesRead, podiumPoints } from '#lib/server/plays.ts';
+import { loadPlays, playOutcomesRead, playRules } from '#lib/server/plays.ts';
 import { loadNights, nightGameInfo } from '#lib/server/nights.ts';
 import { getDb } from '#lib/server/platform.ts';
 import { playsCsv } from '#lib/plays.ts';
@@ -53,6 +53,6 @@ export const GET: RequestHandler = async (event) => {
 		);
 	}
 
-	const [plays, scheme] = await Promise.all([loadPlays(db, groupId, { since, before: period.before, withUser: mine ? me!.id : undefined }), podiumPoints(db, groupId)]);
-	return csvResponse(playsCsv(plays, scheme, nameOf), `plays-${suffix}`);
+	const [plays, rules] = await Promise.all([loadPlays(db, groupId, { since, before: period.before, withUser: mine ? me!.id : undefined }), playRules(db, groupId, event.locals.config.defaultPoints)]);
+	return csvResponse(playsCsv(plays, rules, nameOf), `plays-${suffix}`);
 };

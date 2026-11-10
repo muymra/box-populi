@@ -5,7 +5,8 @@
 import { GAME_COLUMNS, toCatalogGame, type GameRow } from './catalog.ts';
 import { applyCorrection, correctionsRead, type Correction } from './corrections.ts';
 import { known, rowOf, rowsOf, type DB, type Read } from './db.ts';
-import { activeMark, PLAY_SOON_MS, setFavourite, setPlaySoon } from './interest.ts';
+import { activeMark, markUntil, playSoonSince, setFavourite, setPlaySoon } from './interest.ts';
+import type { PlaySoonRule } from './instance.ts';
 import { addWish, removeWish } from './wishlist.ts';
 import { OWN_MARKS, type OwnMark } from '#lib/profile.ts';
 import type { CatalogGame, Role } from '#lib/catalog/types.ts';
@@ -39,7 +40,7 @@ type CopyRow = { game_id: number; owner_id: string; lent_to_user_id: string | nu
  * Everything a profile reads, for one `readAll` after the access check (D59): up to eight statements.
  * `today` is YYYY-MM-DD: nights up to it count as been.
  */
-export function profileReads(db: DB, groupId: string, subjectId: string, viewerId: string | null, today: string, now: number) {
+export function profileReads(db: DB, groupId: string, subjectId: string, viewerId: string | null, today: string, now: number, playSoon: PlaySoonRule) {
 	return {
 		membership: rowOf<{ role: Role; joined_at: number }>(db, 'SELECT role, joined_at FROM memberships WHERE group_id = ?1 AND user_id = ?2', groupId, subjectId),
 		gameRows: rowsOf<FlagRow>(
@@ -117,11 +118,12 @@ export function profileReads(db: DB, groupId: string, subjectId: string, viewerI
 						 FROM play_soon s JOIN games g ON g.id = s.game_id
 						 LEFT JOIN game_corrections gc ON gc.group_id = ?1 AND gc.game_id = s.game_id
 						 WHERE s.user_id = ?2 AND EXISTS (SELECT 1 FROM group_copies c WHERE c.group_id = ?1 AND c.game_id = s.game_id)
-						   AND ${activeMark('?3')}
+						   AND ${activeMark('?3', '?4')}
 						 ORDER BY s.marked_at`,
 						groupId,
 						subjectId,
-						now
+						now,
+						playSoonSince(now, playSoon)
 					)
 				: (known([]) as Read<Array<{ game_id: number; marked_at: number; name: string }>>)
 	};
@@ -172,8 +174,8 @@ export function assembleNightsBeen(
 	});
 }
 
-export function assemblePlaySoon(rows: Array<{ game_id: number; marked_at: number; name: string }>): PlaySoonHere[] {
-	return rows.map((r) => ({ gameId: r.game_id, name: r.name, until: r.marked_at + PLAY_SOON_MS }));
+export function assemblePlaySoon(rows: Array<{ game_id: number; marked_at: number; name: string }>, rule: PlaySoonRule): PlaySoonHere[] {
+	return rows.map((r) => ({ gameId: r.game_id, name: r.name, until: markUntil(r.marked_at, rule) }));
 }
 
 export type OwnMarkResult = { ok: true } | { ok: false; status: 400 | 403 | 404; error: string };
@@ -182,7 +184,7 @@ export type OwnMarkResult = { ok: true } | { ok: false; status: 400 | 403 | 404;
  * Takes one of your own marks off a game, or puts it back, from your profile: a favourite, a Play soon
  * mark or a wish. Only on your own page: `profileId` must be `userId`, the person signed in. Putting one
  * back follows the game page's rules: a favourite only for a game on this shelf, Play soon under its cap
- * (and marked again, so its 8 weeks restart), a wish only for a game this person may add here.
+ * (and marked again, so its days restart), a wish only for a game this person may add here.
  */
 export async function setOwnMark(
 	db: DB,
@@ -190,7 +192,8 @@ export async function setOwnMark(
 	userId: string,
 	profileId: string,
 	mark: { kind: unknown; gameId: number; on: boolean },
-	now: number
+	now: number,
+	playSoon: PlaySoonRule
 ): Promise<OwnMarkResult> {
 	if (profileId !== userId) return { ok: false, status: 403, error: 'Only on your own profile.' };
 	if (!OWN_MARKS.includes(mark.kind as OwnMark)) return { ok: false, status: 400, error: 'Unknown kind of mark.' };
@@ -199,7 +202,7 @@ export async function setOwnMark(
 		case 'favourite':
 			return (await setFavourite(db, groupId, userId, gameId, on, now)) ? { ok: true } : { ok: false, status: 404, error: 'That game isn’t on the shelf here any more.' };
 		case 'playSoon': {
-			const result = await setPlaySoon(db, groupId, userId, gameId, on, now);
+			const result = await setPlaySoon(db, groupId, userId, gameId, on, now, playSoon);
 			return result.ok ? result : { ok: false, status: 400, error: result.error };
 		}
 		case 'want':

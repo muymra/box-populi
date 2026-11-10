@@ -2,7 +2,7 @@
 	// The host's sign-in for /admin, in the same form panel as the admin page.
 	import type { PageProps } from './$types';
 
-	let { form }: PageProps = $props();
+	let { data, form }: PageProps = $props();
 </script>
 
 <svelte:head><title>Admin sign-in</title></svelte:head>
@@ -25,7 +25,7 @@
 		{#if form?.error}<div class="form-block"><p class="banner error" role="alert">{form.error}</p></div>{/if}
 		<div class="form-foot indent">
 			<div><button class="btn primary">Sign in</button></div>
-			<p class="hint">Lasts 12 hours on this device.</p>
+			<p class="hint">Lasts {data.hours} {data.hours === 1 ? 'hour' : 'hours'} on this device.</p>
 		</div>
 	</form>
 </div>

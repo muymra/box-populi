@@ -101,9 +101,9 @@ export const actions: Actions = {
 		if (!displayName) return fail(400, { ...values, error: 'Add your name as the group will see it, up to 40 characters.' });
 		const pin = cleanPin(form.get('pin'));
 		if (!pin) return fail(400, { ...values, error: 'Pick a PIN of six digits. With it you can get back in on any device.' });
-		const person = await newPersonStatements(db, displayName, now, pin);
+		const person = await newPersonStatements(db, displayName, now, locals.config.sessionDays, pin);
 		await joinGroup(db, { groupId: target.id, userId: person.person.id, now, before: person.statements });
-		setSessionCookie(cookies, url, person.sessionToken);
+		setSessionCookie(cookies, url, person.sessionToken, locals.config.sessionDays);
 		redirect(303, `/g/${target.id}`);
 	},
 
@@ -134,7 +134,7 @@ export const actions: Actions = {
 			}
 			const old = event.cookies.get(SESSION_COOKIE);
 			if (old && event.locals.user?.id !== result.person.id) await endSession(db, old);
-			setSessionCookie(event.cookies, event.url, await createSession(db, result.person.id, now));
+			setSessionCookie(event.cookies, event.url, await createSession(db, result.person.id, now, event.locals.config.sessionDays), event.locals.config.sessionDays);
 			redirect(303, '/me?code=1#pin-row');
 		}
 
@@ -146,7 +146,7 @@ export const actions: Actions = {
 		// A device signed in as someone else is switched over, as a sign-in link does.
 		const old = event.cookies.get(SESSION_COOKIE);
 		if (old && event.locals.user?.id !== result.person.id) await endSession(db, old);
-		setSessionCookie(event.cookies, event.url, await createSession(db, result.person.id, now));
+		setSessionCookie(event.cookies, event.url, await createSession(db, result.person.id, now, event.locals.config.sessionDays), event.locals.config.sessionDays);
 		redirect(303, `/g/${opened.target.id}`);
 	}
 };

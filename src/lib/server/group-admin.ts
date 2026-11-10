@@ -5,9 +5,12 @@ import { generateCode, generateLinkKey } from './codes.ts';
 import { bumpCatalogForGroup } from './catalog.ts';
 import { cleanGroupName } from './groups.ts';
 import { all, deleteGroupStatements, mapRead, one, readAll, rowsOf, run, stmt, type DB, type Read } from './db.ts';
-import { can, OWNER_AWAY_DAYS, type GroupAction } from './permissions.ts';
+import { can, type GroupAction } from './permissions.ts';
 import type { Role } from '#lib/catalog/types.ts';
 import { isThemeId } from '#lib/themes.ts';
+import { FILLER_MINUTES_RANGE } from '#lib/catalog/pick.ts';
+import { STALE_DAYS_RANGE } from '#lib/catalog/filter.ts';
+import { wholeNumberIn } from '#lib/numbers.ts';
 
 export type Actor = { id: string; role: Role };
 export type AdminResult = { ok: true } | { ok: false; error: string };
@@ -98,36 +101,39 @@ export async function transferOwnership(db: DB, groupId: string, actor: Actor, t
 	return { ok: true };
 }
 
-/** Whether the group's owner hasn't been seen in it for OWNER_AWAY_DAYS (D50). */
-export async function ownerAway(db: DB, groupId: string, now: number): Promise<boolean> {
-	return (await readAll(db, { a: ownerAwayRead(db, groupId, now) })).a;
+/**
+ * Whether the group's owner hasn't been seen in it for `awayDays` (D50), the instance's
+ * OWNER_AWAY_DAYS (`config.ownerAwayDays`, D71).
+ */
+export async function ownerAway(db: DB, groupId: string, now: number, awayDays: number): Promise<boolean> {
+	return (await readAll(db, { a: ownerAwayRead(db, groupId, now, awayDays) })).a;
 }
 
 /** ownerAway as a read, to share a round trip with others (`readAll`, D59). */
-export function ownerAwayRead(db: DB, groupId: string, now: number): Read<boolean> {
+export function ownerAwayRead(db: DB, groupId: string, now: number, awayDays: number): Read<boolean> {
 	return mapRead(
 		rowsOf<{ last_seen_at: number }>(db, "SELECT last_seen_at FROM memberships WHERE group_id = ?1 AND role = 'owner'", groupId),
-		(rows) => rows[0] == null || now - rows[0].last_seen_at > OWNER_AWAY_DAYS * 86_400_000
+		(rows) => rows[0] == null || now - rows[0].last_seen_at > awayDays * 86_400_000
 	);
 }
 
 /**
- * A co-admin takes over as owner once the owner has been away OWNER_AWAY_DAYS (D51); the owner becomes
+ * A co-admin takes over as owner once the owner has been away `awayDays` (D51); the owner becomes
  * a co-admin. The batch checks again that the owner is still away and that nobody else took over first.
  */
-export async function claimOwnership(db: DB, groupId: string, actor: Actor, now: number): Promise<AdminResult> {
+export async function claimOwnership(db: DB, groupId: string, actor: Actor, now: number, awayDays: number): Promise<AdminResult> {
 	const role = await memberRole(db, groupId, actor.id);
 	if (role !== 'admin') return refused;
-	if (!can(role, 'claim_ownership', { ownerAway: await ownerAway(db, groupId, now) })) {
-		return { ok: false, error: `The owner has been here in the last ${OWNER_AWAY_DAYS} days, so the group stays theirs.` };
+	if (!can(role, 'claim_ownership', { ownerAway: await ownerAway(db, groupId, now, awayDays) })) {
+		return { ok: false, error: `The owner has been here in the last ${awayDays} days, so the group stays theirs.` };
 	}
-	const cutoff = now - OWNER_AWAY_DAYS * 86_400_000;
+	const cutoff = now - awayDays * 86_400_000;
 	// Demote first: the one-owner index is checked statement by statement.
 	await db.batch([
 		stmt(db, "UPDATE memberships SET role = 'admin' WHERE group_id = ?1 AND role = 'owner' AND last_seen_at < ?2", groupId, cutoff),
 		stmt(
 			db,
-			// The new owner is here now, so the 60 days start again from today.
+			// The new owner is here now, so the days away start again from today.
 			`UPDATE memberships SET role = 'owner', last_seen_at = MAX(last_seen_at, ?3) WHERE group_id = ?1 AND user_id = ?2 AND role = 'admin'
 			   AND NOT EXISTS (SELECT 1 FROM memberships o WHERE o.group_id = ?1 AND o.role = 'owner')`,
 			groupId,
@@ -142,10 +148,10 @@ export async function claimOwnership(db: DB, groupId: string, actor: Actor, now:
 
 /**
  * Archives the group (D50): read-only for its members and its join link closed, until it's restored
- * or deleted. The owner can, and a co-admin once the owner has been away OWNER_AWAY_DAYS.
+ * or deleted. The owner can, and a co-admin once the owner has been away `awayDays`.
  */
-export async function archiveGroup(db: DB, groupId: string, actor: Actor, now: number): Promise<AdminResult> {
-	if (!can(actor.role, 'archive_group', { ownerAway: actor.role === 'admin' && (await ownerAway(db, groupId, now)) })) return refused;
+export async function archiveGroup(db: DB, groupId: string, actor: Actor, now: number, awayDays: number): Promise<AdminResult> {
+	if (!can(actor.role, 'archive_group', { ownerAway: actor.role === 'admin' && (await ownerAway(db, groupId, now, awayDays)) })) return refused;
 	const group = await one<{ archived_at: number | null }>(db, 'SELECT archived_at FROM groups WHERE id = ?1', groupId);
 	if (!group) return { ok: false, error: 'This group no longer exists.' };
 	if (group.archived_at != null) return { ok: false, error: 'This group is already archived.' };
@@ -154,8 +160,8 @@ export async function archiveGroup(db: DB, groupId: string, actor: Actor, now: n
 }
 
 /** Brings an archived group back into use, with the same join code. Who may: as for archiving. */
-export async function restoreGroup(db: DB, groupId: string, actor: Actor, now: number): Promise<AdminResult> {
-	if (!can(actor.role, 'archive_group', { ownerAway: actor.role === 'admin' && (await ownerAway(db, groupId, now)) })) return refused;
+export async function restoreGroup(db: DB, groupId: string, actor: Actor, now: number, awayDays: number): Promise<AdminResult> {
+	if (!can(actor.role, 'archive_group', { ownerAway: actor.role === 'admin' && (await ownerAway(db, groupId, now, awayDays)) })) return refused;
 	const group = await one<{ archived_at: number | null }>(db, 'SELECT archived_at FROM groups WHERE id = ?1', groupId);
 	if (!group) return { ok: false, error: 'This group no longer exists.' };
 	if (group.archived_at == null) return { ok: false, error: 'This group isn’t archived.' };
@@ -212,6 +218,32 @@ export async function groupThemeFor(db: DB, groupId: string, userId: string | nu
 		userId
 	);
 	return row?.theme ?? null;
+}
+
+/**
+ * What Play tonight calls a filler here (D71): the longest play time, in whole minutes, and the
+ * complexity it stays under, 1 to 5 to one decimal. Group settings, like the name and theme.
+ */
+export async function setFillerRule(db: DB, groupId: string, actor: Actor, rawMinutes: unknown, rawWeight: unknown): Promise<AdminResult> {
+	if (!can(actor.role, 'rename')) return refused;
+	const { min, max } = FILLER_MINUTES_RANGE;
+	const minutes = wholeNumberIn(rawMinutes, min, max);
+	if (minutes == null) return { ok: false, error: `Give the minutes as a whole number from ${min} to ${max}.` };
+	const weightText = typeof rawWeight === 'string' ? rawWeight.trim().replace(',', '.') : '';
+	const weight = /^\d(\.\d+)?$/.test(weightText) ? Math.round(Number(weightText) * 10) / 10 : NaN;
+	if (!(weight >= 1 && weight <= 5)) return { ok: false, error: 'Give the complexity as a number from 1 to 5, like 2 or 2.5.' };
+	await stmt(db, 'UPDATE groups SET filler_max_minutes = ?1, filler_max_weight = ?2 WHERE id = ?3', minutes, weight, groupId).run();
+	return { ok: true };
+}
+
+/** How far back the shelf's "Not played lately" looks, in whole days (D71). A group setting, like the name. */
+export async function setStaleDays(db: DB, groupId: string, actor: Actor, raw: unknown): Promise<AdminResult> {
+	if (!can(actor.role, 'rename')) return refused;
+	const { min, max } = STALE_DAYS_RANGE;
+	const days = wholeNumberIn(raw, min, max);
+	if (days == null) return { ok: false, error: `Give the days as a whole number from ${min} to ${max}.` };
+	await stmt(db, 'UPDATE groups SET stale_days = ?1 WHERE id = ?2', days, groupId).run();
+	return { ok: true };
 }
 
 /** Sets the group's theme; empty means the instance default. Co-admins and the owner, like renaming. */

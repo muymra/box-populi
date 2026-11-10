@@ -302,6 +302,35 @@
 		{#if form?.nightsBySaved}<p class="muted small" role="status">Saved.</p>{/if}
 		{#if form?.nightsByError}<p class="banner error" role="alert">{form.nightsByError}</p>{/if}
 	{/snippet}
+	{#snippet fillerForm()}
+		<form method="POST" action="?/filler" class="rename filler" use:enhance={() => async ({ update }) => update({ reset: false })}>
+			<label class="filler-field">
+				<span>Up to</span>
+				<input id="filler-minutes" class="field num" name="fillerMinutes" value={data.filler.maxMinutes} inputmode="numeric" autocomplete="off" />
+				<span>minutes</span>
+			</label>
+			<label class="filler-field">
+				<span>Complexity under</span>
+				<input class="field num" name="fillerWeight" value={data.filler.maxWeight} inputmode="decimal" autocomplete="off" />
+				<span>/ 5</span>
+			</label>
+			<button class="btn">Save</button>
+		</form>
+		{#if form?.fillerSaved}<p class="muted small" role="status">Saved.</p>{/if}
+		{#if form?.fillerError}<p class="banner error" role="alert">{form.fillerError}</p>{/if}
+	{/snippet}
+	{#snippet staleForm()}
+		<form method="POST" action="?/stale" class="rename filler" use:enhance={() => async ({ update }) => update({ reset: false })}>
+			<label class="filler-field">
+				<span>The last</span>
+				<input id="stale-days" class="field num" name="staleDays" value={data.staleDays} inputmode="numeric" autocomplete="off" />
+				<span>days</span>
+			</label>
+			<button class="btn">Save</button>
+		</form>
+		{#if form?.staleSaved}<p class="muted small" role="status">Saved.</p>{/if}
+		{#if form?.staleError}<p class="banner error" role="alert">{form.staleError}</p>{/if}
+	{/snippet}
 	{#snippet themeForm()}
 		<form method="POST" action="?/theme" class="rename" use:enhance={() => async ({ update }) => update({ reset: false })}>
 			<label class="visually-hidden" for="group-theme">Group theme</label>
@@ -369,6 +398,20 @@
 				<span class="hint">Who can plan one. Everyone can still answer and bring games.</span>
 			</div>
 			<div class="form-body">{@render nightsForm()}</div>
+		</div>
+		<div class="form-row">
+			<div class="form-label">
+				<label class="form-q" for="filler-minutes">Fillers</label>
+				<span class="hint">What Play tonight offers while people arrive or between longer games. A game nobody has set a complexity for still counts.</span>
+			</div>
+			<div class="form-body">{@render fillerForm()}</div>
+		</div>
+		<div class="form-row">
+			<div class="form-label">
+				<label class="form-q" for="stale-days">Not played lately</label>
+				<span class="hint">How far back the shelf’s filter looks. Games never logged here always count.</span>
+			</div>
+			<div class="form-body">{@render staleForm()}</div>
 		</div>
 		<div class="form-row">
 			<div class="form-label">
@@ -822,6 +865,19 @@
 		gap: var(--s-2);
 		max-width: 30rem;
 		margin-top: var(--s-3);
+	}
+	.filler {
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--s-2) var(--s-4);
+	}
+	.filler-field {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--s-2);
+	}
+	.filler .field {
+		width: 4.5rem;
 	}
 	.btn.danger {
 		border-color: var(--danger);

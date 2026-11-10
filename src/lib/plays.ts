@@ -63,10 +63,40 @@ export function playPoints(places: readonly number[], scheme: readonly number[])
 	return places.map((p) => (p < worst ? (scheme[p - 1] ?? 0) : 0));
 }
 
+/**
+ * A group's scoring (D37, D71): its podium points, what a co-op win gives each player at the table
+ * (a fixed number, not scaled by the podium points), and whether a co-op win counts as a win. A co-op
+ * loss gives nothing.
+ */
+export type PlayRules = { points: readonly number[]; coopWinPoints: number; coopWinsCount: boolean };
+
+export const DEFAULT_COOP_WIN_POINTS = 1;
+export const DEFAULT_PLAY_RULES: PlayRules = { points: DEFAULT_POINTS, coopWinPoints: DEFAULT_COOP_WIN_POINTS, coopWinsCount: true };
+
+/**
+ * Each seat's points in one play: podium points when it's competitive and everyone has a place, the
+ * group's co-op points each for a co-op win, and nothing otherwise.
+ */
+export function seatPoints(play: Pick<PlayOutcome, 'coop' | 'players'>, rules: PlayRules): number[] {
+	if (play.coop === 'won') return play.players.map(() => rules.coopWinPoints);
+	const places = play.players.map((p) => p.place);
+	return play.coop == null && places.every((p) => p != null) ? playPoints(places as number[], rules.points) : play.players.map(() => 0);
+}
+
 /** A win: first place in a competitive play where someone finished below. Ties for first share it. */
 export function isWin(place: number | null, places: readonly (number | null)[]): boolean {
 	if (place !== 1) return false;
 	return places.some((p) => p != null && p > 1);
+}
+
+/**
+ * Which seats won a play, as the leaderboard and profiles count wins: `isWin()` in a competitive play,
+ * and everyone in a co-op win when the group counts those (D37, D71).
+ */
+export function seatWins(play: Pick<PlayOutcome, 'coop' | 'players'>, rules: PlayRules): boolean[] {
+	if (play.coop != null) return play.players.map(() => play.coop === 'won' && rules.coopWinsCount);
+	const places = play.players.map((p) => p.place);
+	return play.players.map((p) => isWin(p.place, places));
 }
 
 /** "3, 2, 1" or "5,3,1,0" into numbers: one to five whole numbers from 0 to 100. Null when it isn't that. */
@@ -86,21 +116,21 @@ export type Standing = { userId: string; points: number; wins: number; plays: nu
 
 /**
  * The leaderboard: members only (guests and people who left aren't on it), most points first, then
- * most wins, then fewer plays. Co-op plays count as plays and score nothing. The pages count in SQL
- * instead (`standingsRead`, then `standingsFromCounts`); this is the rule in plain code, which the
+ * most wins, then fewer plays. Co-op plays count as plays; a co-op win scores and counts as a win as
+ * the group's rules say (`seatPoints`, `seatWins`). The pages count in SQL instead (`standingsRead`, then `standingsFromCounts`); this is the rule in plain code, which the
  * tests hold the SQL to.
  */
-export function standings(plays: readonly Pick<PlayOutcome, 'coop' | 'players'>[], scheme: readonly number[], memberIds: ReadonlySet<string>): Standing[] {
+export function standings(plays: readonly Pick<PlayOutcome, 'coop' | 'players'>[], rules: PlayRules, memberIds: ReadonlySet<string>): Standing[] {
 	const table = new Map<string, Standing>();
 	for (const play of plays) {
-		const places = play.players.map((p) => p.place);
-		const points = play.coop == null && places.every((p) => p != null) ? playPoints(places as number[], scheme) : play.players.map(() => 0);
+		const points = seatPoints(play, rules);
+		const won = seatWins(play, rules);
 		play.players.forEach((player, i) => {
 			if (!player.userId || !memberIds.has(player.userId)) return;
 			const row = table.get(player.userId) ?? { userId: player.userId, points: 0, wins: 0, plays: 0 };
 			row.plays += 1;
 			row.points += points[i];
-			if (play.coop == null && isWin(player.place, places)) row.wins += 1;
+			if (won[i]) row.wins += 1;
 			table.set(player.userId, row);
 		});
 	}
@@ -108,16 +138,23 @@ export function standings(plays: readonly Pick<PlayOutcome, 'coop' | 'players'>[
 }
 
 /**
- * One member's numbers for the leaderboard, counted in SQL (`standingsRead`, D70): their plays, wins,
- * and how often they finished 1st to 5th in a play that scores (competitive, everyone placed, not last).
+ * One member's numbers for the leaderboard, counted in SQL (`standingsRead`, D70): their plays,
+ * competitive wins, co-op wins, and how often they finished 1st to 5th in a play that scores (competitive, everyone
+ * placed, not last).
  * `latest` orders exact ties: whoever played most recently first, as `standings()` meets them.
  */
-export type StandingCounts = { userId: string; plays: number; wins: number; scored: readonly number[]; latest: string };
+export type StandingCounts = { userId: string; plays: number; wins: number; coopWins: number; scored: readonly number[]; latest: string };
 
 /** The leaderboard from `StandingCounts`, by the same rules and order as `standings()`. */
-export function standingsFromCounts(rows: readonly StandingCounts[], scheme: readonly number[]): Standing[] {
+export function standingsFromCounts(rows: readonly StandingCounts[], rules: PlayRules): Standing[] {
 	return rows
-		.map((r) => ({ userId: r.userId, points: r.scored.reduce((sum, n, i) => sum + n * (scheme[i] ?? 0), 0), wins: r.wins, plays: r.plays, latest: r.latest }))
+		.map((r) => ({
+			userId: r.userId,
+			points: r.scored.reduce((sum, n, i) => sum + n * (rules.points[i] ?? 0), r.coopWins * rules.coopWinPoints),
+			wins: r.wins + (rules.coopWinsCount ? r.coopWins : 0),
+			plays: r.plays,
+			latest: r.latest
+		}))
 		.sort((a, b) => b.points - a.points || b.wins - a.wins || a.plays - b.plays || b.latest.localeCompare(a.latest) || a.userId.localeCompare(b.userId))
 		.map(({ userId, points, wins, plays }) => ({ userId, points, wins, plays }));
 }
@@ -135,16 +172,16 @@ export const CSV_COLUMNS = ['date', 'game_night', 'night_id', 'game', 'game_data
  * The export: one row per player per play, newest play first. `nameOf` gives a member's name, or
  * null for someone who has left the group, who shows as "a former member".
  */
-export function playsCsv(plays: readonly Play[], scheme: readonly number[], nameOf: (userId: string) => string | null): string {
+export function playsCsv(plays: readonly Play[], rules: PlayRules, nameOf: (userId: string) => string | null): string {
 	const lines = [CSV_COLUMNS.join(',')];
 	for (const play of plays) {
-		const places = play.players.map((p) => p.place);
-		const points = play.coop == null && places.every((p) => p != null) ? playPoints(places as number[], scheme) : play.players.map(() => 0);
+		const points = seatPoints(play, rules);
+		// `won` says how the play went, so a co-op win is "yes" even where the leaderboard doesn't count it (D71).
+		const won = seatWins(play, { ...rules, coopWinsCount: true });
 		play.players.forEach((player, i) => {
 			const member = player.userId ? nameOf(player.userId) : null;
 			const name = player.guestName ?? member ?? 'a former member';
 			const type = player.guestName != null ? 'guest' : member != null ? 'member' : 'former member';
-			const won = play.coop != null ? play.coop === 'won' : isWin(player.place, places);
 			const bgg = play.gameSource === 'bgg';
 			lines.push(
 				[
@@ -161,9 +198,9 @@ export function playsCsv(plays: readonly Play[], scheme: readonly number[], name
 					csvField(type),
 					csvField(play.coop == null ? player.place : null),
 					csvField(player.score),
-					csvField(won ? 'yes' : 'no'),
+					csvField(won[i] ? 'yes' : 'no'),
 					csvField(play.coop),
-					csvField(play.coop == null ? points[i] : null)
+					csvField(points[i])
 				].join(',')
 			);
 		});

@@ -48,14 +48,14 @@ export const actions: Actions = {
 				await giveBack(db, tried.taken);
 				return fail(400, { ...values, error: 'Pick a PIN of six digits. With it you can get back in on any device.' });
 			}
-			newPerson = await newPersonStatements(db, displayName, now, pin);
+			newPerson = await newPersonStatements(db, displayName, now, locals.config.sessionDays, pin);
 			userId = newPerson.person.id;
 		}
 
 		const { groupId } = await createGroup(db, { userId, name: groupName, now, before: newPerson?.statements });
 
 		// The ready page shows the invite to share (D46); someone new gets back in with their PIN (D47).
-		if (newPerson) setSessionCookie(cookies, url, newPerson.sessionToken);
+		if (newPerson) setSessionCookie(cookies, url, newPerson.sessionToken, locals.config.sessionDays);
 		redirect(303, `/g/${groupId}/ready`);
 	}
 };

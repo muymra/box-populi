@@ -5,6 +5,7 @@ import { assembleNightsBeen, assemblePlaySoon, assembleProfileGames, assembleWan
 import { gameVisibleInGroup } from './games.ts';
 import { playOutcomesRead } from './plays.ts';
 import { setCopyHidden } from './hiding.ts';
+import { DEFAULT_PLAY_SOON } from './instance.ts';
 
 let db: ReturnType<typeof createTestDb>;
 const NOW = Date.UTC(2026, 10, 9);
@@ -31,7 +32,7 @@ beforeEach(async () => {
 });
 
 async function profile(subject: string, viewer: string | null, group = 'g1') {
-	const r = await readAll(db, { ...profileReads(db, group, subject, viewer, TODAY, NOW), plays: playOutcomesRead(db, group, { withUser: subject }) });
+	const r = await readAll(db, { ...profileReads(db, group, subject, viewer, TODAY, NOW, DEFAULT_PLAY_SOON), plays: playOutcomesRead(db, group, { withUser: subject }) });
 	const played = new Set(r.plays.flatMap((p) => (p.nightId ? [p.nightId] : [])));
 	const viewerPlayed = viewer && viewer !== subject ? new Set(r.viewerPlayNights.map((n) => n.night_id)) : played;
 	return {
@@ -39,7 +40,7 @@ async function profile(subject: string, viewer: string | null, group = 'g1') {
 		games: assembleProfileGames(r.gameRows, r.copyRows, r.corrections),
 		wants: assembleWants(r.wantRows, r.corrections),
 		nights: r.membership ? assembleNightsBeen(r.nightRows, r.membership.joined_at, played, viewerPlayed) : [],
-		playSoon: assemblePlaySoon(r.playSoonRows)
+		playSoon: assemblePlaySoon(r.playSoonRows, DEFAULT_PLAY_SOON)
 	};
 }
 
@@ -140,42 +141,42 @@ describe('taking your own marks off from your profile', () => {
 
 	it('refuses on someone else’s profile, and changes nothing', async () => {
 		await run(db, `INSERT INTO favourites (user_id, game_id, added_at) VALUES ('ada', 3, 0)`);
-		const result = await setOwnMark(db, 'g1', 'bo', 'ada', { kind: 'favourite', gameId: 3, on: false }, NOW);
+		const result = await setOwnMark(db, 'g1', 'bo', 'ada', { kind: 'favourite', gameId: 3, on: false }, NOW, DEFAULT_PLAY_SOON);
 		expect(result).toMatchObject({ ok: false, status: 403 });
 		expect(await rows(`SELECT game_id FROM favourites WHERE user_id = 'ada'`)).toEqual([{ game_id: 3 }]);
 	});
 
 	it('refuses a kind of mark it doesn’t know', async () => {
-		expect(await setOwnMark(db, 'g1', 'ada', 'ada', { kind: 'copy', gameId: 3, on: false }, NOW)).toMatchObject({ ok: false, status: 400 });
+		expect(await setOwnMark(db, 'g1', 'ada', 'ada', { kind: 'copy', gameId: 3, on: false }, NOW, DEFAULT_PLAY_SOON)).toMatchObject({ ok: false, status: 400 });
 	});
 
 	it('takes a favourite off and puts it back, but only on a game on this shelf', async () => {
 		await run(db, `INSERT INTO favourites (user_id, game_id, added_at) VALUES ('bo', 1, 0)`);
-		expect(await setOwnMark(db, 'g1', 'bo', 'bo', { kind: 'favourite', gameId: 1, on: false }, NOW)).toEqual({ ok: true });
+		expect(await setOwnMark(db, 'g1', 'bo', 'bo', { kind: 'favourite', gameId: 1, on: false }, NOW, DEFAULT_PLAY_SOON)).toEqual({ ok: true });
 		expect(await rows(`SELECT game_id FROM favourites WHERE user_id = 'bo'`)).toEqual([]);
-		expect(await setOwnMark(db, 'g1', 'bo', 'bo', { kind: 'favourite', gameId: 1, on: true }, NOW)).toEqual({ ok: true });
+		expect(await setOwnMark(db, 'g1', 'bo', 'bo', { kind: 'favourite', gameId: 1, on: true }, NOW, DEFAULT_PLAY_SOON)).toEqual({ ok: true });
 		expect(await rows(`SELECT game_id FROM favourites WHERE user_id = 'bo'`)).toEqual([{ game_id: 1 }]);
 		// Delta is only on the office shelf.
-		expect(await setOwnMark(db, 'g1', 'bo', 'bo', { kind: 'favourite', gameId: 4, on: true }, NOW)).toMatchObject({ ok: false, status: 404 });
+		expect(await setOwnMark(db, 'g1', 'bo', 'bo', { kind: 'favourite', gameId: 4, on: true }, NOW, DEFAULT_PLAY_SOON)).toMatchObject({ ok: false, status: 404 });
 	});
 
 	it('takes a Play soon mark off; putting it back restarts its 8 weeks, under the cap', async () => {
 		await run(db, `INSERT INTO play_soon (user_id, game_id, marked_at) VALUES ('ada', 1, ${NOW - 86_400_000}), ('ada', 2, ${NOW}), ('ada', 3, ${NOW}), ('ada', 5, ${NOW}), ('ada', 6, ${NOW})`);
-		expect(await setOwnMark(db, 'g1', 'ada', 'ada', { kind: 'playSoon', gameId: 1, on: false }, NOW)).toEqual({ ok: true });
-		expect(await setOwnMark(db, 'g1', 'ada', 'ada', { kind: 'playSoon', gameId: 1, on: true }, NOW)).toEqual({ ok: true });
+		expect(await setOwnMark(db, 'g1', 'ada', 'ada', { kind: 'playSoon', gameId: 1, on: false }, NOW, DEFAULT_PLAY_SOON)).toEqual({ ok: true });
+		expect(await setOwnMark(db, 'g1', 'ada', 'ada', { kind: 'playSoon', gameId: 1, on: true }, NOW, DEFAULT_PLAY_SOON)).toEqual({ ok: true });
 		expect(await rows(`SELECT marked_at FROM play_soon WHERE user_id = 'ada' AND game_id = 1`)).toEqual([{ marked_at: NOW }]);
 		// Taken off, then a fifth mark made elsewhere fills the list: Undo can't go over the cap.
-		await setOwnMark(db, 'g1', 'ada', 'ada', { kind: 'playSoon', gameId: 1, on: false }, NOW);
+		await setOwnMark(db, 'g1', 'ada', 'ada', { kind: 'playSoon', gameId: 1, on: false }, NOW, DEFAULT_PLAY_SOON);
 		await run(db, `INSERT INTO play_soon (user_id, game_id, marked_at) VALUES ('ada', 4, ${NOW})`);
-		expect(await setOwnMark(db, 'g1', 'ada', 'ada', { kind: 'playSoon', gameId: 1, on: true }, NOW)).toMatchObject({ ok: false, status: 400 });
+		expect(await setOwnMark(db, 'g1', 'ada', 'ada', { kind: 'playSoon', gameId: 1, on: true }, NOW, DEFAULT_PLAY_SOON)).toMatchObject({ ok: false, status: 400 });
 	});
 
 	it('takes a want off, even when that takes the game out of the group, and puts it back', async () => {
 		// Nobody owns Epsilon; Ada's wish is all that keeps it in the group.
 		await run(db, `INSERT INTO wishlist (user_id, game_id, added_at) VALUES ('ada', 5, 0)`);
-		expect(await setOwnMark(db, 'g1', 'ada', 'ada', { kind: 'want', gameId: 5, on: false }, NOW)).toEqual({ ok: true });
+		expect(await setOwnMark(db, 'g1', 'ada', 'ada', { kind: 'want', gameId: 5, on: false }, NOW, DEFAULT_PLAY_SOON)).toEqual({ ok: true });
 		expect(await gameVisibleInGroup(db, 'g1', 5)).toBe(false);
-		expect(await setOwnMark(db, 'g1', 'ada', 'ada', { kind: 'want', gameId: 5, on: true }, NOW)).toEqual({ ok: true });
+		expect(await setOwnMark(db, 'g1', 'ada', 'ada', { kind: 'want', gameId: 5, on: true }, NOW, DEFAULT_PLAY_SOON)).toEqual({ ok: true });
 		expect(await rows(`SELECT game_id FROM wishlist WHERE user_id = 'ada'`)).toEqual([{ game_id: 5 }]);
 	});
 });

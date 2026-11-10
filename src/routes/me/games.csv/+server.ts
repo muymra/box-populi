@@ -9,7 +9,7 @@ import type { RequestHandler } from './$types';
 export const GET: RequestHandler = async (event) => {
 	const me = event.locals.user;
 	if (!me) error(401, 'Sign in to download your games.');
-	const games = await loadYourGames(getDb(), me.id);
+	const games = await loadYourGames(getDb(), me.id, Date.now(), event.locals.config.playSoon);
 	const day = new Date().toISOString().slice(0, 10);
 	return csvResponse(gamesCsv(games), `games-${fileSlug(me.name, 'mine')}-${day}.csv`);
 };

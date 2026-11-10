@@ -4,10 +4,17 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+**Upgrading:** apply migration `0020_group_rules.sql` before deploying (SELF_HOSTING.md "Upgrading"). Seven new optional settings, each defaulting to today's behaviour: `DEFAULT_POINTS`, `OWNER_AWAY_DAYS`, `SESSION_DAYS`, `PLAY_SOON_DAYS`, `PLAY_SOON_MAX`, `HERE_RESET_HOURS` and `ADMIN_SESSION_HOURS` (SELF_HOSTING.md step 4).
+
 - The plays page and its export cover last year and earlier years too: "2025" sits beside this year when it had plays, and older years are in an "Earlier" list.
 - The Game night tab links to past nights ("Past nights"), which live on the plays page.
 - The plays export has a `night_id` column that matches the game nights export, so the two join in a spreadsheet. The nights export's `came` column now counts who came the way a night's page does (anyone in a play on it came) and is filled in for every night that has been; people who played without answering get a row too.
 - The colour themes' sources are credited in the README.
+- A co-op win counts as a win and 1 point for each player at the table, whatever the group's points; a co-op loss is neither. Past co-op wins count, so the leaderboard may reorder, and members' wins on their pages go up. The plays export's `points` column fills in for co-op plays too.
+- Co-admins and the owner can set what a co-op win scores and whether it counts as a win, on the plays page under the points.
+- Co-admins and the owner can set what Play tonight calls a filler on the Group tab: the longest play time and the complexity it stays under. Play tonight's hint names the group's numbers.
+- Co-admins and the owner can set how far back the shelf's "Not played lately" filter looks, on the Group tab. The filter's label names the window.
+- Hosts can set the podium points groups start with (`DEFAULT_POINTS`), how long an owner can be away before a co-admin may take over (`OWNER_AWAY_DAYS`), how long a device stays signed in (`SESSION_DAYS`), how long Play soon marks last and how many a list holds (`PLAY_SOON_DAYS`, `PLAY_SOON_MAX`), when who's here resets (`HERE_RESET_HOURS`) and how long the admin sign-in lasts (`ADMIN_SESSION_HOURS`).
 
 ## 0.5.1 (2026-11-10)
 

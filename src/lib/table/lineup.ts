@@ -1,7 +1,7 @@
 // Tonight's kept games on this device (PRD "Picker"): the ids kept in the lineup and among the fillers,
 // and whose games count when no game night is planned (`at`: a host's member id, or null for everything
 // the people here own, D40).
-// Pure: the caller supplies storage and the clock. Like who's here, it resets 12 hours after the last change.
+// Pure: the caller supplies storage and the clock. Like who's here, it resets after the last change (HERE_RESET_HOURS).
 import { MAX_CHOSEN } from '#lib/catalog/pick.ts';
 import { HERE_TTL_MS } from './here.ts';
 
@@ -18,7 +18,7 @@ const ids = (value: unknown): number[] =>
 	Array.isArray(value) ? [...new Set(value.filter((v): v is number => Number.isSafeInteger(v) && v > 0))].slice(0, MAX_CHOSEN) : [];
 
 /** Reads a stored lineup. Anything unreadable or older than the reset is empty. */
-export function parseLineup(raw: string | null, now: number): Lineup {
+export function parseLineup(raw: string | null, now: number, ttlMs = HERE_TTL_MS): Lineup {
 	if (!raw) return EMPTY_LINEUP;
 	let value: unknown;
 	try {
@@ -28,7 +28,7 @@ export function parseLineup(raw: string | null, now: number): Lineup {
 	}
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return EMPTY_LINEUP;
 	const { main, fillers, at, venue } = value as Record<string, unknown>;
-	if (typeof at !== 'number' || !(now - at < HERE_TTL_MS) || at > now + HERE_TTL_MS) return EMPTY_LINEUP;
+	if (typeof at !== 'number' || !(now - at < ttlMs) || at > now + ttlMs) return EMPTY_LINEUP;
 	return { main: ids(main), fillers: ids(fillers), at: cleanVenue(venue) };
 }
 

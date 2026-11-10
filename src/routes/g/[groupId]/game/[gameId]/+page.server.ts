@@ -5,7 +5,7 @@ import { addCopy, gameUsableInGroup, gameVisibleInGroup, removeCopy } from '#lib
 import { addLink, canDeleteLink, deleteLink, parseLink } from '#lib/server/links.ts';
 import { addWish, removeWish } from '#lib/server/wishlist.ts';
 import { hiddenHereRead, setCopyHidden } from '#lib/server/hiding.ts';
-import { myPlaySoonRead, PLAY_SOON_MAX, setFavourite, setPlaySoon } from '#lib/server/interest.ts';
+import { myPlaySoonRead, setFavourite, setPlaySoon } from '#lib/server/interest.ts';
 import { lendCopy, returnCopy } from '#lib/server/lending.ts';
 import { editGame, mayEditGame } from '#lib/server/game-edit.ts';
 import { applyCorrection, correctionsRead } from '#lib/server/corrections.ts';
@@ -138,7 +138,7 @@ export const load: PageServerLoad = async (event) => {
 			gameId
 		),
 		// The viewer's own Play soon list (D64): whether this game is on it, until when, and whether it's full.
-		myPlaySoon: me ? myPlaySoonRead(db, me.id, Date.now()) : known([]),
+		myPlaySoon: me ? myPlaySoonRead(db, me.id, Date.now(), event.locals.config.playSoon) : known([]),
 		members: membersRead(db, groupId),
 		plays: playsRead(db, groupId, { gameId }),
 		myCopy: me
@@ -204,7 +204,8 @@ export const load: PageServerLoad = async (event) => {
 		favourite: me ? favourites.some((f) => f.id === me.id) : false,
 		favourites: favourites.map((f) => ({ id: f.id, name: f.name, colorIndex: colorOf.get(f.id) ?? 0 })),
 		playSoon: myPlaySoon.find((m) => m.gameId === gameId) ?? null,
-		playSoonFull: myPlaySoon.filter((m) => m.gameId !== gameId).length >= PLAY_SOON_MAX,
+		playSoonFull: myPlaySoon.filter((m) => m.gameId !== gameId).length >= event.locals.config.playSoon.max,
+		playSoonMax: event.locals.config.playSoon.max,
 		canEditDetails,
 		editedByName,
 		myLoan: myCopy && (myCopy.lent_to_user_id || myCopy.lent_to_text) ? { toUserId: myCopy.lent_to_user_id, toText: myCopy.lent_to_text } : null,
@@ -355,7 +356,7 @@ export const actions: Actions = {
 		const { groupId } = event.params;
 		await requireRole(event, db, groupId, 'member');
 		const on = (await event.request.formData()).get('on') !== '0';
-		const result = await setPlaySoon(db, groupId, event.locals.user!.id, gameIdParam(event.params.gameId), on, Date.now());
+		const result = await setPlaySoon(db, groupId, event.locals.user!.id, gameIdParam(event.params.gameId), on, Date.now(), event.locals.config.playSoon);
 		return result.ok ? { playSoonChanged: true } : fail(400, { playSoonError: result.error });
 	},
 

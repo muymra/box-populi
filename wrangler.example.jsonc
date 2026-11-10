@@ -32,6 +32,19 @@
 		// While BGG is off: "wikidata" looks games up on Wikidata (titles, years, player counts); "manual" means typing only.
 		"GAME_SOURCE": "wikidata",
 		"MAX_GROUPS_PER_USER": "5",
-		"MAX_MEMBERS_PER_GROUP": "100"
+		"MAX_MEMBERS_PER_GROUP": "100",
+		// Podium points for groups that haven't set their own, first place first. Each group can change its own.
+		"DEFAULT_POINTS": "3,2,1",
+		// Days the owner can be away before a co-admin may archive the group or take over as owner.
+		"OWNER_AWAY_DAYS": "60",
+		// Days a device stays signed in after it was last used, 1 to 400 (browsers cap cookies at 400).
+		"SESSION_DAYS": "400",
+		// Days a Play soon mark lasts when nothing clears it (1 to 365), and how many a person can have (1 to 20).
+		"PLAY_SOON_DAYS": "56",
+		"PLAY_SOON_MAX": "5",
+		// Hours after the last change that who's here and kept games reset on a device, 1 to 168.
+		"HERE_RESET_HOURS": "12",
+		// Hours your sign-in to /admin lasts, 1 to 720.
+		"ADMIN_SESSION_HOURS": "12"
 	}
 }

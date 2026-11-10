@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
 import { all, deletePersonStatements, readAll, run } from './db.ts';
 import { loadCatalog } from './catalog.ts';
-import { myPlaySoonRead, nightPlaySoonRead, PLAY_SOON_MAX, PLAY_SOON_MS, playSoonOfPeople, setFavourite, setPlaySoon } from './interest.ts';
+import { DEFAULT_PLAY_SOON } from './instance.ts';
+import { myPlaySoonRead, nightPlaySoonRead, playSoonOfPeople, setFavourite, setPlaySoon } from './interest.ts';
+
+const PLAY_SOON_MAX = DEFAULT_PLAY_SOON.max;
+const PLAY_SOON_MS = DEFAULT_PLAY_SOON.days * 86_400_000;
 
 let db: ReturnType<typeof createTestDb>;
 const NOW = Date.parse('2026-11-09T12:00:00Z');
@@ -27,7 +31,7 @@ beforeEach(async () => {
 	await run(db, `INSERT INTO copies (user_id, game_id, added_at) VALUES ('bo', 1, 0), ('bo', 2, 0), ('bo', 3, 0), ('bo', 4, 0), ('bo', 5, 0), ('bo', 6, 0), ('out', 7, 0)`);
 });
 
-const mine = async (who: string, now = NOW) => (await readAll(db, { m: myPlaySoonRead(db, who, now) })).m.map((m) => m.gameId).sort();
+const mine = async (who: string, now = NOW) => (await readAll(db, { m: myPlaySoonRead(db, who, now, DEFAULT_PLAY_SOON) })).m.map((m) => m.gameId).sort();
 
 describe('favourites (D63)', () => {
 	it('hearts only games on the group’s shelf, and the catalog shows them for its members only', async () => {
@@ -52,29 +56,41 @@ describe('favourites (D63)', () => {
 
 describe('Play soon (D64)', () => {
 	it('holds at most five games, and marking one again starts its eight weeks over', async () => {
-		for (const id of [1, 2, 3, 4, 5]) expect(await setPlaySoon(db, 'g1', 'ada', id, true, NOW)).toEqual({ ok: true });
+		for (const id of [1, 2, 3, 4, 5]) expect(await setPlaySoon(db, 'g1', 'ada', id, true, NOW, DEFAULT_PLAY_SOON)).toEqual({ ok: true });
 		expect(PLAY_SOON_MAX).toBe(5);
-		expect(await setPlaySoon(db, 'g1', 'ada', 6, true, NOW)).toEqual({ ok: false, error: 'Play soon holds 5 games. Clear one to add another.' });
-		expect(await setPlaySoon(db, 'g1', 'ada', 5, true, NOW + DAY)).toEqual({ ok: true }); // already on it
-		expect((await readAll(db, { m: myPlaySoonRead(db, 'ada', NOW + DAY) })).m.find((m) => m.gameId === 5)?.until).toBe(NOW + DAY + PLAY_SOON_MS);
-		await setPlaySoon(db, 'g1', 'ada', 1, false, NOW);
-		expect(await setPlaySoon(db, 'g1', 'ada', 6, true, NOW)).toEqual({ ok: true });
-		expect(await setPlaySoon(db, 'g1', 'ada', 999, true, NOW)).toEqual({ ok: false, error: 'That game isn’t in this group.' });
+		expect(await setPlaySoon(db, 'g1', 'ada', 6, true, NOW, DEFAULT_PLAY_SOON)).toEqual({ ok: false, error: 'Play soon holds 5 games. Clear one to add another.' });
+		expect(await setPlaySoon(db, 'g1', 'ada', 5, true, NOW + DAY, DEFAULT_PLAY_SOON)).toEqual({ ok: true }); // already on it
+		expect((await readAll(db, { m: myPlaySoonRead(db, 'ada', NOW + DAY, DEFAULT_PLAY_SOON) })).m.find((m) => m.gameId === 5)?.until).toBe(NOW + DAY + PLAY_SOON_MS);
+		await setPlaySoon(db, 'g1', 'ada', 1, false, NOW, DEFAULT_PLAY_SOON);
+		expect(await setPlaySoon(db, 'g1', 'ada', 6, true, NOW, DEFAULT_PLAY_SOON)).toEqual({ ok: true });
+		expect(await setPlaySoon(db, 'g1', 'ada', 999, true, NOW, DEFAULT_PLAY_SOON)).toEqual({ ok: false, error: 'That game isn’t in this group.' });
+	});
+
+	it('follows the instance’s PLAY_SOON_DAYS and PLAY_SOON_MAX (D71)', async () => {
+		const rule = { days: 7, max: 2 };
+		for (const id of [1, 2]) expect(await setPlaySoon(db, 'g1', 'ada', id, true, NOW, rule)).toEqual({ ok: true });
+		expect(await setPlaySoon(db, 'g1', 'ada', 3, true, NOW, rule)).toEqual({ ok: false, error: 'Play soon holds 2 games. Clear one to add another.' });
+		expect(await setPlaySoon(db, 'g1', 'ada', 3, true, NOW, { days: 7, max: 1 })).toEqual({ ok: false, error: 'Play soon holds 1 game. Clear one to add another.' });
+		const marks = async (now: number) => (await readAll(db, { m: myPlaySoonRead(db, 'ada', now, rule) })).m;
+		expect((await marks(NOW + 7 * DAY - 1)).map((m) => m.until)).toEqual([NOW + 7 * DAY, NOW + 7 * DAY]);
+		expect(await marks(NOW + 7 * DAY)).toEqual([]);
+		// Run out under the short rule, they no longer count against its cap.
+		expect(await setPlaySoon(db, 'g1', 'ada', 3, true, NOW + 7 * DAY, rule)).toEqual({ ok: true });
 	});
 
 	it('runs out quietly after eight weeks, and a run-out mark doesn’t count against the five', async () => {
-		await setPlaySoon(db, 'g1', 'ada', 1, true, NOW);
+		await setPlaySoon(db, 'g1', 'ada', 1, true, NOW, DEFAULT_PLAY_SOON);
 		expect(await mine('ada', NOW + PLAY_SOON_MS - 1)).toEqual([1]);
 		expect(await mine('ada', NOW + PLAY_SOON_MS)).toEqual([]);
-		for (const id of [2, 3, 4, 5]) await setPlaySoon(db, 'g1', 'ada', id, true, NOW + PLAY_SOON_MS);
-		expect(await setPlaySoon(db, 'g1', 'ada', 6, true, NOW + PLAY_SOON_MS)).toEqual({ ok: true });
+		for (const id of [2, 3, 4, 5]) await setPlaySoon(db, 'g1', 'ada', id, true, NOW + PLAY_SOON_MS, DEFAULT_PLAY_SOON);
+		expect(await setPlaySoon(db, 'g1', 'ada', 6, true, NOW + PLAY_SOON_MS, DEFAULT_PLAY_SOON)).toEqual({ ok: true });
 		expect(await all(db, `SELECT game_id FROM play_soon WHERE user_id = 'ada' AND game_id = 1`)).toEqual([]);
 	});
 
 	it('clears once a play with the person in it is logged, from the day it was marked', async () => {
-		await setPlaySoon(db, 'g1', 'ada', 1, true, NOW);
-		await setPlaySoon(db, 'g1', 'ada', 2, true, NOW);
-		await setPlaySoon(db, 'g1', 'ada', 3, true, NOW);
+		await setPlaySoon(db, 'g1', 'ada', 1, true, NOW, DEFAULT_PLAY_SOON);
+		await setPlaySoon(db, 'g1', 'ada', 2, true, NOW, DEFAULT_PLAY_SOON);
+		await setPlaySoon(db, 'g1', 'ada', 3, true, NOW, DEFAULT_PLAY_SOON);
 		await run(
 			db,
 			`INSERT INTO plays (id, group_id, game_id, played_on, created_at) VALUES
@@ -90,7 +106,7 @@ describe('Play soon (D64)', () => {
 	});
 
 	it('clears the day after a night its person was going to with the game on the bring list', async () => {
-		for (const id of [1, 2, 3, 4]) await setPlaySoon(db, 'g1', 'ada', id, true, NOW);
+		for (const id of [1, 2, 3, 4]) await setPlaySoon(db, 'g1', 'ada', id, true, NOW, DEFAULT_PLAY_SOON);
 		await run(
 			db,
 			`INSERT INTO game_nights (id, group_id, name, night_on, created_at) VALUES
@@ -111,7 +127,7 @@ describe('Play soon (D64)', () => {
 	});
 
 	it('ignores a night planned after its own date, so nobody can clear a mark by making one up', async () => {
-		await setPlaySoon(db, 'g1', 'ada', 1, true, NOW);
+		await setPlaySoon(db, 'g1', 'ada', 1, true, NOW, DEFAULT_PLAY_SOON);
 		const saturday = Date.parse('2026-11-14T20:00:00Z');
 		await run(db, `INSERT INTO game_nights (id, group_id, name, night_on, created_at) VALUES ('n1', 'g1', 'Made up', '2026-11-13', ?1)`, saturday);
 		await run(db, `INSERT INTO night_people (night_id, user_id, going) VALUES ('n1', 'ada', 1)`);
@@ -122,33 +138,33 @@ describe('Play soon (D64)', () => {
 	});
 
 	it('counts the cap inside the insert, so marks sent together can’t pass it', async () => {
-		const results = await Promise.all([1, 2, 3, 4, 5, 6].map((id) => setPlaySoon(db, 'g1', 'ada', id, true, NOW)));
+		const results = await Promise.all([1, 2, 3, 4, 5, 6].map((id) => setPlaySoon(db, 'g1', 'ada', id, true, NOW, DEFAULT_PLAY_SOON)));
 		expect(results.filter((r) => r.ok)).toHaveLength(5);
 		expect(await all(db, `SELECT game_id FROM play_soon WHERE user_id = 'ada'`)).toHaveLength(5);
 	});
 
 	it('tells Play tonight whose marks they are, for the people asked about and in the group only', async () => {
-		await setPlaySoon(db, 'g1', 'ada', 1, true, NOW);
-		await setPlaySoon(db, 'g1', 'bo', 1, true, NOW);
-		await setPlaySoon(db, 'g1', 'cy', 2, true, NOW);
+		await setPlaySoon(db, 'g1', 'ada', 1, true, NOW, DEFAULT_PLAY_SOON);
+		await setPlaySoon(db, 'g1', 'bo', 1, true, NOW, DEFAULT_PLAY_SOON);
+		await setPlaySoon(db, 'g1', 'cy', 2, true, NOW, DEFAULT_PLAY_SOON);
 		await run(db, `INSERT INTO play_soon (user_id, game_id, marked_at) VALUES ('out', 1, ${NOW})`);
 		await run(db, `INSERT INTO play_soon (user_id, game_id, marked_at) VALUES ('ada', 7, ${NOW})`); // marked through another group
-		const marks = await playSoonOfPeople(db, 'g1', ['ada', 'bo', 'out'], NOW);
+		const marks = await playSoonOfPeople(db, 'g1', ['ada', 'bo', 'out'], NOW, DEFAULT_PLAY_SOON);
 		expect(marks.map((m) => ({ ...m, userIds: m.userIds.sort() }))).toEqual([{ gameId: 1, userIds: ['ada', 'bo'] }]);
-		expect(await playSoonOfPeople(db, 'g1', [], NOW)).toEqual([]);
+		expect(await playSoonOfPeople(db, 'g1', [], NOW, DEFAULT_PLAY_SOON)).toEqual([]);
 	});
 
 	it('tells a night’s page which games someone going marked, never who, apart from the viewer’s own', async () => {
 		await run(db, `INSERT INTO game_nights (id, group_id, name, night_on, created_at) VALUES ('n1', 'g1', 'Friday', '2026-11-13', 0)`);
 		await run(db, `INSERT INTO night_people (night_id, user_id, going) VALUES ('n1', 'ada', 1), ('n1', 'bo', 1), ('n1', 'cy', 0)`);
-		await setPlaySoon(db, 'g1', 'ada', 1, true, NOW);
-		await setPlaySoon(db, 'g1', 'ada', 2, true, NOW);
-		await setPlaySoon(db, 'g1', 'cy', 3, true, NOW); // not going
+		await setPlaySoon(db, 'g1', 'ada', 1, true, NOW, DEFAULT_PLAY_SOON);
+		await setPlaySoon(db, 'g1', 'ada', 2, true, NOW, DEFAULT_PLAY_SOON);
+		await setPlaySoon(db, 'g1', 'cy', 3, true, NOW, DEFAULT_PLAY_SOON); // not going
 		await run(db, `INSERT INTO night_people (night_id, user_id, going) VALUES ('n1', 'out', 1)`); // not in the group (left)
 		await run(db, `INSERT INTO play_soon (user_id, game_id, marked_at) VALUES ('out', 4, ${NOW}), ('ada', 7, ${NOW})`);
-		const asBo = (await readAll(db, { s: nightPlaySoonRead(db, 'g1', 'n1', 'bo', NOW) })).s;
+		const asBo = (await readAll(db, { s: nightPlaySoonRead(db, 'g1', 'n1', 'bo', NOW, DEFAULT_PLAY_SOON) })).s;
 		expect({ others: asBo.others.sort(), mine: asBo.mine }).toEqual({ others: [1, 2], mine: [] });
-		const asAda = (await readAll(db, { s: nightPlaySoonRead(db, 'g1', 'n1', 'ada', NOW) })).s;
+		const asAda = (await readAll(db, { s: nightPlaySoonRead(db, 'g1', 'n1', 'ada', NOW, DEFAULT_PLAY_SOON) })).s;
 		expect({ others: asAda.others, mine: asAda.mine.sort() }).toEqual({ others: [], mine: [1, 2] });
 	});
 });
@@ -156,7 +172,7 @@ describe('Play soon (D64)', () => {
 describe('deleting a person', () => {
 	it('takes their favourites and Play soon list with them', async () => {
 		await setFavourite(db, 'g1', 'ada', 1, true, NOW);
-		await setPlaySoon(db, 'g1', 'ada', 2, true, NOW);
+		await setPlaySoon(db, 'g1', 'ada', 2, true, NOW, DEFAULT_PLAY_SOON);
 		await setFavourite(db, 'g1', 'cy', 1, true, NOW);
 		await db.batch(deletePersonStatements(db, 'ada'));
 		expect(await all(db, 'SELECT user_id FROM favourites')).toEqual([{ user_id: 'cy' }]);

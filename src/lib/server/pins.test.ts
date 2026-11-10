@@ -16,7 +16,7 @@ async function groupWith(...people: Array<[name: string, pin: string | null]>) {
 	const ids: string[] = [];
 	let groupId = '';
 	for (const [i, [name, pin]] of people.entries()) {
-		const p = await newPersonStatements(db, name, NOW + i, pin);
+		const p = await newPersonStatements(db, name, NOW + i, 400, pin);
 		if (i === 0) groupId = (await createGroup(db, { userId: p.person.id, name: 'Sandbox', now: NOW, before: p.statements })).groupId;
 		else await joinGroup(db, { groupId, userId: p.person.id, now: NOW + i, before: p.statements });
 		ids.push(p.person.id);

@@ -45,13 +45,23 @@ describe('admin sign-in', () => {
 
 	it('signs the cookie with the key and lets it expire', async () => {
 		const value = await adminCookieValue(KEY, NOW + 1000);
-		expect(await verifyAdminCookie(KEY, value, NOW)).toBe(true);
-		expect(await verifyAdminCookie(KEY, value, NOW + 1000)).toBe(false);
-		expect(await verifyAdminCookie('a different key entirely', value, NOW)).toBe(false);
+		expect(await verifyAdminCookie(KEY, value, NOW, 12)).toBe(true);
+		expect(await verifyAdminCookie(KEY, value, NOW + 1000, 12)).toBe(false);
+		expect(await verifyAdminCookie('a different key entirely', value, NOW, 12)).toBe(false);
 		const [, signature] = value.split('.');
-		expect(await verifyAdminCookie(KEY, `${NOW + 999_999}.${signature}`, NOW)).toBe(false);
-		expect(await verifyAdminCookie(KEY, undefined, NOW)).toBe(false);
-		expect(await verifyAdminCookie(KEY, 'garbage', NOW)).toBe(false);
+		expect(await verifyAdminCookie(KEY, `${NOW + 999_999}.${signature}`, NOW, 12)).toBe(false);
+		expect(await verifyAdminCookie(KEY, undefined, NOW, 12)).toBe(false);
+		expect(await verifyAdminCookie(KEY, 'garbage', NOW, 12)).toBe(false);
+	});
+
+	it('refuses a cookie signed for longer than ADMIN_SESSION_HOURS now allows (D71)', async () => {
+		const hour = 3_600_000;
+		const value = await adminCookieValue(KEY, NOW + 10 * hour);
+		expect(await verifyAdminCookie(KEY, value, NOW, 12)).toBe(true);
+		expect(await verifyAdminCookie(KEY, value, NOW, 2)).toBe(false);
+		expect(await verifyAdminCookie(KEY, value, NOW + 9 * hour, 2)).toBe(true);
+		// A server a few seconds behind the one that signed it still accepts it.
+		expect(await verifyAdminCookie(KEY, await adminCookieValue(KEY, NOW + 2 * hour + 5000), NOW, 2)).toBe(true);
 	});
 });
 

@@ -2,7 +2,7 @@
 // layout creates it and puts it in context; storage is read and written only in the browser.
 import { createContext } from 'svelte';
 import { storage } from '#lib/catalog/client.ts';
-import { addGuest, parseHere, serializeHere, type Here } from './here.ts';
+import { addGuest, HERE_TTL_MS, parseHere, serializeHere, type Here } from './here.ts';
 import { markNight, nightOf, parseRegulars, type Regulars } from './regulars.ts';
 
 /** What the who's-here chips edit: tonight's Table, or a play's own list of players. */
@@ -64,6 +64,9 @@ export class Table implements HereSelection {
 	/** Which night's list last seeded this table, so a later change to the night reseeds it. */
 	private seed: string | undefined;
 
+	/** `resetMs`: how long after the last change the table resets, the instance's HERE_RESET_HOURS (D71). */
+	constructor(readonly resetMs = HERE_TTL_MS) {}
+
 	/**
 	 * Reads this device's table for a group. Called again whenever a view opens, so a stale table
 	 * expires. On a game night's date, `tonight` seeds it from the night's going list (D38) unless the
@@ -71,7 +74,7 @@ export class Table implements HereSelection {
 	 */
 	load(groupId: string, tonight: { key: string; members: string[]; guests: string[] } | null = null) {
 		this.groupId = groupId;
-		const here = parseHere(storage.get(this.key), Date.now());
+		const here = parseHere(storage.get(this.key), Date.now(), this.resetMs);
 		this.regulars = parseRegulars(storage.get(this.regularsKey));
 		if (tonight && here.seed !== tonight.key) {
 			this.members = [...tonight.members];

@@ -6,7 +6,6 @@ import { all, deleteGroupStatements, one, run, stmt, type DB } from './db.ts';
 import { signInCodeStatement } from './recovery.ts';
 
 export const ADMIN_COOKIE = 'bp_admin';
-export const ADMIN_HOURS = 12;
 
 /** Compares two equal-length strings without stopping at the first difference. */
 function sameString(a: string, b: string): boolean {
@@ -32,11 +31,19 @@ export async function adminCookieValue(adminKey: string, expiresAt: number): Pro
 	return `${expiresAt}.${await hmacHex(adminKey, `bp_admin:${expiresAt}`)}`;
 }
 
-export async function verifyAdminCookie(adminKey: string, value: string | undefined, now: number): Promise<boolean> {
+/** A minute's allowance for servers whose clocks differ a little from the one that signed the cookie. */
+const CLOCK_SLACK_MS = 60_000;
+
+/**
+ * A signed admin cookie that hasn't run out. One that runs past `hours` from now (the instance's
+ * ADMIN_SESSION_HOURS, D71), give or take a minute, was signed while it was longer, and is refused
+ * once it's shortened.
+ */
+export async function verifyAdminCookie(adminKey: string, value: string | undefined, now: number, hours: number): Promise<boolean> {
 	if (!value) return false;
 	const [rawExpiry, signature, ...rest] = value.split('.');
 	const expiresAt = Number(rawExpiry);
-	if (rest.length || !signature || !Number.isSafeInteger(expiresAt) || expiresAt <= now) return false;
+	if (rest.length || !signature || !Number.isSafeInteger(expiresAt) || expiresAt <= now || expiresAt > now + hours * 3_600_000 + CLOCK_SLACK_MS) return false;
 	return sameString(signature, await hmacHex(adminKey, `bp_admin:${expiresAt}`));
 }
 

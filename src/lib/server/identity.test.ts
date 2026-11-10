@@ -27,7 +27,7 @@ beforeEach(() => {
 });
 
 async function newPerson(name: string) {
-	const p = await newPersonStatements(db, name, NOW);
+	const p = await newPersonStatements(db, name, NOW, 400);
 	await db.batch(p.statements);
 	return p;
 }
@@ -45,7 +45,7 @@ describe('display names', () => {
 describe('sessions', () => {
 	it('creates a person whose session and link resolve', async () => {
 		const p = await newPerson('Ada');
-		expect((await resolveSession(db, p.sessionToken, NOW))?.person).toEqual({ id: p.person.id, name: 'Ada' });
+		expect((await resolveSession(db, p.sessionToken, NOW, 400))?.person).toEqual({ id: p.person.id, name: 'Ada' });
 		expect(await findPersonByLink(db, p.linkToken)).toEqual({ id: p.person.id, name: 'Ada' });
 	});
 
@@ -58,50 +58,61 @@ describe('sessions', () => {
 
 	it('refuses and deletes expired sessions', async () => {
 		const p = await newPerson('Ada');
-		expect(await resolveSession(db, p.sessionToken, NOW + 401 * DAY_MS)).toBeNull();
+		expect(await resolveSession(db, p.sessionToken, NOW + 401 * DAY_MS, 400)).toBeNull();
 		expect(await all(db, 'SELECT * FROM sessions')).toEqual([]);
 	});
 
 	it('slides the expiry once past half', async () => {
 		const p = await newPerson('Ada');
-		expect((await resolveSession(db, p.sessionToken, NOW + 10 * DAY_MS))?.extended).toBe(false);
+		expect((await resolveSession(db, p.sessionToken, NOW + 10 * DAY_MS, 400))?.extended).toBe(false);
 		const later = NOW + 250 * DAY_MS;
-		expect((await resolveSession(db, p.sessionToken, later))?.extended).toBe(true);
+		expect((await resolveSession(db, p.sessionToken, later, 400))?.extended).toBe(true);
 		const row = await one<{ expires_at: number }>(db, 'SELECT expires_at FROM sessions');
 		expect(row?.expires_at).toBe(later + 400 * DAY_MS);
 	});
 
+	it('keeps to a shorter SESSION_DAYS, pulling in sessions made under a longer one (D71)', async () => {
+		const p = await newPerson('Ada');
+		// Made for 400 days; on its next use under a 30-day setting it runs 30 days from then.
+		expect((await resolveSession(db, p.sessionToken, NOW + DAY_MS, 30))?.extended).toBe(true);
+		expect((await one<{ expires_at: number }>(db, 'SELECT expires_at FROM sessions'))?.expires_at).toBe(NOW + 31 * DAY_MS);
+		expect((await resolveSession(db, p.sessionToken, NOW + 5 * DAY_MS, 30))?.extended).toBe(false);
+		expect(await resolveSession(db, p.sessionToken, NOW + 32 * DAY_MS, 30)).toBeNull();
+		const fresh = await createSession(db, p.person.id, NOW, 30);
+		expect(await resolveSession(db, fresh, NOW + 29 * DAY_MS, 30)).not.toBeNull();
+	});
+
 	it('rejects unknown and oversized tokens', async () => {
-		expect(await resolveSession(db, 'nope', NOW)).toBeNull();
-		expect(await resolveSession(db, 'x'.repeat(500), NOW)).toBeNull();
-		expect(await resolveSession(db, undefined, NOW)).toBeNull();
+		expect(await resolveSession(db, 'nope', NOW, 400)).toBeNull();
+		expect(await resolveSession(db, 'x'.repeat(500), NOW, 400)).toBeNull();
+		expect(await resolveSession(db, undefined, NOW, 400)).toBeNull();
 	});
 
 	it('ends one device session', async () => {
 		const p = await newPerson('Ada');
-		const second = await createSession(db, p.person.id, NOW);
+		const second = await createSession(db, p.person.id, NOW, 400);
 		await endSession(db, p.sessionToken);
-		expect(await resolveSession(db, p.sessionToken, NOW)).toBeNull();
-		expect(await resolveSession(db, second, NOW)).not.toBeNull();
+		expect(await resolveSession(db, p.sessionToken, NOW, 400)).toBeNull();
+		expect(await resolveSession(db, second, NOW, 400)).not.toBeNull();
 	});
 });
 
 describe('personal links', () => {
 	it('regenerating kills the old link and signs out every other device', async () => {
 		const p = await newPerson('Ada');
-		const other = await createSession(db, p.person.id, NOW); // say, whoever used a leaked link
+		const other = await createSession(db, p.person.id, NOW, 400); // say, whoever used a leaked link
 		const bram = await newPerson('Bram');
 		const fresh = await regeneratePersonalLink(db, p.person.id, NOW, p.sessionToken);
 		expect(await findPersonByLink(db, p.linkToken)).toBeNull();
 		expect((await findPersonByLink(db, fresh))?.name).toBe('Ada');
-		expect(await resolveSession(db, p.sessionToken, NOW)).not.toBeNull();
-		expect(await resolveSession(db, other, NOW)).toBeNull();
-		expect(await resolveSession(db, bram.sessionToken, NOW)).not.toBeNull();
+		expect(await resolveSession(db, p.sessionToken, NOW, 400)).not.toBeNull();
+		expect(await resolveSession(db, other, NOW, 400)).toBeNull();
+		expect(await resolveSession(db, bram.sessionToken, NOW, 400)).not.toBeNull();
 	});
 
 	it('signing out everywhere ends sessions and replaces the link', async () => {
 		const p = await newPerson('Ada');
-		await createSession(db, p.person.id, NOW);
+		await createSession(db, p.person.id, NOW, 400);
 		const fresh = await signOutEverywhere(db, p.person.id, NOW);
 		expect(await all(db, 'SELECT * FROM sessions')).toEqual([]);
 		expect(await findPersonByLink(db, p.linkToken)).toBeNull();
@@ -111,7 +122,7 @@ describe('personal links', () => {
 
 describe('groups', () => {
 	it('creates a group with its owner in one batch with a new person', async () => {
-		const p = await newPersonStatements(db, 'Ada', NOW);
+		const p = await newPersonStatements(db, 'Ada', NOW, 400);
 		const { groupId, code } = await createGroup(db, { userId: p.person.id, name: 'Thursday Club', now: NOW, before: p.statements });
 		expect(code).toMatch(/^[A-Z2-9]{5}$/);
 		expect(await one(db, 'SELECT role FROM memberships WHERE group_id = ?1', groupId)).toEqual({ role: 'owner' });
@@ -121,7 +132,7 @@ describe('groups', () => {
 	it('joins by code, once', async () => {
 		const ada = await newPerson('Ada');
 		const { groupId, code } = await createGroup(db, { userId: ada.person.id, name: 'G', now: NOW });
-		const bram = await newPersonStatements(db, 'Bram', NOW);
+		const bram = await newPersonStatements(db, 'Bram', NOW, 400);
 		const target = await findGroupByCode(db, code);
 		expect(target?.memberCount).toBe(1);
 		await joinGroup(db, { groupId, userId: bram.person.id, now: NOW, before: bram.statements });
@@ -153,7 +164,7 @@ describe('group glances', () => {
 	it('counts each game once, colours in join order, and the coming nights soonest first', async () => {
 		const ada = await newPerson('Ada');
 		const { groupId } = await createGroup(db, { userId: ada.person.id, name: 'G', now: NOW });
-		const bram = await newPersonStatements(db, 'Bram', NOW);
+		const bram = await newPersonStatements(db, 'Bram', NOW, 400);
 		await joinGroup(db, { groupId, userId: bram.person.id, now: NOW + 1, before: bram.statements });
 		const other = await createGroup(db, { userId: bram.person.id, name: 'Empty', now: NOW });
 		await run(db, `INSERT INTO games (id, name, search_text, is_manual) VALUES (1, 'A', 'a', 1), (2, 'B', 'b', 1)`);

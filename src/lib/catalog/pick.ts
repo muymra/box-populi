@@ -21,29 +21,38 @@ export function pickWeight(game: CatalogGame, players: number | null): number {
 	return 1;
 }
 
-/** The longest play time a filler may list (PRD "Picker"). */
-export const FILLER_MAX_MINUTES = 30;
+/**
+ * What a group calls a filler (PRD "Picker", D71): the longest play time it may list, and the
+ * complexity it stays under, on BGG's 1 to 5 scale.
+ */
+export type FillerRule = { maxMinutes: number; maxWeight: number };
 
 /**
- * A filler's complexity stays under this, whatever the levels are called: D62's Light alone (under 1.5)
- * would leave out short games such as Hanabi, so fillers keep the line they had under D56.
+ * 30 minutes, and under 2 whatever the levels are called: D62's Light alone (under 1.5) would leave
+ * out short games such as Hanabi, so fillers keep the line they had under D56.
  */
-export const FILLER_MAX_WEIGHT = 2;
+export const DEFAULT_FILLER: FillerRule = { maxMinutes: 30, maxWeight: 2 };
+export const FILLER_MINUTES_RANGE = { min: 5, max: 240 } as const;
 
 /**
- * A filler: something to play while people arrive or between longer games. It lists
- * FILLER_MAX_MINUTES or less as its longest play time, and its complexity is under FILLER_MAX_WEIGHT
- * or unknown. A game with no play time isn't one, since nothing says it's short.
+ * A filler: something to play while people arrive or between longer games. It lists the rule's
+ * minutes or less as its longest play time, and its complexity is under the rule's weight or unknown.
+ * A game with no play time isn't one, since nothing says it's short.
  */
-export function isFiller(game: CatalogGame): boolean {
+export function isFiller(game: CatalogGame, rule: FillerRule = DEFAULT_FILLER): boolean {
 	const longest = game.maxPlaytime ?? game.minPlaytime;
-	if (longest == null || longest > FILLER_MAX_MINUTES) return false;
-	return game.weight == null || game.weight < FILLER_MAX_WEIGHT;
+	if (longest == null || longest > rule.maxMinutes) return false;
+	return game.weight == null || game.weight < rule.maxWeight;
 }
 
 /** Fillers known to be light come up twice as often as those whose complexity nobody has set. */
-export function fillerWeight(game: CatalogGame, players: number | null): number {
-	return pickWeight(game, players) * (game.weight != null && game.weight < FILLER_MAX_WEIGHT ? 2 : 1);
+export function fillerWeight(game: CatalogGame, players: number | null, rule: FillerRule = DEFAULT_FILLER): number {
+	return pickWeight(game, players) * (game.weight != null && game.weight < rule.maxWeight ? 2 : 1);
+}
+
+/** "30 minutes or less and under 2 / 5 complexity", as Play tonight says it. */
+export function fillerLine(rule: FillerRule): string {
+	return `${rule.maxMinutes} minutes or less and under ${rule.maxWeight} / 5 complexity`;
 }
 
 /**

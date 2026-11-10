@@ -11,7 +11,7 @@ import {
 	playerChoiceLabel
 } from './players.ts';
 import { BUCKET_WEIGHTS, formatPlaytime, formatWeight, WEIGHT_BUCKETS, weightBucket } from './buckets.ts';
-import { DEFAULT_FILTERS, filterGames, hiddenByDefault, keepMatching, parseFilters, passedOnUnknown, serializeFilters, SORT_KEYS, sortGames, type Filters } from './filter.ts';
+import { staleCutoff, staleLabel, DEFAULT_FILTERS, filterGames, hiddenByDefault, keepMatching, parseFilters, passedOnUnknown, serializeFilters, SORT_KEYS, sortGames, type Filters } from './filter.ts';
 import {
 	MAX_CHOSEN,
 	SPREAD_BANDS,
@@ -23,6 +23,7 @@ import {
 	roomIsBig,
 	chooseOrder,
 	favouritesAmong,
+	fillerLine,
 	fillerWeight,
 	fitsPlayers,
 	INTEREST_CAP,
@@ -303,6 +304,17 @@ describe('not played lately', () => {
 		expect(parseFilters(new URLSearchParams('stale=1')).stale).toBe(true);
 		expect(serializeFilters(f({ stale: true })).get('stale')).toBe('1');
 	});
+
+	it('looks as far back as the group says (D71)', () => {
+		const now = Date.UTC(2026, 10, 7);
+		const recent = game({ lastPlayed: '2026-10-01' });
+		const old = game({ lastPlayed: '2026-07-01' });
+		// 30 days: October is recent. 180 days: July is too.
+		expect(filterGames([recent, old], f({ stale: true }), members, now, undefined, 30).map((g) => g.id).sort()).toEqual([recent.id, old.id].sort());
+		expect(filterGames([recent, old], f({ stale: true }), members, now, undefined, 180)).toEqual([]);
+		expect(staleCutoff(now, 7)).toBe('2026-10-31');
+		expect([90, 30, 14, 7, 45, 365].map(staleLabel)).toEqual(['3 months', 'month', '2 weeks', 'week', '45 days', '365 days']);
+	});
 });
 
 describe('picker', () => {
@@ -361,6 +373,13 @@ describe('picker', () => {
 		expect(isFiller(game({ minPlaytime: 20, maxPlaytime: 20, weight: 2.4 }))).toBe(false); // short but not light
 		expect(isFiller(game({ minPlaytime: null, maxPlaytime: null, weight: 1.1 }))).toBe(false); // nothing says it's short
 		expect(fillerWeight(sushi, 4)).toBe(2 * fillerWeight(typed, 4));
+		// A group's own filler rule (D71): up to an hour and under 3.
+		const hour = { maxMinutes: 60, maxWeight: 3 };
+		expect(isFiller(game({ minPlaytime: 30, maxPlaytime: 60, weight: 2.4 }), hour)).toBe(true);
+		expect(isFiller(game({ minPlaytime: 30, maxPlaytime: 61, weight: 1.2 }), hour)).toBe(false);
+		expect(isFiller(game({ minPlaytime: 20, maxPlaytime: 20, weight: 3 }), hour)).toBe(false);
+		expect(fillerWeight(game({ minPlaytime: 20, maxPlaytime: 20, weight: 2.4 }), 4, hour)).toBe(2 * fillerWeight(typed, 4, hour));
+		expect(fillerLine(hour)).toBe('60 minutes or less and under 3 / 5 complexity');
 		const fillers = pick([sushi, typed], 4, seededRng(3), new Set(), 3, fillerWeight).games;
 		expect(new Set(fillers)).toEqual(new Set([sushi, typed]));
 	});

@@ -16,5 +16,5 @@ export const GET: RequestHandler = async (event) => {
 	const headers = { 'cache-control': 'private, no-store' };
 	if (!access.role || access.readonly || !event.locals.user) return Response.json({ marks: [] }, { headers });
 	const here = (event.url.searchParams.get('here') ?? '').split(',').filter(Boolean).slice(0, MAX_HERE);
-	return Response.json({ marks: await playSoonOfPeople(db, groupId, here, Date.now()) }, { headers });
+	return Response.json({ marks: await playSoonOfPeople(db, groupId, here, Date.now(), event.locals.config.playSoon) }, { headers });
 };

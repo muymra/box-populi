@@ -3,7 +3,7 @@
 import { fail, type RequestEvent } from '@sveltejs/kit';
 import { requireRole } from './authz.ts';
 import { getDb } from '#lib/server/platform.ts';
-import { deletePlay, parsePlayForm, savePlay, setPodiumPoints } from './plays.ts';
+import { deletePlay, parsePlayForm, savePlay, setCoopRules, setPodiumPoints } from './plays.ts';
 import { nightOf } from '#lib/table/regulars.ts';
 
 type Event = RequestEvent<{ groupId: string }>;
@@ -45,4 +45,13 @@ export async function pointsAction(event: Event) {
 	const access = await requireRole(event, db, event.params.groupId, 'admin');
 	const result = await setPodiumPoints(db, event.params.groupId, { id: event.locals.user!.id, role: access.role }, (await event.request.formData()).get('points'));
 	return result.ok ? { pointsSaved: true } : fail(400, { pointsError: result.error });
+}
+
+/** What a co-op win scores and whether it counts as a win (D71); the same people as the points. */
+export async function coopAction(event: Event) {
+	const db = getDb();
+	const access = await requireRole(event, db, event.params.groupId, 'admin');
+	const form = await event.request.formData();
+	const result = await setCoopRules(db, event.params.groupId, { id: event.locals.user!.id, role: access.role }, { points: form.get('coopPoints'), counts: form.get('coopCounts') });
+	return result.ok ? { coopSaved: true } : fail(400, { coopError: result.error });
 }

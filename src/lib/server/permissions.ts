@@ -33,12 +33,9 @@ export type PermissionContext = {
 	otherMembers?: number;
 	/** For `plan_night`: the group lets any member plan nights (its `nights_by` setting). */
 	openToMembers?: boolean;
-	/** For `archive_group` and `claim_ownership`: the owner hasn't been seen in the group for OWNER_AWAY_DAYS. */
+	/** For `archive_group` and `claim_ownership`: the owner hasn't been seen in the group for the instance's OWNER_AWAY_DAYS. */
 	ownerAway?: boolean;
 };
-
-/** After this long without the owner, a co-admin may archive or restore the group (D50) or take over as owner (D51). */
-export const OWNER_AWAY_DAYS = 60;
 
 const RANK: Record<Role, number> = { member: 0, admin: 1, owner: 2 };
 

@@ -5,6 +5,7 @@ import { addCameGuest, addNightGuest, bringOther, confirmCame, loadNights, remov
 import { myPlaySoonRead } from './interest.ts';
 import { readAll } from './db.ts';
 import { cameChecked, cameList, nightPlayers } from '#lib/nights.ts';
+import { DEFAULT_PLAY_SOON } from './instance.ts';
 
 let db: ReturnType<typeof createTestDb>;
 const NOW = Date.UTC(2026, 10, 10, 12);
@@ -130,7 +131,7 @@ describe('a night that’s over (D70)', () => {
 		// Ada marked Alpha before the night; it was on the list but stayed home, so her mark still counts.
 		await run(db, `INSERT INTO night_games (night_id, game_id, brought_by, added_by, stayed_home) VALUES ('n1', 1, 'ada', 'ada', 1)`);
 		await run(db, `INSERT INTO play_soon (user_id, game_id, marked_at) VALUES ('ada', 1, ${Date.UTC(2026, 10, 1)})`);
-		const marks = async () => (await readAll(db, { m: myPlaySoonRead(db, 'ada', NOW) })).m.map((m) => m.gameId);
+		const marks = async () => (await readAll(db, { m: myPlaySoonRead(db, 'ada', NOW, DEFAULT_PLAY_SOON) })).m.map((m) => m.gameId);
 		expect(await marks()).toEqual([1]);
 		expect((await setStayedHome(db, 'g1', 'n1', 1, false, NOW)).ok).toBe(false);
 		const other = { title: 'Late Arrival', minPlayers: null, maxPlayers: null, minPlaytime: null, maxPlaytime: null, bringer: 'm:ada' };

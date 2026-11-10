@@ -65,7 +65,7 @@ describe('readGroup (D59)', () => {
 		await run(db, `UPDATE users SET pin_set_at = 123 WHERE id = 'ada'`);
 		const { access, extras } = await readGroup(as('ada'), db, 'open');
 		expect(access).toMatchObject({ role: 'owner', readonly: false, group: { id: 'open', isDemo: false } });
-		expect(extras).toEqual({ code: 'AAAAA', linkKey: null, theme: 'nord', pinSetAt: 123, nightsBy: 'members', catalogVersion: 0 });
+		expect(extras).toEqual({ code: 'AAAAA', linkKey: null, theme: 'nord', pinSetAt: 123, nightsBy: 'members', filler: { maxMinutes: 30, maxWeight: 2 }, staleDays: 90, catalogVersion: 0 });
 		expect(await requireRead(as('ada'), db, 'open')).toEqual(access);
 	});
 

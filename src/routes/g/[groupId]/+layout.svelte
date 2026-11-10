@@ -78,7 +78,8 @@
 	}
 
 	// Who's here on this device, shared with the picker (PRD "At the table").
-	const table = setTable(new Table());
+	// The reset is the instance's, so it's read once, before any page under this layout reads the table.
+	const table = setTable(new Table(untrack(() => data.hereResetMs)));
 	let startOpen = $state(false);
 	let diceOpen = $state(false);
 	$effect(() => {

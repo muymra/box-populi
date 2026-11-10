@@ -50,7 +50,7 @@ export const load: PageServerLoad = async (event) => {
 			nightId
 		),
 		// Play soon (D64): games someone going would like to play, never who, and the viewer's own marks.
-		soon: access.role && !access.readonly ? nightPlaySoonRead(db, groupId, nightId, me?.id ?? null, Date.now()) : known({ others: [], mine: [] })
+		soon: access.role && !access.readonly ? nightPlaySoonRead(db, groupId, nightId, me?.id ?? null, Date.now(), event.locals.config.playSoon) : known({ others: [], mine: [] })
 	});
 	const [night] = assembleNights(r.nights, r.people, r.games);
 	if (!night) error(404, 'Game night not found');

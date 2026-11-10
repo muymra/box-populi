@@ -1,20 +1,20 @@
 // What a member's profile works out from their plays in one group (D61): their record, how they do
 // against the person looking, and, on your own profile only, the figures under "Only you see this".
 // Every figure comes from plays the group can already see; nothing here is stored.
-import { isWin, type PlayOutcome } from './plays.ts';
+import { isWin, seatWins, type PlayOutcome, type PlayRules } from './plays.ts';
 
 /** What the figures read from a play: when, co-op or not, and who finished where. */
 type Played = Pick<PlayOutcome, 'playedOn' | 'coop' | 'players'>;
 
-/** Plays and competitive wins: a win as the leaderboard counts it, first with someone below (co-op wins aren't wins). */
-export function record(plays: readonly Played[], userId: string): { plays: number; wins: number } {
+/** Plays and wins, as the leaderboard counts them (`seatWins`): first with someone below, and a co-op win if the group counts those. */
+export function record(plays: readonly Played[], userId: string, rules: PlayRules): { plays: number; wins: number } {
 	let n = 0;
 	let wins = 0;
 	for (const play of plays) {
-		const me = play.players.find((p) => p.userId === userId);
-		if (!me) continue;
+		const i = play.players.findIndex((p) => p.userId === userId);
+		if (i < 0) continue;
 		n += 1;
-		if (play.coop == null && isWin(me.place, play.players.map((p) => p.place))) wins += 1;
+		if (seatWins(play, rules)[i]) wins += 1;
 	}
 	return { plays: n, wins };
 }
