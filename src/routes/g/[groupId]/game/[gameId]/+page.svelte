@@ -15,7 +15,7 @@
 	import Gift from '@lucide/svelte/icons/gift';
 	import { onMount } from 'svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
-	import { goto } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import Trophy from '@lucide/svelte/icons/trophy';
 	import Modal from '#lib/components/Modal.svelte';
@@ -61,6 +61,18 @@
 		data.plays[0] ? new Date(`${data.plays[0].playedOn}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : null
 	);
 	const base = $derived(`/g/${data.group.id}`);
+	// Opened from this group's shelf, the Shelf link goes back through history, as the browser's Back
+	// does, so the shelf returns where it was, filters and all. From anywhere else it's a plain link.
+	let fromShelf = false;
+	afterNavigate(({ from, to }) => {
+		if (from?.url.pathname === to?.url.pathname) return; // a form or the ?log=1 tidy-up, not a new arrival
+		fromShelf = from?.route.id === '/g/[groupId]' && from.url.pathname === base;
+	});
+	function backToShelf(e: MouseEvent) {
+		if (!fromShelf || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+		e.preventDefault();
+		history.back();
+	}
 	/** The rail shows the latest three plays; the plays page has them all. */
 	const recentPlays = $derived(data.plays.slice(0, 3));
 
@@ -134,7 +146,7 @@
 
 <svelte:head><title>{g.name} · {data.group.name}</title></svelte:head>
 
-<a class="back" href={base}><ArrowLeft size={18} aria-hidden="true" /> Shelf</a>
+<a class="back" href={base} onclick={backToShelf}><ArrowLeft size={18} aria-hidden="true" /> Shelf</a>
 
 <article class="game">
 	<!-- From 900px: the game and how to learn it on the left, who has it and its plays in a rail on the

@@ -10,6 +10,7 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 - Plays saved on the wrong day by the bug above are corrected when you upgrade: a play logged after its night takes the night's date, and one moved to an earlier day leaves the night it no longer matches.
 - Member profiles: tap a member's name (Group tab, a game's page, the leaderboard, play rows, a night's page) for their page in the group: how often you've played together and who wins, games you both love, their games you haven't played yet, their record and wants. Your name in the top bar opens your own, which adds figures only you see: your year by month, your win rate by table size, who you play with most, how much of your shelf gets played, and your Play soon list. It shows only what the group could already see.
 - The showcase home page (`INSTANCE_MODE=demo`) draws its example shelves the way the shelf looks now and has a part on favourites and Play soon; its link preview is retaken to match. The demo group's members have favourites, so the demo shows the heart, the Favourites filters and the Most loved sort. Reseed the demo after upgrading to get them.
+- The "Shelf" button on a game's page goes back to where you were on the shelf, with your filters, as the browser's Back does. It used to open the shelf from the top with no filters.
 ## 0.4.1 (2026-11-09)
 
 **Upgrading:** nothing to do: no migrations and no new settings. Deploy as usual. If you run a demo group, reseeding it now always refreshes what visitors see.
