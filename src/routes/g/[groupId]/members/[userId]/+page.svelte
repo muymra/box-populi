@@ -4,8 +4,10 @@
 	// here you haven't played, with their own record and wants beside it. Your own profile swaps the
 	// comparison for figures only you see: your year, your win rate by table size, who you play with,
 	// how much of your shelf gets played, and your Play soon list.
+	import { untrack } from 'svelte';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import ProfileShelf from './ProfileShelf.svelte';
+	import OwnMarks from './OwnMarks.svelte';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { ordinal } from '#lib/plays.ts';
 	import { TABLE_SIZES } from '#lib/profile.ts';
@@ -40,6 +42,15 @@
 	const yearPlays = $derived(mine?.months.reduce((n, m) => n + m.plays, 0) ?? 0);
 	const yearNights = $derived(mine?.months.reduce((n, m) => n + m.nights, 0) ?? 0);
 	const sizeLabel = (size: (typeof TABLE_SIZES)[number]) => (size === 5 ? '5 or more' : `${size} players`);
+	// The lists this profile opened with: one you empty here keeps its panel, struck rows and Undo, until you leave.
+	// Keyed on the id, not the subject object, which is new each time the page's data refreshes. The
+	// template reads it before the lists' lengths: a derived works itself out when first read, so read
+	// after a list emptied it would see the empty list.
+	const subjectId = $derived(s.id);
+	const opened = $derived.by(() => {
+		void subjectId;
+		return untrack(() => ({ favourites: (data.mine?.favourites.length ?? 0) > 0, wants: data.wants.length > 0 }));
+	});
 	/** Players in finishing order for a competitive play, as entered for co-op (DESIGN.md "Play rows"). */
 	const ordered = (p: (typeof data.latest)[number]) => (p.coop ? p.players : [...p.players].sort((a, b) => (a.place ?? 99) - (b.place ?? 99)));
 </script>
@@ -183,25 +194,33 @@
 			{#if mine}
 				<section class="panel" aria-labelledby="soon-h">
 					<div class="year-head"><h3 id="soon-h">Your Play soon</h3><span class="tag">Only you see this</span></div>
-					{#if mine.playSoon.length}
-						<ul class="names">
-							{#each mine.playSoon as g (g.gameId)}<li><a href="{base}/game/{g.gameId}">{g.name}</a> <span class="muted">until {until(g.until)}</span></li>{/each}
-						</ul>
-					{:else}
-						<p class="muted quiet">Nothing on it. Mark a game on its page when you’d like to try it, or get it to the table again soon.</p>
-					{/if}
+					<OwnMarks kind="playSoon" items={mine.playSoon.map((g) => ({ gameId: g.gameId, name: g.name, note: `until ${until(g.until)}` }))} {base} canEdit={data.canEdit}>
+						{#snippet empty()}
+							<p class="muted quiet">Nothing on it. Mark a game on its page when you’d like to try it, or get it to the table again soon.</p>
+						{/snippet}
+					</OwnMarks>
 				</section>
+				{#if opened.favourites || mine.favourites.length}
+					<section class="panel" aria-labelledby="favs-h">
+						<h3 id="favs-h">Your favourites</h3>
+						<OwnMarks kind="favourite" items={mine.favourites} {base} canEdit={data.canEdit} first={8} />
+					</section>
+				{/if}
 			{/if}
 
-			{#if data.wants.length}
+			{#if (data.self && opened.wants) || data.wants.length}
 				<section class="panel" aria-labelledby="wants-h">
 					<h3 id="wants-h">{data.self ? 'You want' : `${s.name} wants`}</h3>
-					<p class="muted quiet">{plural(data.wants.length, 'game', 'games')} nobody here has.</p>
-					<ul class="names">
-						{#each data.wants.slice(0, 6) as w (w.id)}
-							<li><a href="{base}/game/{w.id}">{w.name}</a>{#if w.viewerWants && !data.self} <span class="tag">You too</span>{/if}</li>
-						{/each}
-					</ul>
+					{#if data.wants.length}<p class="muted quiet">{plural(data.wants.length, 'game', 'games')} nobody here has.</p>{/if}
+					{#if data.self}
+						<OwnMarks kind="want" items={data.wants.slice(0, 6).map((w) => ({ gameId: w.id, name: w.name }))} {base} canEdit={data.canEdit} />
+					{:else}
+						<ul class="names">
+							{#each data.wants.slice(0, 6) as w (w.id)}
+								<li><a href="{base}/game/{w.id}">{w.name}</a>{#if w.viewerWants} <span class="tag">You too</span>{/if}</li>
+							{/each}
+						</ul>
+					{/if}
 					{#if data.wants.length > 6}<a class="more" href="{base}/wanted">All on Wanted</a>{/if}
 				</section>
 			{/if}

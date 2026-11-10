@@ -1,13 +1,13 @@
-import { error } from '@sveltejs/kit';
-import { requireRead } from '#lib/server/authz.ts';
+import { error, fail } from '@sveltejs/kit';
+import { requireRead, requireRole } from '#lib/server/authz.ts';
 import { membersRead } from '#lib/server/catalog.ts';
 import { readAll } from '#lib/server/db.ts';
 import { getDb } from '#lib/server/platform.ts';
 import { playsRead, podiumPointsRead } from '#lib/server/plays.ts';
-import { assembleNightsBeen, assemblePlaySoon, assembleProfileGames, assembleWants, profileReads } from '#lib/server/profile.ts';
+import { assembleNightsBeen, assemblePlaySoon, assembleProfileGames, assembleWants, profileReads, setOwnMark } from '#lib/server/profile.ts';
 import { standings } from '#lib/plays.ts';
 import { byMonth, coPlayers, headToHead, record, winRateBySize } from '#lib/profile.ts';
-import type { PageServerLoad } from './$types';
+import type { Actions, PageServerLoad } from './$types';
 
 /** A member's profile (D61): their record here, read against the viewer's; on your own, figures only you see. */
 export const load: PageServerLoad = async (event) => {
@@ -47,6 +47,8 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		subject: { id: subject.id, name: subject.name, colorIndex: subject.colorIndex, role: r.membership.role, joinedAt: r.membership.joined_at, games: own.length },
 		self,
+		// Your own marks can be taken off from here, except in the demo or an archived group.
+		canEdit: self && !access.readonly,
 		viewer: viewerId ? (r.members.find((m) => m.id === viewerId) ?? null) : null,
 		members: r.members,
 		year,
@@ -79,8 +81,27 @@ export const load: PageServerLoad = async (event) => {
 					shelfTotal: ownBase.length,
 					neverPlayed: ownBase.filter((g) => !g.playedHere),
 					lovedUnplayed: hearts.filter((g) => !g.viewerPlayed),
+					favourites: hearts.map((g) => ({ gameId: g.id, name: g.name })),
 					playSoon: assemblePlaySoon(r.playSoonRows)
 				}
 			: null
 	};
+};
+
+export const actions: Actions = {
+	/** Takes one of your own marks off a game, or puts it back (Undo): a favourite, Play soon, a wish. */
+	mark: async (event) => {
+		const db = getDb();
+		const { groupId, userId } = event.params;
+		await requireRole(event, db, groupId, 'member');
+		const form = await event.request.formData();
+		const gameId = Number(form.get('gameId'));
+		if (!Number.isSafeInteger(gameId) || gameId <= 0) error(400, 'Bad game id');
+		const result = await setOwnMark(db, groupId, event.locals.user!.id, userId, { kind: form.get('kind'), gameId, on: form.get('on') === '1' }, Date.now());
+		if (!result.ok) {
+			if (result.status === 403) error(403, result.error);
+			return fail(result.status, { markError: result.error, markGameId: gameId });
+		}
+		return { marked: true };
+	}
 };

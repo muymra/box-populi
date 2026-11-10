@@ -72,6 +72,10 @@ export function byMonth(plays: readonly Play[], nights: readonly string[], userI
 }
 
 /** Table sizes the win rate is split by: 2, 3, 4, and 5 or more. A solo play has nobody to beat. */
+/** The marks your own profile can take off and put back: a favourite, a Play soon mark, a wish. */
+export const OWN_MARKS = ['favourite', 'playSoon', 'want'] as const;
+export type OwnMark = (typeof OWN_MARKS)[number];
+
 export const TABLE_SIZES = [2, 3, 4, 5] as const;
 
 export type SizeRate = { size: (typeof TABLE_SIZES)[number]; plays: number; wins: number };

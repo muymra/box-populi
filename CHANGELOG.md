@@ -12,6 +12,7 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 - The showcase home page (`INSTANCE_MODE=demo`) draws its example shelves the way the shelf looks now and has a part on favourites and Play soon; its link preview is retaken to match. The demo group's members have favourites, so the demo shows the heart, the Favourites filters and the Most loved sort. Reseed the demo after upgrading to get them.
 - The "Shelf" button on a game's page goes back to where you were on the shelf, with your filters, as the browser's Back does. It used to open the shelf from the top with no filters.
 - A game's links section is now "Rules, videos and files", with "Add a link", so score sheets, player aids and 3D-printable inserts have a place too. The title's example follows the kind you pick.
+- Your own profile lists your favourites, and you can take a game off your favourites, Play soon or wants from there. A removed game stays on the list, struck through, with Undo until you leave the page.
 ## 0.4.1 (2026-11-09)
 
 **Upgrading:** nothing to do: no migrations and no new settings. Deploy as usual. If you run a demo group, reseeding it now always refreshes what visitors see.

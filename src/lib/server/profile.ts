@@ -5,7 +5,9 @@
 import { GAME_COLUMNS, toCatalogGame, type GameRow } from './catalog.ts';
 import { applyCorrection, correctionsRead, type Correction } from './corrections.ts';
 import { known, rowOf, rowsOf, type DB, type Read } from './db.ts';
-import { activeMark, PLAY_SOON_MS } from './interest.ts';
+import { activeMark, PLAY_SOON_MS, setFavourite, setPlaySoon } from './interest.ts';
+import { addWish, removeWish } from './wishlist.ts';
+import { OWN_MARKS, type OwnMark } from '#lib/profile.ts';
 import type { CatalogGame, Role } from '#lib/catalog/types.ts';
 
 /** A game a profile shows from the group's shelf, with how it stands with the person and the viewer. */
@@ -145,4 +147,39 @@ export function assembleNightsBeen(rows: Array<{ night_on: string; subject_went:
 
 export function assemblePlaySoon(rows: Array<{ game_id: number; marked_at: number; name: string }>): PlaySoonHere[] {
 	return rows.map((r) => ({ gameId: r.game_id, name: r.name, until: r.marked_at + PLAY_SOON_MS }));
+}
+
+export type OwnMarkResult = { ok: true } | { ok: false; status: 400 | 403 | 404; error: string };
+
+/**
+ * Takes one of your own marks off a game, or puts it back, from your profile: a favourite, a Play soon
+ * mark or a wish. Only on your own page: `profileId` must be `userId`, the person signed in. Putting one
+ * back follows the game page's rules: a favourite only for a game on this shelf, Play soon under its cap
+ * (and marked again, so its 8 weeks restart), a wish only for a game this person may add here.
+ */
+export async function setOwnMark(
+	db: DB,
+	groupId: string,
+	userId: string,
+	profileId: string,
+	mark: { kind: unknown; gameId: number; on: boolean },
+	now: number
+): Promise<OwnMarkResult> {
+	if (profileId !== userId) return { ok: false, status: 403, error: 'Only on your own profile.' };
+	if (!OWN_MARKS.includes(mark.kind as OwnMark)) return { ok: false, status: 400, error: 'Unknown kind of mark.' };
+	const { gameId, on } = mark;
+	switch (mark.kind as OwnMark) {
+		case 'favourite':
+			return (await setFavourite(db, groupId, userId, gameId, on, now)) ? { ok: true } : { ok: false, status: 404, error: 'That game isn’t on the shelf here any more.' };
+		case 'playSoon': {
+			const result = await setPlaySoon(db, groupId, userId, gameId, on, now);
+			return result.ok ? result : { ok: false, status: 400, error: result.error };
+		}
+		case 'want':
+			if (!on) {
+				await removeWish(db, userId, gameId);
+				return { ok: true };
+			}
+			return (await addWish(db, groupId, userId, gameId, now)) ? { ok: true } : { ok: false, status: 404, error: 'That game can’t go back on your wants from here.' };
+	}
 }
