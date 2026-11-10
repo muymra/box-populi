@@ -21,3 +21,22 @@ export function pageStart(since: string, before: string, n: number): string {
 export function beforeParam(raw: string | null): string | undefined {
 	return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : undefined;
 }
+
+/**
+ * The plays page's and the export's period (STATUS item 45): this year (`year`, the default), a past
+ * year (`2025`), or `all`. `since` is its first day and `before` the day after its last, when it has one.
+ */
+export type Period = { key: string; year: number | null; since?: string; before?: string; label: string };
+
+export function parsePeriod(raw: string | null, thisYear: number): Period {
+	if (raw === 'all') return { key: 'all', year: null, label: 'All time' };
+	const y = raw && /^\d{4}$/.test(raw) ? Number(raw) : NaN;
+	if (y >= 1990 && y < thisYear) return { key: String(y), year: y, since: `${y}-01-01`, before: `${y + 1}-01-01`, label: String(y) };
+	return { key: 'year', year: thisYear, since: `${thisYear}-01-01`, label: String(thisYear) };
+}
+
+/** The last day of a period with an end, for reads that take an inclusive date. */
+export function lastDayOf(period: Period): string | undefined {
+	return period.year != null && period.before ? `${period.year}-12-31` : undefined;
+}
+

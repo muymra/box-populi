@@ -4,6 +4,11 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+- The plays page and its export cover last year and earlier years too: "2025" sits beside this year when it had plays, and older years are in an "Earlier" list.
+- The Game night tab links to past nights ("Past nights"), which live on the plays page.
+- The plays export has a `night_id` column that matches the game nights export, so the two join in a spreadsheet. The nights export's `came` column now counts who came the way a night's page does (anyone in a play on it came) and is filled in for every night that has been; people who played without answering get a row too.
+- The colour themes' sources are credited in the README.
+
 ## 0.5.0 (2026-11-10)
 
 **Upgrading:** three migrations, 0017 to 0019. On Cloudflare, note a Time Travel bookmark and export a backup first, then apply them before deploying (SELF_HOSTING.md "Upgrading" has the commands and how to roll back). Docker, Vercel and Netlify apply them on their first request. They correct plays saved on the wrong day, decode codes like `&#039;` in stored BGG names, and store each member's colour; nobody's colour changes. No new settings. If you run a demo group, reseed it to get its favourites.

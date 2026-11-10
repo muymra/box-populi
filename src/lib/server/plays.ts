@@ -352,7 +352,7 @@ export function playOutcomesRead(db: DB, groupId: string, q: { since?: string; w
  * at the planned scale over 10ms of Worker CPU on "All time". `standingsFromCounts` applies the scheme.
  * A play scores when it's competitive and everyone has a place; a place scores unless it's the worst.
  */
-export function standingsRead(db: DB, groupId: string, since?: string): Read<StandingCounts[]> {
+export function standingsRead(db: DB, groupId: string, since?: string, before?: string): Read<StandingCounts[]> {
 	type Row = { user_id: string; plays: number; wins: number; s1: number; s2: number; s3: number; s4: number; s5: number; latest: string };
 	const scores = (k: number) => `SUM(s.coop IS NULL AND s.unplaced = 0 AND s.place < s.worst AND s.place = ${k}) AS s${k}`;
 	return mapRead(
@@ -363,7 +363,7 @@ export function standingsRead(db: DB, groupId: string, since?: string): Read<Sta
 			`WITH per AS (
 			   SELECT p.id, p.coop, p.played_on, p.created_at, MAX(pp.place) AS worst, COUNT(*) - COUNT(pp.place) AS unplaced
 			   FROM plays p CROSS JOIN play_players pp
-			   WHERE p.group_id = ?1 AND p.played_on >= ?2 AND pp.play_id = p.id
+			   WHERE p.group_id = ?1 AND p.played_on >= ?2 AND p.played_on < ?3 AND pp.play_id = p.id
 			   GROUP BY p.id
 			 ),
 			 seats AS (
@@ -377,7 +377,8 @@ export function standingsRead(db: DB, groupId: string, since?: string): Read<Sta
 			 WHERE s.user_id IN (SELECT user_id FROM memberships WHERE group_id = ?1)
 			 GROUP BY s.user_id`,
 			groupId,
-			since ?? FIRST_DAY
+			since ?? FIRST_DAY,
+			before ?? LAST_DAY
 		),
 		(rows) => rows.map((r) => ({ userId: r.user_id, plays: r.plays, wins: r.wins ?? 0, scored: [r.s1 ?? 0, r.s2 ?? 0, r.s3 ?? 0, r.s4 ?? 0, r.s5 ?? 0], latest: r.latest }))
 	);
@@ -385,7 +386,8 @@ export function standingsRead(db: DB, groupId: string, since?: string): Read<Sta
 
 /**
  * About a page of the play log (D70): its first date, whether anything older is left in the period
- * (plays or nights), and the period's play and night counts. Nights count up to `until`.
+ * (plays or nights), and the period's play and night counts, up to `until` (inclusive). `before` is the
+ * page's upper bound; a past year's page also stops at the year's end.
  */
 export function playsPageRead(db: DB, groupId: string, q: { since?: string; before?: string; until: string; n: number }): Read<{ start: string; older: boolean; plays: number; nights: number }> {
 	const start = pageStart('?2', '?3', q.n);
@@ -395,7 +397,7 @@ export function playsPageRead(db: DB, groupId: string, q: { since?: string; befo
 			`SELECT ${start} AS start,
 			   EXISTS (SELECT 1 FROM plays WHERE group_id = ?1 AND played_on >= ?2 AND played_on < ${start})
 			   OR EXISTS (SELECT 1 FROM game_nights WHERE group_id = ?1 AND night_on >= ?2 AND night_on < ${start}) AS older,
-			   (SELECT COUNT(*) FROM plays WHERE group_id = ?1 AND played_on >= ?2) AS plays,
+			   (SELECT COUNT(*) FROM plays WHERE group_id = ?1 AND played_on >= ?2 AND played_on <= ?4) AS plays,
 			   (SELECT COUNT(*) FROM game_nights WHERE group_id = ?1 AND night_on >= ?2 AND night_on <= ?4) AS nights`,
 			groupId,
 			q.since ?? FIRST_DAY,
@@ -403,6 +405,24 @@ export function playsPageRead(db: DB, groupId: string, q: { since?: string; befo
 			q.until
 		),
 		(rows) => ({ start: rows[0].start, older: rows[0].older === 1, plays: rows[0].plays, nights: rows[0].nights })
+	);
+}
+
+/**
+ * Which years the plays page offers (STATUS item 45): the first day anyone played here, and whether
+ * last year had plays, so "2025" shows beside this year only when there's something in it.
+ */
+export function playYearsRead(db: DB, groupId: string, thisYear: number): Read<{ first: string | null; lastYear: boolean }> {
+	return mapRead(
+		rowsOf<{ first: string | null; last_year: number }>(
+			db,
+			`SELECT (SELECT MIN(played_on) FROM plays WHERE group_id = ?1) AS first,
+			   EXISTS (SELECT 1 FROM plays WHERE group_id = ?1 AND played_on >= ?2 AND played_on < ?3) AS last_year`,
+			groupId,
+			`${thisYear - 1}-01-01`,
+			`${thisYear}-01-01`
+		),
+		(rows) => ({ first: rows[0]?.first ?? null, lastYear: rows[0]?.last_year === 1 })
 	);
 }
 

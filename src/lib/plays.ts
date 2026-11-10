@@ -129,7 +129,7 @@ export function ordinal(n: number): string {
 	return `${n}${{ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] ?? 'th'}`;
 }
 
-export const CSV_COLUMNS = ['date', 'game_night', 'game', 'game_data_from', 'bgg_id', 'play_id', 'player', 'player_type', 'place', 'score', 'won', 'coop_result', 'points'];
+export const CSV_COLUMNS = ['date', 'game_night', 'night_id', 'game', 'game_data_from', 'bgg_id', 'play_id', 'player', 'player_type', 'place', 'score', 'won', 'coop_result', 'points'];
 
 /**
  * The export: one row per player per play, newest play first. `nameOf` gives a member's name, or
@@ -150,6 +150,8 @@ export function playsCsv(plays: readonly Play[], scheme: readonly number[], name
 				[
 					csvField(play.playedOn),
 					csvField(play.night?.name ?? null),
+					// Joins the nights file's night_id in a spreadsheet (STATUS item 45).
+					csvField(play.night?.id ?? null),
 					csvField(play.gameName, bgg),
 					// BGG is named on the rows that carry its data, and nowhere else.
 					csvField(SOURCE_LABEL[play.gameSource]),

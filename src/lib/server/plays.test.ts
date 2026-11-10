@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
 import { deleteGroupStatements, deletePersonStatements, one, readAll, run } from './db.ts';
-import { deletePlay, loadPlays, parsePlayForm, playOutcomesRead, playsPageRead, playsRead, podiumPoints, savePlay, setPodiumPoints, standingsRead, type Actor } from './plays.ts';
+import { deletePlay, loadPlays, parsePlayForm, playOutcomesRead, playsPageRead, playsRead, podiumPoints, savePlay, setPodiumPoints, playYearsRead, standingsRead, type Actor } from './plays.ts';
 import { assembleNights, nightReads } from './nights.ts';
 import { loadCatalog } from './catalog.ts';
 import {
@@ -87,11 +87,11 @@ describe('play rules', () => {
 			[3, 2, 1],
 			(id) => (id === 'ada' ? 'Ada' : null)
 		);
-		expect(csv.startsWith('﻿date,game_night,game,game_data_from,bgg_id,play_id,player,player_type,place,score,won,coop_result,points\r\n')).toBe(true);
+		expect(csv.startsWith('﻿date,game_night,night_id,game,game_data_from,bgg_id,play_id,player,player_type,place,score,won,coop_result,points\r\n')).toBe(true);
 		const lines = csv.slice(1).trim().split('\r\n');
-		expect(lines[1]).toBe('2026-11-07,,"Alpha, the ""Game""",typed in,,p1,Ada,member,1,40,yes,,3');
-		expect(lines[2]).toBe(`2026-11-07,,"Alpha, the ""Game""",typed in,,p1,'=cmd(),guest,2,30,no,,0`);
-		expect(lines[3]).toBe("2026-11-07,,'=Typed,typed in,,p2,a former member,former member,,,no,lost,");
+		expect(lines[1]).toBe('2026-11-07,,,"Alpha, the ""Game""",typed in,,p1,Ada,member,1,40,yes,,3');
+		expect(lines[2]).toBe(`2026-11-07,,,"Alpha, the ""Game""",typed in,,p1,'=cmd(),guest,2,30,no,,0`);
+		expect(lines[3]).toBe("2026-11-07,,,'=Typed,typed in,,p2,a former member,former member,,,no,lost,");
 		expect(csvField(-5)).toBe('-5');
 		expect(csvField('-5')).toBe("'-5");
 	});
@@ -106,8 +106,8 @@ describe('play rules', () => {
 			() => 'Ada'
 		);
 		const lines = csv.slice(1).trim().split('\r\n');
-		expect(lines[1].startsWith('2026-11-07,,-ism,BoardGameGeek,13,b,')).toBe(true);
-		expect(lines[2].startsWith('2026-11-07,,Wiki,Wikidata,13,w,')).toBe(true);
+		expect(lines[1].startsWith('2026-11-07,,,-ism,BoardGameGeek,13,b,')).toBe(true);
+		expect(lines[2].startsWith('2026-11-07,,,Wiki,Wikidata,13,w,')).toBe(true);
 		expect(playsCsv([play({ players: [p('ada', 1)] })], [3, 2, 1], () => 'Ada')).not.toContain('BoardGameGeek');
 	});
 });
@@ -358,6 +358,20 @@ describe('the leaderboard counted in SQL (D70)', () => {
 				expect(standingsFromCounts(r.counts, scheme)).toEqual(standings(r.plays, scheme, members));
 			}
 		}
+	});
+
+	it('stops at a past year’s end, and says which years have plays (STATUS item 45)', async () => {
+		const r = await readAll(db, {
+			counts: standingsRead(db, 'g1', '2025-01-01', '2026-01-01'),
+			plays: playOutcomesRead(db, 'g1', { since: '2025-01-01' }),
+			years: playYearsRead(db, 'g1', 2026),
+			later: playYearsRead(db, 'g1', 2028)
+		});
+		const in2025 = r.plays.filter((p) => p.playedOn < '2026-01-01');
+		expect(in2025.map((p) => p.id)).toEqual(['p1']);
+		expect(standingsFromCounts(r.counts, [3, 2, 1])).toEqual(standings(in2025, [3, 2, 1], new Set(['ada', 'bo', 'cy', 'dee'])));
+		expect(r.years).toEqual({ first: '2025-12-20', lastYear: true });
+		expect(r.later).toEqual({ first: '2025-12-20', lastYear: false });
 	});
 });
 

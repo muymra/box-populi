@@ -111,6 +111,8 @@ pnpm test
 
 Game details come from [Wikidata](https://www.wikidata.org), which anyone may reuse, and, on copies connected to it, from [BoardGameGeek](https://boardgamegeek.com) under BGG's non-commercial API terms. Each copy uses its own BGG application. Box Populi isn't affiliated with BoardGameGeek.
 
+The colour themes adapt the palettes of Dracula, Catppuccin, Solarized (Ethan Schoonover), Gruvbox (morhetz), Tokyo Night (Folke Lemaitre, Apache-2.0), Kanagawa (Tommaso Laurenzi), Nord (Sven Greb), Everforest (sainnhe), Rosé Pine, Atom One and GitHub Primer (GitHub Inc.) and Ayu (Konstantin Pschera), each under its own MIT licence unless noted; `src/lib/themes.ts` names each source.
+
 ## License
 
 [MIT](./LICENSE) for the code. BoardGameGeek data shown by any copy stays under BGG's non-commercial terms.

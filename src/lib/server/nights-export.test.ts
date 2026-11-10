@@ -40,21 +40,36 @@ describe('the game nights CSV', () => {
 		const games = await nightGameInfo(db, 'g1');
 		expect([...games.keys()].sort()).toEqual([1, 2, 3]);
 		const names = new Map([['ada', 'Ada'], ['bo', 'Bo']]);
-		const lines = nightsCsv(nights, (id) => names.get(id) ?? null, (id) => games.get(id) ?? null).split('\r\n');
+		const lines = nightsCsv(nights, (id) => names.get(id) ?? null, (id) => games.get(id) ?? null, { played: new Map(), today: '2026-11-10' }).split('\r\n');
 		expect(lines[0]).toBe('﻿date,starts,game_night,host,person,person_type,answer,came,brought,game_data_from,bgg_id,stayed_home,night_id');
 		expect(lines.slice(1, -1)).toEqual([
 			'2026-11-20,,Café,,Bo,member,going,,,,,,n2',
 			'2026-11-20,,Café,,a former member,former member,,,Harbour Lights,BoardGameGeek,4242,no,n2',
 			"2026-11-06,19:30,At Ada's,Ada,Ada,member,going,yes,Harbour Lights,BoardGameGeek,4242,no,n1",
 			"2026-11-06,19:30,At Ada's,Ada,Ada,member,going,yes,Ember Tavern (2nd ed.),typed in,,yes,n1",
-			"2026-11-06,19:30,At Ada's,Ada,Bo,member,not going,,,,,,n1",
+			"2026-11-06,19:30,At Ada's,Ada,Bo,member,not going,no,,,,,n1",
 			"2026-11-06,19:30,At Ada's,Ada,Sam,guest,going,no,Elsewhere,typed in,,no,n1"
 		]);
 	});
 
+	it('counts who came as the night’s page does: in a play, else marked, else going; nothing for a night to come (STATUS item 45)', async () => {
+		const nights = await loadNights(db, 'g1');
+		const names = new Map([['ada', 'Ada'], ['bo', 'Bo']]);
+		// Bo said he couldn't make it but played; Lou, on no list, played too; Sam was marked as not having come.
+		const played = new Map([['n1', { members: new Set(['bo']), guests: new Set(['lou']) }]]);
+		const rows = nightsCsv(nights, (id) => names.get(id) ?? null, () => null, { played, today: '2026-11-10' })
+			.split('\r\n')
+			.filter((l) => l.includes(',n1'))
+			.map((l) => l.split(',').slice(4, 8).join(','));
+		expect(rows).toEqual(['Ada,member,going,yes', 'Ada,member,going,yes', 'Bo,member,not going,yes', 'Sam,guest,going,no', 'lou,guest,,yes']);
+		// On the night's own date nothing has a came yet.
+		const early = nightsCsv(nights, (id) => names.get(id) ?? null, () => null, { played, today: '2026-11-06' });
+		expect(early.split('\r\n').filter((l) => l.includes(',n1')).every((l) => l.split(',')[7] === '')).toBe(true);
+	});
+
 	it('defuses formulas in typed names but leaves BGG titles alone', () => {
 		const night = { id: 'n', name: '=Party', nightOn: '2026-01-01', startsAt: null, hostId: null, createdBy: null, people: [], games: [{ gameId: 1, broughtBy: null, guestName: '+Guest', addedBy: null, stayedHome: false }] };
-		const csv = nightsCsv([night], () => null, () => ({ name: '-Bgg Title', source: 'bgg', bggId: 7 }));
+		const csv = nightsCsv([night], () => null, () => ({ name: '-Bgg Title', source: 'bgg', bggId: 7 }), { played: new Map(), today: '2026-11-10' });
 		expect(csv).toContain("'=Party");
 		expect(csv).toContain("'+Guest");
 		expect(csv).toContain(',-Bgg Title,BoardGameGeek,7,');

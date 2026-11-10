@@ -591,6 +591,8 @@
 				No nights planned.{data.mayPlanNights ? ' Plan one under Plan a night to say who’s coming and what they’ll bring;' : ''} On a planned night, Play tonight picks from what people bring.
 			</p>
 		{/if}
+		<!-- How earlier nights went lives on the plays page's timeline (STATUS item 45). -->
+		{#if data.hasPastNight}<a class="past-nights" href="/g/{data.group.id}/plays#plays-h">Past nights</a>{/if}
 	</section>
 
 	<div class="tabbed" class:has-tabs={data.mayPlanNights}>
@@ -932,6 +934,11 @@
 </div>
 
 <style>
+	.past-nights {
+		display: inline-block;
+		margin-top: var(--s-3);
+		font-weight: 650;
+	}
 	/* As wide as the Play tonight panel under it. */
 	.nights {
 		display: grid;

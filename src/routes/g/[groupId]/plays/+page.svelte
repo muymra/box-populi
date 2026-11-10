@@ -42,7 +42,19 @@
 			<h1 id="board-h">Leaderboard</h1>
 			<div class="switch" role="group" aria-label="Period">
 				<a href="?period=year" aria-current={data.period === 'year' ? 'true' : undefined}>{data.year}</a>
+				{#if data.lastYear}<a href="?period={data.year - 1}" aria-current={data.period === String(data.year - 1) ? 'true' : undefined}>{data.year - 1}</a>{/if}
 				<a href="?period=all" aria-current={data.period === 'all' ? 'true' : undefined}>All time</a>
+				<!-- Years before that from a select at the end, from the first year anyone played here. -->
+				{#if data.earlierYears.length}
+					<form method="GET" class="earlier" class:current={data.earlierYears.some((y) => String(y) === data.period)}>
+						<label class="visually-hidden" for="earlier-year">An earlier year</label>
+						<select id="earlier-year" name="period" value={data.earlierYears.some((y) => String(y) === data.period) ? data.period : ''} onchange={(e) => e.currentTarget.form?.requestSubmit()}>
+							<option value="" disabled>Earlier</option>
+							{#each data.earlierYears as y (y)}<option value={String(y)}>{y}</option>{/each}
+						</select>
+						<noscript><button class="link-button">Go</button></noscript>
+					</form>
+				{/if}
 			</div>
 		</div>
 		{#if data.standings.length}
@@ -79,7 +91,7 @@
 				</table>
 			{/if}
 		{:else}
-			<p class="muted">Nobody has scored {data.period === 'year' ? `in ${data.year}` : 'yet'}. Log a play from a game’s page, or from a game Play tonight pulls.</p>
+			<p class="muted">Nobody has scored {data.period === 'all' ? 'yet' : `in ${data.periodLabel}`}. Log a play from a game’s page, or from a game Play tonight pulls.</p>
 		{/if}
 	</section>
 
@@ -120,7 +132,7 @@
 				</p>
 			{/if}
 		{:else}
-			<p class="muted">No plays logged {data.period === 'year' ? `in ${data.year}` : 'yet'}.</p>
+			<p class="muted">No plays logged {data.period === 'all' ? 'yet' : `in ${data.periodLabel}`}.</p>
 		{/if}
 	</section>
 
@@ -178,7 +190,9 @@
 						<span>Period</span>
 						<select class="field" name="period" value={data.period}>
 							<option value="year">{data.year}</option>
+							{#if data.lastYear}<option value={String(data.year - 1)}>{data.year - 1}</option>{/if}
 							<option value="all">All time</option>
+							{#each data.earlierYears as y (y)}<option value={String(y)}>{y}</option>{/each}
 						</select>
 					</label>
 					<button class="btn"><Download size={18} aria-hidden="true" /> Download CSV</button>
@@ -221,6 +235,23 @@
 		color: var(--ink-2);
 	}
 	.switch a[aria-current] {
+		background: var(--ink);
+		color: var(--laminate);
+	}
+	.earlier {
+		display: flex;
+		border-left: 1.5px solid var(--rule);
+	}
+	.earlier select {
+		padding: 8px 10px;
+		border: 0;
+		background: none;
+		color: var(--ink-2);
+		font: inherit;
+		font-weight: 650;
+		cursor: pointer;
+	}
+	.earlier.current select {
 		background: var(--ink);
 		color: var(--laminate);
 	}

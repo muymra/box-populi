@@ -6,6 +6,10 @@
 //
 // The accent (`mark`) is always the theme's yellow: yellow is the one hue the eight player
 // colours don't use, so "chosen" never reads as a person.
+//
+// The palettes' copyrights stay with their authors, under each project's licence: MIT for all but
+// Tokyo Night (Apache-2.0); README.md "Credits" names them. Colours were adjusted here for
+// contrast, as said above. Licences checked 2026-11-10.
 
 export type Mode = 'light' | 'dark';
 
@@ -314,7 +318,7 @@ export const THEMES: Theme[] = [
 	{
 		id: 'rose-pine',
 		label: 'Rosé Pine',
-		source: 'rose-pine/palette palette.json (Dawn, Main)',
+		source: 'rose-pine/rose-pine-palette palette.json (Dawn, Main)',
 		light: {
 			laminate: '#faf4ed',
 			cube: '#fffaf3',

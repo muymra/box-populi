@@ -5,7 +5,7 @@ import { membersRead } from '#lib/server/catalog.ts';
 import { assembleNights, mayPlanNights, nightOnlyGamesRead, nightReads } from '#lib/server/nights.ts';
 import { getDb } from '#lib/server/platform.ts';
 import { myGroupsRead } from '#lib/server/identity.ts';
-import { known, readAll } from '#lib/server/db.ts';
+import { known, readAll, rowOf } from '#lib/server/db.ts';
 import { myPlaySoonRead } from '#lib/server/interest.ts';
 import type { LayoutServerLoad } from './$types';
 
@@ -36,7 +36,9 @@ export const load: LayoutServerLoad = async (event) => {
 		myPlaySoon: access.role && user ? myPlaySoonRead(db, user.id, Date.now()) : known([]),
 		...nightReads(db, access.group.id, { from: day(-1) }),
 		// Games on nights around today that no member owns, so Play tonight can draw from a guest's game.
-		nightGames: nightOnlyGamesRead(db, access.group.id, { from: day(-1), to: day(1) })
+		nightGames: nightOnlyGamesRead(db, access.group.id, { from: day(-1), to: day(1) }),
+		// Whether the group has a night behind it, for the Game night tab's "Past nights" link (STATUS item 45).
+		pastNight: rowOf<{ x: number }>(db, 'SELECT 1 AS x FROM game_nights WHERE group_id = ?1 AND night_on < ?2 LIMIT 1', access.group.id, day(0))
 	});
 	const tableMembers = reads.members.map((m) => ({ id: m.id, name: m.name, colorIndex: m.colorIndex }));
 	const nights = assembleNights(reads.nights, reads.people, reads.games);
@@ -54,6 +56,7 @@ export const load: LayoutServerLoad = async (event) => {
 		tableMembers,
 		nights,
 		nightGames: reads.nightGames,
+		hasPastNight: reads.pastNight != null,
 		mayPlanNights: mayPlan,
 		myId: event.locals.user?.id ?? null,
 		// A member without a PIN is nudged on the shelf to set one (D47, D48).
