@@ -112,7 +112,7 @@ export async function listGroups(db: DB): Promise<AdminGroup[]> {
 		db,
 		`SELECT g.id, g.name, g.created_at, g.is_demo, g.suspended_at, g.suspended_reason, g.archived_at,
 		        (SELECT COUNT(*) FROM memberships m WHERE m.group_id = g.id) AS members,
-		        (SELECT COUNT(*) FROM copies c JOIN memberships m ON m.user_id = c.user_id WHERE m.group_id = g.id) AS copies,
+		        (SELECT COUNT(*) FROM group_copies c WHERE c.group_id = g.id) AS copies, -- what the group holds (D66)
 		        (SELECT COUNT(*) FROM plays p WHERE p.group_id = g.id) AS plays,
 		        (SELECT COUNT(*) FROM game_nights n WHERE n.group_id = g.id) AS nights,
 		        (SELECT MAX(m.last_seen_at) FROM memberships m WHERE m.group_id = g.id) AS last_active

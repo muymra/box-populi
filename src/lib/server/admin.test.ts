@@ -63,10 +63,12 @@ describe('what the admin sees', () => {
 	it('lists groups with counts and activity, and nothing about members', async () => {
 		await run(db, `INSERT INTO plays (id, group_id, game_id, played_on, logged_by, created_at) VALUES ('p1', 'g1', 1, '2026-11-01', 'ada', 0)`);
 		await run(db, `INSERT INTO game_nights (id, group_id, name, night_on, created_at) VALUES ('n1', 'g1', 'Café', '2026-11-20', 0), ('n2', 'g1', 'Café', '2026-11-27', 0)`);
+		// Bo hid his B from the Quiet group: its count is what the group holds, as on its shelf (D66).
+		await run(db, `INSERT INTO hidden_copies (group_id, user_id, game_id, hidden_at) VALUES ('g2', 'bo', 2, 0)`);
 		const groups = await listGroups(db);
 		expect(groups.map((g) => [g.id, g.members, g.copies, g.plays, g.nights, g.lastActive])).toEqual([
 			['g1', 2, 3, 1, 2, 900],
-			['g2', 1, 2, 0, 0, 100],
+			['g2', 1, 1, 0, 0, 100],
 			['demo', 0, 0, 0, 0, null]
 		]);
 		// Counts only: no names, codes, games or contents (PRD "Instance administration").

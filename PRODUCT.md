@@ -35,25 +35,26 @@ Supporting claims, in order: game nights and the "who's here" picker, which plan
 - Join codes and invite links are shared in group chats.
 - Collections usually come in through a BoardGameGeek collection import; anything missing is added by hand.
 - Copies get lent within the group or outside it. A loan to a member keeps the game available to the group.
-- Rules and video links are added by members per group.
+- Links to rules, videos and files are added by members per group.
 - Each person is a display name on a device. A group's link and their six-digit PIN get them in on any device (tap your name, type your PIN); a sign-in link is a backup.
 
 ## Capabilities and Constraints
 
-- **Built (as of 2026-11-07):**
+- **Built (as of 2026-11-10):**
   - no-account identity;
-  - create and join groups, with roles and group settings;
+  - create and join groups, with roles and group settings, archiving, and hiding some of your games from one group;
   - catalog with filters;
-  - game pages with rules and video links;
+  - game pages with links to rules, videos and files;
+  - favourites and Play soon, and member profiles;
   - game nights: who's going and what they'll bring, and on the night the picker, with guests, fillers and split tables, choosing from what's there;
-  - adding games through BGG search, collection import, Wikidata search, a pasted list or by hand;
+  - adding games through BGG search, collection import, Wikidata search, a pasted list or by hand, and finding typed-in games on BGG;
   - wishlist and the Wanted view, and lending;
-  - the play log with a leaderboard and CSV export, grouped by game night;
+  - the play log with a leaderboard and CSV export, grouped by game night, with who came to each;
   - who goes first and dice;
   - themes, the instance admin page, and the public demo group.
 - **Planned:** see STATUS.md "Next up" and the PRD's stretch list.
 - **Language:** English only (confirmed). Other languages may come later; not planned.
-- **No accounts** (DECISIONS D25): no email, password or third-party sign-in. The app stores a display name, games, memberships, and hashed session and link tokens.
+- **No accounts** (DECISIONS D25): no email, password or third-party sign-in. The app stores a display name, games, memberships, a hashed PIN, and hashed session and link tokens.
 - **BoardGameGeek terms** (DECISIONS D23):
   - non-commercial only: no ads, payments, donations or sponsorship;
   - BGG data shown unmodified;
@@ -74,7 +75,7 @@ Supporting claims, in order: game nights and the "who's here" picker, which plan
 
 - No users, testimonials, usage numbers or press yet. Don't invent any.
 - The demo group's games and people are invented (`scripts/seed-demo.ts`) and say so on screen.
-- The BGG API application was submitted 2026-11-06 and is awaiting review.
+- The BGG API application was approved on 2026-11-09; Carlo's group instance runs on live BGG data.
 - No brand assets beyond the name. `src/lib/assets/favicon.svg` is a placeholder made during the build, not a confirmed mark.
 
 ## Product Principles

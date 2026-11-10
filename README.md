@@ -43,7 +43,7 @@ Box Populi isn't an app you download or a website you sign up to. One person run
 
 **If someone already runs one,** ask them for your group's code or invite link, open it, and type your name and a PIN. That's all.
 
-**If you'd like to run one,** you don't need to be a programmer. You'll create a free Cloudflare account and copy some commands into a terminal; the [setup guide](./SELF_HOSTING.md) writes out every step. Set aside 30 minutes to an hour. If you'd rather keep it on your own machine, it also runs in Docker on a home server, and it works on Vercel or Netlify too.
+**If you'd like to run one,** you don't need to be a programmer. You'll create a free Cloudflare account and copy some commands into a terminal; the [setup guide](./SELF_HOSTING.md) writes out every step. Set aside 30 minutes to an hour. If you'd rather keep it on your own machine, it also builds for Docker on a home server and for Vercel or Netlify, which are less tested than Cloudflare Pages.
 
 Once it's running, you create a group and share its code. Your friends never see any of the setup.
 
@@ -79,11 +79,11 @@ Forgot your PIN and have no device that's still signed in? Ask your group's owne
 
 ### Can we change how it looks?
 
-Everyone can pick from twelve colour themes at the bottom of any page, a group can choose its own, and the person running the copy can add their own colours and logo.
+Everyone can pick the default look or one of twelve other themes at the bottom of any page, a group can choose its own, and the person running the copy can add their own colours and logo.
 
 ## For developers
 
-Box Populi is built with SvelteKit 3 and SQLite: Cloudflare D1 on Cloudflare, a plain file in Docker, or Turso on Vercel and Netlify. It runs one real group and the public demo; live BoardGameGeek data is waiting on BGG approving the application. Progress is in [STATUS.md](./STATUS.md).
+Box Populi is built with SvelteKit 3 and SQLite: Cloudflare D1 on Cloudflare, a plain file in Docker, or Turso on Vercel and Netlify. It runs Carlo's group, on live BoardGameGeek data since BGG approved its application on 2026-11-09, and the public demo. Progress is in [STATUS.md](./STATUS.md).
 
 To run it on your computer you need Node 22.18 or newer and pnpm:
 

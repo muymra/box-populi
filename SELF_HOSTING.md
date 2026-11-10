@@ -9,13 +9,13 @@ The steps follow Cloudflare Pages, the main path and the one tested end to end. 
 | Host | Database | Cost and effort | Notes |
 |---|---|---|---|
 | Cloudflare Pages (steps 1 to 7) | Cloudflare D1 | Free plan; about 30 minutes | The reference setup. |
-| [Cloudflare Workers](#cloudflare-workers) | Cloudflare D1 | Free plan; same steps, another config file | Cloudflare's newer product; Pages is being folded into it. |
-| [Docker](#docker) | A SQLite file on your machine | Any server with Docker and a domain | You run the machine and the backups. HTTPS comes from Caddy in `compose.yaml`. |
+| [Cloudflare Workers](#cloudflare-workers) | Cloudflare D1 | Free plan; same steps, another config file | Cloudflare's newer product; Pages is being folded into it. Run under `wrangler dev`; not yet deployed by the maintainer. |
+| [Docker](#docker) | A SQLite file on your machine | Any server with Docker and a domain | You run the machine and the backups. HTTPS comes from Caddy in `compose.yaml`. The Node build inside it has run; the image itself hasn't been built by the maintainer yet. |
 | [Vercel or Netlify](#vercel-and-netlify) | Turso (hosted SQLite) | Free tiers of both; two accounts | Migrations run themselves. Checked only as far as building; see STATUS.md. |
 
 ## What you take on
 
-- **The data.** Your instance stores display names, collections and group memberships. No emails or other contact details. You're responsible for it, including deletion requests. The built-in privacy page names you and your contact address.
+- **The data.** Your instance stores display names, PIN hashes, collections, wishlists, favourites, Play soon marks, loans, links, plays, game nights and group memberships. No emails or other contact details; `/privacy` lists it all. You're responsible for it, including deletion requests. The built-in privacy page names you and your contact address.
 - **BoardGameGeek's terms.** If you connect BGG, you need your own BGG application. Its data is licensed for non-commercial use only. Read the [XML API Terms of Use](https://boardgamegeek.com/wiki/page/XML_API_Terms_of_Use) and [Commercial Use](https://boardgamegeek.com/wiki/page/BGG_XML_API_Commercial_Use) pages. BGG counts all of the following as commercial, and they need its commercial license or `BGG_MODE = "off"`:
   - taking payments or donations;
   - showing ads;
@@ -24,7 +24,7 @@ The steps follow Cloudflare Pages, the main path and the one tested end to end. 
 
   Don't remove the BGG credit in the footer, and don't build anything that gives other programs access to BGG data through your instance. BGG announces API policy changes in its Geek Tools News forum.
 - **Abuse.** You get an admin page at `/admin/login` to suspend groups, and to delete a group once it's suspended (suspending can be undone; deleting can't). There are no accounts to ban (people are just display names), and the page deliberately doesn't show who is in a group or what they own.
-- **Locked-out owners.** A group's owner who forgot their PIN and has no signed-in device will ask you, at your `INSTANCE_CONTACT`. On the admin page, a group's Manage has "Sign-in code for the owner…": it makes a one-time code that works for 10 minutes, for that group's owner only. You won't see their name, so make one only for someone you know owns that group. Each one goes in the admin log with your reason.
+- **Locked-out owners.** A group's owner who forgot their PIN and has no signed-in device will ask you, at your `INSTANCE_CONTACT`. On the admin page, a group's Manage has an "Owner's way in" row with "Make a sign-in code": it makes a one-time code that works for 10 minutes, for that group's owner only. You won't see their name, so make one only for someone you know owns that group. Each one goes in the admin log with your reason.
 
 ## What you need
 
@@ -65,7 +65,7 @@ Examples to adapt. Put in your own group and numbers, and leave out anything tha
 
 > **Other information:** Box Populi is open source (MIT) and self-hosted. Each person who runs a copy registers their own application, as your guide asks, and no instance fetches data for another. There's no public API, no ads, payments or donations, and no BGG data goes to AI services. Requests carry the User-Agent `BoxPopuli/<version> (<instance address>; <contact>; +https://github.com/muymra/box-populi)`. Until you approve this, the instance uses Wikidata and hand entry.
 
-Approval is done by hand. BGG warns it can take a week or more; Carlo's took three days (applied 2026-11-06, token 2026-11-09). When it's approved, open the application on `boardgamegeek.com/applications`, create a token there and store it as `BGG_TOKEN` (step 5). The instance turns on BGG search, import and game details as soon as the token is there; until then it runs with manual entry. Games members added before that keep working: those from Wikidata fill in BGG's details by themselves, and members find their typed-in ones from the Add games page ("Find them on BoardGameGeek").
+Approval is done by hand. BGG warns it can take a week or more; Carlo's took three days (applied 2026-11-06, token 2026-11-09). When it's approved, open the application on `boardgamegeek.com/applications`, create a token there and store it as `BGG_TOKEN` (step 5). Store it and deploy again: BGG search, import and game details turn on with that deploy. Until then members find games on Wikidata, or type them in if `GAME_SOURCE` is `manual`. Games members added before that keep working: those from Wikidata fill in BGG's details by themselves, and members find their typed-in ones from the Add games page ("Find them on BoardGameGeek").
 
 ## 2. Get the code
 
@@ -94,7 +94,7 @@ In `wrangler.jsonc` under `"vars"`:
 | Variable | Set it to |
 |---|---|
 | `INSTANCE_NAME` | What your instance is called, e.g. "Utrecht Board Gamers." |
-| `INSTANCE_CONTACT` | `mailto:you@example.com` or a contact page URL. Required. |
+| `INSTANCE_CONTACT` | `mailto:` with your address, or an `https://` contact page. Required; the example address is refused. |
 | `GROUP_CREATION` | `admins` (the default): only you create groups, from the admin page. `anyone`: every visitor can create one. |
 | `INSTANCE_MODE` | `standard`. Set `demo` for an instance that only shows the demo group: its home page introduces the demo and links to GitHub. |
 | `SEARCH_ENGINES` | `allow`. Set `block` if only your groups should find the instance; search engines are asked not to index it. |
@@ -162,7 +162,7 @@ Your site is at `https://<name>.<your-subdomain>.workers.dev`, or a custom domai
 
 ## Docker
 
-For a server you run, with Docker and a domain name pointing at it. The app stores everything in one SQLite file on a Docker volume and applies database migrations itself when it starts.
+For a server you run, with Docker and a domain name pointing at it. The app stores everything in one SQLite file on a Docker volume and applies database migrations itself when it first opens the database, on the first request.
 
 ```sh
 git clone https://github.com/muymra/box-populi.git
@@ -220,8 +220,8 @@ pnpm exec wrangler pages deploy
 Apply migrations before deploying: new code can read columns an old database doesn't have. If the new version misbehaves, put the database back with the bookmark (`pnpm exec wrangler d1 time-travel restore DB --bookmark=<bookmark>`), then check out the version you had (`git checkout v0.3.4`, say) and deploy it.
 
 - **Cloudflare Workers:** the same, with `pnpm exec wrangler deploy` as the last step.
-- **Docker:** `git pull && docker compose up -d --build`. The app applies new migrations when it starts.
-- **Vercel or Netlify:** push the new code to the repository the host builds from (or run its deploy command). The app applies new migrations to Turso when it starts.
+- **Docker:** `git pull && docker compose up -d --build`. The app applies new migrations on its first request.
+- **Vercel or Netlify:** push the new code to the repository the host builds from (or run its deploy command). The app applies new migrations to Turso on its first request after a cold start.
 
 If a new version adds a required setting, the site names it on every page until you set it; the new keys are in `wrangler.example.jsonc`.
 
