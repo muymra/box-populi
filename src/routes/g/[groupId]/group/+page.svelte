@@ -104,7 +104,7 @@
 					<span class="who">
 						<strong><a class="profile-link" href="/g/{data.group.id}/members/{m.id}">{m.name}</a>{#if m.isMe}<span class="muted">{' (you)'}</span>{/if}{#if m.noPin}{' '}<span class="tag">No PIN yet</span>{/if}</strong>
 						<span class="muted">
-							{ROLE[m.role]}{' · '}<span class="num">{m.games}</span> {m.games === 1 ? 'game' : 'games'}{' · '}{c.hatched ? 'striped ' : ''}{c.name.toLowerCase()}{' · '}<span class="nowrap">{lastActive(m.lastSeenAt, data.now)}</span>
+							{ROLE[m.role]}{' · '}<span class="num">{m.games}</span> {m.games === 1 ? 'game' : 'games'}{' · '}{c.pattern === 'solid' ? '' : `${c.pattern} `}{c.name.toLowerCase()}{' · '}<span class="nowrap">{lastActive(m.lastSeenAt, data.now)}</span>
 						</span>
 					</span>
 				{/snippet}

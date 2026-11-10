@@ -2,7 +2,6 @@
 // new person whose statements are passed in) so these run as one batch.
 import { generateCode, generateLinkKey } from './codes.ts';
 import { bumpCatalogForGroup } from './catalog.ts';
-import { colorIndexesByJoinOrder } from '#lib/catalog/colors.ts';
 import { all, one, readAll, rowsOf, stmt, type DB } from './db.ts';
 
 export function cleanGroupName(raw: unknown): string | null {
@@ -147,9 +146,9 @@ export function groupGlancesReads(db: DB, userId: string, from: string) {
 			 WHERE group_id IN (${GLANCE_GROUPS}) GROUP BY group_id`,
 			userId
 		),
-		glanceMembers: rowsOf<{ group_id: string; user_id: string; joined_at: number }>(
+		glanceMembers: rowsOf<{ group_id: string; color_index: number | null }>(
 			db,
-			`SELECT group_id, user_id, joined_at FROM memberships WHERE group_id IN (${GLANCE_GROUPS})`,
+			`SELECT group_id, color_index FROM memberships WHERE group_id IN (${GLANCE_GROUPS})`,
 			userId
 		),
 		glanceNights: rowsOf<{ group_id: string; name: string; night_on: string; starts_at: string | null }>(
@@ -164,7 +163,7 @@ export function groupGlancesReads(db: DB, userId: string, from: string) {
 
 export function assembleGlances(r: {
 	glanceGames: Array<{ group_id: string; n: number }>;
-	glanceMembers: Array<{ group_id: string; user_id: string; joined_at: number }>;
+	glanceMembers: Array<{ group_id: string; color_index: number | null }>;
 	glanceNights: Array<{ group_id: string; name: string; night_on: string; starts_at: string | null }>;
 }): Map<string, GroupGlance> {
 	const glances = new Map<string, GroupGlance>();
@@ -174,9 +173,8 @@ export function assembleGlances(r: {
 		return g;
 	};
 	for (const row of r.glanceGames) glance(row.group_id).games = row.n;
-	const joined = new Map<string, Array<{ id: string; joinedAt: number }>>();
-	for (const m of r.glanceMembers) joined.set(m.group_id, [...(joined.get(m.group_id) ?? []), { id: m.user_id, joinedAt: m.joined_at }]);
-	for (const [id, members] of joined) glance(id).colors = [...colorIndexesByJoinOrder(members).values()].sort((a, b) => a - b);
+	for (const m of r.glanceMembers) glance(m.group_id).colors.push(m.color_index ?? 0);
+	for (const g of glances.values()) g.colors.sort((a, b) => a - b);
 	for (const n of r.glanceNights) {
 		const g = glance(n.group_id);
 		if (g.nights.length < 3) g.nights.push({ name: n.name, nightOn: n.night_on, startsAt: n.starts_at });

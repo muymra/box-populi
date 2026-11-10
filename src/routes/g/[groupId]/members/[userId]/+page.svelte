@@ -8,7 +8,7 @@
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import ProfileShelf from './ProfileShelf.svelte';
 	import OwnMarks from './OwnMarks.svelte';
-	import { playerColor } from '#lib/catalog/colors.ts';
+	import { colorBeside, playerColor } from '#lib/catalog/colors.ts';
 	import { ordinal } from '#lib/plays.ts';
 	import { TABLE_SIZES } from '#lib/profile.ts';
 	import type { PageProps } from './$types';
@@ -17,6 +17,9 @@
 	const base = $derived(`/g/${data.group.id}`);
 	const s = $derived(data.subject);
 	const fill = (colorIndex: number) => playerColor(colorIndex).fill;
+	// In "You and Bram" only the two of you are drawn, so when Bram looks like you, his side takes his
+	// colour in the next pattern (D69); everywhere else he keeps his own.
+	const theirs = $derived(data.viewer ? colorBeside(s.colorIndex, data.viewer.colorIndex).fill : fill(s.colorIndex));
 	const byId = $derived(new Map(data.members.map((m) => [m.id, m])));
 	const ROLE = { owner: 'Owner', admin: 'Co-admin', member: 'Member' } as const;
 	const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -75,7 +78,7 @@
 		<section class="versus panel" aria-labelledby="versus-h">
 			<div class="count">
 				<h3 id="versus-h" class="pair">
-					<span class="squares" aria-hidden="true"><span style:background={fill(v.colorIndex)}></span><span style:background={fill(s.colorIndex)}></span></span>
+					<span class="squares" aria-hidden="true"><span style:background={fill(v.colorIndex)}></span><span style:background={theirs}></span></span>
 					You and {s.name}
 				</h3>
 				<p class="big num">{t.together}</p>
@@ -87,12 +90,12 @@
 				{#if decided}
 					<p class="names" aria-hidden="true">
 						<span><span class="sq" style:background={fill(v.colorIndex)}></span>You won {t.youWon}</span>
-						<span>{s.name} won {t.theyWon}<span class="sq" style:background={fill(s.colorIndex)}></span></span>
+						<span>{s.name} won {t.theyWon}<span class="sq" style:background={theirs}></span></span>
 					</p>
 					<div class="bar" role="img" aria-label={barLabel}>
 						{#if t.youWon}<span style:flex-grow={t.youWon} style:background={fill(v.colorIndex)}>{t.youWon}</span>{/if}
 						{#if t.othersWon}<span class="others" style:flex-grow={t.othersWon}>{t.othersWon}</span>{/if}
-						{#if t.theyWon}<span style:flex-grow={t.theyWon} style:background={fill(s.colorIndex)}>{t.theyWon}</span>{/if}
+						{#if t.theyWon}<span style:flex-grow={t.theyWon} style:background={theirs}>{t.theyWon}</span>{/if}
 					</div>
 					<p class="note">
 						{[t.othersWon ? `${t.othersWon} went to someone else` : '', t.coop ? `${plural(t.coop, 'co-op play', 'co-op plays')}, ${t.coopWon} won` : '']

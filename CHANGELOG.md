@@ -13,6 +13,7 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 - The "Shelf" button on a game's page goes back to where you were on the shelf, with your filters, as the browser's Back does. It used to open the shelf from the top with no filters.
 - A game's links section is now "Rules, videos and files", with "Add a link", so score sheets, player aids and 3D-printable inserts have a place too. The title's example follows the kind you pick.
 - Your own profile lists your favourites, and you can take a game off your favourites, Play soon or wants from there. A removed game stays on the list, struck through, with Undo until you leave the page.
+- Members keep their colour when someone leaves the group; a new member takes a free colour. There's a third round of colours, dotted, so up to 24 members look different (members 17 and up in a big group get new looks). On a profile, when you and the other person share a colour, their side of "You and Bram" is striped so the two of you differ. Migration `0019_member_colors.sql`; nobody's colour changes on the upgrade.
 ## 0.4.1 (2026-11-09)
 
 **Upgrading:** nothing to do: no migrations and no new settings. Deploy as usual. If you run a demo group, reseeding it now always refreshes what visitors see.

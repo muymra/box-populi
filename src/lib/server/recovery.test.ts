@@ -100,7 +100,8 @@ describe('merging an old entry into a new one', () => {
 		expect(await one(db, "SELECT user_id FROM night_people WHERE night_id = 'n1'")).toEqual({ user_id: 'bo2' });
 		expect(await one(db, "SELECT brought_by, added_by FROM night_games WHERE night_id = 'n1'")).toEqual({ brought_by: 'bo2', added_by: 'bo2' });
 		expect(await one(db, 'SELECT created_by FROM games WHERE id = 1')).toEqual({ created_by: 'bo2' });
-		expect(await one(db, "SELECT joined_at, last_seen_at, role FROM memberships WHERE group_id = 'g1' AND user_id = 'bo2'")).toEqual({ joined_at: 1, last_seen_at: 90, role: 'member' });
+		// Bo joined second, so the merged entry keeps his colour (index 1), not bo2's (4).
+		expect(await one(db, "SELECT joined_at, last_seen_at, role, color_index FROM memberships WHERE group_id = 'g1' AND user_id = 'bo2'")).toEqual({ joined_at: 1, last_seen_at: 90, role: 'member', color_index: 1 });
 		expect(await one(db, "SELECT id FROM users WHERE id = 'bo'")).toBeNull();
 		expect(await all(db, "SELECT * FROM memberships WHERE user_id = 'bo'")).toEqual([]);
 		expect((await one<{ catalog_version: number }>(db, "SELECT catalog_version FROM groups WHERE id = 'g1'"))!.catalog_version).toBeGreaterThan(version);

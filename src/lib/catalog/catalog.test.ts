@@ -41,7 +41,7 @@ import {
 	tableSizes
 } from './pick.ts';
 import { copy, game } from './testing.ts';
-import { playerColor } from './colors.ts';
+import { colorBeside, playerColor } from './colors.ts';
 
 const members = new Set(['u1', 'u2', 'u3']);
 const f = (over: Partial<Filters>): Filters => ({ ...DEFAULT_FILTERS, ...over });
@@ -130,14 +130,23 @@ describe('URL filters', () => {
 });
 
 describe('player colours', () => {
-	it('go round solid, then hatched, so sixteen members all differ', () => {
-		const fills = Array.from({ length: 16 }, (_, i) => playerColor(i).fill);
-		expect(new Set(fills).size).toBe(16);
-		expect(playerColor(0).hatched).toBe(false);
-		expect(playerColor(8)).toMatchObject({ name: 'red', hatched: true });
+	it('go round solid, striped, then dotted, so twenty-four members all differ', () => {
+		const fills = Array.from({ length: 24 }, (_, i) => playerColor(i).fill);
+		expect(new Set(fills).size).toBe(24);
+		expect(playerColor(0)).toMatchObject({ name: 'red', pattern: 'solid', fill: playerColor(0).bg });
+		expect(playerColor(8)).toMatchObject({ name: 'red', pattern: 'striped' });
 		expect(playerColor(8).fill).toContain('repeating-linear-gradient');
-		expect(playerColor(16)).toMatchObject({ name: 'red', hatched: false, fill: playerColor(0).bg });
-		expect(playerColor(-1)).toMatchObject({ name: 'black' });
+		expect(playerColor(16)).toMatchObject({ name: 'red', pattern: 'dotted' });
+		expect(playerColor(16).fill).toContain('radial-gradient');
+		expect(playerColor(24)).toMatchObject({ name: 'red', pattern: 'solid', fill: playerColor(0).bg });
+		expect(playerColor(-1)).toMatchObject({ name: 'black', pattern: 'dotted' });
+	});
+
+	it('draw someone beside a look-alike in the next pattern, and anyone else as they are', () => {
+		expect(colorBeside(24, 0)).toMatchObject({ name: 'red', pattern: 'striped' });
+		expect(colorBeside(16, 40)).toMatchObject({ name: 'red', pattern: 'solid' });
+		expect(colorBeside(8, 0)).toEqual(playerColor(8));
+		expect(colorBeside(3, 1)).toEqual(playerColor(3));
 	});
 });
 

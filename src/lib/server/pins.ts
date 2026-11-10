@@ -1,7 +1,6 @@
 // The front door's PINs (DECISIONS D47): six digits a person picks when they join or create a group,
 // so they can get back in on any device through the group's link. Wrong tries are limited per
 // address, per person and across the instance; a right one gives the tries back.
-import { colorIndexesByJoinOrder } from '#lib/catalog/colors.ts';
 import { all, mapRead, one, readAll, rowsOf, run, type DB, type Read } from './db.ts';
 import { pinHash, randomToken, type Person } from './identity.ts';
 import { giveBack, groupSubject, ipSubject, LIMITS, take } from './ratelimit.ts';
@@ -33,15 +32,14 @@ export type DoorMember = { id: string; name: string; colorIndex: number; hasPin:
 
 /** The names on a group's front door, alphabetical so people find their own; nothing else about them. */
 export async function frontDoorMembers(db: DB, groupId: string): Promise<DoorMember[]> {
-	const rows = await all<{ id: string; name: string; joined_at: number; has_pin: number }>(
+	const rows = await all<{ id: string; name: string; color_index: number | null; has_pin: number }>(
 		db,
-		`SELECT u.id, u.name, m.joined_at, (u.pin_hash IS NOT NULL) AS has_pin
+		`SELECT u.id, u.name, m.color_index, (u.pin_hash IS NOT NULL) AS has_pin
 		 FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.group_id = ?1`,
 		groupId
 	);
-	const colors = colorIndexesByJoinOrder(rows.map((r) => ({ id: r.id, joinedAt: r.joined_at })));
 	return rows
-		.map((r) => ({ id: r.id, name: r.name, colorIndex: colors.get(r.id) ?? 0, hasPin: r.has_pin === 1 }))
+		.map((r) => ({ id: r.id, name: r.name, colorIndex: r.color_index ?? 0, hasPin: r.has_pin === 1 }))
 		.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }
 

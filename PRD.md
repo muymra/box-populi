@@ -205,7 +205,7 @@ Hand-entered and Wikidata games can be filled in and corrected: name, image, pla
 | Complexity | BGG's five vote labels, a weight taking the one it rounds to: Light (under 1.5), Medium light (1.5 to under 2.5), Medium (to under 3.5), Medium heavy (to under 4.5), Heavy (4.5 and up) (D62), from BGG weight on its 1 to 5 scale. A range slider is a later addition (cut order item 3). |
 | Mechanics | Multi-select (deck building, worker placement, and so on). Matches any selected, with an "all of" switch (cut order item 2). |
 | Themes | Multi-select from BGG categories (fantasy, sci-fi, animals). Same any/all behavior. BGG categories mix themes with formats like "Card Game"; that's acceptable, and the filter is labeled "Themes & categories." |
-| Owner | One or more members, picked from a row of everyone with games on the shelf, in their player colours and in join order, so the row is also the key to the owner edge. Colours are solid for the first eight members and hatched for the next eight, so up to sixteen never share a look. For "what does Sam have?" |
+| Owner | One or more members, picked from a row of everyone with games on the shelf, in their player colours and in join order, so the row is also the key to the owner edge. A member keeps their colour from the day they join, and someone joining later takes the colour of anyone who left (D69). The eight colours are solid, then striped, then dotted, so up to twenty-four members never share a look. For "what does Sam have?" |
 | Availability | Hide games that are lent outside the group. On by default. A copy lent to a group member counts as available. |
 | Expansions | Hidden by default. |
 | Favourites | Under More once anyone has one (D63): favourites of anyone in the group, or only my own. |

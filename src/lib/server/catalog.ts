@@ -2,7 +2,6 @@
 // and keeps `groups.catalog_version` current so the ETag changes when the payload does.
 import { jsonArray, mapRead, one, readAll, rowsOf, stmt, type DB, type Read } from './db.ts';
 import { applyCorrection, correctionsRead } from './corrections.ts';
-import { colorIndexesByJoinOrder } from '#lib/catalog/colors.ts';
 import type { CatalogGame, CatalogMember, CatalogPayload, PollSource, Role } from '#lib/catalog/types.ts';
 
 export type GameRow = {
@@ -72,18 +71,16 @@ export async function loadMembers(db: DB, groupId: string): Promise<CatalogMembe
 /** loadMembers as a read, to share a round trip with others (`readAll`, D59). */
 export function membersRead(db: DB, groupId: string): Read<CatalogMember[]> {
 	return mapRead(
-		rowsOf<{ id: string; name: string; role: Role; last_seen_at: number; joined_at: number }>(
+		rowsOf<{ id: string; name: string; role: Role; last_seen_at: number; color_index: number | null }>(
 			db,
-			`SELECT u.id, u.name, m.role, m.last_seen_at, m.joined_at
+			`SELECT u.id, u.name, m.role, m.last_seen_at, m.color_index
 			 FROM memberships m JOIN users u ON u.id = m.user_id
 			 WHERE m.group_id = ?1
 			 ORDER BY m.last_seen_at DESC, u.name`,
 			groupId
 		),
-		(rows) => {
-			const colors = colorIndexesByJoinOrder(rows.map((r) => ({ id: r.id, joinedAt: r.joined_at })));
-			return rows.map((r) => ({ id: r.id, name: r.name, role: r.role, lastSeenAt: r.last_seen_at, colorIndex: colors.get(r.id) ?? 0 }));
-		}
+		// Each member's colour is stored when they join (D69), so nobody's changes when someone leaves.
+		(rows) => rows.map((r) => ({ id: r.id, name: r.name, role: r.role, lastSeenAt: r.last_seen_at, colorIndex: r.color_index ?? 0 }))
 	);
 }
 

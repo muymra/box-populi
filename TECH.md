@@ -88,7 +88,7 @@ box-populi/
       nights.ts                 game night rules: tonight's pool, who's going, the chat text, tonight's seed
       catalog/                  pure TS: runs in browser, server and tests
         types.ts                CatalogPayload and friends
-        colors.ts               player colours (by join order) and box-front colours
+        colors.ts               player colours (by stored index, D69) and box-front colours
         normalize.ts            search normalization, buildSearchText()
         players.ts              player-count bitmasks and formatting
         buckets.ts              weight buckets, weight and time formatting
@@ -231,6 +231,7 @@ Bindings and variables come from `import { env } from 'cloudflare:workers'` (Sve
 - `0016_hidden_copies.sql` (D66): `hidden_copies` and `memberships.hide_new`, four triggers that keep hidden rows in step with `copies` and `memberships`, and the view `group_copies` (below). Every query about what a group holds reads the view; `hiding.ts` writes the rows.
 - `0017_night_came.sql` (D67): `night_people.came`, empty until someone checks who came, 1 or 0 after; and a one-off correction of plays saved on the wrong day (a play after its night takes the night's date; one before it leaves the night), bumping those groups' catalog version for "last played".
 - `0018_bgg_entities.sql`: decodes `&#039;` and a few other character references left in stored BGG names, search text, mechanics, themes and cached searches (see "Parsing `thing`"), bumping the catalog of groups with an affected game.
+- `0019_member_colors.sql` (D69): `memberships.color_index`, filled for existing members from join order (ties by user id), and the trigger `memberships_color`, which gives a membership inserted without one the lowest index nobody in its group holds. Reads take the column; `mergeMember` keeps the earlier membership's colour.
 - Guest plays to a member (D37) needs no migration: `linkGuestPlays` in `guest-plays.ts` rewrites `play_players`, `night_people` and `night_games` guest rows to the member, checking `can(role, 'link_guest_plays')`.
 
 Timestamps are Unix milliseconds. JSON columns hold arrays and are written and read only through helpers in `db.ts`.
@@ -357,6 +358,9 @@ CREATE TABLE hidden_copies (
   PRIMARY KEY (group_id, user_id, game_id)
 );
 ALTER TABLE memberships ADD COLUMN hide_new INTEGER NOT NULL DEFAULT 0;
+-- 0019 (D69): each member's colour, kept from joining. The trigger memberships_color fills it with the
+-- lowest index nobody in the group holds when an insert leaves it out.
+ALTER TABLE memberships ADD COLUMN color_index INTEGER;
 -- What a group holds: members' copies less those hidden from it. Never join copies to memberships for this.
 CREATE VIEW group_copies AS
   SELECT m.group_id, c.id, c.user_id, c.game_id, c.lent_to_user_id, c.lent_to_text, c.added_at
@@ -477,7 +481,7 @@ export type Role = 'owner' | 'admin' | 'member';
 
 export type CatalogMember = {
   id: string; name: string; role: Role; lastSeenAt: number;
-  colorIndex: number; // 0 to 7, by join order
+  colorIndex: number; // memberships.color_index, stored at joining (D69); playerColor() wraps it at 24
 };
 
 export type CatalogCopy = {

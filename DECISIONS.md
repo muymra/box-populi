@@ -465,3 +465,13 @@ Planned, not built (STATUS item 46, low priority). Two rules for starting a grou
 **Why:** a group's history should be able to follow it to another host, without a merge reaching into other groups or anything claiming BGG's data as the group's own.
 **Revisit if:** group files start carrying personal lists, which would bring D65's reasoning back, or BGG's terms change on storing data an instance didn't fetch itself.
 
+## D69. Member colours: stored at joining, three rounds, and told apart on a profile (2026-11-10)
+
+Carlo asked what a profile looks like when you and the person share a colour, then chose all three fixes ("1, 2, 3"). Colours were worked out from the current members' join order on every read, eight solid then eight striped, so member 17 looked exactly like member 1, and when someone left, everyone who joined after them moved down a colour.
+- **Stored when someone joins** (`memberships.color_index`, migration 0019). A trigger gives a new membership the lowest index nobody in the group holds, so a leaver's colour goes to the next person to join and nobody else's moves. The migration fills existing members from join order, ties by id, which is the colour they had, so nothing changes on the upgrade. A merge (D48) keeps the earlier membership's colour with its join date.
+- **A third round, dotted**: dots in the stripe's darker shade on a 5px grid. Twenty-four members look different before a look repeats. Members 17 to 24 of a big group change from a repeat of 1 to 8 to their dotted colour, and 25 and up shift with the new cycle.
+- **"You and Bram" tells you apart.** When the two of you look the same, the other person's side of that panel (the heading square, their win count's square and their part of the bar) takes their hue in the next pattern (`colorBeside`). Everywhere else, their header square and play rows included, they keep their own colour, since other people appear there too.
+**Why:** a person's colour is how the shelf says whose a game is (the Owner Edge Rule); it should stay put, and groups up to the planned 50 members should rarely repeat.
+**Trade-offs accepted:** past 24 members at once, looks repeat on the shelf; no unique index on colours, so a merge can briefly hold two rows with one colour inside its batch.
+**Revisit if:** groups regularly pass 24 members at once, or people ask to pick their colour, which the Owner Edge Rule rules out today.
+

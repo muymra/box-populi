@@ -222,10 +222,13 @@ export async function mergeMember(
 		s('UPDATE games SET edited_by = ?2 WHERE edited_by = ?1'),
 		s('UPDATE game_links SET added_by = ?2 WHERE added_by = ?1'),
 		s('UPDATE game_corrections SET edited_by = ?2 WHERE edited_by = ?1'),
-		// The earlier join date keeps their colour; the higher role stays (the owner is never merged away).
+		// The earlier membership's join date and colour stay (D69); the higher role stays (the owner is never
+		// merged away). SET reads the row as it was, so the CASE compares the original join dates.
 		stmt(
 			db,
 			`UPDATE memberships SET
+			   color_index = CASE WHEN (SELECT joined_at FROM memberships WHERE group_id = ?1 AND user_id = ?2) < joined_at
+			                      THEN (SELECT color_index FROM memberships WHERE group_id = ?1 AND user_id = ?2) ELSE color_index END,
 			   joined_at = MIN(joined_at, (SELECT joined_at FROM memberships WHERE group_id = ?1 AND user_id = ?2)),
 			   last_seen_at = MAX(last_seen_at, (SELECT last_seen_at FROM memberships WHERE group_id = ?1 AND user_id = ?2)),
 			   role = ?4

@@ -123,3 +123,36 @@ describe('0018: character references in stored BGG names', () => {
 		]);
 	});
 });
+
+describe('0019: member colours stored (D69)', () => {
+	const colours = (raw: DatabaseSync, group: string) =>
+		Object.fromEntries((raw.prepare('SELECT user_id, color_index FROM memberships WHERE group_id = ? ORDER BY user_id').all(group) as Array<{ user_id: string; color_index: number }>).map((r) => [r.user_id, r.color_index]));
+
+	it('keeps each member’s colour from join order, ties by id, then gives a newcomer the lowest free one', () => {
+		const raw = new DatabaseSync(':memory:');
+		applyMigrationsSync(
+			raw,
+			MIGRATIONS.filter((m) => m.name < '0019')
+		);
+		raw.exec(`
+			INSERT INTO users (id, name, created_at) VALUES ('ada', 'Ada', 0), ('bo', 'Bo', 0), ('cy', 'Cy', 0), ('di', 'Di', 0), ('ed', 'Ed', 0);
+			INSERT INTO groups (id, name, code, created_at) VALUES ('g1', 'One', 'K7M4P', 0), ('g2', 'Two', 'K7M4Q', 0);
+			INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES
+				('g1', 'cy', 'owner', 10, 0), ('g1', 'bo', 'member', 20, 0), ('g1', 'ada', 'member', 20, 0),
+				('g2', 'bo', 'owner', 5, 0);
+		`);
+		applyMigrationsSync(raw);
+		expect(colours(raw, 'g1')).toEqual({ ada: 1, bo: 2, cy: 0 });
+		expect(colours(raw, 'g2')).toEqual({ bo: 0 });
+
+		// Ada leaves: Bo keeps his colour, the next to join takes Ada's, and the one after takes a new one.
+		raw.exec(`DELETE FROM memberships WHERE group_id = 'g1' AND user_id = 'ada'`);
+		raw.exec(`INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES ('g1', 'di', 'member', 30, 0)`);
+		raw.exec(`INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES ('g1', 'ed', 'member', 40, 0)`);
+		expect(colours(raw, 'g1')).toEqual({ bo: 2, cy: 0, di: 1, ed: 3 });
+		// A colour named on insert stays as given.
+		raw.exec(`INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at, color_index) VALUES ('g2', 'ed', 'member', 40, 0, 7)`);
+		expect(colours(raw, 'g2')).toEqual({ bo: 0, ed: 7 });
+	});
+});
+

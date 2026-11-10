@@ -1,6 +1,6 @@
 // Colour roles of the cube-shelf world (DESIGN.md). Pure, shared by server and browser.
 
-/** Wooden-cube player colours. Each member gets one by join order, so it never changes; see playerColor(). */
+/** Wooden-cube player colours. Each member keeps one from the day they join (D69); see playerColor(). */
 export const PLAYER_COLORS = [
 	{ name: 'red', bg: '#c8402e', ink: '#ffffff' },
 	{ name: 'blue', bg: '#2f62b0', ink: '#ffffff' },
@@ -12,28 +12,46 @@ export const PLAYER_COLORS = [
 	{ name: 'black', bg: '#2b2a28', ink: '#ffffff' }
 ] as const;
 
+/** The three rounds the eight colours go through: solid, then striped, then dotted. */
+export const PATTERNS = ['solid', 'striped', 'dotted'] as const;
+export type Pattern = (typeof PATTERNS)[number];
+/** How many members look different before a look repeats: 24. */
+export const DISTINCT_LOOKS = PLAYER_COLORS.length * PATTERNS.length;
+
 export type PlayerColor = (typeof PLAYER_COLORS)[number] & {
-	/** The CSS background to paint: the colour itself, or hatched for a member's second round. */
+	/** The CSS background to paint: the colour itself, striped or dotted. */
 	fill: string;
-	/** True for members 9 to 16, 25 to 32, and so on. */
-	hatched: boolean;
+	pattern: Pattern;
 };
 
 /**
- * A member's colour by join order. The eight colours go round once solid, then once hatched, so the
- * first sixteen members all look different; from the seventeenth the pattern repeats. The hatch's
- * stripe is a darker shade (a lighter grey for black), so white ink on it reads at least as well as on
- * the solid colour.
+ * A member's colour by their stored index (D69). The eight colours go round once solid, once striped
+ * and once dotted, so twenty-four members all look different; from the twenty-fifth the looks repeat.
+ * Stripes and dots are a darker shade (a lighter grey for black), so white ink on them reads at least
+ * as well as on the solid colour.
  */
 export function playerColor(index: number): PlayerColor {
 	const n = PLAYER_COLORS.length;
-	const i = ((index % n) + n) % n;
-	const base = PLAYER_COLORS[i];
-	const round = Math.floor((((index % (2 * n)) + 2 * n) % (2 * n)) / n);
-	const hatched = round === 1;
-	const stripe = base.name === 'black' ? `color-mix(in srgb, ${base.bg} 75%, white)` : `color-mix(in srgb, ${base.bg} 62%, black)`;
-	const fill = hatched ? `repeating-linear-gradient(135deg, ${base.bg} 0 3px, ${stripe} 3px 5px)` : base.bg;
-	return { ...base, fill, hatched };
+	const look = ((index % DISTINCT_LOOKS) + DISTINCT_LOOKS) % DISTINCT_LOOKS;
+	const base = PLAYER_COLORS[look % n];
+	const pattern = PATTERNS[Math.floor(look / n)];
+	const shade = base.name === 'black' ? `color-mix(in srgb, ${base.bg} 75%, white)` : `color-mix(in srgb, ${base.bg} 62%, black)`;
+	const fill =
+		pattern === 'striped'
+			? `repeating-linear-gradient(135deg, ${base.bg} 0 3px, ${shade} 3px 5px)`
+			: pattern === 'dotted'
+				? `radial-gradient(circle at 2.5px 2.5px, ${shade} 1.25px, transparent 1.5px) 0 0 / 5px 5px, ${base.bg}`
+				: base.bg;
+	return { ...base, fill, pattern };
+}
+
+/**
+ * The colour to draw `index` in beside `other`, where only the two of them are compared (a profile's
+ * "You and Bram"): their own, or, when the two look the same, their hue in the next pattern.
+ */
+export function colorBeside(index: number, other: number): PlayerColor {
+	const look = (i: number) => ((i % DISTINCT_LOOKS) + DISTINCT_LOOKS) % DISTINCT_LOOKS;
+	return playerColor(look(index) === look(other) ? index + PLAYER_COLORS.length : index);
 }
 
 /**
@@ -64,10 +82,4 @@ export function boxColor(name: string): (typeof BOX_COLORS)[number] {
 		h = Math.imul(h, 16777619);
 	}
 	return BOX_COLORS[(h >>> 0) % BOX_COLORS.length];
-}
-
-/** Member colour indexes by join order: the first member gets 0, the next 1, and so on. */
-export function colorIndexesByJoinOrder(members: Array<{ id: string; joinedAt: number }>): Map<string, number> {
-	const sorted = [...members].sort((a, b) => a.joinedAt - b.joinedAt || a.id.localeCompare(b.id));
-	return new Map(sorted.map((m, i) => [m.id, i]));
 }
