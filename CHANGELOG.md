@@ -8,6 +8,11 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 - The Game night tab links to past nights ("Past nights"), which live on the plays page.
 - The plays export has a `night_id` column that matches the game nights export, so the two join in a spreadsheet. The nights export's `came` column now counts who came the way a night's page does (anyone in a play on it came) and is filled in for every night that has been; people who played without answering get a row too.
 - The colour themes' sources are credited in the README.
+
+## 0.5.1 (2026-11-10)
+
+**Upgrading:** nothing to do: no migrations and no new settings. Deploy as usual.
+
 - Ticking a play's game night while editing it no longer ends on "Something went wrong". The play was saved; the page failed to redraw the form afterwards.
 - An unexpected error's page shows a short reference ("Error 500 · ref K7M4PQ"), and the instance's logs carry the same reference with what failed, so a report can be traced (SELF_HOSTING.md "When something goes wrong").
 
