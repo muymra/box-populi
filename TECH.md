@@ -1,26 +1,28 @@
 # Box Populi: technical plan
 
-Status: draft v2, 2026-11-06. Revised after a review pass, after the expected scale grew to 50 members and 1,500 games per group, and after the decision to publish the code on GitHub for anyone to self-host.
-What and why: [PRD.md](./PRD.md). Settled decisions: [DECISIONS.md](./DECISIONS.md). Build order and progress: [STATUS.md](./STATUS.md). Rules for agents: [AGENTS.md](./AGENTS.md). Running an instance: [SELF_HOSTING.md](./SELF_HOSTING.md).
+Status: first written 2026-11-06 as the build plan, and kept in step with the code since. Where the two disagree, fix one in the same change (AGENTS.md).
+What and why: [PRD.md](./PRD.md). Settled decisions: [DECISIONS.md](./DECISIONS.md). Progress: [STATUS.md](./STATUS.md). Rules for agents: [AGENTS.md](./AGENTS.md). Running an instance: [SELF_HOSTING.md](./SELF_HOSTING.md).
 
-Facts about third-party services below (BGG API terms, Cloudflare limits, library APIs) were written from memory. STATUS.md lists each one as unverified until someone checks it against current documentation.
+Facts about third-party services below (BGG API terms, Cloudflare limits, library APIs) were first written from memory; STATUS.md lists which have since been checked, with a date and source.
 
-## Decisions
+## Stack
 
-| Area | Choice | Reason |
-|---|---|---|
-| Distribution | Open source on GitHub. Each hoster deploys to their own Cloudflare account. | Nobody depends on one person's copy. Carlo runs two deployments: one for his group, and the public demo at `box-populi.pages.dev`. |
-| Hosting | Cloudflare Pages on the hoster's account, at `<project>.pages.dev` or a custom domain | Free tier, no server to maintain. |
-| Framework | SvelteKit 3 with Svelte 5 (runes), TypeScript 6 strict, `@sveltejs/adapter-cloudflare` 8 | Server routes and form actions in one project, small bundles for phones. SvelteKit 3 shipped 2026-10-01; see AGENTS.md for what changed from 2. |
-| Database | Cloudflare D1 (SQLite), binding `DB` | Native to Pages Functions, no external service. |
-| Queries | Raw SQL through a thin helper in `src/lib/server/db.ts` | About 25 tables; an ORM adds more than it saves over a weekend. |
-| Catalog filtering | In the browser, over a cached JSON payload | See "Catalog delivery." Driven by the 1,500-game scale and D1's daily limits. |
-| Identity | No accounts: a display name per person, a long-lived device session, and a reusable personal link for other devices (D25) | No third party, no email, nothing for hosters to set up. |
-| XML parsing | `fast-xml-parser` | Workers have no `DOMParser`. |
-| Images | Link to BGG's image CDN, thumbnails only in lists; see "Images" under the BGG section | Copying images would reproduce files whose rights sit with their uploaders and publishers. Disclosed on Carlo's BGG application. |
-| IDs | `crypto.randomUUID()` for users and groups; integer keys for games and copies | No dependency. |
-| Package manager | pnpm; Node 22.18 or newer (the first that strips TypeScript types by default, which `pnpm install` and the scripts rely on) | pnpm is what the build machine has on Linux; its npm is the Windows one, which breaks on WSL paths. |
-| Tests | Vitest, colocated as `*.test.ts`; SQL tests on Node's built-in `node:sqlite` with the real migrations | Pure logic is most of the risk; no native module to build. See "Testing." |
+The reasons are in DECISIONS.md, by number.
+
+| Area | Choice |
+|---|---|
+| Distribution | Open source on GitHub, MIT (D22); each hoster deploys their own. Carlo runs two deployments: his group's, and the public demo at `box-populi.pages.dev`. |
+| Hosting | Cloudflare Pages by default (D03); builds for Workers, Node (Docker), Vercel and Netlify too (D32, "Hosting targets"). |
+| Framework | SvelteKit 3 with Svelte 5 runes, TypeScript strict, `@sveltejs/adapter-cloudflare` (D24); AGENTS.md lists what changed from SvelteKit 2. |
+| Database | SQLite: Cloudflare D1 (binding `DB`), a file through `node:sqlite`, or Turso. |
+| Queries | Raw SQL through `src/lib/server/db.ts`, about 25 tables; no ORM, so every query stays visible while D1's free plan counts them (D59). |
+| Catalog filtering | In the browser, over a cached JSON payload ("Catalog delivery"). |
+| Identity | No accounts: a display name, device sessions, a six-digit PIN and a backup sign-in link (D25, D47). |
+| XML parsing | `fast-xml-parser`; Workers have no `DOMParser`. |
+| Images | BGG's image CDN, linked, never copied (D12, "Images"). |
+| IDs | `crypto.randomUUID()` for users and groups; integer keys for games and copies. |
+| Package manager | pnpm; Node 22.18 or newer, for type stripping. |
+| Tests | Vitest, `*.test.ts` beside the code; SQL tests on `node:sqlite` with the real migrations ("Testing"). |
 
 Cloudflare is steering new projects toward Workers with static assets over Pages. Pages still works, and Carlo chose pages.dev (DECISIONS D03). Pages Functions lack cron triggers, which this design works around with lazy cleanup. Moving to Workers later means swapping the adapter and the config file.
 
@@ -51,119 +53,58 @@ BGG is called only from the server, so the token never reaches the browser and e
 
 ## Project layout
 
-Tests sit next to the code they test as `*.test.ts`.
+The directories, and the files whose role their name doesn't say; `ls` gives the rest. Tests sit next to the code they test as `*.test.ts`.
 
 ```
 box-populi/
-  AGENTS.md  CLAUDE.md  README.md  STATUS.md  DECISIONS.md  PRD.md  TECH.md
-  SELF_HOSTING.md  PRODUCT.md  DESIGN.md  LICENSE
+  *.md                          the docs; AGENTS.md says which owns what
+  docs/                         screenshots/ for the README; history/session-log.md, the older session log
   wrangler.example.jsonc        copied to wrangler.jsonc (gitignored) by `pnpm install`
   wrangler.workers.example.jsonc  the same for Cloudflare Workers
   .dev.vars.example             copied to .dev.vars (gitignored) by `pnpm install`
   worker-configuration.d.ts     generated by `pnpm gen` (wrangler types); committed
-  Dockerfile  compose.yaml  Caddyfile  docker.env.example  .dockerignore   the Docker target
+  Dockerfile  compose.yaml  Caddyfile  docker.env.example   the Docker target
   vercel.json  netlify.toml     the Vercel and Netlify targets
-  package.json  vite.config.ts  tsconfig.json  pnpm-workspace.yaml
-  migrations/                   0001_init (schema below), 0002_game_sources, 0003_group_theme,
-                                0004_instance_settings, 0005_game_corrections, 0006_plays,
-                                0007_game_nights, 0008_pins, 0009_sign_in_codes, 0010_archive,
-                                0011_owner_sign_in_codes, 0012_bgg_courtesy, 0013_complexity_votes,
-                                0014_favourites_play_soon, 0015_audit_fixes, 0016_hidden_copies,
-                                0017_night_came, 0018_bgg_entities, 0019_member_colors
-  scripts/
-    ensure-local-config.ts      creates the two gitignored config files on install
-    seed-demo.ts                writes seed/demo.sql
-    gen-themes.ts               writes src/lib/themes.css from themes.ts
-    restore-order.ts            reorders a `wrangler d1 export` so it loads into an empty D1 database (tables first)
-  seed/demo.sql                 generated demo data, gitignored
+  migrations/                   numbered SQL files; "Data model" lists what each adds
+  scripts/                      seed-demo.ts and seed-sandbox.ts (invented data), gen-themes.ts (writes
+                                src/lib/themes.css), ensure-local-config.ts, restore-order.ts (reorders a
+                                `wrangler d1 export` so it loads into an empty database)
+  seed/                         generated seed SQL, gitignored
   src/
-    app.d.ts                    App.Locals: config, user, isAdmin, deviceTheme, theme, instanceTheme, appearance
-    app.css                     colour tokens (light and dark) and base styles
+    app.d.ts                    App.Locals: config, user, isAdmin and the theme fields
     hooks.server.ts             config check, session → locals.user, admin cookie, theme, security headers
-    lib/
-      themes.ts  themes.css     the twelve presets, the custom theme, the contrast guard; generated CSS
-      link-kinds.ts             rulebook / video / other, guessed from an address
-      project.ts                the source repository's address
-      time.ts                   coarse "active 3 weeks ago"
-      days.ts                   calendar days as YYYY-MM-DD in UTC: weeks, the day grid's window, month and day names, start times
-      plays.ts                  play log rules: places, podium points, standings, the CSV
-      nights.ts                 game night rules: tonight's pool, who's going, the chat text, tonight's seed
-      catalog/                  pure TS: runs in browser, server and tests
-        types.ts                CatalogPayload and friends
-        colors.ts               player colours (by stored index, D69) and box-front colours
-        normalize.ts            search normalization, buildSearchText()
-        players.ts              player-count bitmasks and formatting
-        buckets.ts              weight buckets, weight and time formatting
-        filter.ts               Filters, URL params, filterGames() (keepMatching() then sortGames(); the shelf sorts once, then filters), passedOnUnknown(), tagOptions()
-        pick.ts                 picker draw, the lineup (refill, chooseInto, misfits), fillers, seededRng()
-        client.ts               browser fetch of the catalog, safe localStorage
-        testing.ts              builders for tests
-      table/                    "At the table": who's here, start player, dice (browser)
-        here.ts                 who's here on a device: parse, 12-hour reset, guest names
-        regulars.ts             nights each member was here, ranking, folding the list
-        lineup.ts               kept games on a device: parse, 12-hour reset, link ids
-        table.svelte.ts         Table, the shared who's-here state, and its context
-        dice.ts                 dice pool, rolls, holds, coin, recent results
-        random.ts               randomInt(): crypto.getRandomValues without modulo bias
-      components/               BoxFront, Cube, OwnerEdge, ListRow (Spines view), CubeMark, CheckList,
-                                BggCredit, PersonalLink, CopyButton, ThemePicker, ImportPanel,
-                                HydrateProgress, ListPanel, Modal, WhosHere, StartPlayer, DiceRoller, PlayForm, PlayList, NightFields, ChooseList,
-                                DayGrid (picks a day; the app's own, not the browser's date input)
-      server/                   server-only (SvelteKit 3 treats any `server` directory so)
-        platform.ts             Cloudflare (Pages and Workers), the only importer of `cloudflare:workers`: getDb(), getConfig(), afterResponse()
+    lib/                        shared by browser and server: the rules as pure TS (plays.ts, nights.ts,
+                                profile.ts, themes.ts, csv files), components/, and:
+      catalog/                  the catalog's types, filters, search normalization, player colours,
+                                box shapes and the picker's draw; pure, run in browser, server and tests
+      table/                    "At the table": who's here, regulars, start player, dice (browser)
+      server/                   server only (SvelteKit 3 treats any `server` directory so)
+        platform.ts             Cloudflare (Pages and Workers), the only importer of `cloudflare:workers`:
+                                getDb(), getConfig(), afterResponse()
         platform.node.ts        the same three for Node and Docker: a SQLite file (BOX_TARGET=node)
-        platform.libsql.ts      the same three for Vercel and Netlify: Turso (BOX_TARGET=vercel or netlify)
-        sqlite-d1.ts            D1-shaped wrapper over node:sqlite (Node platform and tests; testing/d1.ts builds test databases on it, or on libsql-d1 with TEST_DB=libsql)
-        libsql-d1.ts            D1-shaped wrapper over @libsql/client (Turso)
+        platform.libsql.ts      the same three for Vercel and Netlify: Turso
+        sqlite-d1.ts            D1-shaped wrapper over node:sqlite; libsql-d1.ts, the same over @libsql/client
         migrations.ts           bundled migrations and the runner for platforms without wrangler
-        db.ts                   D1 helpers, and the explicit group and person deletes
-        instance.ts             instance config from env, validated
-        authz.ts                requireUser, requireRead, requireRole, requireActiveMember
-        permissions.ts          role table as a pure function
-        codes.ts                join code generation, invite link keys (D65)
-        front-door.ts           opening a group's front door from /join/<code> or /join/<code>-<key> (D65)
-        catalog.ts              payload query, the per-version JSON kept in memory, catalog_version bumps
-        return-to.ts            safe return paths after sign-in
-        identity.ts             people, device sessions, personal links, account deletion (D25)
-        cookies.ts              session, new-link and admin cookie settings
-        groups.ts               creating and joining groups
-        group-admin.ts          group settings: rename, code, roles, remove, hand over, theme, delete
-        games.ts                BGG search, copies, manual entry, usableGames
-        game-edit.ts            editing non-BGG games: shared details, a group's own image (D54)
-        corrections.ts          reading groups' images and older corrections, applyCorrection()
-        game-list.ts            pasting a list: parse, match, add
-        wikidata.ts             the Wikidata client and cache (public-sources mode, D31)
-        importer.ts             BGG collection import and the hydrate step
-        links.ts                rules and tutorial links
-        wishlist.ts             wishes and the Wanted query
-        interest.ts             favourites and Play soon: set, the 5-mark cap, which marks still count (D63, D64)
-        hiding.ts               hiding a copy from one group, "Hide new games here", the Add page's list (D66)
-        guest-plays.ts          guest plays to a member: the group's guest names, moving the chosen ones (D37)
-        lending.ts              lending, returns, and the account page's loans
-        plays.ts                the play log: form parsing, save, edit, delete, load, podium points
-        play-actions.ts         the play log's form actions, shared by the plays and game pages
-        nights.ts               game nights: plan, edit, delete, who's going, guests, bring list, load
-        ratelimit.ts            rate_events: take() and giveBack(), cleanup of rows older than a day
-        admin.ts                instance admin: key check, signed cookie, totals, groups table, actions
-        appearance.ts           the custom theme and logo set on /admin
-        bgg-credit.ts           whether pages must credit BGG (D30)
-        testing/d1.ts           D1-shaped wrapper over node:sqlite for tests
-        bgg/
-          types.ts              BggClient interface, result types, BggBusyError
-          parse.ts              XML → typed objects (pure)
-          poll.ts               player-count summary and votes → bitmasks (pure)
-          pace.ts               instance-wide request pacing over bgg_pace
-          fake.ts               fixture-backed client for BGG_MODE=fake
-          client.ts             live client: bearer token, pacing, backoff, timeout, User-Agent
-          http.ts               JSON error responses for BGG failures, refuseInactive()
-          fixtures/*.xml        hand-written BGG-shaped fixtures with invented games, committed
-          fixtures/local/       real BGG responses, gitignored
+        db.ts                   D1 helpers (readAll and friends), and the explicit group and person deletes
+        authz.ts                requireUser, requireRead, readGroup, requireRole, requireActiveMember
+        permissions.ts          the role table as a pure function, can()
+        log-pages.ts            where a page of the play log starts (D70)
+        testing/d1.ts           test databases on sqlite-d1, or libsql-d1 with TEST_DB=libsql
+        bgg/                    the BGG client (client.ts), its interface (types.ts), parsing (parse.ts,
+                                poll.ts), pacing (pace.ts), the fake (fake.ts) and invented fixtures;
+                                real responses go in fixtures/local/, gitignored
     routes/                     see "Routes and endpoints"
 ```
 
 ## Versions
 
-The release version lives in `package.json` (D44). `vite.config.ts` reads it and defines `__APP_VERSION__` for the build; code reads it as `APP_VERSION` from `#lib/project.ts`. The footer (`BggCredit.svelte`) shows it as `vX.Y.Z` linked to `CHANGELOG.md` on GitHub, `/admin` shows it under its intro, and the BGG client's User-Agent carries it (`BoxPopuli/<version>`). It's separate from SvelteKit's build id (`version` from `$app/env`), which changes on every build and is what the catalog's ETag uses. Cutting a release: set `package.json`, move CHANGELOG.md's "Unreleased" lines under the new version with an **Upgrading** line, commit, and `git tag -a vX.Y.Z -m "Box Populi X.Y.Z"`.
+The release version lives in `package.json` (D44). `vite.config.ts` reads it and defines `__APP_VERSION__` for the build; code reads it as `APP_VERSION` from `#lib/project.ts`. The footer (`BggCredit.svelte`) shows it as `vX.Y.Z` linked to `CHANGELOG.md` on GitHub, `/admin` shows it under its intro, and the BGG client's User-Agent carries it (`BoxPopuli/<version>`). It's separate from SvelteKit's build id (`version` from `$app/env`), which changes on every build and is what the catalog's ETag uses. Every production deploy is a release (D44). Cutting one:
+
+1. Pick the number: minor for features, a migration or a new setting, patch for fixes only. Stay at 0.x; 1.0 is Carlo's call.
+2. Set it in `package.json`, and move CHANGELOG.md's "Unreleased" lines under a heading for it with an **Upgrading** line: migrations to apply (by name), settings to change, a demo reseed if the seed changed.
+3. Commit, and tag with an annotated tag: `git tag -a vX.Y.Z -m "Box Populi X.Y.Z"` (a lightweight tag doesn't travel with `--follow-tags`).
+4. Push `main` with `--follow-tags`, then deploy each instance as SELF_HOSTING.md "Upgrading" says: a Time Travel bookmark and an export before any migration, the migrations, the deploy, and for the demo the reseed.
+5. A GitHub release from the CHANGELOG section (`gh release create vX.Y.Z --verify-tag`), and the session log's entries moved to `docs/history/session-log.md`.
 
 ## Hosting targets
 
@@ -873,7 +814,7 @@ Links live in `src/lib/server/links.ts` and are the game page's `addLink` and `d
 - Every page has a footer reading "Game data from BoardGameGeek," with the "Powered by BGG" logo linked to `https://boardgamegeek.com`. It also says "Box Populi is not affiliated with or endorsed by BoardGameGeek." The footer is one component, `BggCredit.svelte`, in the root layout, so no page can drop it. The credit and the non-affiliation line show whenever the instance shows BGG data: always with `BGG_MODE` `live` or `fake`, and with `off` only while games fetched from BGG remain in the cache (`needsBggCredit` in `src/lib/server/bgg-credit.ts`, checked once per isolate). An instance that never had BGG on doesn't claim BGG data it doesn't show (D30).
 - The logo is a file BGG provides for this purpose, shown large enough to read on a phone. Don't redraw or recolor it. Where BGG publishes the files is unconfirmed; record it in STATUS.md when found.
 - Each game page links to its BGG page with "View on BoardGameGeek." Hand-entered games are marked as such and carry no BGG link.
-- No public API (see "No services for other applications"). The stretch CSV export holds only game name, year, BGG link and owners: no descriptions or statistics.
+- No public API (see "No services for other applications"). The planned catalog CSV export would hold only game name, year, BGG link and owners: no descriptions or statistics.
 
 ### Images
 
@@ -976,7 +917,7 @@ The demo seed invents 140 plays over 14 months with weighted skill per member, a
 - Demo games use ids from 9,000,001 up and `created_by = 'demo-ada'`, so a re-run can delete exactly them.
 - `pnpm db:seed` generates and applies it locally. For production: `pnpm exec wrangler d1 execute DB --remote --file seed/demo.sql`. The script starts by deleting the existing demo rows, so re-running it replaces the demo.
 - `/demo` redirects to `/g/demo`. `requireRead` lets anyone read it; `requireRole` refuses every mutation on it. Pages hide controls when `group.isDemo` is true, but the server check is the one that counts.
-- The same seed doubles as development data, so catalog work has real volume from Saturday morning.
+- The same seed doubles as development data, so catalog work runs against about 400 games.
 - `seed/demo.sql` is gitignored: it's generated, and a seed from a real BGG collection would hold BGG data. Each hoster generates their own.
 - The demo is optional per instance. The landing page shows "See a demo group" only when a group with id `demo` exists. Hosters who want one run `pnpm db:seed` and apply `seed/demo.sql` to production as above.
 
@@ -1086,7 +1027,7 @@ Run with `pnpm test` (Vitest). Tests sit next to their code as `*.test.ts`.
 
 | Risk | Mitigation |
 |---|---|
-| BGG approval takes a week or more (BGG's own warning) | Apply on Friday. `BGG_MODE=fake` lets every BGG-dependent step be built on fixtures, and `BGG_MODE=off` lets an instance launch with manual entry. |
+| BGG approval takes a week or more (BGG's warning; Carlo's took three days) | Each hoster applies first (SELF_HOSTING.md step 1). `BGG_MODE=fake` serves fixtures in development, and an instance launches on Wikidata or typed-in games (D28, D31). |
 | Code quietly drifts from BGG's terms | "Access and terms" lists each rule and where the plan meets it. AGENTS.md repeats the ones code can break. |
 | BGG changes its terms, or a hoster breaks them | Terms are summarized under "Access and terms" and linked from SELF_HOSTING.md. Each hoster holds their own application, so a violation affects only their token. |
 | BGG collection endpoint stays on 202 | Client-side polling with visible progress and a retry button. |
@@ -1097,4 +1038,4 @@ Run with `pnpm test` (Vitest). Tests sit next to their code as `*.test.ts`.
 | A personal link leaks (pasted in the wrong chat) | Regenerating it from the account page revokes it at once; "sign out everywhere" also ends existing sessions. |
 | Someone loses every device without saving their link | Their PIN at the group's door (D47); without it, a one-time sign-in code from an admin (D48); a duplicate made by rejoining can be merged into the old entry. |
 | A hoster misconfigures their instance | `instance.ts` names the missing variable on every page. SELF_HOSTING.md lists every step, and each is checked by doing it once on a fresh Cloudflare account. |
-| Scope creep | The PRD's cut order and stretch list are fixed. Nothing joins the stretch list before Sunday's items ship. |
+| Scope creep | New work starts only when Carlo asks for it (AGENTS.md "Scope"); other ideas wait on the PRD's "Planned or possible" list. |

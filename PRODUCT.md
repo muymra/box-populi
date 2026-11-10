@@ -52,7 +52,7 @@ Supporting claims, in order: game nights and the "who's here" picker, which plan
   - the play log with a leaderboard and CSV export, grouped by game night, with who came to each;
   - who goes first and dice;
   - themes, the instance admin page, and the public demo group.
-- **Planned:** see STATUS.md "Next up" and the PRD's stretch list.
+- **Planned:** see STATUS.md "Next up" and the PRD's "Planned or possible" list.
 - **Language:** English only (confirmed). Other languages may come later; not planned.
 - **No accounts** (DECISIONS D25): no email, password or third-party sign-in. The app stores a display name, games, memberships, a hashed PIN, and hashed session and link tokens.
 - **BoardGameGeek terms** (DECISIONS D23):

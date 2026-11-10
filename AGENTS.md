@@ -4,25 +4,23 @@ Box Populi is an open-source, self-hostable web app where a board game group poo
 
 This file applies to any coding agent or LLM working here. `CLAUDE.md` imports it.
 
-## Read first, in this order
+## The documents
 
-1. [STATUS.md](./STATUS.md): what exists, what's next, what's unverified. Start here every session.
-2. [PRD.md](./PRD.md): what the product does and why, including scope, cut order and open questions.
-3. [TECH.md](./TECH.md): how it's built, including schema, endpoints, BGG parsing rules and tests.
-4. [DECISIONS.md](./DECISIONS.md): choices already made. Don't reopen them without Carlo.
-5. [SELF_HOSTING.md](./SELF_HOSTING.md): what a hoster does. Keep it true when config or deploy steps change.
-6. [PRODUCT.md](./PRODUCT.md): users, positioning, voice and product principles, the starting point for any UI or copy work.
-7. [DESIGN.md](./DESIGN.md): the cube shelf visual system (tokens, colour roles, components, motion). Read it before touching any UI; the Impeccable design hook checks edits against it.
+Read them in this order; STATUS.md first, every session.
 
-## Which document owns what
-
-| Topic | Source of truth |
-|---|---|
-| Features, behavior, scope, priorities | PRD.md |
-| Schema, endpoints, algorithms, config names | The code; TECH.md describes it |
-| Settled choices and their reasons | DECISIONS.md |
-| Progress, recorded ids, verified facts, session log | STATUS.md |
-| Deploying and running an instance | SELF_HOSTING.md |
+| File | Owns | Read when |
+|---|---|---|
+| [STATUS.md](./STATUS.md) | Progress: what's open and done, recorded ids, verified facts, known issues, the session log since the last release | Every session, first |
+| [PRD.md](./PRD.md) | What the product does and why: features, behavior, what's built and what's planned, open questions | Before changing behavior |
+| [TECH.md](./TECH.md) | How it's built: schema, endpoints, algorithms, config names. The code is the truth; TECH.md describes it | Before changing code |
+| [DECISIONS.md](./DECISIONS.md) | Settled choices and their reasons. Don't reopen them without Carlo | When a choice looks odd |
+| [SELF_HOSTING.md](./SELF_HOSTING.md) | Deploying and running an instance. Keep it true when config or deploy steps change | When config or deploys change |
+| [PRODUCT.md](./PRODUCT.md) | Users, positioning, voice and product principles | Before UI or copy work |
+| [DESIGN.md](./DESIGN.md) | The cube shelf visual system: tokens, colour roles, components, motion; the Impeccable design hook checks edits against it | Before touching any UI |
+| [CHANGELOG.md](./CHANGELOG.md) | What changed in each version, and what an upgrade needs | When a user or hoster would notice a change |
+| [README.md](./README.md) | The public page: what it is, for people who might use or run it | When features change |
+| [docs/history/session-log.md](./docs/history/session-log.md) | The session log before the last release | Rarely |
+| CLAUDE.md | Imports this file for Claude Code | Never edit for rules; they go here |
 
 When code and TECH.md disagree, fix one of them in the same change and say which in STATUS.md. A doc that describes something the code doesn't do is a bug.
 
@@ -50,7 +48,7 @@ Restart `pnpm dev` after editing `.dev.vars` or `wrangler.jsonc`; the instance c
 
 ## Rules
 
-- **Scope.** Build in the order STATUS.md lists. Nothing from the PRD's stretch list before every Sunday item is done or cut. When time runs short, cut in the PRD's cut order and mark the items "cut" in STATUS.md.
+- **Scope.** Work on what Carlo has asked for, in the order STATUS.md lists. Items on the PRD's "Planned or possible" list wait until he picks one. If something else looks worth building, propose it; don't build it.
 - **Authorization.** Every group load function, action and endpoint goes through `src/lib/server/authz.ts`: `requireRead` (or `readGroup`, which adds the layout's extras from the same query), `requireRole`, or `requireActiveMember` for the Add page's per-person endpoints. Role rules go through `can()` in `permissions.ts`, with the target's role read from the database. Instance admin status grants nothing inside groups.
 - **Privacy in `/admin`.** Admin queries never select member lists, emails, join codes, collections, links or wishlists. Changing that needs a DECISIONS.md entry approved by Carlo.
 - **BGG.** Call BGG only from server code, through `getBggClient()`. Respect `BGG_MODE=off` everywhere. Never commit a token. Never commit real BGG responses or generated seed data: real fixtures go in `src/lib/server/bgg/fixtures/local/`, which is gitignored. Keep real BGG data out of anything that could become AI training data (the public repo, issues, prompts to services that train on inputs); BGG's terms prohibit AI training on it. Never let users edit a BGG-sourced game.
@@ -69,7 +67,7 @@ Restart `pnpm dev` after editing `.dev.vars` or `wrangler.jsonc`; the instance c
 - **Runtime access.** Only the platform modules (`platform.ts` for Cloudflare, `platform.node.ts`, `platform.libsql.ts`) know where the app runs, and only `platform.ts` imports `cloudflare:workers`. Load functions and actions (including the shared ones in `play-actions.ts`) call `getDb()` and pass `db` down; library code takes `db` and `config` as arguments. Deleting a group or a person goes through `deleteGroupStatements` / `deletePersonStatements`, never a bare `DELETE` that relies on cascades (Turso doesn't run them).
 - **Secrets.** `.dev.vars` and `wrangler.jsonc` are gitignored. Never write secret values into any file, log or doc.
 - **Open questions.** If the PRD lists an open question with a starting default, build the default. Don't block on it, and don't settle it yourself.
-- **Versions.** Every change a user or hoster would notice gets a line under "Unreleased" in [CHANGELOG.md](./CHANGELOG.md). At a production deploy, cut a version (D44): minor for features, a migration or a new setting, patch for fixes only; set it in `package.json`, move the lines under the new heading with an **Upgrading** line, and tag `vX.Y.Z`. Stay at 0.x: never 1.0 without Carlo.
+- **Versions.** Every change a user or hoster would notice gets a line under "Unreleased" in [CHANGELOG.md](./CHANGELOG.md). Every production deploy is a release (D44); the steps are in TECH.md "Versions". Stay at 0.x: never 1.0 without Carlo.
 
 ## Traps from outdated training data
 
@@ -91,6 +89,8 @@ Many models learned older versions of these tools. Check yourself against this l
 - **No sign-in provider.** No OAuth, no Lucia, no Auth.js. People are display names with device sessions, a six-digit PIN for other devices and a backup sign-in link (D25, D47, TECH.md "Identity and sessions").
 - **Workers runtime.** No file system (fixtures load through `import.meta.glob(..., { query: '?raw' })`), no `DOMParser` (use `fast-xml-parser`). Avoid Node built-ins.
 - **SvelteKit's CSRF check runs only in production builds.** It refuses form posts whose `Origin` doesn't match the site, and `pnpm dev` skips it, so a post that works locally can fail live. Never send `Referrer-Policy: no-referrer` (browsers then send `Origin: null` on later posts from that tab); use `same-origin`.
+- **A dev server outlives a database reset.** Started before `rm -rf .wrangler/state/v3/d1`, it keeps the deleted file open (`SQLITE_CANTOPEN`). Stop old `vite dev` processes by PID (`ss -ltnp | grep 5173`); `pkill -f` with the command line matches its own shell.
+- **Form posts from curl** need a `Content-Type` (SvelteKit 3 answers 415 without one) and `Accept: text/html` to get the 303.
 - **Never call `fetch` as a method.** Storing `fetch` on an object and calling `this.fetchFn(...)` throws "Illegal invocation" on Workers and works fine in Node, so tests pass and production breaks. Default to `(input, init) => fetch(input, init)` and call through a local variable; the client tests stub `globalThis.fetch` to throw the way Workers do.
 - **D1.** No `BEGIN`/`COMMIT`; `db.batch()` is the transaction. At most 100 bound parameters per statement. Foreign keys are enforced by default; the test adapter in `src/lib/server/testing/d1.ts` turns them on to match. `INSERT OR IGNORE` silently skips NOT NULL violations, so don't use it to paper over errors. Two limits the tests can't catch, because node:sqlite and libSQL don't have them: a `LIKE` or `GLOB` pattern over 50 bytes is an error (match with `instr()` instead), and the free plan allows 50 queries per request, where a `batch()` counts as one. Never run a query per row in a loop; check with one `IN (...)` query and write with one batch.
 - **Pages Functions.** No cron triggers, so all cleanup is lazy. 50 subrequests per request on the free plan. 
@@ -103,7 +103,7 @@ Many models learned older versions of these tools. Check yourself against this l
 - For UI changes, the page was opened in `pnpm dev` and looked at, not only type-checked.
 - New pure logic has tests. Permission changes update the permissions table test in `rules.test.ts`.
 - Docs match the code: the PRD if behavior changed, TECH.md if the implementation differs, DECISIONS.md if a choice was made, SELF_HOSTING.md if config or deploy steps changed.
-- STATUS.md has the checklist item ticked and one line in the session log: date, what changed, anything left half-done.
+- STATUS.md has the item moved to Done and one line in the session log: date, what changed, anything left half-done. At a release cut, the log's entries move to `docs/history/session-log.md`.
 - CHANGELOG.md has a line under "Unreleased" if a user or hoster would notice the change.
 - Nothing instance-specific, secret, or BGG-sourced is staged for commit.
 

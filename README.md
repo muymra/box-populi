@@ -99,6 +99,8 @@ pnpm test
 |---|---|
 | [SELF_HOSTING.md](./SELF_HOSTING.md) | Running a copy, on every supported host. |
 | [PRD.md](./PRD.md) | What it does and why. |
+| [PRODUCT.md](./PRODUCT.md) | Who it's for, its voice and principles. |
+| [DESIGN.md](./DESIGN.md) | The cube shelf's visual system and each page's layout. |
 | [TECH.md](./TECH.md) | How it's built. |
 | [DECISIONS.md](./DECISIONS.md) | Choices already made, and why. |
 | [STATUS.md](./STATUS.md) | Progress and what's next. |

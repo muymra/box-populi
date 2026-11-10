@@ -1,6 +1,6 @@
 # Box Populi: product requirements
 
-Status: written 2026-11-06 for a weekend build (2026-11-07 and 2026-11-08), kept up to date since. Released versions are in [CHANGELOG.md](./CHANGELOG.md).
+Status: first written 2026-11-06, and kept up to date as the app changes. Released versions are in [CHANGELOG.md](./CHANGELOG.md).
 How it's built: [TECH.md](./TECH.md). Settled decisions: [DECISIONS.md](./DECISIONS.md). Progress: [STATUS.md](./STATUS.md). Running an instance: [SELF_HOSTING.md](./SELF_HOSTING.md).
 
 ## Summary
@@ -61,55 +61,27 @@ A copy belongs to the user, not the group. When someone is in two groups, their 
 
 ## Scope
 
-### Saturday: the core
+### Built
 
-1. Identity without accounts: a display name, a device that stays signed in, and a six-digit PIN for getting back in through a group's link on any other device (D47).
-2. Create a group; get a code. Join a group by code or by its invite link, `/join/<code>-<key>` (D65: the key lets the link work even while someone floods the site with wrong codes).
-3. Add a game by searching BGG. Add a game by hand when BGG has no match or is unreachable.
-4. Group catalog with search and filters.
-5. Game page: image, description, stats, owners.
-6. Remove a copy; leave a group.
-7. Instance settings from environment variables, so nothing about Carlo's deployment is hard-coded. Missing settings produce an error page naming them.
+The first build (2026-11-06 to 2026-11-08): identity without accounts, with a PIN for other devices (D25, D47); groups with codes and invite links (D65); adding games by BGG search, collection import, Wikidata, a pasted list or by hand; the group catalog with search and filters; game pages; the picker with who's here; links to rules, videos and files; roles and group admin; the instance admin page; the public demo; the wishlist and the Wanted view; lending; themes and a custom theme (DESIGN.md "Themes"); public-sources mode (D31); hosting targets beyond Cloudflare Pages (D32); and instance settings from environment variables, so nothing about Carlo's deployment is hard-coded.
 
-At the end of Saturday the app answers "who has X" and "what fits 5 players in under an hour."
+Since then: game nights (D38), the play log (D37), archiving a group (D50), help getting back in (D48, D52), Find on BoardGameGeek (D57), favourites and Play soon (D63, D64), member profiles (D61), hiding games from a group (D66), who came to a night (D67), member colours that stay put (D69) and the play log a page at a time (D70). STATUS.md lists every item.
 
-### Sunday: what makes it worth using
+### Must keep working
 
-8. **BGG collection import.** Enter a BGG username, preview the owned games, tick the ones to add. Copies appear at once; full game details fill in behind a progress bar. This decides whether anyone fills in their games. Typing 80 titles by hand won't happen.
-9. **"What should we play?" picker,** including "who's here tonight."
-10. **User-added links** for rules, videos and files, plus two generated links per game.
-11. **Roles and group admin.** Promote and demote co-admins, rename, regenerate the code, remove members, transfer ownership, delete the group.
-12. **Instance admin page.** Key sign-in, totals, a groups table without contents, suspend and delete groups, an action log.
-13. **Public demo group** for portfolio visitors.
-14. **Wishlist and the Wanted view.**
-15. **Lending.**
-16. **Polish and publishing:** empty states, phone layout, BGG attribution, privacy page, README screenshots, SELF_HOSTING.md checked by following it once.
+Import, the picker, the demo group, the phone layout, and the instance admin basics (suspend and delete; there are no bans, D25). The first four decide whether a group uses it and whether it works as a portfolio piece. A public instance without the last one leaves the hoster editing the database by hand when something goes wrong.
 
-### Cut order
+### Planned or possible, in rough priority
 
-If the weekend runs long, drop in this order. Each item can be added back later without schema changes.
-
-1. Ownership transfer UI. Co-admins stay. Until it exists, the owner can't leave a group that has other members.
-2. The any/all switch on mechanics and themes. "Any" only.
-3. The weight range slider. Buckets only.
-4. Lending.
-5. Wishlist and the Wanted view, together.
-
-Never cut: import, the picker, the demo group, the phone layout, and the instance admin basics (suspend and delete; there are no bans, D25). The first four decide whether a group uses it and whether it works as a portfolio piece. A public instance without the last one leaves the hoster editing the database by hand when something goes wrong.
-
-### Stretch, in rough priority
-
-- **Game night.** Built 2026-11-07 (D38); see "Game night" below.
-- **Play log.** Built 2026-11-07 (D37); see "Play log" below. Date, game, players, places or scores, a podium-points leaderboard, a CSV export, and a "not played lately" filter.
+- **Expansions that change the player count** (STATUS item 30).
+- **Link previews** for a standard instance's pages (STATUS item 26; the showcase has them).
+- **Older years on the plays page, a way back from Game night, and exports that join** (STATUS item 45, parts 3 to 5).
 - **Passkeys** as an optional second way to sign in on a new device, for people who'd rather not keep a link.
 - **CSV export** of the group catalog: game name, year, BGG link and owners. No BGG descriptions or statistics, so the export can't work as a copy of BGG's data.
 - **Installable PWA** so it sits on a phone home screen.
-- **Member profiles** (Carlo's idea, 2026-11-09, D61): built the same day; see "Member profiles" below.
 - **Fill in details with an AI chatbot** (Carlo's idea, 2026-11-08, a maybe). A copyable prompt lists the person's games that lack details and asks a chatbot to research players, play time and complexity from publishers and rulebooks, not BGG, saying "unknown" rather than guessing, with a source per game. It answers in Paste a list's format with a fourth column for complexity as light, medium or heavy (D55): `Title | 2-4 | 30-60 | medium`. The column also takes a number from 1 to 5, decimals allowed (`2.31`), such as a BGG weight someone copies, and keeps only its complexity level (D62); the number itself isn't stored, so a non-BGG instance never holds BGG's figure. The prompt still asks for the chatbot's own judgment from the rules and the publisher's age and length, so it doesn't go to BGG for it. Pasting the answer fills only empty details on games already on the shelf, shared with every group (D54), after a preview of what changes. Today Paste a list skips games already on the shelf and has no complexity column. About 4 hours.
-- **Themes and branding.** Presets built 2026-11-06: twelve themes from the footer, with the hoster's default set by `THEME`, and a group theme set by a group's owner or co-admins (DESIGN.md "Themes"). Custom theme and logo built the same day: five colours and a logo address on `/admin`. The original plan: preset colour themes beside the default cube shelf, each with its light and dark variant: Dracula (with Alucard), Catppuccin (Latte and Mocha), Solarized, Gruvbox, Tokyo Night (Day and Night) and Kanagawa (Lotus and Wave). Chosen 2026-11-06 by GitHub stars among themes with an official light variant. Later candidates: Nord (dark-first), Everforest, Nightfox, One Dark and Light, Rosé Pine, GitHub, Night Owl, Ayu. Check each palette's license before shipping; GitHub detects none on morhetz/gruvbox. A custom theme where the hoster sets the colour tokens, and an instance logo in place of the cube mark. Every theme keeps the eight player colours distinguishable and readable on its surfaces, maps marigold's job (state only) to its own accent, and never recolours the BGG logo or credit. Who picks starts as: the hoster sets the instance default and logo, and each person can switch preset on their device. About 3 hours for the presets, 2 more for the custom theme and logo.
-- **More hosting targets** (D29; built 2026-11-06 as D32, TECH.md "Hosting targets"). A Docker image running on Node with a SQLite file, for home servers, NAS boxes, VPSes and container hosts with a persistent disk (about half a day). Cloudflare Workers beside Pages (about an hour). Later, Vercel and Netlify, which need a hosted database. Only `platform.ts` touches Cloudflare and the tests already run the data layer on `node:sqlite`, which keeps the Node target small.
 - **Moving a group to another instance** (Carlo, 2026-11-10; low priority, planned in STATUS item 46): the owner downloads the group as one file and starts a group from it on another Box Populi; members claim their names there with a sign-in code, and each brings their own games with Your data's games file.
-- **Public-sources mode** (built 2026-11-06, D31; TECH.md "Public-sources mode") for hosters who don't want to apply to BGG: titles, years and player counts from Wikidata, members fill in the rest by hand. The same plan as TECH.md "If BGG declines the application", offered as a setting (D27). About a day.
+- **A two-ended complexity range on the shelf** (was cut order item 3; the shelf filters by complexity level instead).
 
 ### Not doing
 
@@ -202,8 +174,8 @@ Hand-entered and Wikidata games can be filled in and corrected: name, image, pla
 | Text | Matches primary and alternate titles; case- and accent-insensitive. |
 | Players | Pick N from 1 to 12, or "13+": games whose range includes N (13+ checks 13). A "best at N" toggle narrows to games BGG voters rate best at that count (available up to 30 players). |
 | Time | "Fits in N minutes": games whose maximum listed play time is at most N. A game listed at 60 to 120 minutes doesn't fit in an hour. |
-| Complexity | BGG's five vote labels, a weight taking the one it rounds to: Light (under 1.5), Medium light (1.5 to under 2.5), Medium (to under 3.5), Medium heavy (to under 4.5), Heavy (4.5 and up) (D62), from BGG weight on its 1 to 5 scale. A range slider is a later addition (cut order item 3). |
-| Mechanics | Multi-select (deck building, worker placement, and so on). Matches any selected, with an "all of" switch (cut order item 2). |
+| Complexity | BGG's five vote labels, a weight taking the one it rounds to: Light (under 1.5), Medium light (1.5 to under 2.5), Medium (to under 3.5), Medium heavy (to under 4.5), Heavy (4.5 and up) (D62), from BGG weight on its 1 to 5 scale. A two-ended range is planned ("Planned or possible"). |
+| Mechanics | Multi-select (deck building, worker placement, and so on). Matches any selected, with an "all of" switch. |
 | Themes | Multi-select from BGG categories (fantasy, sci-fi, animals). Same any/all behavior. BGG categories mix themes with formats like "Card Game"; that's acceptable, and the filter is labeled "Themes and categories." |
 | Owner | One or more members, picked from a row of everyone with games on the shelf, in their player colours and in colour order (join order, until someone takes the colour of a member who left, D69), so the row is also the key to the owner edge. A member keeps their colour from the day they join, and someone joining later takes the colour of anyone who left (D69). The eight colours are solid, then striped, then dotted, so up to twenty-four members never share a look. For "what does Sam have?" |
 | Availability | Hide games that are lent outside the group. On by default. A copy lent to a group member counts as available. |

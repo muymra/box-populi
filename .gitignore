@@ -48,3 +48,7 @@ Thumbs.db
 
 # Agent worktrees (Claude Code)
 .claude/worktrees/
+
+# Impeccable critique snapshots: point-in-time reviews with local paths, not committed
+.impeccable/critique/*
+!.impeccable/critique/ignore.md
