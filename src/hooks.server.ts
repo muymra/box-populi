@@ -1,4 +1,5 @@
-import type { Handle } from '@sveltejs/kit/hooks';
+import type { Handle, HandleServerError } from '@sveltejs/kit/hooks';
+import { errorRef, errorStatus } from '#lib/error-ref.ts';
 import { getConfig, getDb } from '#lib/server/platform.ts';
 import { resolveSession, SESSION_COOKIE } from '#lib/server/identity.ts';
 import { clearAdminCookie, clearSessionCookie, setSessionCookie, THEME_COOKIE } from '#lib/server/cookies.ts';
@@ -68,3 +69,20 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (config.config.searchEngines === 'block') response.headers.set('x-robots-tag', 'noindex, nofollow');
 	return response;
 };
+
+/**
+ * An unexpected error on the server gets a reference (STATUS item 50): the error page shows it, and the
+ * log line carries it with the status, the request and the error itself, which is where the details
+ * are. A hoster finds it in the platform's logs: `wrangler pages deployment tail` or the dashboard's
+ * real-time logs on Cloudflare, `docker compose logs` on Docker. Errors the app raises on purpose
+ * (`error(...)`) already say what's wrong, and a missing page is ordinary, so neither gets one.
+ */
+export const handleError: HandleServerError = ({ kind, error, event }) => {
+	if (kind === 'app') return;
+	const status = errorStatus(kind, error);
+	if (status === 404) return;
+	const ref = errorRef();
+	console.error(`[box-populi error ${ref}] ${status} ${event.request.method} ${event.route.id ?? event.url.pathname} (${kind})`, error);
+	return { message: status >= 500 ? 'The server had a problem with that request' : String((error as { message?: unknown })?.message ?? 'That request didn’t work'), ref };
+};
+

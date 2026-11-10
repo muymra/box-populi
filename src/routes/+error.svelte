@@ -22,7 +22,8 @@
 		{:else if notFound}
 			<p>There's nothing at this address.</p>
 		{:else}
-			<p>{page.error?.message ?? 'The server had a problem with that request.'} Try again in a moment.</p>
+			<p>{page.error?.message ?? 'The server had a problem with that request'}. Try again in a moment.</p>
+			<p class="ref num">Error {page.status}{#if page.error?.ref}{' · ref '}{page.error.ref}{/if}</p>
 		{/if}
 		<p class="actions">
 			<a class="btn primary" href="/">Go to your groups</a>
@@ -32,6 +33,11 @@
 </section>
 
 <style>
+	.ref {
+		font-size: var(--t-small);
+		color: var(--ink-2);
+		user-select: all;
+	}
 	.error-page {
 		display: grid;
 		gap: var(--s-5);

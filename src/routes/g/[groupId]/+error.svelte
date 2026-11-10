@@ -18,7 +18,8 @@
 	{:else if notFound}
 		<p>There's nothing at this address in the group.</p>
 	{:else}
-		<p>{page.error?.message ?? 'The server had a problem with that request.'}.</p>
+		<p>{page.error?.message ?? 'The server had a problem with that request'}.</p>
+		<p class="ref num">Error {page.status}{#if page.error?.ref}{' · ref '}{page.error.ref}{/if}</p>
 	{/if}
 	<p><a class="btn primary" href="/g/{groupId}">Back to the shelf</a></p>
 </section>
@@ -26,5 +27,11 @@
 <style>
 	.error-page {
 		padding-top: var(--s-6);
+	}
+	/* What to quote when reporting it: quiet, and selectable in one go. */
+	.ref {
+		font-size: var(--t-small);
+		color: var(--ink-2);
+		user-select: all;
 	}
 </style>
