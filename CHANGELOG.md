@@ -4,6 +4,10 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+## 0.5.0 (2026-11-10)
+
+**Upgrading:** three migrations, 0017 to 0019. On Cloudflare, note a Time Travel bookmark and export a backup first, then apply them before deploying (SELF_HOSTING.md "Upgrading" has the commands and how to roll back). Docker, Vercel and Netlify apply them on their first request. They correct plays saved on the wrong day, decode codes like `&#039;` in stored BGG names, and store each member's colour; nobody's colour changes. No new settings. If you run a demo group, reseed it to get its favourites.
+
 - Game names from BoardGameGeek no longer show codes like `&#039;` in place of an apostrophe; names already on shelves are fixed when you upgrade, along with mechanics and themes.
 - After a game night, its page shows how it went: who came, what got played and who won, and what was brought but not played, and "Copy for the chat" copies that. Who came starts as who said they'd go; anyone in a play logged that night counts as there. You can say whether you came, and co-admins can for anyone or confirm the list in one tap. Play counts on profiles and the plays page, Play soon, and the nights export (a new `came` column) follow it.
 - Logging a play on a day that had a game night puts it on that night ("At Café, that day's game night"), and you can untick it; editing a play can move it onto or off a night. A play logged from a past night's page now gets the night's date instead of today's.
