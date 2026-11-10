@@ -120,6 +120,8 @@
 	const longDescription = $derived((g.description?.length ?? 0) > 500);
 
 	const KIND_ICONS = { rules: BookOpen, video: Play, other: LinkIcon };
+	// The title's example follows the kind, so files like a printable insert read as welcome too.
+	const TITLE_EXAMPLES: Record<LinkKind, string> = { rules: 'e.g. Official rulebook (PDF)', video: 'e.g. 20-minute teach', other: 'e.g. 3D-printable insert' };
 
 	// The add-link form: picks a kind from the address as it's typed, until the person picks one.
 	let adding = $state(false);
@@ -249,7 +251,7 @@
 		{/if}
 
 			<section class="form-panel rules" aria-labelledby="links-h">
-				<div class="form-head"><div><h3 id="links-h">Rules and tutorials</h3></div></div>
+				<div class="form-head"><div><h3 id="links-h">Rules, videos and files</h3></div></div>
 				<div class="form-block">
 				<ul class="links">
 					{#each data.links as link (link.id)}
@@ -283,7 +285,7 @@
 
 				{#if data.canEdit}
 					<details class="add-link" bind:open={adding}>
-						<summary class="btn small"><Plus size={16} aria-hidden="true" /> Add a rulebook or video</summary>
+						<summary class="btn small"><Plus size={16} aria-hidden="true" /> Add a link</summary>
 						<form
 							method="POST"
 							action="?/addLink"
@@ -330,7 +332,7 @@
 							</fieldset>
 							<label>
 								<span>Title <span class="hint">(optional)</span></span>
-								<input class="field" name="title" maxlength="100" placeholder="e.g. Official rulebook (PDF)" value={form?.link?.title ?? ''} />
+								<input class="field" name="title" maxlength="100" placeholder={TITLE_EXAMPLES[kind || 'rules']} value={form?.link?.title ?? ''} />
 							</label>
 							{#if form?.linkError}<p class="banner error" role="alert">{form.linkError}</p>{/if}
 							<div class="inline">

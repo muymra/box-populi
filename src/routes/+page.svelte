@@ -76,7 +76,7 @@
 		['Wanted', 'games someone wants and nobody in the group owns yet'],
 		['Hide games from a group', 'keep some of your games out of one group, a work group say, while your other groups still see them'],
 		['Lending', 'who has whose copy, so lent games don’t go missing'],
-		['Rules and tutorials', 'rulebook and video links on every game'],
+		['Rules, videos and files', 'rulebooks, how-to videos, score sheets and printable inserts, linked from each game'],
 		['At the table', 'who goes first, any mix of dice, and a coin, a tap away'],
 		['Your data', 'download your games, plays and game nights as spreadsheets, and take your games to another Box Populi'],
 		['Twelve colour themes', 'try one at the bottom of this page']

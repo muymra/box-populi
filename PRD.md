@@ -7,7 +7,7 @@ How it's built: [TECH.md](./TECH.md). Settled decisions: [DECISIONS.md](./DECISI
 
 Box Populi is a shared board game library for a friend group. Someone creates a group and gets a five-character code. Friends join with the code and a display name (no accounts, no passwords) and add the games they own, usually by importing their BoardGameGeek collection. Anyone in the group can then search the combined catalog by player count, play time, complexity, mechanics and theme, see who owns a copy, and ask the app to suggest what to play with the people who showed up.
 
-Game data (cover image, player counts, weight, mechanics, the community's "best at N players" votes) comes from BoardGameGeek (BGG). Rules and tutorial links are added by group members and sit next to the game.
+Game data (cover image, player counts, weight, mechanics, the community's "best at N players" votes) comes from BoardGameGeek (BGG). Links to rules, videos and files (score sheets, a 3D-printable insert) are added by group members and sit next to the game.
 
 It started as a weekend project and is now maintained occasionally, since Carlo's group has taken it up. It's open source on GitHub. Anyone can run their own instance on a free Cloudflare account. Carlo's instance is one of them: it serves his own group, hosts the public demo, and is linked from his portfolio. It should work well enough that Carlo's group uses it for real game nights, a portfolio visitor can see it working without an account, and a stranger can stand up their own instance from the docs alone.
 
@@ -77,7 +77,7 @@ At the end of Saturday the app answers "who has X" and "what fits 5 players in u
 
 8. **BGG collection import.** Enter a BGG username, preview the owned games, tick the ones to add. Copies appear at once; full game details fill in behind a progress bar. This decides whether anyone fills in their games. Typing 80 titles by hand won't happen.
 9. **"What should we play?" picker,** including "who's here tonight."
-10. **User-added links** for rules and videos, plus two generated links per game.
+10. **User-added links** for rules, videos and files, plus two generated links per game.
 11. **Roles and group admin.** Promote and demote co-admins, rename, regenerate the code, remove members, transfer ownership, delete the group.
 12. **Instance admin page.** Key sign-in, totals, a groups table without contents, suspend and delete groups, an action log.
 13. **Public demo group** for portfolio visitors.
@@ -269,7 +269,7 @@ Two icon buttons in the group bar, on every group page, each open a modal over t
 
 ### Links
 
-Members add a URL with a kind (rules, video, other) and an optional title. Links belong to the group, so each group builds its own. Each link shows who added it. The member who added a link, a co-admin, or the owner can delete it.
+Members add a URL with a kind (rules, video, other) and an optional title. The section is "Rules, videos and files", so files such as score sheets, player aids or a 3D-printable insert are welcome; they take the kind "other". Links belong to the group, so each group builds its own. Each link shows who added it. The member who added a link, a co-admin, or the owner can delete it.
 
 Every game page also shows two generated links that need no upkeep: the BGG page and a YouTube search for "how to play <game>".
 
