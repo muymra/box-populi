@@ -4,6 +4,10 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+## 0.6.1 (2026-11-11)
+
+**Upgrading:** nothing to do: no migrations and no new settings. Deploy as usual.
+
 - A game that an expansion in the group adds players to now shows the expansion's own count beside its own on the shelf and at Play tonight, after a puzzle piece: Catan reads "3–4p · 🧩5–6" when someone has the 5–6 Player Extension. Play tonight's rows add "🧩 5–6 with the 5-6 Player Extension (Bram's)" whenever it's there, not only when tonight's count needs it, and the "choose one yourself" list shows it too, which it didn't before. On a phone, a cube with the puzzle piece leaves out its play time.
 - The footer credits BoardGameGeek with BGG's own "Powered by BGG" logo instead of a text badge, in white on dark themes.
 
