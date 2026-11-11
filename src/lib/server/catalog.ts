@@ -89,7 +89,7 @@ export async function loadCatalog(db: DB, groupId: string, version: number): Pro
 	// from this group (D66), so the payload is the same for every viewer, owner included. Games and
 	// copies are read apart: joined, each game's 21 columns
 	// came back once per copy, and turning those rows into objects was most of the CPU a build cost (D65).
-	const { members, corrections, played, favourites, gameRows, copyRows } = await readAll(db, {
+	const { members, corrections, played, favourites, gameRows, copyRows, bases } = await readAll(db, {
 		members: membersRead(db, groupId),
 		corrections: correctionsRead(db, groupId),
 		// For "not played lately" (PRD "Play log").
@@ -113,6 +113,17 @@ export async function loadCatalog(db: DB, groupId: string, version: number): Pro
 			 FROM group_copies c WHERE c.group_id = ?1
 			 ORDER BY c.game_id, c.id`,
 			groupId
+		),
+		// Which of the group's games each of its expansions expands, through `game_bases` (D65), so an
+		// expansion's player count can widen its base's (STATUS item 30). Both have to be on the shelf.
+		bases: rowsOf<{ expansion_id: number; base_id: number }>(
+			db,
+			`SELECT b.game_id AS expansion_id, g.id AS base_id
+			 FROM game_bases b JOIN games g ON g.bgg_id = b.base_bgg_id
+			 WHERE b.game_id IN (SELECT game_id FROM group_copies WHERE group_id = ?1)
+			   AND g.id IN (SELECT game_id FROM group_copies WHERE group_id = ?1)
+			 ORDER BY b.game_id, g.id`,
+			groupId
 		)
 	});
 
@@ -135,6 +146,10 @@ export async function loadCatalog(db: DB, groupId: string, version: number): Pro
 			lentOut: row.lent_to_text != null,
 			addedAt: row.added_at
 		});
+	}
+	for (const row of bases) {
+		const expansion = games.get(row.expansion_id);
+		if (expansion?.isExpansion && row.base_id !== row.expansion_id) expansion.baseIds = [...(expansion.baseIds ?? []), row.base_id];
 	}
 	return { version, members, games: [...games.values()] };
 }

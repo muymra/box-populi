@@ -14,7 +14,8 @@
 	import { BUCKET_LABELS, WEIGHT_BUCKETS, formatPlaytime, weightBucket, type WeightBucket } from '#lib/catalog/buckets.ts';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { MANY_PLAYERS, PLAYER_CHOICES, formatPlayerRange, maskHas, playerChoiceLabel } from '#lib/catalog/players.ts';
-	import { DEFAULT_FILTERS, filterGames, keepMatching, sortGames } from '#lib/catalog/filter.ts';
+	import { DEFAULT_FILTERS, filterGames, keepMatching, shelfExtensions, sortGames } from '#lib/catalog/filter.ts';
+	import { expansionsOnHand, extensionName, fitsWith, type OnHand } from '#lib/catalog/extensions.ts';
 	import {
 		LINEUP_SIZE,
 		MAX_CHOSEN,
@@ -26,6 +27,7 @@
 		fillerWeight,
 		fitsPlayers,
 		gamesAtHand,
+		isCopyAtHand,
 		isFiller,
 		misfits,
 		needsSplit,
@@ -189,13 +191,31 @@
 		if (!payload || pool || !host) return room;
 		return gamesAtHand(keepMatching(byTitle, { ...DEFAULT_FILTERS, availableOnly: false }, memberIds), new Set([host]));
 	});
+	/**
+	 * Expansions that widen a game's player count tonight (STATUS item 30): one whose owner is here (the
+	 * host's too, at a member's home) or that's on tonight's list. With nobody ticked, the group's own.
+	 */
+	const onHand = $derived.by((): OnHand | undefined => {
+		if (!payload) return undefined;
+		const listed = tonight ? nightPoolIds(tonight, payload.games, memberIds) : null;
+		const people = new Set(host ? [...present, host] : present);
+		if (!listed && people.size === 0) return shelfExtensions(payload.games, { availableOnly: true }, memberIds);
+		return expansionsOnHand(payload.games, (c, g) => (listed?.has(g.id) ?? false) || isCopyAtHand(c, people));
+	});
+	/** "With the 5-6 Player Extension (Bram’s)" on a game that seats `size` only that way. */
+	function withLine(game: CatalogGame, size: number | null): string | null {
+		const via = size ? fitsWith(game, size, onHand) : null;
+		if (!via) return null;
+		const owners = ownersOf(via);
+		return `With ${extensionName(game.name, via.name)}${owners.length ? ` (${ownerText(owners)})` : ''}`;
+	}
 	/** More people here than three in four of the games take: the evening runs as several groups (D41). */
-	const bigRoom = $derived(roomIsBig(atTable, shelfToPull));
+	const bigRoom = $derived(roomIsBig(atTable, shelfToPull, onHand));
 	// In a big room nobody is put at a table (D41): Players stays "Any" until someone says how many are starting.
 	const players = $derived(playersOverride ?? (bigRoom ? null : atTable || null));
 	const weights = $derived(ceiling ? WEIGHT_BUCKETS.slice(0, WEIGHT_BUCKETS.indexOf(ceiling) + 1) : []);
 	// shelfToPull is already in title order, so filtering keeps it.
-	const candidates = $derived(keepMatching(shelfToPull, { ...DEFAULT_FILTERS, players, minutes, weights, availableOnly: false }, memberIds));
+	const candidates = $derived(keepMatching(shelfToPull, { ...DEFAULT_FILTERS, players, minutes, weights, availableOnly: false }, memberIds, { onHand }));
 	const keptSet = $derived(new Set(kept));
 	/** A pull covers group sizes instead of one table: a big room, with nobody saying how many are starting. */
 	const spreadMode = $derived(bigRoom && playersOverride == null);
@@ -205,14 +225,14 @@
 	let fillerBandOf = $state<Record<number, BandId>>({});
 	const bandLabel = (id: BandId | undefined | null) => SPREAD_BANDS.find((b) => b.id === id)?.label ?? null;
 	const keptGames = $derived(lineup.filter((g) => keptSet.has(g.id)));
-	const coveredBands = $derived(spreadMode ? assignBands(keptGames, bandOf) : new Map<number, BandId>());
+	const coveredBands = $derived(spreadMode ? assignBands(keptGames, bandOf, onHand) : new Map<number, BandId>());
 	/** Places in the lineup a pull fills: the bands not covered by a kept game, or the three places. */
 	const open = $derived(
 		spreadMode ? SPREAD_BANDS.filter((b) => ![...coveredBands.values()].includes(b.id)).length : Math.max(0, LINEUP_SIZE - kept.length)
 	);
 	const mainLabel = (game: CatalogGame) => (spreadMode ? bandLabel(keptSet.has(game.id) ? coveredBands.get(game.id) : bandOf[game.id]) : null);
 	const drawable = $derived(candidates.filter((g) => !keptSet.has(g.id)));
-	const whyMain = (game: CatalogGame) => misfits(game, { players, minutes, ceiling }, roomIds.has(game.id));
+	const whyMain = (game: CatalogGame) => misfits(game, { players, minutes, ceiling }, roomIds.has(game.id), onHand);
 	const mainFull = $derived(kept.length >= MAX_CHOSEN ? `That’s ${MAX_CHOSEN} games, the most the lineup holds. Let one go to choose another.` : null);
 
 	// Fillers ignore the time and complexity limits (they have their own) but come from the same table
@@ -222,24 +242,24 @@
 		const main = new Set(lineup.map((g) => g.id));
 		return shelfToPull.filter((g) => isFiller(g, data.filler) && !main.has(g.id));
 	});
-	const fillerCandidates = $derived(players ? fillerPool.filter((g) => fitsPlayers(g, players)) : fillerPool);
-	const splitting = $derived(needsSplit(fillerPool, players));
+	const fillerCandidates = $derived(players ? fillerPool.filter((g) => fitsPlayers(g, players, onHand)) : fillerPool);
+	const splitting = $derived(needsSplit(fillerPool, players, onHand));
 	const keptFillerSet = $derived(new Set(keptFillers));
 	const keptFillerGames = $derived(keptFillers.map((id) => gameById.get(id)).filter((g): g is CatalogGame => g != null));
 	/** Kept fillers that fit none of the tables, shown after them. */
 	const strayFillers = $derived(tableFillers ? keptFillerGames.filter((g) => !tableFillers!.some((t) => t.game.id === g.id)) : []);
 	const fillerDrawable = $derived(splitting || spreadMode ? fillerPool.some((g) => !keptFillerSet.has(g.id)) : fillerCandidates.some((g) => !keptFillerSet.has(g.id)));
-	const coveredFillerBands = $derived(spreadMode ? assignBands(keptFillerGames, fillerBandOf) : new Map<number, BandId>());
+	const coveredFillerBands = $derived(spreadMode ? assignBands(keptFillerGames, fillerBandOf, onHand) : new Map<number, BandId>());
 	const fillerOpen = $derived(
 		spreadMode ? SPREAD_BANDS.filter((b) => ![...coveredFillerBands.values()].includes(b.id)).length : Math.max(0, LINEUP_SIZE - keptFillers.length)
 	);
 	const fillerLabel = (game: CatalogGame) =>
 		spreadMode ? bandLabel(keptFillerSet.has(game.id) ? coveredFillerBands.get(game.id) : fillerBandOf[game.id]) : null;
-	const whyFiller = (game: CatalogGame) => misfits(game, { players: splitting ? null : players, minutes: null, ceiling: null }, roomIds.has(game.id));
+	const whyFiller = (game: CatalogGame) => misfits(game, { players: splitting ? null : players, minutes: null, ceiling: null }, roomIds.has(game.id), onHand);
 	const fillerFull = $derived(!splitting && keptFillers.length >= MAX_CHOSEN ? `That’s ${MAX_CHOSEN} fillers, the most the row holds. Let one go to choose another.` : null);
 	function fillerBlocked(game: CatalogGame): string | null {
 		if (!tableFillers || tableFillers.some((t) => t.game.id === game.id)) return null;
-		return placeFiller(tableFillers, game, keptFillerSet) ? null : 'Fits no open table';
+		return placeFiller(tableFillers, game, keptFillerSet, onHand) ? null : 'Fits no open table';
 	}
 
 	/**
@@ -367,7 +387,7 @@
 	}
 	function pullMainNow(again: boolean) {
 		if (spreadMode) {
-			const spread = pickSpread(drawable, keptGames, bandOf, Math.random, new Set(again ? seen : []), weighMain);
+			const spread = pickSpread(drawable, keptGames, bandOf, Math.random, new Set(again ? seen : []), weighMain, onHand);
 			lineup = spread.slots.map((s) => s.game);
 			bandOf = Object.fromEntries(spread.slots.filter((s) => s.band).map((s) => [s.game.id, s.band as BandId]));
 			const drawn = spread.slots.filter((s) => !keptSet.has(s.game.id)).map((s) => s.game.id);
@@ -430,7 +450,8 @@
 				fillerBandOf,
 				Math.random,
 				new Set(again ? fillerSeen : []),
-				weighFiller
+				weighFiller,
+				onHand
 			);
 			tableFillers = null;
 			fillers = spread.slots.map((s) => s.game);
@@ -441,7 +462,7 @@
 			return;
 		}
 		if (splitting && players) {
-			tableFillers = splitFillers(fillerPool, players, Math.random, new Set(again ? fillerSeen : []), keptFillerGames, weighFiller);
+			tableFillers = splitFillers(fillerPool, players, Math.random, new Set(again ? fillerSeen : []), keptFillerGames, weighFiller, onHand);
 			fillers = [];
 			const drawn = tableFillers?.map((t) => t.game.id).filter((id) => !keptNow.has(id)) ?? [];
 			fillerSeen = again ? [...fillerSeen, ...drawn] : drawn;
@@ -475,7 +496,7 @@
 		if (!tableFillers) return;
 		const size = tableFillers[index].players;
 		const used = new Set(tableFillers.map((t) => t.game.id));
-		const fits = fillerPool.filter((g) => !used.has(g.id) && fitsPlayers(g, size));
+		const fits = fillerPool.filter((g) => !used.has(g.id) && fitsPlayers(g, size, onHand));
 		const [game] = pick(fits, size, Math.random, new Set(fillerSeen), 1, fillerOf).games;
 		if (!game) return;
 		tableFillers = tableFillers.map((t, j) => (j === index ? { players: t.players, game } : t));
@@ -490,7 +511,7 @@
 			if (index >= 0) redrawTable(index);
 			else fillers = fillers.filter((g) => g.id !== game.id);
 		} else if (tableFillers) {
-			const next = placeFiller(tableFillers, game, keptFillerSet);
+			const next = placeFiller(tableFillers, game, keptFillerSet, onHand);
 			if (!next) return;
 			tableFillers = next;
 			keptFillers = [...keptFillers, game.id];
@@ -752,9 +773,11 @@
 						{isKept ? 'Kept' : 'Keep'}
 					</button>
 				{/snippet}
-				<!-- One pulled or chosen game as a compact row: the box, its facts, whose it is, and what to do with it. -->
-				{#snippet result(game: CatalogGame, i: number, label: string | null, tags: string[], isKept: boolean, toggle: () => void)}
+				<!-- One pulled or chosen game as a compact row: the box, its facts, whose it is, and what to do with it.
+				     `size`: the players it's for, so a game that seats them only with an expansion says which. -->
+				{#snippet result(game: CatalogGame, i: number, label: string | null, tags: string[], isKept: boolean, toggle: () => void, size: number | null)}
 					{@const owners = ownersOf(game)}
+					{@const withText = withLine(game, size)}
 					<li class="result" class:kept={isKept} style:--delay="{i * 60}ms">
 						<a class="thumb" href="/g/{data.group.id}/game/{game.id}" tabindex="-1" aria-hidden="true"
 							><BoxFront name={game.name} src={game.thumbUrl} size="mini" /></a
@@ -770,6 +793,7 @@
 								{#if label}<span class="tag best num">{label}</span>{/if}
 								{#each tags as tag (tag)}<span class="tag best">{tag}</span>{/each}
 							</span>
+							{#if withText}<span class="with">{withText}</span>{/if}
 							{#if soonLine(game)}<span class="soon">{soonLine(game)}</span>{/if}
 						</div>
 						<div class="acts">
@@ -818,7 +842,8 @@
 									mainLabel(game),
 									[...(players && maskHas(game.bestMask, players) ? [`Best at ${players}`] : []), ...(isKept ? whyMain(game) : [])],
 									isKept,
-									() => toggleKeep(game.id)
+									() => toggleKeep(game.id),
+									spreadMode ? null : players
 								)}
 							{/each}
 						</ul>
@@ -852,10 +877,10 @@
 							<p class="muted split-note">No filler here takes {total} players, so split into {tableFillers.length} tables.</p>
 							<ul class="result-list">
 								{#each tableFillers as t, i (t.game.id)}
-									{@render result(t.game, i, `Table ${i + 1} · ${t.players} players`, [], keptFillerSet.has(t.game.id), () => toggleKeepFiller(t.game.id))}
+									{@render result(t.game, i, `Table ${i + 1} · ${t.players} players`, [], keptFillerSet.has(t.game.id), () => toggleKeepFiller(t.game.id), t.players)}
 								{/each}
 								{#each strayFillers as game, i (game.id)}
-									{@render result(game, tableFillers.length + i, null, ['Fits no table', ...whyFiller(game)], true, () => toggleKeepFiller(game.id))}
+									{@render result(game, tableFillers.length + i, null, ['Fits no table', ...whyFiller(game)], true, () => toggleKeepFiller(game.id), null)}
 								{/each}
 							</ul>
 						{:else if fillers.length}
@@ -868,7 +893,8 @@
 										fillerLabel(game),
 										[...(game.weight == null ? ['Complexity unknown'] : []), ...(isKept ? whyFiller(game) : [])],
 										isKept,
-										() => toggleKeepFiller(game.id)
+										() => toggleKeepFiller(game.id),
+										spreadMode ? null : players
 									)}
 								{/each}
 							</ul>
@@ -1376,7 +1402,8 @@
 		display: inline-flex;
 		gap: 2px;
 	}
-	.soon {
+	.soon,
+	.with {
 		font-size: var(--t-small);
 		color: var(--ink-2);
 	}

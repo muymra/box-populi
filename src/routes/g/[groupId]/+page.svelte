@@ -27,12 +27,15 @@
 		parseFilters,
 		passedOnUnknown,
 		serializeFilters,
+		shelfExtensions,
 		sortGames,
 		tagOptions,
+		widenedFor,
 		type SortKey
 	} from '#lib/catalog/filter.ts';
 	import { PLAYER_CHOICES, playerChoiceLabel } from '#lib/catalog/players.ts';
-	import type { CatalogPayload } from '#lib/catalog/types.ts';
+	import { extensionName } from '#lib/catalog/extensions.ts';
+	import type { CatalogGame, CatalogPayload } from '#lib/catalog/types.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -83,7 +86,16 @@
 	const sortKey = $derived(filters.sort);
 	const sorted = $derived(payload ? sortGames(payload.games, sortKey) : []);
 	const plainFilters = $derived($state.snapshot(filters));
-	const results = $derived(keepMatching(sorted, plainFilters, memberIds, Date.now(), viewer, data.staleDays));
+	// The group's expansions that widen a game's player count (STATUS item 30), lent-out ones only when shown.
+	const availableOnly = $derived(filters.availableOnly);
+	const onHand = $derived(payload ? shelfExtensions(payload.games, { availableOnly }, memberIds) : undefined);
+	const context = $derived({ viewer, staleDays: data.staleDays, onHand });
+	const results = $derived(keepMatching(sorted, plainFilters, memberIds, context));
+	/** What the shelf tags a game with: the expansion it fits with, or "Info missing". */
+	const tagFor = (game: CatalogGame) => {
+		const via = onHand ? widenedFor(game, plainFilters, onHand) : null;
+		return { via: via ? `With ${extensionName(game.name, via.name)}` : null, unknown: !via && passedOnUnknown(game, plainFilters) };
+	};
 	const spare = $derived(limit >= results.length ? (columns - (results.length % columns)) % columns : 0);
 	// The favourites filters appear once someone has a favourite, Play soon once the viewer has a mark.
 	const hasFavourites = $derived(payload?.games.some((g) => (g.favouredBy?.length ?? 0) > 0) ?? false);
@@ -102,7 +114,7 @@
 	let ownersTouched = $state<string[]>([]);
 	const ownerFold = $derived(foldMembers(ownerChoices, new Set([...filters.owners, ...ownersTouched])));
 	const ownersShown = $derived(ownersExpanded ? ownerChoices : ownerFold.shown);
-	const hidden = $derived(payload ? hiddenByDefault(payload.games, plainFilters, memberIds, Date.now(), viewer, data.staleDays) : { lent: 0, expansions: 0 });
+	const hidden = $derived(payload ? hiddenByDefault(payload.games, plainFilters, memberIds, context) : { lent: 0, expansions: 0 });
 	const hiddenText = $derived(
 		[
 			hidden.lent && `${hidden.lent} lent-out ${hidden.lent === 1 ? 'game' : 'games'}`,
@@ -416,7 +428,7 @@
 {:else if view === 'cubes' && results.length}
 	<ul class="shelf" bind:this={shelfEl}>
 		{#each results.slice(0, limit) as game (game.id)}
-			<li><Cube {game} href="/g/{data.group.id}/game/{game.id}" members={memberMap} {memberIds} unknown={passedOnUnknown(game, plainFilters)} /></li>
+			<li><Cube {game} href="/g/{data.group.id}/game/{game.id}" members={memberMap} {memberIds} {...tagFor(game)} /></li>
 		{/each}
 		<!-- Empty compartments fill out the last row, so the shelf never stops short. -->
 		{#each { length: spare } as _, k (k)}
@@ -430,7 +442,7 @@
 {:else if results.length}
 	<ul class="list">
 		{#each results.slice(0, limit) as game (game.id)}
-			<li><ListRow {game} href="/g/{data.group.id}/game/{game.id}" members={memberMap} {memberIds} unknown={passedOnUnknown(game, plainFilters)} /></li>
+			<li><ListRow {game} href="/g/{data.group.id}/game/{game.id}" members={memberMap} {memberIds} {...tagFor(game)} /></li>
 		{/each}
 	</ul>
 {/if}

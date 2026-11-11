@@ -1,6 +1,7 @@
 import { needsBggCredit } from '#lib/server/bgg-credit.ts';
 import { activeGameSource } from '#lib/server/instance.ts';
 import { getDb } from '#lib/server/platform.ts';
+import { linkPreview } from '#lib/server/preview-image.ts';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ locals }) => ({
@@ -14,5 +15,7 @@ export const load: LayoutServerLoad = async ({ locals }) => ({
 	// The custom theme's stylesheet version (null when there's none) and the logo replacing the cube mark.
 	customTheme: locals.appearance.colors ? locals.appearance.version : null,
 	logoUrl: locals.appearance.logoUrl,
+	// The picture pages' link previews use (TECH.md "Link previews").
+	preview: linkPreview(locals.config.instanceName, locals.instanceTheme, locals.appearance),
 	user: locals.user ? { name: locals.user.name } : null
 });

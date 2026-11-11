@@ -179,6 +179,9 @@
 						<span><strong class="num">{players}</strong> players
 							{#if best}<span class="muted">{' · '}best with <span class="num">{best}</span> ({pollLabel})</span>{/if}
 							{#if recommended && recommended !== best}<span class="muted">{' · '}recommended <span class="num">{recommended}</span></span>{/if}
+							{#each data.playerExtensions as x (x.id)}
+								<span class="widened"><span class="num">{x.range}</span> with <a href="{base}/game/{x.id}">{x.name}</a>{#if x.owners}{' '}({x.owners}){/if}</span>
+							{/each}
 						</span>
 					</li>
 				{/if}
@@ -674,6 +677,12 @@
 		display: flex;
 		gap: var(--s-2);
 		align-items: flex-start;
+	}
+	/* An expansion's own count, under the game's (STATUS item 30). */
+	.widened {
+		display: block;
+		color: var(--ink-2);
+		font-size: var(--t-small);
 	}
 	.facts :global(svg) {
 		flex: none;

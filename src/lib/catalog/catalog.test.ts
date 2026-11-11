@@ -281,11 +281,11 @@ describe('favourites and Play soon on the shelf (D63, D64)', () => {
 	const all = [plain, liked, outside, loved];
 	it('filters to anyone’s favourites in the group, or the viewer’s own', () => {
 		expect(filterGames(all, f({ favourites: 'any' }), members).map((g) => g.name)).toEqual(['Liked', 'Loved']);
-		expect(filterGames(all, f({ favourites: 'mine' }), members, Date.now(), { id: 'u1', playSoon: new Set() }).map((g) => g.name)).toEqual(['Loved']);
+		expect(filterGames(all, f({ favourites: 'mine' }), members, { viewer: { id: 'u1', playSoon: new Set() } }).map((g) => g.name)).toEqual(['Loved']);
 		expect(filterGames(all, f({ favourites: 'mine' }), members)).toEqual([]); // nobody signed in
 	});
 	it('filters to the viewer’s Play soon list', () => {
-		expect(filterGames(all, f({ playSoon: true }), members, Date.now(), { id: 'u1', playSoon: new Set([plain.id]) })).toEqual([plain]);
+		expect(filterGames(all, f({ playSoon: true }), members, { viewer: { id: 'u1', playSoon: new Set([plain.id]) } })).toEqual([plain]);
 	});
 	it('sorts the most loved first', () => {
 		expect(filterGames(all, f({ sort: 'loved' }), members).map((g) => g.name)).toEqual(['Loved', 'Liked', 'Outside', 'Plain']);
@@ -298,9 +298,9 @@ describe('not played lately', () => {
 		const recent = game({ lastPlayed: '2026-10-01' });
 		const old = game({ lastPlayed: '2026-07-01' });
 		const never = game({ lastPlayed: null });
-		const shown = filterGames([recent, old, never], f({ stale: true }), members, now).map((g) => g.id);
+		const shown = filterGames([recent, old, never], f({ stale: true }), members, { now }).map((g) => g.id);
 		expect(shown.sort()).toEqual([old.id, never.id].sort());
-		expect(filterGames([recent, old, never], f({}), members, now)).toHaveLength(3);
+		expect(filterGames([recent, old, never], f({}), members, { now })).toHaveLength(3);
 		expect(parseFilters(new URLSearchParams('stale=1')).stale).toBe(true);
 		expect(serializeFilters(f({ stale: true })).get('stale')).toBe('1');
 	});
@@ -310,8 +310,8 @@ describe('not played lately', () => {
 		const recent = game({ lastPlayed: '2026-10-01' });
 		const old = game({ lastPlayed: '2026-07-01' });
 		// 30 days: October is recent. 180 days: July is too.
-		expect(filterGames([recent, old], f({ stale: true }), members, now, undefined, 30).map((g) => g.id).sort()).toEqual([recent.id, old.id].sort());
-		expect(filterGames([recent, old], f({ stale: true }), members, now, undefined, 180)).toEqual([]);
+		expect(filterGames([recent, old], f({ stale: true }), members, { now, staleDays: 30 }).map((g) => g.id).sort()).toEqual([recent.id, old.id].sort());
+		expect(filterGames([recent, old], f({ stale: true }), members, { now, staleDays: 180 })).toEqual([]);
 		expect(staleCutoff(now, 7)).toBe('2026-10-31');
 		expect([90, 30, 14, 7, 45, 365].map(staleLabel)).toEqual(['3 months', 'month', '2 weeks', 'week', '45 days', '365 days']);
 	});

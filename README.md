@@ -9,7 +9,7 @@ A shared shelf for your board game group. Everyone adds the games they own, and 
 ## What your group gets
 
 - **One shelf for everyone's games.** Each game stands in its own compartment, at the shape of its box, with a coloured line for each friend who owns it.
-- **Finding something to play.** Pick "4 players" and "fits in an hour", add "not too heavy" if you like, and the shelf shows only what fits.
+- **Finding something to play.** Pick "4 players" and "fits in an hour", add "not too heavy" if you like, and the shelf shows only what fits. Expansions count: with someone's 5–6 player extension, Catan shows up for six.
 - **Game night.** Plan a night, see who's coming and what they'll bring, and copy it all to the group chat. On the night, Play tonight suggests three games from what's actually there, guests' games included, or lets you choose and keep your own, plus quick fillers for while others arrive, split across tables if the group is too big for any of them.
 - **Favourites and Play soon.** Heart the games you love, and keep a short list of ones you'd like to play soon. Play tonight leans towards both for whoever's there, and nobody gets asked to bring anything: an owner only sees that someone going would like to play theirs.
 - **Play log.** Note who played what and who won, with scores if you like, kept with the night you played them. A leaderboard with points for the podium, just for fun.

@@ -97,7 +97,7 @@ In `wrangler.jsonc` under `"vars"`:
 | `INSTANCE_CONTACT` | `mailto:` with your address, or an `https://` contact page. Required; the example address is refused. |
 | `GROUP_CREATION` | `admins` (the default): only you create groups, from the admin page. `anyone`: every visitor can create one. |
 | `INSTANCE_MODE` | `standard`. Set `demo` for an instance that only shows the demo group: its home page introduces the demo and links to GitHub. |
-| `SEARCH_ENGINES` | `allow`. Set `block` if only your groups should find the instance; search engines are asked not to index it. |
+| `SEARCH_ENGINES` | `allow`. Set `block` if only your groups should find the instance; search engines are asked not to index it. Its `robots.txt` disallows everything except what chat apps' link preview crawlers need for a card: a group's link, the sign-in page and the preview picture. |
 | `THEME` | `cube`, the default look. Or a preset such as `dracula`, `catppuccin` or `nord`; the full list is in `src/lib/themes.ts`. Visitors can still pick their own from the footer. |
 | `GAME_SOURCE` | `wikidata`. While you have no BGG token, members search Wikidata for games; set `manual` to have them type everything instead. |
 | `MAX_GROUPS_PER_USER` | Default `5`. |
@@ -133,7 +133,7 @@ pnpm exec wrangler pages deploy
 ## 7. Check it
 
 1. Open your site. On a new project the address can answer with error 522 for about a minute after the first deploy; wait and reload. If a setting is missing, the page names it.
-2. Open `/admin/login` and enter your admin key. The admin page should show zero groups. Its "Look of this site" section sets a custom theme from five colours and a logo, without redeploying.
+2. Open `/admin/login` and enter your admin key. The admin page should show zero groups. Its "Look of this site" section sets a custom theme from five colours and a logo, without redeploying. The logo is also the picture on your links' previews in chat apps; without one, they show the cube mark in your theme's colours.
 3. From the admin page, create a group with your name and a PIN, add a game, and open the catalog. (With the default `GROUP_CREATION=admins`, only you can create groups; your group's members join with its code.)
 4. Open `/privacy` and check that it shows your instance name and contact.
 

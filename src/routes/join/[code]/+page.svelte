@@ -6,6 +6,7 @@
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { PIN_LENGTH } from '#lib/pin.ts';
 	import { GROUP_CODE_EXAMPLE, SIGN_IN_CODE_EXAMPLE, tidySignInCode } from '#lib/codes.ts';
+	import LinkPreview from '#lib/components/LinkPreview.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -23,6 +24,17 @@
 </script>
 
 <svelte:head><title>{data.state === 'ok' || data.state === 'refused' ? data.groupName : 'Join a group'} · {data.instanceName}</title></svelte:head>
+<!-- The group's link in its chat (STATUS item 26): the card names the group, as the page does for anyone with the code, but never its members. -->
+{#if data.state === 'ok'}
+	<LinkPreview
+		siteName={data.instanceName}
+		preview={data.preview}
+		title="Join {data.groupName} on {data.instanceName}"
+		description="Everyone’s board games on one shelf, so you can find something that fits tonight. Join with your name and a PIN, or tap your name if you’re already in."
+	/>
+{:else if data.state === 'refused'}
+	<LinkPreview siteName={data.instanceName} preview={data.preview} title="{data.groupName} on {data.instanceName}" description={data.refusal ?? ''} />
+{/if}
 
 {#if data.state === 'limited'}
 	<section class="narrow">

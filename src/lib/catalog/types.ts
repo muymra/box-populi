@@ -50,6 +50,11 @@ export type CatalogGame = {
 	lastPlayed?: string | null;
 	/** Members of this group who have it as a favourite (D63). Only in a group's catalog. */
 	favouredBy?: string[];
+	/**
+	 * For an expansion, the games in this catalog it expands, from BGG's links, so its player count can
+	 * widen theirs (STATUS item 30, `extensions.ts`). Left out when there are none.
+	 */
+	baseIds?: number[];
 	copies: CatalogCopy[];
 };
 

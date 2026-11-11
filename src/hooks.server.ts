@@ -7,6 +7,8 @@ import { AUTO_THEME, isDeviceTheme, isThemeId, resolveTheme } from '#lib/themes.
 import { groupThemeFor } from '#lib/server/group-admin.ts';
 import { getAppearance } from '#lib/server/appearance.ts';
 import { ADMIN_COOKIE, verifyAdminCookie } from '#lib/server/admin.ts';
+import { linkPreview } from '#lib/server/preview-image.ts';
+import { demoPreview, previewHtml, previewMeta, signInPreview } from '#lib/link-preview.ts';
 
 const escapeHtml = (s: string) =>
 	s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -57,7 +59,34 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.instanceTheme = instanceTheme;
 	event.locals.theme = resolveTheme(event.locals.deviceTheme, groupTheme, instanceTheme);
 	const theme = event.locals.theme;
-	const response = await resolve(event, { transformPageChunk: ({ html }) => html.replace('%bp.theme%', theme) });
+	// Link previews for pages a component can't give them (STATUS item 26, D72). The demo is the one
+	// group a chat app's crawler can read, every page of it (/demo opens its shelf). Another group's
+	// pages send a signed-out crawler to sign-in, except its shelf, which isn't rendered on the server
+	// (D59) and answers with a bare shell, so that gets sign-in's card, the same for every group id.
+	const card =
+		groupId === 'demo'
+			? demoPreview(config.config.instanceName)
+			: groupId && event.route.id === '/g/[groupId]'
+				? signInPreview(config.config.instanceName)
+				: null;
+	const previewTags =
+		card && !event.isDataRequest
+			? previewHtml(
+					previewMeta({
+						origin: event.url.origin,
+						path: event.url.pathname,
+						siteName: config.config.instanceName,
+						...card,
+						preview: linkPreview(config.config.instanceName, instanceTheme, event.locals.appearance)
+					})
+				)
+			: '';
+	const response = await resolve(event, {
+		transformPageChunk: ({ html }) => {
+			const themed = html.replace('%bp.theme%', theme);
+			return previewTags ? themed.replace('</head>', `${previewTags}</head>`) : themed;
+		}
+	});
 	// Headers that close off framing and content sniffing without limiting scripts or styles (D65): no
 	// other site may frame a page (clickjacking), forms post only here, and a response is only ever
 	// the type it says. A full script policy would need checking against whatever a host's platform

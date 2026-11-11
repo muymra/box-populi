@@ -1,5 +1,6 @@
 // "What should we play?" (TECH.md "Picker"). Pure: the caller supplies the random source.
 import { maskHas } from './players.ts';
+import { fitsPlayers, mostPlayers, NOTHING_ON_HAND, type OnHand } from './extensions.ts';
 import { WEIGHT_BUCKETS, weightBucket, type WeightBucket } from './buckets.ts';
 import type { CatalogCopy, CatalogGame } from './types.ts';
 
@@ -140,10 +141,9 @@ export function seededRng(seed: number): () => number {
 	};
 }
 
-/** A game fits n players when n is inside its range; an unknown end doesn't rule it out, as in the filter. */
-export function fitsPlayers(game: CatalogGame, n: number): boolean {
-	return (game.minPlayers == null || n >= game.minPlayers) && (game.maxPlayers == null || n <= game.maxPlayers);
-}
+// A game fits n players when n is inside its range, or the range of an expansion on hand (STATUS item
+// 30); an unknown end doesn't rule it out, as in the filter.
+export { fitsPlayers };
 
 /** `players` split across `tables` as evenly as possible, largest first: 9 across 2 is [5, 4]. */
 export function tableSizes(players: number, tables: number): number[] {
@@ -167,20 +167,21 @@ export function splitFillers(
 	rng: () => number,
 	seen: ReadonlySet<number> = new Set(),
 	fixed: readonly CatalogGame[] = [],
-	weigh: (game: CatalogGame, players: number | null) => number = fillerWeight
+	weigh: (game: CatalogGame, players: number | null) => number = fillerWeight,
+	onHand: OnHand = NOTHING_ON_HAND
 ): TableFiller[] | null {
 	for (let count = 2; count <= Math.min(MAX_TABLES, Math.floor(players / 2)); count++) {
 		const sizes = tableSizes(players, count);
 		const tables: (TableFiller | null)[] = sizes.map(() => null);
 		for (const game of fixed) {
-			const i = sizes.findIndex((size, j) => tables[j] == null && fitsPlayers(game, size));
+			const i = sizes.findIndex((size, j) => tables[j] == null && fitsPlayers(game, size, onHand));
 			if (i >= 0) tables[i] = { players: sizes[i], game };
 		}
 		const used = new Set(fixed.map((g) => g.id));
 		let complete = true;
 		for (let i = 0; i < sizes.length && complete; i++) {
 			if (tables[i]) continue;
-			const fits = fillers.filter((g) => !used.has(g.id) && fitsPlayers(g, sizes[i]));
+			const fits = fillers.filter((g) => !used.has(g.id) && fitsPlayers(g, sizes[i], onHand));
 			const [game] = pick(fits, sizes[i], rng, seen, 1, weigh).games;
 			if (game) {
 				used.add(game.id);
@@ -196,9 +197,9 @@ export function splitFillers(
  * Puts a chosen filler at the largest table it fits whose filler isn't kept. The tables stay as they
  * are when it's already at one; null when no open table fits it.
  */
-export function placeFiller(tables: readonly TableFiller[], game: CatalogGame, kept: ReadonlySet<number>): TableFiller[] | null {
+export function placeFiller(tables: readonly TableFiller[], game: CatalogGame, kept: ReadonlySet<number>, onHand: OnHand = NOTHING_ON_HAND): TableFiller[] | null {
 	if (tables.some((t) => t.game.id === game.id)) return [...tables];
-	const i = tables.findIndex((t) => !kept.has(t.game.id) && fitsPlayers(game, t.players));
+	const i = tables.findIndex((t) => !kept.has(t.game.id) && fitsPlayers(game, t.players, onHand));
 	if (i < 0) return null;
 	return tables.map((t, j) => (j === i ? { players: t.players, game } : t));
 }
@@ -209,10 +210,10 @@ export function placeFiller(tables: readonly TableFiller[], game: CatalogGame, k
  * set doesn't count, since nothing says it seats them all; one that needs more players than are here
  * doesn't either, since splitting wouldn't help.
  */
-export function needsSplit(fillers: CatalogGame[], players: number | null): boolean {
+export function needsSplit(fillers: CatalogGame[], players: number | null, onHand: OnHand = NOTHING_ON_HAND): boolean {
 	if (players == null || players < 4) return false;
-	const known = fillers.filter((g) => g.maxPlayers != null);
-	return known.length > 0 && known.every((g) => g.maxPlayers! < players);
+	const most = fillers.map((g) => mostPlayers(g, onHand)).filter((n): n is number => n != null);
+	return most.length > 0 && most.every((n) => n < players);
 }
 
 /** How many places a pull fills, in the lineup and among the fillers (PRD "Picker"). */
@@ -256,10 +257,10 @@ export type Limits = { players: number | null; minutes: number | null; ceiling: 
  * Why a game falls outside tonight's setup, as short tags for a kept game or a search result
  * ("Over 60 min"). Empty when it fits. A game missing a detail isn't ruled out by it, as in the filter.
  */
-export function misfits(game: CatalogGame, limits: Limits, atTable: boolean): string[] {
+export function misfits(game: CatalogGame, limits: Limits, atTable: boolean, onHand: OnHand = NOTHING_ON_HAND): string[] {
 	const why: string[] = [];
 	if (!atTable) why.push('Not at the table');
-	if (limits.players != null && !fitsPlayers(game, limits.players)) why.push(`Not for ${limits.players} ${limits.players === 1 ? 'player' : 'players'}`);
+	if (limits.players != null && !fitsPlayers(game, limits.players, onHand)) why.push(`Not for ${limits.players} ${limits.players === 1 ? 'player' : 'players'}`);
 	const longest = game.maxPlaytime ?? game.minPlaytime;
 	if (limits.minutes != null && longest != null && longest > limits.minutes) why.push(`Over ${limits.minutes} min`);
 	const bucket = weightBucket(game.weight);
@@ -289,13 +290,18 @@ export const SPREAD_BANDS: readonly Band[] = [
 ];
 
 /** A game suits a band when it fits any of the band's sizes; for 6 or more, it has to take 6. */
-export function fitsBand(game: CatalogGame, band: Band): boolean {
-	return band.id === 'big' ? fitsPlayers(game, band.sizes[0]) : band.sizes.some((n) => fitsPlayers(game, n));
+export function fitsBand(game: CatalogGame, band: Band, onHand: OnHand = NOTHING_ON_HAND): boolean {
+	return band.id === 'big' ? fitsPlayers(game, band.sizes[0], onHand) : band.sizes.some((n) => fitsPlayers(game, n, onHand));
 }
 
 /** The best weight a game has at any of a band's sizes, so "best at 4" counts for the 4 or 5 band. */
-export function bandWeight(game: CatalogGame, band: Band, weigh: (game: CatalogGame, players: number | null) => number = pickWeight): number {
-	return Math.max(...band.sizes.filter((n) => fitsPlayers(game, n)).map((n) => weigh(game, n)), 1);
+export function bandWeight(
+	game: CatalogGame,
+	band: Band,
+	weigh: (game: CatalogGame, players: number | null) => number = pickWeight,
+	onHand: OnHand = NOTHING_ON_HAND
+): number {
+	return Math.max(...band.sizes.filter((n) => fitsPlayers(game, n, onHand)).map((n) => weigh(game, n)), 1);
 }
 
 /**
@@ -303,9 +309,9 @@ export function bandWeight(game: CatalogGame, band: Band, weigh: (game: CatalogG
  * take (games with no upper limit set don't count). A shelf with a few big party games still runs as
  * several groups once most of its games can't take everyone.
  */
-export function roomIsBig(people: number, games: readonly CatalogGame[]): boolean {
+export function roomIsBig(people: number, games: readonly CatalogGame[], onHand: OnHand = NOTHING_ON_HAND): boolean {
 	if (people < 4) return false;
-	const most = games.map((g) => g.maxPlayers).filter((n): n is number => n != null).sort((a, b) => a - b);
+	const most = games.map((g) => mostPlayers(g, onHand)).filter((n): n is number => n != null).sort((a, b) => a - b);
 	if (most.length === 0) return false;
 	return people > most[Math.floor((most.length - 1) * 0.75)];
 }
@@ -315,20 +321,20 @@ export function roomIsBig(people: number, games: readonly CatalogGame[]): boolea
  * first free band it's best at, else the first free band it fits. A kept game that suits no free band
  * covers none.
  */
-export function assignBands(kept: readonly CatalogGame[], known: Readonly<Record<number, BandId>> = {}): Map<number, BandId> {
+export function assignBands(kept: readonly CatalogGame[], known: Readonly<Record<number, BandId>> = {}, onHand: OnHand = NOTHING_ON_HAND): Map<number, BandId> {
 	const taken = new Map<number, BandId>();
 	const used = new Set<BandId>();
 	const bandById = new Map(SPREAD_BANDS.map((b) => [b.id, b]));
 	const later: CatalogGame[] = [];
 	for (const game of kept) {
 		const band = known[game.id] ? bandById.get(known[game.id]) : undefined;
-		if (band && !used.has(band.id) && fitsBand(game, band)) {
+		if (band && !used.has(band.id) && fitsBand(game, band, onHand)) {
 			taken.set(game.id, band.id);
 			used.add(band.id);
 		} else later.push(game);
 	}
 	for (const game of later) {
-		const free = SPREAD_BANDS.filter((b) => !used.has(b.id) && fitsBand(game, b));
+		const free = SPREAD_BANDS.filter((b) => !used.has(b.id) && fitsBand(game, b, onHand));
 		const band = free.find((b) => b.sizes.some((n) => maskHas(game.bestMask, n))) ?? free[0];
 		if (!band) continue;
 		taken.set(game.id, band.id);
@@ -350,9 +356,10 @@ export function pickSpread(
 	known: Readonly<Record<number, BandId>>,
 	rng: () => number,
 	seen: ReadonlySet<number> = new Set(),
-	weigh: (game: CatalogGame, players: number | null) => number = pickWeight
+	weigh: (game: CatalogGame, players: number | null) => number = pickWeight,
+	onHand: OnHand = NOTHING_ON_HAND
 ): { slots: SpreadSlot[]; reset: boolean } {
-	const covered = assignBands(kept, known);
+	const covered = assignBands(kept, known, onHand);
 	const used = new Set(kept.map((g) => g.id));
 	const chosen = new Map<BandId, CatalogGame>();
 	for (const game of kept) {
@@ -362,12 +369,12 @@ export function pickSpread(
 	// The open bands with the fewest suitable games draw first, so a game that suits several bands
 	// isn't spent on one that had other choices.
 	const open = SPREAD_BANDS.filter((b) => !chosen.has(b.id))
-		.map((band) => ({ band, count: candidates.filter((g) => !used.has(g.id) && fitsBand(g, band)).length }))
+		.map((band) => ({ band, count: candidates.filter((g) => !used.has(g.id) && fitsBand(g, band, onHand)).length }))
 		.sort((a, b) => a.count - b.count);
 	let reset = false;
 	for (const { band } of open) {
-		const fits = candidates.filter((g) => !used.has(g.id) && fitsBand(g, band));
-		const result = pick(fits, null, rng, seen, 1, (g) => bandWeight(g, band, weigh));
+		const fits = candidates.filter((g) => !used.has(g.id) && fitsBand(g, band, onHand));
+		const result = pick(fits, null, rng, seen, 1, (g) => bandWeight(g, band, weigh, onHand));
 		reset ||= result.reset;
 		const [game] = result.games;
 		if (!game) continue;

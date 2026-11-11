@@ -3,6 +3,7 @@
 // is the "best at N" toggle, which by definition only matches games with BGG vote data.
 import { normalize } from './normalize.ts';
 import { maskHas } from './players.ts';
+import { expansionsOnHand, fitsPlayers, fitsWith, NOTHING_ON_HAND, type OnHand } from './extensions.ts';
 import { weightBucket, WEIGHT_BUCKETS, type WeightBucket } from './buckets.ts';
 import type { CatalogCopy, CatalogGame } from './types.ts';
 
@@ -33,6 +34,19 @@ export type Filters = {
 /** Who's looking, for the filters that are about them: their favourites and their Play soon list. */
 export type Viewer = { id: string | null; playSoon: ReadonlySet<number> };
 const NOBODY: Viewer = { id: null, playSoon: new Set() };
+
+/**
+ * What a pass over the shelf needs besides the filters: the time "Not played lately" counts back from,
+ * who's looking, the group's window (D71) and the expansions that can widen a player count (item 30).
+ */
+export type Context = { now?: number; viewer?: Viewer; staleDays?: number; onHand?: OnHand };
+function settle(c: Context) {
+	return {
+		cutoff: staleCutoff(c.now ?? Date.now(), c.staleDays ?? DEFAULT_STALE_DAYS),
+		viewer: c.viewer ?? NOBODY,
+		onHand: c.onHand ?? NOTHING_ON_HAND
+	};
+}
 
 /** How far back "Not played lately" looks when the group hasn't changed it (D71). */
 export const DEFAULT_STALE_DAYS = 90;
@@ -135,7 +149,7 @@ function matchesTags(gameTags: string[], wanted: string[], all: boolean, incompl
 const searchFor = (f: Filters) => (f.q.trim() ? normalize(f.q) : '');
 
 /** Every filter except the two the shelf hides by default: expansions, and copies that aren't available. */
-function matchesOthers(game: CatalogGame, f: Filters, q: string, memberIds: ReadonlySet<string>, cutoff: string, viewer: Viewer): boolean {
+function matchesOthers(game: CatalogGame, f: Filters, q: string, memberIds: ReadonlySet<string>, cutoff: string, viewer: Viewer, onHand: OnHand): boolean {
 	if (f.stale && game.lastPlayed != null && game.lastPlayed >= cutoff) return false;
 	if (f.favourites != null) {
 		const fans = game.favouredBy ?? [];
@@ -148,8 +162,8 @@ function matchesOthers(game: CatalogGame, f: Filters, q: string, memberIds: Read
 
 	if (f.players != null) {
 		const n = f.players;
-		if (game.minPlayers != null && n < game.minPlayers) return false;
-		if (game.maxPlayers != null && n > game.maxPlayers) return false;
+		// An expansion on hand can widen the range (STATUS item 30); best-at stays the game's own.
+		if (!fitsPlayers(game, n, onHand)) return false;
 		if (f.best && !maskHas(game.bestMask, n)) return false;
 	}
 
@@ -189,25 +203,34 @@ export function passedOnUnknown(game: CatalogGame, f: Filters): boolean {
 }
 
 /**
+ * The expansion an active players filter let this game through with, or null (STATUS item 30): the
+ * shelf tags it "With expansion", as it tags "Info missing".
+ */
+export function widenedFor(game: CatalogGame, f: Filters, onHand: OnHand): CatalogGame | null {
+	return f.players == null ? null : fitsWith(game, f.players, onHand);
+}
+
+/**
+ * The expansions the shelf counts: the group's, with a copy it can borrow unless lent-out games are
+ * shown too.
+ */
+export function shelfExtensions(games: readonly CatalogGame[], f: Pick<Filters, 'availableOnly'>, memberIds: ReadonlySet<string>): OnHand {
+	return expansionsOnHand(games, (c) => !f.availableOnly || isCopyAvailable(c, memberIds));
+}
+
+/**
  * How many more games the shelf would show with its two default hides off (PRD "Filters": lent
  * outside the group, and expansions), so the count line can say what it leaves out. An expansion
  * that is also lent out counts as an expansion, so the two add up to everything hidden. One pass.
  */
-export function hiddenByDefault(
-	games: CatalogGame[],
-	f: Filters,
-	memberIds: ReadonlySet<string>,
-	now = Date.now(),
-	viewer: Viewer = NOBODY,
-	staleDays = DEFAULT_STALE_DAYS
-): { lent: number; expansions: number } {
-	const cutoff = staleCutoff(now, staleDays);
+export function hiddenByDefault(games: CatalogGame[], f: Filters, memberIds: ReadonlySet<string>, context: Context = {}): { lent: number; expansions: number } {
+	const { cutoff, viewer, onHand } = settle(context);
 	const q = searchFor(f);
 	let shown = 0;
 	let withLent = 0;
 	let withAll = 0;
 	for (const g of games) {
-		if (!matchesOthers(g, f, q, memberIds, cutoff, viewer)) continue;
+		if (!matchesOthers(g, f, q, memberIds, cutoff, viewer, onHand)) continue;
 		withAll++;
 		if (!f.expansions && g.isExpansion) continue;
 		withLent++;
@@ -260,33 +283,19 @@ export function sortGames(games: readonly CatalogGame[], sort: SortKey): Catalog
 }
 
 /** The games that pass the filters, in the order given. */
-export function keepMatching(
-	games: readonly CatalogGame[],
-	f: Filters,
-	memberIds: ReadonlySet<string>,
-	now = Date.now(),
-	viewer: Viewer = NOBODY,
-	staleDays = DEFAULT_STALE_DAYS
-): CatalogGame[] {
-	const cutoff = staleCutoff(now, staleDays);
+export function keepMatching(games: readonly CatalogGame[], f: Filters, memberIds: ReadonlySet<string>, context: Context = {}): CatalogGame[] {
+	const { cutoff, viewer, onHand } = settle(context);
 	const q = searchFor(f);
 	return games.filter(
 		(g) =>
-			matchesOthers(g, f, q, memberIds, cutoff, viewer) &&
+			matchesOthers(g, f, q, memberIds, cutoff, viewer, onHand) &&
 			(f.expansions || !g.isExpansion) &&
 			(!f.availableOnly || hasAvailableCopy(g, f, memberIds))
 	);
 }
 
-export function filterGames(
-	games: CatalogGame[],
-	f: Filters,
-	memberIds: ReadonlySet<string>,
-	now = Date.now(),
-	viewer: Viewer = NOBODY,
-	staleDays = DEFAULT_STALE_DAYS
-): CatalogGame[] {
-	return sortGames(keepMatching(games, f, memberIds, now, viewer, staleDays), f.sort);
+export function filterGames(games: CatalogGame[], f: Filters, memberIds: ReadonlySet<string>, context: Context = {}): CatalogGame[] {
+	return sortGames(keepMatching(games, f, memberIds, context), f.sort);
 }
 
 /** Distinct tag values across the catalog, most common first, for the filter pickers. */

@@ -73,6 +73,27 @@ describe('catalogJson', () => {
 	});
 });
 
+describe('expansion links in the catalog (STATUS item 30)', () => {
+	it('gives an expansion the ids of its base games on the shelf, and nothing for a base nobody has', async () => {
+		await run(db, `INSERT INTO users (id, name, created_at) VALUES ('bram', 'Bram', 0)`);
+		await run(db, `INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES ('g1', 'bram', 'member', 0, 0)`);
+		await run(
+			db,
+			`INSERT INTO games (id, bgg_id, name, search_text, min_players, max_players, is_expansion, base_bgg_ids) VALUES
+			 (70, 13, 'CATAN', 'catan', 3, 4, 0, '[]'),
+			 (71, 926, 'CATAN: 5-6 Player Extension', 'catan 5 6', 5, 6, 1, '[13]'),
+			 (72, 325, 'CATAN: Seafarers', 'seafarers', 3, 4, 1, '[13, 999]'),
+			 (73, 2807, 'Pandemic: On the Brink', 'brink', 2, 5, 1, '[30549]')`
+		);
+		await run(db, `INSERT INTO copies (user_id, game_id, added_at) VALUES ('ada', 70, 0), ('bram', 71, 0), ('ada', 72, 0), ('ada', 73, 0)`);
+		const byId = new Map((await loadCatalog(db, 'g1', 0)).games.map((g) => [g.id, g]));
+		expect(byId.get(71)?.baseIds).toEqual([70]);
+		expect(byId.get(72)?.baseIds).toEqual([70]); // its other base isn't on the shelf
+		expect(byId.get(73)?.baseIds).toBeUndefined(); // Pandemic isn't on the shelf
+		expect(byId.get(70)?.baseIds).toBeUndefined();
+	});
+});
+
 describe('copies', () => {
 	it('adds once, shows in the catalog, and removes', async () => {
 		const [alpha] = await searchBgg(db, new FakeBggClient(), 'Test Game Alpha', 'ada', NOW);

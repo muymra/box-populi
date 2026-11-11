@@ -13,6 +13,7 @@ import { linkHost } from '#lib/link-kinds.ts';
 import { membersRead } from '#lib/server/catalog.ts';
 import { canChangePlay, playsRead } from '#lib/server/plays.ts';
 import { isWin } from '#lib/plays.ts';
+import { playerExtensions } from '#lib/catalog/extensions.ts';
 import { jsonArray, known, readAll, rowOf, rowsOf } from '#lib/server/db.ts';
 import { getDb } from '#lib/server/platform.ts';
 import type { PollSource } from '#lib/catalog/types.ts';
@@ -109,13 +110,24 @@ export const load: PageServerLoad = async (event) => {
 		),
 		// Expansions of this game someone in the group owns; none for a game without a BGG id. Found
 		// through `game_bases` (D65), not by unpacking the base ids of every game the group owns.
-		expansions: rowsOf<{ id: number; name: string; year: number | null }>(
+		expansions: rowsOf<{ id: number; name: string; year: number | null; min_players: number | null; max_players: number | null }>(
 			db,
-			`SELECT g.id, g.name, g.year
+			`SELECT g.id, g.name, g.year, g.min_players, g.max_players
 			 FROM game_bases b JOIN games g ON g.id = b.game_id
 			 WHERE b.base_bgg_id = (SELECT bgg_id FROM games WHERE id = ?2) AND g.is_expansion = 1
 			   AND EXISTS (SELECT 1 FROM group_copies gc WHERE gc.group_id = ?1 AND gc.game_id = g.id)
 			 ORDER BY g.name`,
+			groupId,
+			gameId
+		),
+		// Who in the group owns each of them, for "Up to 6 with the 5-6 Player Extension (Bram's)" (STATUS item 30).
+		expansionOwners: rowsOf<{ game_id: number; user_id: string; name: string }>(
+			db,
+			`SELECT gc.game_id, gc.user_id, u.name
+			 FROM group_copies gc JOIN users u ON u.id = gc.user_id
+			 WHERE gc.group_id = ?1
+			   AND gc.game_id IN (SELECT b.game_id FROM game_bases b WHERE b.base_bgg_id = (SELECT bgg_id FROM games WHERE id = ?2))
+			 ORDER BY u.name`,
 			groupId,
 			gameId
 		),
@@ -259,7 +271,23 @@ export const load: PageServerLoad = async (event) => {
 			addedByName: l.added_by_name,
 			canDelete: canEdit && actor != null && canDeleteLink(actor, l.added_by)
 		})),
-		expansions,
+		expansions: expansions.map((e) => ({ id: e.id, name: e.name, year: e.year })),
+		// Expansions that change how many can play, each with its own count from BGG, named and
+		// credited to its owners, since the game's own count stays as BGG gives it (STATUS item 30).
+		playerExtensions:
+			game.is_expansion === 1
+				? []
+				: playerExtensions(
+						{ name: game.name, minPlayers: game.min_players, maxPlayers: game.max_players },
+						expansions.map((e) => ({
+							id: e.id,
+							name: e.name,
+							minPlayers: e.min_players,
+							maxPlayers: e.max_players,
+							owners: r.expansionOwners.filter((o) => o.game_id === e.id).map((o) => ({ id: o.user_id, name: o.name }))
+						})),
+						me?.id ?? null
+					),
 		bases: bases.map((b) => ({ id: b.id, name: b.name }))
 	};
 };

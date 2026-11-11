@@ -65,7 +65,7 @@ A copy belongs to the user, not the group. When someone is in two groups, their 
 
 The first build (2026-11-06 to 2026-11-08): identity without accounts, with a PIN for other devices (D25, D47); groups with codes and invite links (D65); adding games by BGG search, collection import, Wikidata, a pasted list or by hand; the group catalog with search and filters; game pages; the picker with who's here; links to rules, videos and files; roles and group admin; the instance admin page; the public demo; the wishlist and the Wanted view; lending; themes and a custom theme (DESIGN.md "Themes"); public-sources mode (D31); hosting targets beyond Cloudflare Pages (D32); and instance settings from environment variables, so nothing about Carlo's deployment is hard-coded.
 
-Since then: game nights (D38), the play log (D37), archiving a group (D50), help getting back in (D48, D52), Find on BoardGameGeek (D57), favourites and Play soon (D63, D64), member profiles (D61), hiding games from a group (D66), who came to a night (D67), member colours that stay put (D69) and the play log a page at a time (D70). STATUS.md lists every item.
+Since then: game nights (D38), the play log (D37), archiving a group (D50), help getting back in (D48, D52), Find on BoardGameGeek (D57), favourites and Play soon (D63, D64), member profiles (D61), hiding games from a group (D66), who came to a night (D67), member colours that stay put (D69), the play log a page at a time (D70), configurable play rules and fillers (D71), link previews (D72) and expansions that change the player count (D73). STATUS.md lists every item.
 
 ### Must keep working
 
@@ -73,9 +73,6 @@ Import, the picker, the demo group, the phone layout, and the instance admin bas
 
 ### Planned or possible, in rough priority
 
-- **Expansions that change the player count** (STATUS item 30).
-- **Link previews** for a standard instance's pages (STATUS item 26; the showcase has them).
-- **Older years on the plays page, a way back from Game night, and exports that join** (STATUS item 45, parts 3 to 5).
 - **Passkeys** as an optional second way to sign in on a new device, for people who'd rather not keep a link.
 - **CSV export** of the group catalog: game name, year, BGG link and owners. No BGG descriptions or statistics, so the export can't work as a copy of BGG's data.
 - **Installable PWA** so it sits on a phone home screen.
@@ -172,7 +169,7 @@ Hand-entered and Wikidata games can be filled in and corrected: name, image, pla
 | Filter | Behavior |
 |---|---|
 | Text | Matches primary and alternate titles; case- and accent-insensitive. |
-| Players | Pick N from 1 to 12, or "13+": games whose range includes N (13+ checks 13). A "best at N" toggle narrows to games BGG voters rate best at that count (available up to 30 players). |
+| Players | Pick N from 1 to 12, or "13+": games whose range includes N (13+ checks 13). A base game also fits the counts an expansion someone in the group has plays at, linked by BGG (D73): Catan 3–4 shows for 6 when someone has the 5–6 Player Extension, flagged "With expansion" (the flag's tooltip names it). An expansion lent outside the group counts only when lent-out games are shown. A "best at N" toggle narrows to games BGG voters rate best at that count (available up to 30 players); it reads the base game's own votes. |
 | Time | "Fits in N minutes": games whose maximum listed play time is at most N. A game listed at 60 to 120 minutes doesn't fit in an hour. |
 | Complexity | BGG's five vote labels, a weight taking the one it rounds to: Light (under 1.5), Medium light (1.5 to under 2.5), Medium (to under 3.5), Medium heavy (to under 4.5), Heavy (4.5 and up) (D62), from BGG weight on its 1 to 5 scale. A two-ended range is planned ("Planned or possible"). |
 | Mechanics | Multi-select (deck building, worker placement, and so on). Matches any selected, with an "all of" switch. |
@@ -183,7 +180,7 @@ Hand-entered and Wikidata games can be filled in and corrected: name, image, pla
 | Favourites | Under More once anyone has one (D63): favourites of anyone in the group, or only my own. |
 | Play soon | Under More once the viewer has a mark (D64): only games on my own Play soon list. |
 
-Games with unknown data (hand-entered, from Wikidata, or details still loading) are never filtered out by a field they lack. When an active filter lets a game through only for that reason, it shows an "Info missing" flag. The one exception is the "best at N" toggle, which by definition only matches games that have BGG vote data.
+Games with unknown data (hand-entered, from Wikidata, or details still loading) are never filtered out by a field they lack. When an active filter lets a game through only for that reason, it shows an "Info missing" flag; a game the players filter lets through with an expansion shows "With expansion" instead. The one exception is the "best at N" toggle, which by definition only matches games that have BGG vote data.
 
 On a phone, players, time and complexity sit in one strip that scrolls sideways; everything else is behind a "More filters" sheet. Sorting: title, weight, play time, recently added, most owned, most loved (the most favourites in the group). Each result shows the box, its player range and play time, and its owners as coloured segments on the box's edge (up to four, then "+N"); the denser Spines view adds the weight bucket. DESIGN.md has the details. Results render in pages of about 60 as you scroll, and the result count is always shown, so 1,500 games don't freeze a phone. When the two default hides leave games out, the count line says how many ("Hiding 6 lent-out games and 32 expansions") with a "Show them" link that turns both off. Going back to the shelf from a game returns to the same place in it. Filters set under More show as removable chips in the filter strip, and on a phone More is a sheet whose button says how many games the filters leave. Filter state lives in the URL, so a filtered view can be shared in chat. Filtering happens on the device once the catalog has loaded, so changing a filter is instant.
 
@@ -191,7 +188,7 @@ On a phone, players, time and complexity sit in one strip that scrolls sideways;
 
 Cover image, title and year, description (collapsed past a few lines), player range with BGG voters' best and recommended counts, play time range, BGG weight as BGG shows it (for example "2.31 / 5") with its complexity level (light to heavy) beside it, mechanics and themes as chips, owners with their loan status, wishlisters, the links section, and a "View on BoardGameGeek" link. BGG's terms forbid modifying its data, so BGG fields always appear as BGG gives them.
 
-A base game's page lists the expansions owned in the group. An expansion's page links to its base game.
+A base game's page lists the expansions owned in the group. One that changes how many can play adds a line under the game's own count, with the expansion's count from BGG, its name and whose it is: "Up to 6 with the 5-6 Player Extension (Bram's)", "Solo with the Automa Pack (yours)" (D73). An expansion's page links to its base game.
 
 ### Game night
 
@@ -217,6 +214,7 @@ Inputs:
 - **Who's here.** Tick the members present and add guests by name for people at the table without an account. Regulars come first: the members this device has ticked on the most nights in the last 90 days, then the most recently active. In a group of more than 10, the first 8 show, plus anyone ticked; the rest sit behind "N more", which opens the full list with a search past 12. The device remembers the selection for the group and clears it 12 hours after the last change (the instance's `HERE_RESET_HOURS`, D71), so last week's table doesn't carry over (D36). The same list feeds "Who goes first?" (see "At the table"). Only the ticked members' copies are considered, plus copies lent to them; guests bring no games. With no members ticked, the whole catalog is used.
 - **Whose games.** Only when no game night is planned today: "Everything they own" (the default: everything the people here own, or the whole shelf with nobody ticked) or "At someone's home" with "Whose?", a dropdown of the people here (you, if you're ticked), for an evening at a member's home, where pulls and fillers come from that member's shelf only. Choosing by hand still searches everyone here, since games people bring are in the room too. It's kept with the kept games on the device, under the same 12-hour reset, and goes into the copied link (D40). On a night's date the night's own place decides. A group that wants a list of what's brought, at a café or anywhere else, plans a night, for today if need be (D42, D43).
 - **Players.** Defaults to the number of people here, members and guests, however many; editable from 1 to 12 or "13+". With nobody ticked it can stay "Any", which skips the player filter and the best/recommended weighting. A big evening isn't treated as one table (D41): once more people are here than three in four of the room's games take, Players stays "Any" and a pull is a spread (below), and "Starting a game?" quick counts (2, 3, 4, 5, 6+) beside it set Players for whoever's starting a game; tapping the same count again goes back to the spread. Nobody is put at a table.
+- **Expansions.** A base game also seats the counts an expansion plays at (D73) when the expansion's owner is here, or it's on tonight's list; with nobody ticked, any the group can borrow. A row whose game seats the table only that way says so: "With the 5-6 Player Extension (Bram's)". Fillers, split tables, spreads and "Not for 6 players" all count it; best-at stays the base game's.
 - **Minutes available** and an optional **complexity ceiling.**
 - **Fillers too.** A checkbox beside the limits, for game nights where people arrive at different times or want a palette cleanser between longer games. When ticked, up to three fillers sit under the lineup with their own pull, so fillers can come first while people are still arriving. A filler lists 30 minutes or less as its longest play time and is light (a weight under 2, BGG's or a member's, whatever its level is called; D62). Both numbers are the group's: co-admins and the owner change them under Fillers on the Group tab, 5 to 240 minutes and a complexity from 1 to 5 (D71). Short games nobody has rated count too, at half the odds, marked "Complexity unknown". Fillers fit the same players and the games at the table, ignore the time and complexity limits, and never repeat a main pick. When a count is set and no filler takes that many, the group splits into the fewest tables (two to six, at least two players each, sizes as even as possible) that each get a different filler that fits them, shown as "Table 1 · 7 players" and so on; "Other fillers" draws again. A game with no upper player limit set doesn't count as taking everyone. Thirty minutes is where the usual fillers sit (Sushi Go, Coup, Love Letter, No Thanks!, For Sale list 15 to 30 on the box); measured on the longest time, it leaves out "30 to 60 minute" games.
 
@@ -288,6 +286,10 @@ For fun, not for rankings anyone takes seriously (D37).
 ### Demo group
 
 On Carlo's instance, `/demo` shows a read-only group of about 400 invented games and made-up members (`pnpm db:seed`; seeding from a real BGG collection isn't built). Visitors can browse the catalog, open game pages, and use the picker. Anything that would change data is hidden, and the server refuses it regardless. On a demo instance the landing page leads to it: "Browse the demo shelf", and links from each of four of its five moments (the shelf filtered to four players and an hour, the next game night, the most loved games, the leaderboard). Other instances can seed their own demo or skip it; the link appears only when a demo group exists. Pasted in a chat app, a demo instance's home page link shows a preview: the headline, a line about Box Populi and a picture of the example shelf.
+
+### Link previews
+
+Pasted in a chat app, an instance's links show a card (D72): a standard home page, a group's link (its join link, which members also sign in by), the demo, and the sign-in page, which is where any other group link lands for a chat app's crawler, since it isn't signed in. A game night's link shows "Sign in to Dice Den", not the night. A group's card may name the group, as its page does for anyone with the code, but never its members. The picture is the instance's: the cube mark in its theme's colours, with no text, or the hoster's logo as a small square beside the text when one is set. Never BGG box art (D30). A demo instance's home page keeps its own picture of the example shelf.
 
 ### Self-hosting
 

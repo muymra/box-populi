@@ -16,6 +16,7 @@
 	import { nightOf } from '#lib/table/regulars.ts';
 	import { SELF_HOSTING_URL, SOURCE_URL } from '#lib/project.ts';
 	import showcaseImage from '#lib/assets/og-showcase.png';
+	import LinkPreview from '#lib/components/LinkPreview.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -103,6 +104,15 @@
 		<meta name="twitter:card" content="summary_large_image" />
 	{/if}
 </svelte:head>
+<!-- A standard instance's home page (STATUS item 26); the showcase above has its own picture. -->
+{#if !data.demoMode}
+	<LinkPreview
+		siteName={data.instanceName}
+		preview={data.preview}
+		title={data.instanceName}
+		description="Every game your group owns, on one shelf. Find what fits five players in an hour, see who owns it, and pick what to play tonight."
+	/>
+{/if}
 
 {#snippet exampleShelf()}
 	<figure class="example" aria-label="Example shelf with invented games">

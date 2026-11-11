@@ -17,6 +17,7 @@
 		src = null,
 		lead = '',
 		flag = null,
+		flagTitle = null,
 		badge = null,
 		out = false,
 		caption,
@@ -30,8 +31,10 @@
 		src?: string | null;
 		/** What a screen reader hears for the cube: the name, then anything the picture says. */
 		lead?: string;
-		/** One flag on the box (Lent out, Info missing, Expansion). */
+		/** One flag on the box (Lent out, With expansion, Info missing, Expansion). */
 		flag?: string | null;
+		/** The flag's tooltip, where its pill is too short to say it all. */
+		flagTitle?: string | null;
 		/** A marigold pill on the compartment's top edge, such as "Most wanted". */
 		badge?: string | null;
 		/** Dimmed, for a copy that isn't available here. */
@@ -56,7 +59,7 @@
 		{#if badge}<span class="badge" aria-hidden="true">{badge}</span>{/if}
 		<div class="slot">
 			<BoxFront {name} {src} />
-			{#if flag}<span class="flag" aria-hidden="true">{flag}</span>{/if}
+			{#if flag}<span class="flag" aria-hidden="true" title={flagTitle}>{flag}</span>{/if}
 		</div>
 		<!-- Box art is cover-fitted, so a crop can cut its title; a printed front already shows the name
 		     (STATUS item 29). The line is there on every cube, empty under a printed front, so captions

@@ -3,12 +3,16 @@
 	// getting back in is the main door: the group's link, your name, your PIN. Joining and the demo
 	// are the other ways in, and joining is not the primary button.
 	import KeyRound from '@lucide/svelte/icons/key-round';
+	import LinkPreview from '#lib/components/LinkPreview.svelte';
+	import { signInPreview } from '#lib/link-preview.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 </script>
 
 <svelte:head><title>Not signed in · {data.instanceName}</title></svelte:head>
+<!-- A link to a group's page, such as a game night's, reaches a chat app's crawler signed out and lands here, so this card is theirs (STATUS item 26). -->
+<LinkPreview siteName={data.instanceName} preview={data.preview} {...signInPreview(data.instanceName)} />
 
 <div class="doors-page">
 	<header>

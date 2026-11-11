@@ -10,19 +10,21 @@
 	import { isCopyAvailable } from '#lib/catalog/filter.ts';
 	import type { CatalogGame, CatalogMember } from '#lib/catalog/types.ts';
 
-	/** `unknown`: an active filter let this game through only because it lacks that detail. */
+	/** `unknown` and `via`: as on a cube (Cube.svelte). */
 	let {
 		game,
 		href,
 		members,
 		memberIds,
-		unknown = false
+		unknown = false,
+		via = null
 	}: {
 		game: CatalogGame;
 		href: string;
 		members: ReadonlyMap<string, Pick<CatalogMember, 'id' | 'name' | 'colorIndex'>>;
 		memberIds: ReadonlySet<string>;
 		unknown?: boolean;
+		via?: string | null;
 	} = $props();
 
 	const color = $derived(boxColor(game.name));
@@ -46,6 +48,7 @@
 		{facts}
 		{#if game.isExpansion}<span class="flag">Expansion</span>{/if}
 		{#if unavailable}<span class="flag">Lent out</span>{/if}
+		{#if via}<span class="flag" title={via}>With expansion</span>{/if}
 		{#if unknown}<span class="flag">Info missing</span>{/if}
 	</span>
 	<span class="end" role="img" aria-label={ownerLabel} title={ownerLabel}>
