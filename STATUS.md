@@ -1,8 +1,8 @@
 # Status
 
-Last updated 2026-11-11. Everything under Done is built, and 559 tests pass. Two instances run on Cloudflare Pages: the public demo at `box-populi.pages.dev` (`INSTANCE_MODE=demo`) and Carlo's private instance for his own groups, whose address stays out of this public repo. Both run v0.6.0. **Migrations 0001 to 0020 are applied to production, so they're frozen: schema changes go in new migration files.**
+Last updated 2026-11-11. Everything under Done is built, and 559 tests pass. Two instances run on Cloudflare Pages: the public demo at `box-populi.pages.dev` (`INSTANCE_MODE=demo`) and Carlo's private instance for his own groups, whose address stays out of this public repo. Both run v0.6.1. **Migrations 0001 to 0020 are applied to production, so they're frozen: schema changes go in new migration files.**
 
-**Next up:** 0.6.1 is cut and tagged (2026-11-11): push `main` with its tag, then deploy the demo before the private instance (no migrations). Then the 2026-11-06 audit's low-priority list (Known issues) and a plan for BGG's 30-day refresh; item 46 (moving a group between instances, D68) is low priority. Still open from before: the ranks-file search index and the unbuilt 30-day refresh. The PRD's "Planned or possible" list: passkeys, CSV export of the catalog, PWA, and maybe filling in details with an AI chatbot.
+**Next up:** 0.6.1 is live on both instances (2026-11-11). Then the 2026-11-06 audit's low-priority list (Known issues) and a plan for BGG's 30-day refresh; item 46 (moving a group between instances, D68) is low priority. Still open from before: the ranks-file search index and the unbuilt 30-day refresh. The PRD's "Planned or possible" list: passkeys, CSV export of the catalog, PWA, and maybe filling in details with an AI chatbot.
 
 Agents: tick items as they're done, add a line to the session log at the bottom, and move assumptions to "Verified" with a date and source when you confirm them.
 
@@ -18,7 +18,7 @@ Not secret. Secrets never go in this file.
 | Production URL | `https://box-populi.pages.dev` (demo) |
 | D1 database name and id | `box-populi`, `082d8def-1901-4a9c-bd64-5dfb85b5cf4f`, region APAC (the demo's) |
 | Production migrations | `0001_init.sql` to `0020_group_rules.sql` on both instances (0012 to 0016 with 0.4.0 on 2026-11-09, 0017 to 0019 with 0.5.0 on 2026-11-10, 0020 with 0.6.0 on 2026-11-11) |
-| Versions (D44) | Tags `v0.1.0` to `v0.6.0`; v0.6.0 is live on both instances. Each version's notes are in CHANGELOG.md and its GitHub release. |
+| Versions (D44) | Tags `v0.1.0` to `v0.6.1`; v0.6.1 is live on both instances. Each version's notes are in CHANGELOG.md and its GitHub release. |
 | BGG application | approved 2026-11-09; the token is live on Carlo's private instance (see Verified). The demo runs without BGG. |
 
 ## Open
@@ -145,5 +145,3 @@ From memory when the docs were written. Check each before relying on it, then mo
 ## Session log
 
 Entries since the last release; older ones are in [docs/history/session-log.md](./docs/history/session-log.md).
-
-- 2026-11-11: An expansion's count on the shelf and at Play tonight (D74; Carlo: the count with an expansion showed only on the game page, and choosing a game at Play tonight still showed the base count). Built first as a combined range ("🧩 3–6p", his 1a), then, after he asked whether that complied with BGG's terms, replaced by both BGG figures, each with its own game: "3–4p · 🧩5–6" on cubes, Spines and the choose lists (`expansionsAdding`, `expansionRanges`, `countsWith` in `extensions.ts`; `Cube` and `ListRow` take `adding`; a phone cube drops its play time), and Play tonight's facts keep the game's range with a line "🧩 5–6 with the 5-6 Player Extension (Bram's)" whenever an expansion here adds to it. Then BGG's logo in the footer, from the two files Carlo downloaded (`src/lib/assets/powered-by-bgg-*.svg`, checked: shapes only, no scripts or links): the colour one on light themes and the reversed one on dark, switched by new `--on-light`/`--on-dark` tokens (`themes.ts`, `app.css`, `themes.css` regenerated), 28px tall. 559 tests on both adapters, `pnpm check` clean. Checked in `pnpm dev`, signed in as Ada: the shelf at 1280 and 390, Spines, the shelf filtered to 6, Play tonight with and without Bram, and the footer in cube light and dark, Gruvbox and Dracula dark; no console errors. Unreleased.
