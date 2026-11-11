@@ -4,7 +4,9 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
-**Upgrading:** apply migration `0020_group_rules.sql` before deploying (SELF_HOSTING.md "Upgrading"). Seven new optional settings, each defaulting to today's behaviour: `DEFAULT_POINTS`, `OWNER_AWAY_DAYS`, `SESSION_DAYS`, `PLAY_SOON_DAYS`, `PLAY_SOON_MAX`, `HERE_RESET_HOURS` and `ADMIN_SESSION_HOURS` (SELF_HOSTING.md step 4).
+## 0.6.0 (2026-11-11)
+
+**Upgrading:** one migration, `0020_group_rules.sql`. On Cloudflare, note a Time Travel bookmark and export a backup first, then apply it before deploying (SELF_HOSTING.md "Upgrading" has the commands and how to roll back). Docker, Vercel and Netlify apply it on their first request. It gives each group its co-op and filler settings and its "Not played lately" window, at the values every group had. Seven new optional settings, each defaulting to today's behaviour: `DEFAULT_POINTS`, `OWNER_AWAY_DAYS`, `SESSION_DAYS`, `PLAY_SOON_DAYS`, `PLAY_SOON_MAX`, `HERE_RESET_HOURS` and `ADMIN_SESSION_HOURS` (SELF_HOSTING.md step 4). One change people will see at once: past co-op wins now count as wins and score a point each, so leaderboards may reorder. A demo group needs no reseed.
 
 - The plays page and its export cover last year and earlier years too: "2025" sits beside this year when it had plays, and older years are in an "Earlier" list.
 - The Game night tab links to past nights ("Past nights"), which live on the plays page.
