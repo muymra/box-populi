@@ -14,13 +14,35 @@ export const NOTHING_ON_HAND: OnHand = new Map();
  * The catalog's expansions that have a copy `counts` accepts, by base game: on the shelf, a copy the
  * group can use; at Play tonight, one whose owner is here or that's on tonight's list.
  */
-export function expansionsOnHand(games: readonly CatalogGame[], counts: (copy: CatalogCopy, expansion: CatalogGame) => boolean): Map<number, CatalogGame[]> {
+export function expansionsOnHand(games: readonly CatalogGame[], counts: (copy: CatalogCopy, game: CatalogGame) => boolean): Map<number, CatalogGame[]> {
 	const byBase = new Map<number, CatalogGame[]>();
+	const add = (baseId: number, entry: CatalogGame) => byBase.set(baseId, [...(byBase.get(baseId) ?? []), entry]);
 	for (const g of games) {
-		if (!g.isExpansion || !g.baseIds?.length || !g.copies.some((c) => counts(c, g))) continue;
-		for (const baseId of g.baseIds) byBase.set(baseId, [...(byBase.get(baseId) ?? []), g]);
+		if (g.isExpansion) {
+			if (g.baseIds?.length && g.copies.some((c) => counts(c, g))) for (const baseId of g.baseIds) add(baseId, g);
+			continue;
+		}
+		// An owner's own count on a copy that counts (D75) goes in like an expansion that takes the game to it.
+		g.copies.forEach((c, i) => {
+			if (c.maxWith != null && counts(c, g)) add(g.id, ownerCount(g, c, i));
+		});
 	}
 	return byBase;
+}
+
+/** The entry that stands for an owner's count on their copy (D75): up to `maxWith`, the fewest left to the game. */
+function ownerCount(game: CatalogGame, copy: CatalogCopy, index: number): CatalogGame {
+	return {
+		...game,
+		id: -(game.id * 100 + index + 1),
+		name: '',
+		minPlayers: null,
+		maxPlayers: copy.maxWith ?? null,
+		isExpansion: true,
+		baseIds: [game.id],
+		copies: [copy],
+		countBy: copy.ownerId
+	};
 }
 
 /** Whether the game's own range takes n. An unknown end doesn't rule it out, as in every filter (PRD "Filters"). */
@@ -136,7 +158,7 @@ export function expansionsAdding(game: CatalogGame, onHand: OnHand = NOTHING_ON_
 
 /** "5–6", or "5–6, 1–4": each expansion's own range as BGG gives it ("up to 6" when only the most is known). */
 export function expansionRanges(expansions: ReadonlyArray<Pick<CatalogGame, 'minPlayers' | 'maxPlayers'>>): string {
-	return expansions.map((e) => formatPlayerRange(e.minPlayers, e.maxPlayers)).filter(Boolean).join(', ');
+	return [...new Set(expansions.map((e) => formatPlayerRange(e.minPlayers, e.maxPlayers)).filter(Boolean))].join(', ');
 }
 
 /** "the 5-6 Player Extension", or "the 5-6 Player Extension and Seafarers", as a sentence names them after "With". */
@@ -148,4 +170,33 @@ export function extensionNames(baseName: string, expansions: ReadonlyArray<{ nam
 /** "5–6 with the 5-6 Player Extension", one per expansion, each with BGG's count for it; `whose` adds " (Bram’s)". */
 export function countsWith(baseName: string, expansions: readonly CatalogGame[], whose: (e: CatalogGame) => string = () => ''): string[] {
 	return expansions.map((e) => `${formatPlayerRange(e.minPlayers, e.maxPlayers)} with ${extensionName(baseName, e.name)}${whose(e)}`);
+}
+
+/**
+ * What the shelf and Play tonight show after the puzzle piece for the expansions on hand that add to a
+ * game (D74, D75): an owner's own count when there is one ("7", the highest), else each expansion's own
+ * range from BGG ("5–6"); the title for hover; and Play tonight's line(s). `nameOf` gives a member's
+ * name, `whose` an expansion's owners (" (Bram’s)").
+ */
+export function addedCounts(
+	game: Pick<CatalogGame, 'name' | 'minPlayers' | 'maxPlayers'>,
+	adding: readonly CatalogGame[],
+	nameOf: (userId: string) => string,
+	whose: (expansion: CatalogGame) => string = () => ''
+): { text: string; title: string; line: string } | null {
+	if (adding.length === 0) return null;
+	const own = adding.filter((e) => e.countBy != null && e.maxPlayers != null).sort((a, b) => b.maxPlayers! - a.maxPlayers!);
+	if (own.length) {
+		const most = own[0].maxPlayers!;
+		const owners = [...new Set(own.filter((e) => e.maxPlayers === most).map((e) => `${nameOf(e.countBy!)}’s`))];
+		const who = owners.length > 1 ? `${owners.slice(0, -1).join(', ')} and ${owners.at(-1)}` : owners[0];
+		const line = `Up to ${most} with ${who} expansions (${owners.length > 1 ? 'their' : who} count)`;
+		return { text: String(most), title: line, line };
+	}
+	const real = adding.filter((e) => e.countBy == null);
+	return {
+		text: expansionRanges(real),
+		title: `${formatPlayerRange(game.minPlayers, game.maxPlayers)} players; ${countsWith(game.name, real).join(', ')}`,
+		line: countsWith(game.name, real, whose).join(' · ')
+	};
 }

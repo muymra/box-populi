@@ -3,6 +3,7 @@
 import { all, jsonArray, one, stmt, type DB } from './db.ts';
 import { bumpCatalogForGames, bumpCatalogForUser } from './catalog.ts';
 import { buildSearchText, normalize } from '#lib/catalog/normalize.ts';
+import { wholeNumberIn } from '#lib/numbers.ts';
 import type { BggClient, BggSearchHit, BggThing } from './bgg/types.ts';
 
 const UPSERT_THING = `INSERT INTO games (bgg_id, name, search_text, year, description, image_url, thumb_url,
@@ -249,6 +250,37 @@ export async function addCopy(db: DB, userId: string, gameId: number, now: numbe
 
 export async function removeCopy(db: DB, userId: string, gameId: number): Promise<void> {
 	await db.batch([stmt(db, 'DELETE FROM copies WHERE user_id = ?1 AND game_id = ?2', userId, gameId), bumpCatalogForUser(db, userId)]);
+}
+
+/** The most an owner's count can say (D75): the player masks stop at 30 (`MAX_MASK_PLAYERS`). */
+export const MAX_PLAYERS_WITH = 30;
+
+export type PlayersWithResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Sets how many can play with the expansions the owner has (D75), on their own copy; empty clears it.
+ * It has to be more than the game's own most, when that's known, or it would say nothing. Every group
+ * the owner is in shows it, so each of their catalogs is bumped.
+ */
+export async function setPlayersWith(db: DB, userId: string, gameId: number, raw: FormDataEntryValue | null): Promise<PlayersWithResult> {
+	const text = typeof raw === 'string' ? raw.trim() : '';
+	const value = text === '' ? null : wholeNumberIn(text, 2, MAX_PLAYERS_WITH);
+	if (text !== '' && value == null) return { ok: false, error: `Type a whole number from 2 to ${MAX_PLAYERS_WITH}, or leave it empty.` };
+	const row = await one<{ max_players: number | null }>(
+		db,
+		'SELECT g.max_players FROM copies c JOIN games g ON g.id = c.game_id WHERE c.user_id = ?1 AND c.game_id = ?2',
+		userId,
+		gameId
+	);
+	if (!row) return { ok: false, error: 'That isn’t on your shelf any more.' };
+	if (value != null && row.max_players != null && value <= row.max_players) {
+		return { ok: false, error: `It already takes up to ${row.max_players} on its own. Leave it empty, or type more than ${row.max_players}.` };
+	}
+	await db.batch([
+		stmt(db, 'UPDATE copies SET max_players_with = ?3 WHERE user_id = ?1 AND game_id = ?2', userId, gameId, value),
+		bumpCatalogForUser(db, userId)
+	]);
+	return { ok: true };
 }
 
 export type ManualGameInput = {

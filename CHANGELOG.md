@@ -4,6 +4,11 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+**Upgrading:** apply migration `0021_copy_players_with.sql` before deploying (SELF_HOSTING.md "Upgrading"). No new settings.
+
+- If your expansions stack in a way BoardGameGeek's counts can't say (two that each add a player), say how many your copy takes on the game's page, under your name: "With your expansions, how many can play?". The shelf then shows "3–5p · 🧩7", the players filter and Play tonight count it while your copy is there, and everyone sees it's your count. The link to set it starts folded unless the group has an expansion of the game.
+- Two expansions with the same count show it once after the puzzle piece ("🧩3–6", not "🧩3–6, 3–6").
+
 ## 0.6.1 (2026-11-11)
 
 **Upgrading:** nothing to do: no migrations and no new settings. Deploy as usual.

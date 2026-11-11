@@ -1,6 +1,6 @@
 // Expansions that change how many can play (STATUS item 30).
 import { describe, expect, it } from 'vitest';
-import { expansionsOnHand, extensionName, extensionNames, fitsPlayers, fitsWith, mostPlayers, playerExtensions, rangeWith, widenedText, expansionsAdding, expansionRanges } from './extensions.ts';
+import { expansionsOnHand, extensionName, extensionNames, fitsPlayers, fitsWith, mostPlayers, playerExtensions, rangeWith, widenedText, expansionsAdding, expansionRanges, addedCounts } from './extensions.ts';
 import { DEFAULT_FILTERS, filterGames, shelfExtensions, widenedFor, type Filters } from './filter.ts';
 import { assignBands, fitsBand, isCopyAtHand, misfits, needsSplit, roomIsBig, seededRng, splitFillers, SPREAD_BANDS } from './pick.ts';
 import { maskFromCounts } from './players.ts';
@@ -176,5 +176,51 @@ describe('the counts shown with expansions (D74)', () => {
 		expect(expansionRanges([extension])).toBe('5–6');
 		expect(expansionRanges([extension, solo, half])).toBe('5–6, 1–4, up to 8'); // BGG's own, a zero left unknown
 		expect(extensionNames('CATAN', [extension, solo])).toBe('the 5-6 Player Extension and the Solo Pack');
+	});
+});
+
+describe('an owner’s count on their copy (D75)', () => {
+	// Cosmic Encounter's case: 3–5 on its own, two expansions each listed 3–6, and together they take 7.
+	function cosmic() {
+		const base = game({ name: 'Cosmic Encounter', minPlayers: 3, maxPlayers: 5, copies: [copy('u1', { maxWith: 7 })] });
+		const one = game({ name: 'Cosmic Encounter: Cosmic Incursion', minPlayers: 3, maxPlayers: 6, isExpansion: true, baseIds: [base.id], copies: [copy('u1')] });
+		const two = game({ name: 'Cosmic Encounter: Cosmic Conflict', minPlayers: 3, maxPlayers: 6, isExpansion: true, baseIds: [base.id], copies: [copy('u1')] });
+		return { base, one, two, games: [base, one, two] };
+	}
+	const names = (id: string) => ({ u1: 'Ada', u2: 'Bram' })[id] ?? 'Someone';
+
+	it('counts like an expansion that takes the game to it, whenever its copy counts', () => {
+		const { base, games } = cosmic();
+		const onHand = expansionsOnHand(games, () => true);
+		expect(fitsPlayers(base, 6)).toBe(false);
+		expect(fitsPlayers(base, 7, onHand)).toBe(true);
+		expect(fitsPlayers(base, 8, onHand)).toBe(false);
+		expect(mostPlayers(base, onHand)).toBe(7);
+		expect(fitsWith(base, 7, onHand)?.countBy).toBe('u1');
+		const away = expansionsOnHand(games, (c) => c.ownerId !== 'u1');
+		expect(fitsPlayers(base, 7, away)).toBe(false);
+	});
+
+	it('shows the owner’s count in place of the expansions’ own, and says whose it is', () => {
+		const { base, one, two, games } = cosmic();
+		const adding = expansionsAdding(base, expansionsOnHand(games, () => true));
+		expect(addedCounts(base, adding, names)).toEqual({
+			text: '7',
+			title: 'Up to 7 with Ada’s expansions (Ada’s count)',
+			line: 'Up to 7 with Ada’s expansions (Ada’s count)'
+		});
+		// Without a count, the expansions' own, the same range once.
+		const plain = { ...base, copies: [copy('u1')] };
+		const shown = addedCounts(plain, expansionsAdding(plain, expansionsOnHand([plain, one, two], () => true)), names, () => ' (Ada’s)');
+		expect(shown?.text).toBe('3–6');
+		expect(shown?.line).toBe('3–6 with Cosmic Incursion (Ada’s) · 3–6 with Cosmic Conflict (Ada’s)');
+		expect(addedCounts(plain, [], names)).toBeNull();
+	});
+
+	it('takes the highest count when two owners set one', () => {
+		const base = game({ minPlayers: 3, maxPlayers: 5, copies: [copy('u1', { maxWith: 6 }), copy('u2', { maxWith: 7 })] });
+		const adding = expansionsAdding(base, expansionsOnHand([base], () => true));
+		expect(addedCounts(base, adding, names)?.text).toBe('7');
+		expect(addedCounts(base, adding, names)?.line).toBe('Up to 7 with Bram’s expansions (Bram’s count)');
 	});
 });

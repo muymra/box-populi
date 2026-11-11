@@ -1,7 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { nightListRead } from '#lib/server/nights.ts';
 import { requireRead, requireRole } from '#lib/server/authz.ts';
-import { addCopy, gameUsableInGroup, gameVisibleInGroup, removeCopy } from '#lib/server/games.ts';
+import { addCopy, gameUsableInGroup, gameVisibleInGroup, MAX_PLAYERS_WITH, removeCopy, setPlayersWith } from '#lib/server/games.ts';
 import { addLink, canDeleteLink, deleteLink, parseLink } from '#lib/server/links.ts';
 import { addWish, removeWish } from '#lib/server/wishlist.ts';
 import { hiddenHereRead, setCopyHidden } from '#lib/server/hiding.ts';
@@ -77,9 +77,9 @@ export const load: PageServerLoad = async (event) => {
 			me && access.role ? me.id : ''
 		),
 		corrections: correctionsRead(db, groupId, [gameId]),
-		owners: rowsOf<{ user_id: string; name: string; lent_to_name: string | null; lent_to_text: string | null; lent_in_group: number }>(
+		owners: rowsOf<{ user_id: string; name: string; lent_to_name: string | null; lent_to_text: string | null; lent_in_group: number; max_players_with: number | null }>(
 			db,
-			`SELECT c.user_id, u.name, lu.name AS lent_to_name, c.lent_to_text,
+			`SELECT c.user_id, u.name, lu.name AS lent_to_name, c.lent_to_text, c.max_players_with,
 				EXISTS (SELECT 1 FROM memberships lm WHERE lm.group_id = ?1 AND lm.user_id = c.lent_to_user_id) AS lent_in_group
 			 FROM group_copies c
 			 JOIN users u ON u.id = c.user_id
@@ -154,9 +154,9 @@ export const load: PageServerLoad = async (event) => {
 		members: membersRead(db, groupId),
 		plays: playsRead(db, groupId, { gameId }),
 		myCopy: me
-			? rowOf<{ lent_to_user_id: string | null; lent_to_text: string | null }>(
+			? rowOf<{ lent_to_user_id: string | null; lent_to_text: string | null; max_players_with: number | null }>(
 					db,
-					'SELECT lent_to_user_id, lent_to_text FROM copies WHERE user_id = ?1 AND game_id = ?2',
+					'SELECT lent_to_user_id, lent_to_text, max_players_with FROM copies WHERE user_id = ?1 AND game_id = ?2',
 					me.id,
 					gameId
 				)
@@ -288,9 +288,23 @@ export const load: PageServerLoad = async (event) => {
 						})),
 						me?.id ?? null
 					),
+		// Owners' own counts on their copies (D75), highest first: "Up to 7 with Ada's expansions, by Ada's count".
+		ownerCounts: game.is_expansion === 1 ? [] : ownerCounts(owners, me?.id ?? null, game.max_players),
+		// The viewer's own count, for the field under their copy; and whether to show that field open.
+		myPlayersWith: myCopy?.max_players_with ?? null,
+		playersWithOpen: myCopy?.max_players_with != null || expansions.length > 0,
+		maxPlayersWith: MAX_PLAYERS_WITH,
 		bases: bases.map((b) => ({ id: b.id, name: b.name }))
 	};
 };
+
+/** The owners' counts that add to the game's own most, highest first, the viewer's said as "your". */
+function ownerCounts(owners: Array<{ user_id: string; name: string; max_players_with: number | null }>, me: string | null, most: number | null) {
+	return owners
+		.filter((o) => o.max_players_with != null && (most == null || o.max_players_with > most))
+		.sort((a, b) => b.max_players_with! - a.max_players_with!)
+		.map((o) => (o.user_id === me ? { id: o.user_id, most: o.max_players_with!, who: 'your', mine: true } : { id: o.user_id, most: o.max_players_with!, who: `${o.name}’s`, mine: false }));
+}
 
 function gameIdParam(raw: string): number {
 	const id = Number(raw);
@@ -337,6 +351,13 @@ export const actions: Actions = {
 			toText: form.get('toText')
 		});
 		return result.ok ? { lent: true } : fail(400, { lendError: result.error });
+	},
+
+	playersWith: async (event) => {
+		const db = getDb();
+		await requireRole(event, db, event.params.groupId, 'member');
+		const result = await setPlayersWith(db, event.locals.user!.id, gameIdParam(event.params.gameId), (await event.request.formData()).get('maxWith'));
+		return result.ok ? { playersWithSaved: true } : fail(400, { playersWithError: result.error });
 	},
 
 	returned: async (event) => {

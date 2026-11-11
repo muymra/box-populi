@@ -4,7 +4,7 @@ import { all, one, run } from './db.ts';
 import { FakeBggClient } from './bgg/fake.ts';
 import { LiveBggClient, userAgent, BggAuthError } from './bgg/client.ts';
 import { BggBusyError, type BggSearchHit } from './bgg/types.ts';
-import { addCopy, addManualGame, cachedSearch, gameUsableInGroup, parseManualGame, rankHits, removeCopy, SEARCH_CACHE_MS, searchBgg } from './games.ts';
+import { addCopy, addManualGame, cachedSearch, gameUsableInGroup, parseManualGame, rankHits, removeCopy, SEARCH_CACHE_MS, searchBgg, setPlayersWith } from './games.ts';
 import { catalogJson, loadCatalog } from './catalog.ts';
 
 let db: ReturnType<typeof createTestDb>;
@@ -91,6 +91,24 @@ describe('expansion links in the catalog (STATUS item 30)', () => {
 		expect(byId.get(72)?.baseIds).toEqual([70]); // its other base isn't on the shelf
 		expect(byId.get(73)?.baseIds).toBeUndefined(); // Pandemic isn't on the shelf
 		expect(byId.get(70)?.baseIds).toBeUndefined();
+	});
+});
+
+describe('an owner’s count on their copy (D75)', () => {
+	it('saves a count above the game’s own most, clears it when empty, and refuses the rest', async () => {
+		await run(db, `INSERT INTO games (id, bgg_id, name, search_text, min_players, max_players) VALUES (80, 39463, 'Cosmic Encounter', 'cosmic', 3, 5)`);
+		await run(db, `INSERT INTO copies (user_id, game_id, added_at) VALUES ('ada', 80, 0)`);
+		const version = async () => (await one<{ v: number }>(db, `SELECT catalog_version AS v FROM groups WHERE id = 'g1'`))!.v;
+		const before = await version();
+		expect(await setPlayersWith(db, 'ada', 80, '7')).toEqual({ ok: true });
+		expect(await version()).toBe(before + 1);
+		expect((await loadCatalog(db, 'g1', 0)).games.find((g) => g.id === 80)?.copies[0].maxWith).toBe(7);
+		expect(await setPlayersWith(db, 'ada', 80, '5')).toMatchObject({ ok: false, error: expect.stringContaining('up to 5 on its own') });
+		expect(await setPlayersWith(db, 'ada', 80, '31')).toMatchObject({ ok: false });
+		expect(await setPlayersWith(db, 'ada', 80, 'seven')).toMatchObject({ ok: false });
+		expect(await setPlayersWith(db, 'bram', 80, '7')).toMatchObject({ ok: false, error: expect.stringContaining('isn’t on your shelf') });
+		expect(await setPlayersWith(db, 'ada', 80, ' ')).toEqual({ ok: true });
+		expect((await loadCatalog(db, 'g1', 0)).games.find((g) => g.id === 80)?.copies[0]).not.toHaveProperty('maxWith');
 	});
 });
 

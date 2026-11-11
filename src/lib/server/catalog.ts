@@ -107,9 +107,9 @@ export async function loadCatalog(db: DB, groupId: string, version: number): Pro
 			 ORDER BY g.id`,
 			groupId
 		),
-		copyRows: rowsOf<{ game_id: number; owner_id: string; lent_to_user_id: string | null; lent_to_text: string | null; added_at: number }>(
+		copyRows: rowsOf<{ game_id: number; owner_id: string; lent_to_user_id: string | null; lent_to_text: string | null; added_at: number; max_players_with: number | null }>(
 			db,
-			`SELECT c.game_id, c.user_id AS owner_id, c.lent_to_user_id, c.lent_to_text, c.added_at
+			`SELECT c.game_id, c.user_id AS owner_id, c.lent_to_user_id, c.lent_to_text, c.added_at, c.max_players_with
 			 FROM group_copies c WHERE c.group_id = ?1
 			 ORDER BY c.game_id, c.id`,
 			groupId
@@ -144,7 +144,8 @@ export async function loadCatalog(db: DB, groupId: string, version: number): Pro
 			ownerId: row.owner_id,
 			lentToUserId: row.lent_to_user_id,
 			lentOut: row.lent_to_text != null,
-			addedAt: row.added_at
+			addedAt: row.added_at,
+			...(row.max_players_with != null ? { maxWith: row.max_players_with } : {})
 		});
 	}
 	for (const row of bases) {

@@ -15,7 +15,7 @@
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { MANY_PLAYERS, PLAYER_CHOICES, formatPlayerRange, maskHas, playerChoiceLabel } from '#lib/catalog/players.ts';
 	import { DEFAULT_FILTERS, filterGames, keepMatching, shelfExtensions, sortGames } from '#lib/catalog/filter.ts';
-	import { countsWith, expansionsAdding, expansionsOnHand, type OnHand } from '#lib/catalog/extensions.ts';
+	import { addedCounts, expansionsAdding, expansionsOnHand, type OnHand } from '#lib/catalog/extensions.ts';
 	import Puzzle from '@lucide/svelte/icons/puzzle';
 	import {
 		LINEUP_SIZE,
@@ -205,14 +205,17 @@
 	});
 	/** The expansions here that add to the game's range, each shown with its own count from BGG (D74). */
 	const addingOf = (game: CatalogGame) => (onHand ? expansionsAdding(game, onHand) : []);
-	/** "5–6 with the 5-6 Player Extension (Bram’s)", under a game an expansion here adds players to, whatever tonight's count. */
+	/**
+	 * "5–6 with the 5-6 Player Extension (Bram’s)", or an owner's count, "Up to 7 with Ada’s expansions (Ada’s
+	 * count)", under a game an expansion here adds players to, whatever tonight's count (D74, D75).
+	 */
 	function withLine(game: CatalogGame): string | null {
-		const adding = addingOf(game);
-		if (!adding.length) return null;
-		return countsWith(game.name, adding, (e) => {
-			const owners = ownersOf(e);
-			return owners.length ? ` (${ownerText(owners)})` : '';
-		}).join(' · ');
+		return (
+			addedCounts(game, addingOf(game), (id) => memberMap.get(id)?.name ?? 'Someone', (e) => {
+				const owners = ownersOf(e);
+				return owners.length ? ` (${ownerText(owners)})` : '';
+			})?.line ?? null
+		);
 	}
 	/** More people here than three in four of the games take: the evening runs as several groups (D41). */
 	const bigRoom = $derived(roomIsBig(atTable, shelfToPull, onHand));

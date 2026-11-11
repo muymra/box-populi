@@ -21,6 +21,8 @@ export type CatalogCopy = {
 	/** Lent to someone outside the app. */
 	lentOut: boolean;
 	addedAt: number;
+	/** How many can play with the expansions its owner has, by the owner's count (D75); left out when not set. */
+	maxWith?: number;
 };
 
 export type CatalogGame = {
@@ -55,6 +57,11 @@ export type CatalogGame = {
 	 * widen theirs (STATUS item 30, `extensions.ts`). Left out when there are none.
 	 */
 	baseIds?: number[];
+	/**
+	 * Never sent: set in the browser on an entry that stands for an owner's own count (D75), the owner's id,
+	 * so the expansion checks in `extensions.ts` take it like an expansion.
+	 */
+	countBy?: string;
 	copies: CatalogCopy[];
 };
 

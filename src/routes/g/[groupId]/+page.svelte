@@ -95,7 +95,7 @@
 	const tagFor = (game: CatalogGame) => {
 		const via = onHand ? widenedFor(game, plainFilters, onHand) : null;
 		return {
-			via: via ? `With ${extensionName(game.name, via.name)}` : null,
+			via: via ? `With ${via.countBy ? `${memberMap.get(via.countBy)?.name ?? 'Someone'}’s expansions` : extensionName(game.name, via.name)}` : null,
 			unknown: !via && passedOnUnknown(game, plainFilters),
 			// The group's expansions that add to its range, each shown with its own count, whatever the filters (D74).
 			adding: onHand ? expansionsAdding(game, onHand) : []

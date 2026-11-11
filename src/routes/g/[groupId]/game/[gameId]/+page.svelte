@@ -114,6 +114,11 @@
 			};
 		};
 	let editOpen = $state(false);
+	// The owner's count on their copy (D75): open when one is set or the group has an expansion of this game.
+	let playersWithOpen = $state(false);
+	$effect(() => {
+		if (data.playersWithOpen || form?.playersWithError) playersWithOpen = true;
+	});
 	$effect(() => {
 		if (form?.editError) editOpen = true;
 	});
@@ -145,6 +150,32 @@
 		}
 	}
 </script>
+
+<!-- The owner's count on their copy (D75), under their name in "On whose shelf". -->
+{#snippet playersWith()}
+	<details class="players-with" bind:open={playersWithOpen}>
+		<summary class="link-button">Your expansions take more players?</summary>
+		<form method="POST" action="?/playersWith" use:enhance={send('playersWith')}>
+			<label for="max-with">With your expansions, how many can play?</label>
+			<div class="row">
+				<input
+					id="max-with"
+					class="field num"
+					name="maxWith"
+					inputmode="numeric"
+					pattern="[0-9]*"
+					maxlength="2"
+					value={data.myPlayersWith ?? ''}
+					aria-describedby="max-with-hint"
+				/>
+				<span>players</span>
+				<button class="btn small" disabled={sending === 'playersWith'}>{sending === 'playersWith' ? 'Saving…' : 'Save'}</button>
+			</div>
+			<p id="max-with-hint" class="muted">Your own count, shown as yours. Leave it empty to go by BoardGameGeek’s.</p>
+			{#if form?.playersWithError}<p class="banner error" role="alert">{form.playersWithError}</p>{:else if form?.playersWithSaved}<p class="muted" role="status">Saved.</p>{/if}
+		</form>
+	</details>
+{/snippet}
 
 <svelte:head><title>{g.name} · {data.group.name}</title></svelte:head>
 
@@ -181,6 +212,9 @@
 							{#if recommended && recommended !== best}<span class="muted">{' · '}recommended <span class="num">{recommended}</span></span>{/if}
 							{#each data.playerExtensions as x (x.id)}
 								<span class="widened"><span class="num">{x.range}</span> with <a href="{base}/game/{x.id}">{x.name}</a>{#if x.owners}{' '}({x.owners}){/if}</span>
+							{/each}
+							{#each data.ownerCounts as o (o.id)}
+								<span class="widened"><span class="num">Up to {o.most}</span> with {o.who} expansions, by {o.who} count</span>
 							{/each}
 						</span>
 					</li>
@@ -380,6 +414,7 @@
 								<span class="chip" style:background={c.fill} style:color={c.ink} aria-hidden="true">{o.name.slice(0, 1).toUpperCase()}</span>
 								<span class="who"><strong><a href="{base}/members/{o.id}">{o.name}</a></strong></span>
 								{#if o.status}<span class="tag">{o.status}</span>{/if}
+								{#if o.isMe && data.canEdit}{@render playersWith()}{/if}
 							</li>
 						{/each}
 					</ul>
@@ -677,6 +712,31 @@
 		display: flex;
 		gap: var(--s-2);
 		align-items: flex-start;
+	}
+	/* The owner's count on their copy (D75): a line under their name, folded until it's wanted. */
+	.players-with {
+		flex-basis: 100%;
+		margin-left: 40px;
+		font-size: var(--t-small);
+	}
+	.players-with[open] summary {
+		display: none;
+	}
+	.players-with form {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	.players-with .row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.players-with input {
+		width: 4.25rem;
+	}
+	.players-with p {
+		margin: 0;
 	}
 	/* An expansion's own count, under the game's (STATUS item 30). */
 	.widened {
