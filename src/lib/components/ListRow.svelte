@@ -6,18 +6,21 @@
 <script lang="ts">
 	import { boxColor, playerColor } from '#lib/catalog/colors.ts';
 	import { BUCKET_LABELS, formatPlaytime, weightBucket } from '#lib/catalog/buckets.ts';
-	import { formatPlayersShort } from '#lib/catalog/players.ts';
+	import { formatPlayerRange, formatPlayersShort } from '#lib/catalog/players.ts';
 	import { isCopyAvailable } from '#lib/catalog/filter.ts';
+	import Puzzle from '@lucide/svelte/icons/puzzle';
+	import { countsWith, expansionRanges } from '#lib/catalog/extensions.ts';
 	import type { CatalogGame, CatalogMember } from '#lib/catalog/types.ts';
 
-	/** `unknown` and `via`: as on a cube (Cube.svelte). */
+	/** `unknown`, `via` and `adding`: as on a cube (Cube.svelte). */
 	let {
 		game,
 		href,
 		members,
 		memberIds,
 		unknown = false,
-		via = null
+		via = null,
+		adding = []
 	}: {
 		game: CatalogGame;
 		href: string;
@@ -25,6 +28,7 @@
 		memberIds: ReadonlySet<string>;
 		unknown?: boolean;
 		via?: string | null;
+		adding?: readonly CatalogGame[];
 	} = $props();
 
 	const color = $derived(boxColor(game.name));
@@ -34,8 +38,10 @@
 	const time = $derived(formatPlaytime(game.minPlaytime, game.maxPlaytime));
 	const bucket = $derived(weightBucket(game.weight));
 	const unavailable = $derived(!game.copies.some((c) => isCopyAvailable(c, memberIds)));
+	const addedCounts = $derived(adding.length ? expansionRanges(adding) : null);
+	const addedTitle = $derived(adding.length ? `${formatPlayerRange(game.minPlayers, game.maxPlayers)} players; ${countsWith(game.name, adding).join(', ')}` : null);
 	const facts = $derived(
-		[players, time, bucket && BUCKET_LABELS[bucket], owners.length > 4 ? `${owners.length} owners` : null]
+		[addedCounts ? null : players, time, bucket && BUCKET_LABELS[bucket], owners.length > 4 ? `${owners.length} owners` : null]
 			.filter(Boolean)
 			.join(' · ')
 	);
@@ -45,6 +51,9 @@
 <a class="spine" class:out={unavailable} {href} style:--spine-bg={color.bg} style:--spine-ink={color.ink}>
 	<span class="title">{game.name}</span>
 	<span class="facts num">
+		{#if addedCounts}<span class="added" title={addedTitle}
+				>{players} · <Puzzle size={13} aria-hidden="true" />{addedCounts}<span class="visually-hidden">, {addedTitle}</span>{facts ? ' ·' : ''}</span
+			>{/if}
 		{facts}
 		{#if game.isExpansion}<span class="flag">Expansion</span>{/if}
 		{#if unavailable}<span class="flag">Lent out</span>{/if}
@@ -97,6 +106,11 @@
 		font-size: var(--t-small);
 		font-weight: 600;
 		white-space: nowrap;
+	}
+	.added {
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
 	}
 	.flag {
 		padding: 0 6px;

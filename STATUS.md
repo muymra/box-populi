@@ -1,6 +1,6 @@
 # Status
 
-Last updated 2026-11-11. Everything under Done is built, and 558 tests pass. Two instances run on Cloudflare Pages: the public demo at `box-populi.pages.dev` (`INSTANCE_MODE=demo`) and Carlo's private instance for his own groups, whose address stays out of this public repo. Both run v0.6.0. **Migrations 0001 to 0020 are applied to production, so they're frozen: schema changes go in new migration files.**
+Last updated 2026-11-11. Everything under Done is built, and 559 tests pass. Two instances run on Cloudflare Pages: the public demo at `box-populi.pages.dev` (`INSTANCE_MODE=demo`) and Carlo's private instance for his own groups, whose address stays out of this public repo. Both run v0.6.0. **Migrations 0001 to 0020 are applied to production, so they're frozen: schema changes go in new migration files.**
 
 **Next up:** 0.6.0 is live on both instances (2026-11-11). Then the 2026-11-06 audit's low-priority list (Known issues) and a plan for BGG's 30-day refresh; item 46 (moving a group between instances, D68) is low priority. Still open from before: the ranks-file search index and the unbuilt 30-day refresh. The PRD's "Planned or possible" list: passkeys, CSV export of the catalog, PWA, and maybe filling in details with an AI chatbot.
 
@@ -23,7 +23,7 @@ Not secret. Secrets never go in this file.
 
 ## Open
 
-- [ ] Read BGG's five policy pages in a browser (links in TECH.md "Access and terms"). Done 2026-11-08: "Using the XML API" and the XML API2 wiki's CSV section; still to read: the XML API Terms of Use, Commercial Use, the site Terms of Service, and the logo files the guide links ("any of the files found here"): Using the XML API, XML API Terms of Use, Commercial Use, the XML API2 wiki, and the site Terms of Service. Fix anything in TECH.md they contradict, and note where BGG publishes the "Powered by BGG" logo files.
+- [ ] Read BGG's five policy pages in a browser (links in TECH.md "Access and terms"). Done 2026-11-08: "Using the XML API" and the XML API2 wiki's CSV section; still to read: the XML API Terms of Use, Commercial Use, the site Terms of Service, Using the XML API, XML API Terms of Use, Commercial Use, the XML API2 wiki, and the site Terms of Service. Fix anything in TECH.md they contradict. (The logo files: Carlo downloaded them from BGG on 2026-11-11; the Terms of Use point to a "Powered by BGG Logos" page.)
 46. [ ] Move a group to another Box Populi (Carlo, 2026-11-10: "as for importing exported data to another instance, plan for it too. this can be low priority for now as it's further in the future"; planned, low priority). The CSV exports stay as they are, for spreadsheets; they're lossy (names not ids, no points scheme, links, corrections or lowest-score-wins) and won't be read back. Instead:
     1. **A group bundle.** The owner downloads one JSON file from the Group tab ("Move this group to another Box Populi…", with "Tell the group first: their names, plays and nights go with it"). Format `box-populi-group`, version 1: the group (name, points scheme, co-op rule, filler limits, stale window, nights setting), members (name, role, join order, so colours carry over), games (BGG id and name, or a typed-in game's own details), the group's corrections and rulebook links (with who added them, by name), plays (date, game, night, co-op result, lowest-score-wins, players with place and score, guests by name) and nights (name, date, start, host, people with going and came, bring list with who brings and stayed home). Never: PINs, sessions, sign-in links, the join code and link key, anyone's shelf, wishlist, favourites or Play soon (those are the person's, not the group's), or anything from BGG beyond ids and names.
     2. **Start a group from it.** On the new instance, Create a group (under its `GROUP_CREATION` rule) gets "From a Box Populi file": pick the file, see what's in it (members, plays, nights, games found by BGG id or coming in by name), say which member you are, and create. It always makes a new group, so a file can't be imported twice into one. The browser reads the file and sends it in parts of about 500 plays, written with `json_each` like the collection import, so no request goes near the CPU or D1 limits; a file over 5 MB is refused.
@@ -98,7 +98,6 @@ From memory when the docs were written. Check each before relying on it, then mo
 |---|---|
 | `thing` returns `poll-summary name="suggested_numplayers"` with `bestwith` and `recommmendedwith` results, in text like "Best with 3–4 players" | `poll.ts` |
 | BGG's site Terms of Service add nothing that conflicts with the plan (never read; automated fetches blocked) | Everything BGG-facing |
-| Where BGG publishes the "Powered by BGG" logo files, and any size or placement rules | `BggCredit.svelte` |
 | BGG search results carry no images | Search flow |
 | BGG collection returns 202 while preparing | Import polling |
 | BGG XML details: zero for unknown, double-encoded descriptions, "N+" poll rows, `inbound="true"` on an expansion's base link | `parse.ts`, `poll.ts` |
@@ -130,6 +129,7 @@ From memory when the docs were written. Check each before relying on it, then mo
 | The live BGG client works against BGG: search, `thing` batches of 20, the bearer token and the instance pacer. Hydrate upgraded Wikidata games with BGG ids to full BGG data (images, players, weight, best-at, mechanics) with no errors in the logs | 2026-11-09 | Carlo's private instance, `wrangler pages deployment tail` and D1 counts |
 | BGG is "still determining exact usage limits"; its older wiki says throttling returns 500 or 503 and that 5 seconds between requests sufficed | 2026-11-06 | "Using the XML API"; BGG XML API2 wiki, via search summaries |
 | The twelve theme palettes may be reused: MIT, except Tokyo Night (Apache-2.0); Gruvbox's MIT is stated in its README; credited in README.md | 2026-11-10 | Each project's LICENSE or README, via the GitHub API |
+| BGG's "Powered by BGG" logo comes as an SVG in colour and reversed (white type, for dark grounds), 342×76, and the Terms of Use ask that it be "sized so the text is easily legible" | 2026-11-11 | Carlo's downloads from BGG; the Terms of Use via a search summary of a BGG wiki mirror |
 | D1 Time Travel gives a bookmark to roll back to before migrating (taken, not yet restored from) | 2026-11-09 | The 0.4.0 deploys on both instances |
 
 ## Measurements to record
@@ -139,10 +139,11 @@ From memory when the docs were written. Check each before relying on it, then mo
 
 ## Known issues
 
-- The footer shows a text "Powered by BGG" badge. BGG's terms ask for its logo; swap in the official file once its location is confirmed.
 - Open from the 2026-11-06 audit: only its low-priority list (screen-reader names on picker results and shelf cubes, status messages that aren't announced, touch targets under 44px, the picker at 360px, page titles, silent failures in the theme picker and copy buttons, game-page state carried between games).
 - BGG games keep the details they were first fetched with: the 30-day background refresh (TECH.md "Refresh") isn't built.
 
 ## Session log
 
 Entries since the last release; older ones are in [docs/history/session-log.md](./docs/history/session-log.md).
+
+- 2026-11-11: An expansion's count on the shelf and at Play tonight (D74; Carlo: the count with an expansion showed only on the game page, and choosing a game at Play tonight still showed the base count). Built first as a combined range ("🧩 3–6p", his 1a), then, after he asked whether that complied with BGG's terms, replaced by both BGG figures, each with its own game: "3–4p · 🧩5–6" on cubes, Spines and the choose lists (`expansionsAdding`, `expansionRanges`, `countsWith` in `extensions.ts`; `Cube` and `ListRow` take `adding`; a phone cube drops its play time), and Play tonight's facts keep the game's range with a line "🧩 5–6 with the 5-6 Player Extension (Bram's)" whenever an expansion here adds to it. Then BGG's logo in the footer, from the two files Carlo downloaded (`src/lib/assets/powered-by-bgg-*.svg`, checked: shapes only, no scripts or links): the colour one on light themes and the reversed one on dark, switched by new `--on-light`/`--on-dark` tokens (`themes.ts`, `app.css`, `themes.css` regenerated), 28px tall. 559 tests on both adapters, `pnpm check` clean. Checked in `pnpm dev`, signed in as Ada: the shelf at 1280 and 390, Spines, the shelf filtered to 6, Play tonight with and without Bram, and the footer in cube light and dark, Gruvbox and Dracula dark; no console errors. Unreleased.

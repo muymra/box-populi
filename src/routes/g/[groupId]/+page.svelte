@@ -34,7 +34,7 @@
 		type SortKey
 	} from '#lib/catalog/filter.ts';
 	import { PLAYER_CHOICES, playerChoiceLabel } from '#lib/catalog/players.ts';
-	import { extensionName } from '#lib/catalog/extensions.ts';
+	import { expansionsAdding, extensionName } from '#lib/catalog/extensions.ts';
 	import type { CatalogGame, CatalogPayload } from '#lib/catalog/types.ts';
 	import type { PageProps } from './$types';
 
@@ -94,7 +94,12 @@
 	/** What the shelf tags a game with: the expansion it fits with, or "Info missing". */
 	const tagFor = (game: CatalogGame) => {
 		const via = onHand ? widenedFor(game, plainFilters, onHand) : null;
-		return { via: via ? `With ${extensionName(game.name, via.name)}` : null, unknown: !via && passedOnUnknown(game, plainFilters) };
+		return {
+			via: via ? `With ${extensionName(game.name, via.name)}` : null,
+			unknown: !via && passedOnUnknown(game, plainFilters),
+			// The group's expansions that add to its range, each shown with its own count, whatever the filters (D74).
+			adding: onHand ? expansionsAdding(game, onHand) : []
+		};
 	};
 	const spare = $derived(limit >= results.length ? (columns - (results.length % columns)) % columns : 0);
 	// The favourites filters appear once someone has a favourite, Play soon once the viewer has a mark.

@@ -1,11 +1,12 @@
 <!--
 	Required on every page by BGG's XML API terms (TECH.md "Attribution and public surface").
-	It lives in the root layout so no page can drop it.
-	TODO: replace the text badge with the official "Powered by BGG" logo file once its location
-	is confirmed (STATUS.md, unverified assumptions). Don't redraw the logo.
+	It lives in the root layout so no page can drop it. The logo is BGG's own file, as BGG provides it:
+	the colour one on light themes, the reversed one on dark ones. Don't redraw or recolour it.
 -->
 <script lang="ts">
 	import { APP_VERSION, CHANGELOG_URL, SOURCE_URL } from '#lib/project.ts';
+	import poweredByBgg from '#lib/assets/powered-by-bgg-rgb.svg';
+	import poweredByBggReversed from '#lib/assets/powered-by-bgg-reversed-rgb.svg';
 	import ThemePicker from './ThemePicker.svelte';
 
 	/** `bgg`: whether this instance shows BGG data and so must credit it (D30). */
@@ -18,7 +19,10 @@
 			{#if bgg}
 				<p>
 					Game data from <a href="https://boardgamegeek.com" rel="noopener">BoardGameGeek</a>
-					<a class="badge" href="https://boardgamegeek.com" rel="noopener">Powered by BGG</a>
+					<a class="logo" href="https://boardgamegeek.com" rel="noopener">
+						<img class="on-light" src={poweredByBgg} alt="Powered by BGG" width="126" height="28" />
+						<img class="on-dark" src={poweredByBggReversed} alt="Powered by BGG" width="126" height="28" />
+					</a>
 				</p>
 			{/if}
 			{#if wikidata}
@@ -75,14 +79,20 @@
 	.theme {
 		margin-left: auto;
 	}
-	.badge {
-		display: inline-block;
-		padding: 1px 8px;
-		border: 1.5px solid currentColor;
+	/* 28px tall keeps the logo's small "by" readable on a phone, as BGG asks. */
+	.logo {
+		display: inline-flex;
 		border-radius: 4px;
-		font-weight: 700;
-		text-decoration: none;
-		color: var(--ink);
+	}
+	.logo img {
+		height: 28px;
+		width: auto;
+	}
+	.on-light {
+		display: var(--on-light, block);
+	}
+	.on-dark {
+		display: var(--on-dark, none);
 	}
 	/* Group pages carry a bottom tab bar below 900px; keep the credit clear of it. */
 	:global(body:has(.tabbar)) .credit {

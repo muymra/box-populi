@@ -555,7 +555,11 @@ export function resolve(p: Palette, mode: Mode): Tokens {
 		'--danger': ensureContrast(p.danger, [p.cube, p.laminate, dangerSoft], 4.5, extreme),
 		'--danger-soft': dangerSoft,
 		'--note': note,
-		'--focus': ink
+		'--focus': ink,
+		// Which of a pair of pictures shows, for one made for light grounds and one for dark: the BGG
+		// logo in the footer has both (display values, not colours).
+		'--on-light': mode === 'light' ? 'block' : 'none',
+		'--on-dark': mode === 'dark' ? 'block' : 'none'
 	};
 }
 

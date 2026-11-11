@@ -1,6 +1,6 @@
 // Expansions that change how many can play (STATUS item 30).
 import { describe, expect, it } from 'vitest';
-import { expansionsOnHand, extensionName, fitsPlayers, fitsWith, mostPlayers, playerExtensions, rangeWith, widenedText } from './extensions.ts';
+import { expansionsOnHand, extensionName, extensionNames, fitsPlayers, fitsWith, mostPlayers, playerExtensions, rangeWith, widenedText, expansionsAdding, expansionRanges } from './extensions.ts';
 import { DEFAULT_FILTERS, filterGames, shelfExtensions, widenedFor, type Filters } from './filter.ts';
 import { assignBands, fitsBand, isCopyAtHand, misfits, needsSplit, roomIsBig, seededRng, splitFillers, SPREAD_BANDS } from './pick.ts';
 import { maskFromCounts } from './players.ts';
@@ -160,5 +160,21 @@ describe('Play tonight with expansions', () => {
 		expect(fitsBand(catan, big, here(['u2']))).toBe(true);
 		expect(assignBands([catan], { [catan.id]: 'big' }).get(catan.id)).toBe('mid'); // best at 4
 		expect(assignBands([catan], { [catan.id]: 'big' }, here(['u2'])).get(catan.id)).toBe('big');
+	});
+});
+
+describe('the counts shown with expansions (D74)', () => {
+	it('lists the expansions on hand that add to the range, each shown with its own count from BGG', () => {
+		const { catan, extension, games } = catanShelf();
+		const solo = game({ name: 'CATAN: Solo Pack', minPlayers: 1, maxPlayers: 4, isExpansion: true, baseIds: [catan.id] });
+		const seafarers = game({ name: 'CATAN: Seafarers', minPlayers: 3, maxPlayers: 4, isExpansion: true, baseIds: [catan.id] });
+		const half = game({ name: 'CATAN: Big Box', minPlayers: null, maxPlayers: 8, isExpansion: true, baseIds: [catan.id] });
+		expect(expansionsAdding(catan)).toEqual([]);
+		expect(expansionsAdding(catan, expansionsOnHand(games, () => true))).toEqual([extension]);
+		const all = expansionsOnHand([...games, solo, seafarers, half], () => true);
+		expect(expansionsAdding(catan, all)).toEqual([extension, solo, half]); // Seafarers adds nothing
+		expect(expansionRanges([extension])).toBe('5–6');
+		expect(expansionRanges([extension, solo, half])).toBe('5–6, 1–4, up to 8'); // BGG's own, a zero left unknown
+		expect(extensionNames('CATAN', [extension, solo])).toBe('the 5-6 Player Extension and the Solo Pack');
 	});
 });

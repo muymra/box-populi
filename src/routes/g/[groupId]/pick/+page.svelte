@@ -15,7 +15,8 @@
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { MANY_PLAYERS, PLAYER_CHOICES, formatPlayerRange, maskHas, playerChoiceLabel } from '#lib/catalog/players.ts';
 	import { DEFAULT_FILTERS, filterGames, keepMatching, shelfExtensions, sortGames } from '#lib/catalog/filter.ts';
-	import { expansionsOnHand, extensionName, fitsWith, type OnHand } from '#lib/catalog/extensions.ts';
+	import { countsWith, expansionsAdding, expansionsOnHand, type OnHand } from '#lib/catalog/extensions.ts';
+	import Puzzle from '@lucide/svelte/icons/puzzle';
 	import {
 		LINEUP_SIZE,
 		MAX_CHOSEN,
@@ -202,12 +203,16 @@
 		if (!listed && people.size === 0) return shelfExtensions(payload.games, { availableOnly: true }, memberIds);
 		return expansionsOnHand(payload.games, (c, g) => (listed?.has(g.id) ?? false) || isCopyAtHand(c, people));
 	});
-	/** "With the 5-6 Player Extension (Bram’s)" on a game that seats `size` only that way. */
-	function withLine(game: CatalogGame, size: number | null): string | null {
-		const via = size ? fitsWith(game, size, onHand) : null;
-		if (!via) return null;
-		const owners = ownersOf(via);
-		return `With ${extensionName(game.name, via.name)}${owners.length ? ` (${ownerText(owners)})` : ''}`;
+	/** The expansions here that add to the game's range, each shown with its own count from BGG (D74). */
+	const addingOf = (game: CatalogGame) => (onHand ? expansionsAdding(game, onHand) : []);
+	/** "5–6 with the 5-6 Player Extension (Bram’s)", under a game an expansion here adds players to, whatever tonight's count. */
+	function withLine(game: CatalogGame): string | null {
+		const adding = addingOf(game);
+		if (!adding.length) return null;
+		return countsWith(game.name, adding, (e) => {
+			const owners = ownersOf(e);
+			return owners.length ? ` (${ownerText(owners)})` : '';
+		}).join(' · ');
 	}
 	/** More people here than three in four of the games take: the evening runs as several groups (D41). */
 	const bigRoom = $derived(roomIsBig(atTable, shelfToPull, onHand));
@@ -773,11 +778,10 @@
 						{isKept ? 'Kept' : 'Keep'}
 					</button>
 				{/snippet}
-				<!-- One pulled or chosen game as a compact row: the box, its facts, whose it is, and what to do with it.
-				     `size`: the players it's for, so a game that seats them only with an expansion says which. -->
-				{#snippet result(game: CatalogGame, i: number, label: string | null, tags: string[], isKept: boolean, toggle: () => void, size: number | null)}
+				<!-- One pulled or chosen game as a compact row: the box, its facts, whose it is, and what to do with it. -->
+				{#snippet result(game: CatalogGame, i: number, label: string | null, tags: string[], isKept: boolean, toggle: () => void)}
 					{@const owners = ownersOf(game)}
-					{@const withText = withLine(game, size)}
+					{@const withText = withLine(game)}
 					<li class="result" class:kept={isKept} style:--delay="{i * 60}ms">
 						<a class="thumb" href="/g/{data.group.id}/game/{game.id}" tabindex="-1" aria-hidden="true"
 							><BoxFront name={game.name} src={game.thumbUrl} size="mini" /></a
@@ -793,7 +797,7 @@
 								{#if label}<span class="tag best num">{label}</span>{/if}
 								{#each tags as tag (tag)}<span class="tag best">{tag}</span>{/each}
 							</span>
-							{#if withText}<span class="with">{withText}</span>{/if}
+							{#if withText}<span class="with num"><Puzzle size={13} aria-hidden="true" />{withText}</span>{/if}
 							{#if soonLine(game)}<span class="soon">{soonLine(game)}</span>{/if}
 						</div>
 						<div class="acts">
@@ -842,8 +846,7 @@
 									mainLabel(game),
 									[...(players && maskHas(game.bestMask, players) ? [`Best at ${players}`] : []), ...(isKept ? whyMain(game) : [])],
 									isKept,
-									() => toggleKeep(game.id),
-									spreadMode ? null : players
+									() => toggleKeep(game.id)
 								)}
 							{/each}
 						</ul>
@@ -858,6 +861,7 @@
 						chosen={kept}
 						{players}
 						why={whyMain}
+						{addingOf}
 						full={mainFull}
 						onchoose={chooseMain}
 						groupId={data.group.id}
@@ -877,10 +881,10 @@
 							<p class="muted split-note">No filler here takes {total} players, so split into {tableFillers.length} tables.</p>
 							<ul class="result-list">
 								{#each tableFillers as t, i (t.game.id)}
-									{@render result(t.game, i, `Table ${i + 1} · ${t.players} players`, [], keptFillerSet.has(t.game.id), () => toggleKeepFiller(t.game.id), t.players)}
+									{@render result(t.game, i, `Table ${i + 1} · ${t.players} players`, [], keptFillerSet.has(t.game.id), () => toggleKeepFiller(t.game.id))}
 								{/each}
 								{#each strayFillers as game, i (game.id)}
-									{@render result(game, tableFillers.length + i, null, ['Fits no table', ...whyFiller(game)], true, () => toggleKeepFiller(game.id), null)}
+									{@render result(game, tableFillers.length + i, null, ['Fits no table', ...whyFiller(game)], true, () => toggleKeepFiller(game.id))}
 								{/each}
 							</ul>
 						{:else if fillers.length}
@@ -893,8 +897,7 @@
 										fillerLabel(game),
 										[...(game.weight == null ? ['Complexity unknown'] : []), ...(isKept ? whyFiller(game) : [])],
 										isKept,
-										() => toggleKeepFiller(game.id),
-										spreadMode ? null : players
+										() => toggleKeepFiller(game.id)
 									)}
 								{/each}
 							</ul>
@@ -925,6 +928,7 @@
 								chosen={keptFillers}
 								{players}
 								why={whyFiller}
+								{addingOf}
 								blocked={fillerBlocked}
 								full={fillerFull}
 								onchoose={chooseFiller}
@@ -1401,6 +1405,10 @@
 	.squares {
 		display: inline-flex;
 		gap: 2px;
+	}
+	.with :global(svg) {
+		vertical-align: -2px;
+		margin-right: 3px;
 	}
 	.soon,
 	.with {

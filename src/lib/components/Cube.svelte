@@ -2,14 +2,18 @@
 <script lang="ts">
 	import Compartment from './Compartment.svelte';
 	import OwnerEdge from './OwnerEdge.svelte';
+	import Puzzle from '@lucide/svelte/icons/puzzle';
 	import { formatPlaytime } from '#lib/catalog/buckets.ts';
-	import { formatPlayersShort } from '#lib/catalog/players.ts';
+	import { formatPlayerRange, formatPlayersShort } from '#lib/catalog/players.ts';
 	import { isCopyAvailable } from '#lib/catalog/filter.ts';
-	import type { CatalogMember, CubeGame } from '#lib/catalog/types.ts';
+	import { countsWith, expansionRanges } from '#lib/catalog/extensions.ts';
+	import type { CatalogGame, CatalogMember, CubeGame } from '#lib/catalog/types.ts';
 
 	/**
 	 * `unknown`: an active filter let this game through only because it lacks that detail. `via`: the
 	 * players filter let it through with an expansion, as "With the 5-6 Player Extension" (STATUS item 30).
+	 * `adding`: the group's expansions that add to its range, each shown with its own count from BGG after a
+	 * puzzle piece, "3–4p · 🧩5–6" (D74).
 	 */
 	let {
 		game,
@@ -17,8 +21,17 @@
 		members,
 		memberIds,
 		unknown = false,
-		via = null
-	}: { game: CubeGame; href: string; members: Map<string, CatalogMember>; memberIds: ReadonlySet<string>; unknown?: boolean; via?: string | null } = $props();
+		via = null,
+		adding = []
+	}: {
+		game: CubeGame;
+		href: string;
+		members: Map<string, CatalogMember>;
+		memberIds: ReadonlySet<string>;
+		unknown?: boolean;
+		via?: string | null;
+		adding?: readonly CatalogGame[];
+	} = $props();
 
 	const owners = $derived(
 		[...new Set(game.copies.map((c) => c.ownerId))]
@@ -30,17 +43,39 @@
 	const time = $derived(formatPlaytime(game.minPlaytime, game.maxPlaytime));
 	const unavailable = $derived(!game.copies.some((c) => isCopyAvailable(c, memberIds)));
 	const captionText = $derived([players, time].filter(Boolean).join(' · '));
+	const addedCounts = $derived(adding.length ? expansionRanges(adding) : null);
+	// "3–4 players; 5–6 with the 5-6 Player Extension": each count BGG's, next to the game it's for.
+	const addedTitle = $derived(adding.length ? `${formatPlayerRange(game.minPlayers, game.maxPlayers)} players; ${countsWith(game.name, adding).join(', ')}` : null);
 	// One flag fits on a box: lent out first, then the filter notes, then expansion. An expansion's name
 	// is too long for the pill, so the pill says "With expansion" and its title names it.
 	const flag = $derived(unavailable ? 'Lent out' : via ? 'With expansion' : unknown ? 'Info missing' : game.isExpansion ? 'Expansion' : null);
 	// The link is named by its contents, so a screen reader hears the caption and the owners too. The
 	// name leads, with every flag that applies (only one fits on the box).
 	const lead = $derived(
-		[game.name, game.year, unavailable && 'lent out', via?.toLowerCase(), unknown && 'info missing', game.isExpansion && 'expansion'].filter(Boolean).join(', ') + '.'
+		[game.name, game.year, unavailable && 'lent out', via?.toLowerCase(), unknown && 'info missing', game.isExpansion && 'expansion', addedTitle]
+			.filter(Boolean)
+			.join(', ') + '.'
 	);
 </script>
 
 <Compartment {href} name={game.name} src={game.thumbUrl} {lead} {flag} flagTitle={!unavailable ? via : null} out={unavailable}>
-	{#snippet caption()}{captionText || (game.isManual ? 'Hand-entered' : ' ')}{/snippet}
+	{#snippet caption()}
+		{#if addedCounts}{players}{' · '}<span class="added" title={addedTitle}><Puzzle size={12} aria-hidden="true" />{addedCounts}</span
+			>{#if time}<span class="time">{' · '}{time}</span>{/if}
+		{:else}{captionText || (game.isManual ? 'Hand-entered' : ' ')}{/if}
+	{/snippet}
 	{#snippet edge()}<OwnerEdge {owners} />{/snippet}
 </Compartment>
+
+<style>
+	.added :global(svg) {
+		vertical-align: -1px;
+		margin-right: 1px;
+	}
+	/* Three cubes across a phone: the expansion's count keeps its room, the play time gives way (D74). */
+	@media (max-width: 759px) {
+		.time {
+			display: none;
+		}
+	}
+</style>

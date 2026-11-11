@@ -3,6 +3,7 @@
 // also fits the counts the expansion plays at. Every count stays BGG's and stays with its own game:
 // the base shows its own range everywhere, and wherever an expansion is what lets a game fit, it's
 // named (TECH.md "Access and terms").
+import { formatPlayerRange } from './players.ts';
 import type { CatalogCopy, CatalogGame } from './types.ts';
 
 /** The expansions that count, by the id of the base game they widen. */
@@ -122,4 +123,29 @@ export function playerExtensions(
 		const owners = whose.length > 1 ? `${whose.slice(0, -1).join(', ')} and ${whose.at(-1)}` : (whose[0] ?? '');
 		return [{ id: e.id, range, name: extensionName(base.name, e.name), owners }];
 	});
+}
+
+/**
+ * The expansions on hand that add to a game's range (D74). The shelf and Play tonight show each one's
+ * own count from BGG beside the game's, after a puzzle piece ("3–4p · 🧩5–6"), never a combined range,
+ * so every number shown is BGG's figure for the game it's next to. Empty when none adds.
+ */
+export function expansionsAdding(game: CatalogGame, onHand: OnHand = NOTHING_ON_HAND): CatalogGame[] {
+	return (onHand.get(game.id) ?? []).filter((e) => widenedText(game, e) != null);
+}
+
+/** "5–6", or "5–6, 1–4": each expansion's own range as BGG gives it ("up to 6" when only the most is known). */
+export function expansionRanges(expansions: ReadonlyArray<Pick<CatalogGame, 'minPlayers' | 'maxPlayers'>>): string {
+	return expansions.map((e) => formatPlayerRange(e.minPlayers, e.maxPlayers)).filter(Boolean).join(', ');
+}
+
+/** "the 5-6 Player Extension", or "the 5-6 Player Extension and Seafarers", as a sentence names them after "With". */
+export function extensionNames(baseName: string, expansions: ReadonlyArray<{ name: string }>): string {
+	const names = expansions.map((e) => extensionName(baseName, e.name));
+	return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : (names[0] ?? '');
+}
+
+/** "5–6 with the 5-6 Player Extension", one per expansion, each with BGG's count for it; `whose` adds " (Bram’s)". */
+export function countsWith(baseName: string, expansions: readonly CatalogGame[], whose: (e: CatalogGame) => string = () => ''): string[] {
+	return expansions.map((e) => `${formatPlayerRange(e.minPlayers, e.maxPlayers)} with ${extensionName(baseName, e.name)}${whose(e)}`);
 }

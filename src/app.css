@@ -55,6 +55,9 @@
 	--t-h1: clamp(1.625rem, 4.5vw, 2.25rem); /* 26–36 */
 	--t-display: clamp(2rem, 6vw, 3.25rem); /* 32–52: the landing headline, the join code, who goes first */
 
+	/* Which of a pair of pictures shows, as in themes.ts: the BGG logo has one for each ground. */
+	--on-light: block;
+	--on-dark: none;
 	color-scheme: light;
 }
 
@@ -89,6 +92,8 @@
 		--cubby-floor: color-mix(in oklab, var(--cube) 95%, black);
 		--shadow-stand: 0 1px 1px rgb(0 0 0 / 0.5), 4px 3px 9px -3px rgb(0 0 0 / 0.6);
 		--shadow-stand-lift: 0 1px 1px rgb(0 0 0 / 0.3), 7px 10px 16px -7px rgb(0 0 0 / 0.75);
+		--on-light: none;
+		--on-dark: block;
 		color-scheme: dark;
 	}
 }

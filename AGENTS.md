@@ -55,7 +55,7 @@ Restart `pnpm dev` after editing `.dev.vars` or `wrangler.jsonc`; the instance c
 - **BGG terms in code.** These are the BGG rules code can break; TECH.md "Access and terms" has the full list.
   - Every BGG request goes through the client's instance-wide pacer.
   - Every page renders the `BggCredit` footer, which credits BGG whenever `needsBggCredit()` says the instance shows BGG data (BGG on, or BGG-sourced games still cached). Don't show BGG data anywhere that bypasses it (D30).
-  - Weight and player counts are shown as BGG gives them.
+  - Weight and player counts are shown as BGG gives them. An expansion's count goes beside its base game's, each BGG's own figure for its own game, never combined into one range (D74).
   - No ads, payments, donation or sponsor links anywhere in the app.
   - No endpoint meant for other programs, and no CORS headers on anything that returns BGG data.
   - Breaking any of these needs Carlo's approval and a DECISIONS.md entry.

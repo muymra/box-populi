@@ -4,6 +4,9 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+- A game that an expansion in the group adds players to now shows the expansion's own count beside its own on the shelf and at Play tonight, after a puzzle piece: Catan reads "3–4p · 🧩5–6" when someone has the 5–6 Player Extension. Play tonight's rows add "🧩 5–6 with the 5-6 Player Extension (Bram's)" whenever it's there, not only when tonight's count needs it, and the "choose one yourself" list shows it too, which it didn't before. On a phone, a cube with the puzzle piece leaves out its play time.
+- The footer credits BoardGameGeek with BGG's own "Powered by BGG" logo instead of a text badge, in white on dark themes.
+
 ## 0.6.0 (2026-11-11)
 
 **Upgrading:** one migration, `0020_group_rules.sql`. On Cloudflare, note a Time Travel bookmark and export a backup first, then apply it before deploying (SELF_HOSTING.md "Upgrading" has the commands and how to roll back). Docker, Vercel and Netlify apply it on their first request. It gives each group its co-op and filler settings and its "Not played lately" window, at the values every group had. Seven new optional settings, each defaulting to today's behaviour: `DEFAULT_POINTS`, `OWNER_AWAY_DAYS`, `SESSION_DAYS`, `PLAY_SOON_DAYS`, `PLAY_SOON_MAX`, `HERE_RESET_HOURS` and `ADMIN_SESSION_HOURS` (SELF_HOSTING.md step 4). One change people will see at once: past co-op wins now count as wins and score a point each, so leaderboards may reorder. A demo group needs no reseed.

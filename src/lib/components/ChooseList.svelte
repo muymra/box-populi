@@ -17,6 +17,7 @@
 		players,
 		why,
 		blocked = () => null,
+		addingOf = () => [],
 		full = null,
 		onchoose,
 		groupId,
@@ -36,6 +37,8 @@
 		why: (game: CatalogGame) => string[];
 		/** Why this one game can't be chosen now, shown as a tag. */
 		blocked?: (game: CatalogGame) => string | null;
+		/** The expansions here that add to the game's range, each shown with its own count (D74). */
+		addingOf?: (game: CatalogGame) => readonly CatalogGame[];
 		/** Why nothing more can be chosen, shown above the matches. */
 		full?: string | null;
 		onchoose: (game: CatalogGame) => void;
@@ -78,7 +81,7 @@
 				{@const reason = isChosen ? null : (blocked(game) ?? (full ? 'full' : null))}
 				{@const tags = [...why(game), ...(reason && reason !== 'full' ? [reason] : [])]}
 				<li>
-					<ListRow {game} href="/g/{groupId}/game/{game.id}" {members} {memberIds} />
+					<ListRow {game} href="/g/{groupId}/game/{game.id}" {members} {memberIds} adding={addingOf(game)} />
 					<button
 						type="button"
 						class="toggle"
