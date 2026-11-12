@@ -20,6 +20,7 @@ type Row = {
 	added_at: number;
 	lent_to: string | null;
 	note: string | null;
+	players_with: number | null;
 };
 
 /** The person's copies, wishes, favourites, live Play soon marks and copies hidden from a group (D66), with the game as stored (not any one group's corrections). */
@@ -27,23 +28,23 @@ export async function loadYourGames(db: DB, userId: string, now: number, playSoo
 	const game = 'g.name, g.year, g.source, g.bgg_id, g.wikidata_id, g.min_players, g.max_players, g.min_playtime, g.max_playtime';
 	const rows = await all<Row>(
 		db,
-		`SELECT 'shelf' AS list, ${game}, c.added_at, COALESCE(lu.name, c.lent_to_text) AS lent_to, c.note
+		`SELECT 'shelf' AS list, ${game}, c.added_at, COALESCE(lu.name, c.lent_to_text) AS lent_to, c.note, c.max_players_with AS players_with
 		 FROM copies c JOIN games g ON g.id = c.game_id LEFT JOIN users lu ON lu.id = c.lent_to_user_id
 		 WHERE c.user_id = ?1
 		 UNION ALL
-		 SELECT 'wishlist' AS list, ${game}, w.added_at, NULL AS lent_to, NULL AS note
+		 SELECT 'wishlist' AS list, ${game}, w.added_at, NULL AS lent_to, NULL AS note, NULL AS players_with
 		 FROM wishlist w JOIN games g ON g.id = w.game_id
 		 WHERE w.user_id = ?1
 		 UNION ALL
-		 SELECT 'favourite' AS list, ${game}, f.added_at, NULL AS lent_to, NULL AS note
+		 SELECT 'favourite' AS list, ${game}, f.added_at, NULL AS lent_to, NULL AS note, NULL AS players_with
 		 FROM favourites f JOIN games g ON g.id = f.game_id
 		 WHERE f.user_id = ?1
 		 UNION ALL
-		 SELECT 'play soon' AS list, ${game}, s.marked_at, NULL AS lent_to, NULL AS note
+		 SELECT 'play soon' AS list, ${game}, s.marked_at, NULL AS lent_to, NULL AS note, NULL AS players_with
 		 FROM play_soon s JOIN games g ON g.id = s.game_id
 		 WHERE s.user_id = ?1 AND ${activeMark('?2', '?3')}
 		 UNION ALL
-		 SELECT 'hidden' AS list, ${game}, h.hidden_at, NULL AS lent_to, 'from ' || gr.name AS note
+		 SELECT 'hidden' AS list, ${game}, h.hidden_at, NULL AS lent_to, 'from ' || gr.name AS note, NULL AS players_with
 		 FROM hidden_copies h JOIN games g ON g.id = h.game_id JOIN groups gr ON gr.id = h.group_id
 		 WHERE h.user_id = ?1`,
 		userId,
@@ -63,6 +64,7 @@ export async function loadYourGames(db: DB, userId: string, now: number, playSoo
 		maxPlaytime: r.max_playtime,
 		addedAt: r.added_at,
 		lentTo: r.lent_to,
-		note: r.note
+		note: r.note,
+		playersWith: r.players_with
 	}));
 }

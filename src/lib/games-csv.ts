@@ -19,9 +19,11 @@ export type YourGame = {
 	/** Who has the copy now: a member's name or what was typed for someone outside the app. */
 	lentTo: string | null;
 	note: string | null;
+	/** The owner's count on a shelf copy (D75): how many it takes with their expansions. Theirs, not BGG's, so it travels for BGG games too. */
+	playersWith: number | null;
 };
 
-export const GAMES_CSV_COLUMNS = ['game', 'players', 'minutes', 'list', 'year', 'game_data_from', 'bgg_id', 'wikidata_id', 'added', 'lent_to', 'note'];
+export const GAMES_CSV_COLUMNS = ['game', 'players', 'minutes', 'list', 'year', 'game_data_from', 'bgg_id', 'wikidata_id', 'added', 'lent_to', 'note', 'players_with_expansions'];
 
 /** "2-4", "2" or empty, as "Paste a list" reads it. */
 export function rangeText(lo: number | null, hi: number | null): string | null {
@@ -51,7 +53,8 @@ export function gamesCsv(games: readonly YourGame[]): string {
 				csvField(g.wikidataId),
 				csvField(new Date(g.addedAt).toISOString().slice(0, 10)),
 				csvField(g.lentTo),
-				csvField(g.note)
+				csvField(g.note),
+				csvField(g.playersWith)
 			].join(',')
 		);
 	}

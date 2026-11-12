@@ -538,7 +538,7 @@ Carlo's Cosmic Encounter is 3–5 on BGG, and he has two expansions that each ad
 - **Counted like an expansion.** The catalog sends it on the copy (`maxWith`), and `expansionsOnHand` puts in an entry for it that takes the game to that number whenever its copy counts: on the shelf, a copy the group can borrow; at Play tonight, the owner here or the copy on tonight's list. The players filter, Play tonight's checks, tables and spreads take it with no change of their own.
 - **Shown as the owner's.** It replaces the expansions' own counts after the puzzle piece: "3–5p · 🧩7", its hover "Up to 7 with Ada's expansions (Ada's count)"; Play tonight's line says the same; the game page keeps BGG's count and each expansion's line and adds "Up to 7 with Ada's expansions, by Ada's count" ("your" for the owner). With two owners' counts, the highest shows. It's the member's figure, said to be theirs, so no number BGG gives is changed (D74).
 **Why:** only the owner knows which of their expansions stack, and it's their box.
-**Trade-offs accepted:** expansions split between two owners stack only if one of them counts the other's in; a copy hidden from a group doesn't bring its count there; the count isn't in "Download your games" yet.
+**Trade-offs accepted:** expansions split between two owners stack only if one of them counts the other's in; a copy hidden from a group doesn't bring its count there; "Download your games" carries the count (since 0.7.0) but "Paste a list" doesn't read it back.
 **Revisit if:** groups want a group-wide count, or owners want a fewest end too.
 
 ## D76. Installable on a home screen, opening to the last group (2026-11-11)

@@ -47,13 +47,25 @@ describe('your games as a CSV', () => {
 		const games = await loadYourGames(db, 'ada', Date.now(), DEFAULT_PLAY_SOON);
 		expect(games.map((g) => `${g.list}:${g.name}`).sort()).toEqual(['shelf:=Ember Tavern', 'shelf:Harbour Lights', 'shelf:Quiet Orchard', 'wishlist:Night Ferry']);
 		const lines = gamesCsv(games).split('\r\n');
-		expect(lines[0]).toBe('﻿game,players,minutes,list,year,game_data_from,bgg_id,wikidata_id,added,lent_to,note');
+		expect(lines[0]).toBe('﻿game,players,minutes,list,year,game_data_from,bgg_id,wikidata_id,added,lent_to,note,players_with_expansions');
 		expect(lines.slice(1, -1)).toEqual([
-			`'=Ember Tavern,2-4,30-60,shelf,,typed in,,,2026-11-08,my sister,"Box is, ""battered"""`,
-			'Harbour Lights,,,shelf,2019,BoardGameGeek,4242,,2026-11-08,Bo,',
-			'Quiet Orchard,1,20,shelf,2021,Wikidata,,Q999,2026-11-08,,',
-			'Night Ferry,,,wishlist,2015,BoardGameGeek,77,,2026-11-08,,'
+			`'=Ember Tavern,2-4,30-60,shelf,,typed in,,,2026-11-08,my sister,"Box is, ""battered""",`,
+			'Harbour Lights,,,shelf,2019,BoardGameGeek,4242,,2026-11-08,Bo,,',
+			'Quiet Orchard,1,20,shelf,2021,Wikidata,,Q999,2026-11-08,,,',
+			'Night Ferry,,,wishlist,2015,BoardGameGeek,77,,2026-11-08,,,'
 		]);
+	});
+
+	it('carries the owner’s count on their copies, BGG games too, and only on the shelf (D75)', async () => {
+		await run(db, `UPDATE copies SET max_players_with = 7 WHERE game_id = 1`);
+		await run(db, `UPDATE copies SET max_players_with = 8 WHERE game_id = 4`);
+		await run(db, `INSERT INTO favourites (user_id, game_id, added_at) VALUES ('ada', 1, ?1)`, DAY);
+		const games = await loadYourGames(db, 'ada', Date.now(), DEFAULT_PLAY_SOON);
+		expect(games.filter((g) => g.playersWith != null).map((g) => `${g.list}:${g.name}:${g.playersWith}`)).toEqual(['shelf:Harbour Lights:7']);
+		const lines = gamesCsv(games).split('\r\n');
+		expect(lines).toContain('Harbour Lights,,,shelf,2019,BoardGameGeek,4242,,2026-11-08,Bo,,7');
+		// Bo's count on his copy of Night Ferry isn't on Ada's wishlist row.
+		expect(lines).toContain('Night Ferry,,,wishlist,2015,BoardGameGeek,77,,2026-11-08,,,');
 	});
 
 	it('keeps BGG’s players, times and weight out', async () => {
