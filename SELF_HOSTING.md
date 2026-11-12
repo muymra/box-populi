@@ -133,7 +133,7 @@ pnpm exec wrangler pages deploy
 ## 7. Check it
 
 1. Open your site. On a new project the address can answer with error 522 for about a minute after the first deploy; wait and reload. If a setting is missing, the page names it.
-2. Open `/admin/login` and enter your admin key. The admin page should show zero groups. Its "Look of this site" section sets a custom theme from five colours and a logo, without redeploying. The logo is also the picture on your links' previews in chat apps; without one, they show the cube mark in your theme's colours.
+2. Open `/admin/login` and enter your admin key. The admin page should show zero groups. Its "Look of this site" section sets a custom theme from five colours and a logo, without redeploying. The logo is also the picture on your links' previews in chat apps; without one, they show the cube mark in your theme's colours. It doesn't change the icon people get when they put the site on a home screen: that's always the cube mark, with `INSTANCE_NAME` under it.
 3. From the admin page, create a group with your name and a PIN, add a game, and open the catalog. (With the default `GROUP_CREATION=admins`, only you can create groups; your group's members join with its code.)
 4. Open `/privacy` and check that it shows your instance name and contact.
 

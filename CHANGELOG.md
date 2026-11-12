@@ -8,6 +8,7 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 - If your expansions stack in a way BoardGameGeek's counts can't say (two that each add a player), say how many your copy takes on the game's page, under your name: "With your expansions, how many can play?". The shelf then shows "3–5p · 🧩7", the players filter and Play tonight count it while your copy is there, and everyone sees it's your count. The link to set it starts folded unless the group has an expansion of the game.
 - Two expansions with the same count show it once after the puzzle piece ("🧩3–6", not "🧩3–6, 3–6").
+- Box Populi can go on a phone's home screen, or be installed as an app on a computer: Chrome's menu has Install or Add to Home screen, Safari has Share, Add to Home Screen. It opens in its own window, with the cube mark as its icon and the instance's name under it, straight onto the group you had open last on that device. It still needs a connection. On an iPhone the app keeps its own sign-in, so the first time you sign in there with your group's code and your PIN.
 
 ## 0.6.1 (2026-11-11)
 

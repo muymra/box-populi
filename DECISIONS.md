@@ -540,3 +540,14 @@ Carlo's Cosmic Encounter is 3–5 on BGG, and he has two expansions that each ad
 **Why:** only the owner knows which of their expansions stack, and it's their box.
 **Trade-offs accepted:** expansions split between two owners stack only if one of them counts the other's in; a copy hidden from a group doesn't bring its count there; the count isn't in "Download your games" yet.
 **Revisit if:** groups want a group-wide count, or owners want a fewest end too.
+
+## D76. Installable on a home screen, opening to the last group (2026-11-11)
+
+Carlo picked the PRD's installable app for 0.7.0 and took installable only (1a), the cube mark drawn for a home screen (2a), and opening to the last group rather than the home page (3b).
+- **No service worker.** A manifest is enough for Chrome to install a site (it dropped the service worker requirement in version 108 on Android and 112 on desktop) and for Safari's Add to Home Screen to open it in its own window. The app needs a connection, as the site does, and keeps nothing on the device that could go stale after a deploy.
+- **The icons** are the cube mark, drawn by `scripts/gen-icons.ts` into `static/` so Pages serves them without running the app (D59): 192 and 512 pixels on a clear ground, and a 512 one for launchers that cut icons to their own shape, the frame's ink to every edge and the four cubbies inside the circle every shape keeps. They're the same on every instance, as the favicon is; a hoster's logo doesn't replace them. The name under the icon is `INSTANCE_NAME`, and the bar around the app takes the page's colour in the theme showing.
+- **Opening to the last group.** The manifest opens `/?start`. Every group page sets the `bp_group` cookie to its group; the home page given `start` goes on to that group if the viewer is still in it (or it's the demo), and otherwise shows their groups as usual. A cookie, not `memberships.last_seen_at`, which is written at most once an hour and is the person's, not the device's.
+**Why:** the app is used on phones at game nights; opening straight onto the shelf saves the step through the home page for the many who are in one group.
+**Trade-offs accepted:** on an iPhone, the home-screen app keeps its own cookies apart from Safari's (WebKit's design), so the first time it opens the person signs in there through their group's code and their PIN; someone without a PIN sets one in Safari first, since a sign-in link opens in Safari, not the app. With no connection the app shows the system's own error.
+**Revisit if:** members want the shelf at a game night with no signal (option 1b: a service worker that keeps the last catalog), or hosters want their logo as the icon.
+

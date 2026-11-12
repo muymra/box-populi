@@ -67,7 +67,8 @@ box-populi/
   vercel.json  netlify.toml     the Vercel and Netlify targets
   migrations/                   numbered SQL files; "Data model" lists what each adds
   scripts/                      seed-demo.ts and seed-sandbox.ts (invented data), gen-themes.ts (writes
-                                src/lib/themes.css), ensure-local-config.ts, restore-order.ts (reorders a
+                                src/lib/themes.css), gen-icons.ts (draws the home-screen icons in static/),
+                                ensure-local-config.ts, restore-order.ts (reorders a
                                 `wrangler d1 export` so it loads into an empty database)
   seed/                         generated seed SQL, gitignored
   src/
@@ -949,6 +950,14 @@ The picture is the root layout's `preview`, from `linkPreview()` in `src/lib/ser
 
 With `INSTANCE_MODE=demo`, the home page keeps its own tags and picture instead (`src/routes/+page.svelte`): the headline, a line of pitch and `src/lib/assets/og-showcase.png`, 1200×630, imported so the build gives it a hashed name and a changed picture gets a new URL past the apps' caches. It's the page's own hero in the default light theme with the invented example shelf: the brand, the headline and "Free and open source." beside the shelf, with the lede, buttons, header and footer hidden. Retake it the same way when the headline or the example shelf changes.
 
+## Home screen
+
+The site installs as an app with no service worker (D76). `src/app.html` links `/manifest.webmanifest` (there rather than in the root layout, so the shelf, which isn't rendered on the server, has it in its first HTML). The route returns `webManifest()` from `src/lib/server/home-screen.ts` as `application/manifest+json`, cached an hour: `id` and `scope` `/`, `start_url` `/?start`, `display` `standalone`, `name` and `short_name` `INSTANCE_NAME`, `theme_color` and `background_color` the instance theme's page colour (`previewColors()`), and three icons.
+
+The icons are files in `static/`, drawn by `scripts/gen-icons.ts` (`pnpm gen:icons`) from favicon.svg's shapes as signed distances and written as RGBA PNGs: `icon-192.png` and `icon-512.png`, the mark with an eighth of the width spare on a clear ground, and `icon-maskable-512.png`, the frame's ink to every edge with the four cubbies inside the middle circle, 80% of the width, that launchers keep. `home-screen.test.ts` checks each listed icon is there at its size. `apple-touch-icon.png` (180, the mark to the edge) is older and stays; iPhones use it, and take the app's name from the root layout's `apple-mobile-web-app-title`. The root layout also writes two `<meta name="theme-color">`, for light and dark by `prefers-color-scheme`, from `themeBarColors()` in `themes.ts` for the page's resolved theme (the custom theme's page in both), so the bar around an installed app follows the page.
+
+**Opening to the last group.** The group layout's load calls `rememberGroup()` in `cookies.ts`, which sets `bp_group` (`HttpOnly; SameSite=Lax; Path=/`, 400 days) to the group's id when it isn't that already; the shelf isn't rendered on the server, so its data request is what sets it there. The home page's load, given `?start`, asks `startPath()`: a 303 to `/g/<id>` when the viewer is a member of that group, or it's the demo and the demo exists; otherwise the home page as usual. On an iPhone the home-screen app has its own cookies, apart from Safari's, so it starts signed out and with no `bp_group`.
+
 ## Sandbox group
 
 A writable local group with invented data, for trying the app as a member sees it; the demo is read-only and hides every control.
@@ -965,6 +974,7 @@ A writable local group with invented data, for trying the app as a member sees i
 |---|---|---|
 | `/` | Landing with "Create a group", "Join with a code" and "See a demo group". A device with a session in a group sees Your groups instead: cards from `groupGlances()` (games, the members' colours, nights from yesterday on, three queries for all groups) and a join-by-code form posting to `/join`. | none |
 | `/privacy` | What's stored, why, how to delete it. | none |
+| `GET /manifest.webmanifest` | The web manifest that makes the site installable (D76, "Home screen"); `/?start` is where it opens, and the home page goes on from there to the last group open on the device. | none |
 | `/demo` | Redirect to `/g/demo`. | none |
 | `/join` and `/join/[code]` | `/join` takes a code. `/join/[code]` is the group's front door (D46, D47): member and game counts (`groupGameCount()`); signed out, action `join` (name and PIN) and action `signin` (the members' names from `frontDoorMembers()`, then a PIN); signed in, "Join as <name>". | none; rate-limited by IP, PINs also by person |
 | `/groups/new` | Create a group. Asks for a display name when the device has no session. Redirects to the group's ready page. | `GROUP_CREATION`, `MAX_GROUPS_PER_USER`, rate limit by IP |

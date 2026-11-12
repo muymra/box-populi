@@ -51,6 +51,7 @@
 			fingerprint, until you use it or ten minutes pass.
 		</li>
 		<li>A cookie that keeps this device signed in. The server stores only a scrambled fingerprint of it, and the same for your sign-in link.</li>
+		<li>A cookie on your device with the group you had open last, so the app on your home screen opens there. The server doesn't keep it.</li>
 		<li>
 			Network addresses that tried a wrong join code, PIN, sign-in link or admin key, or created a group, and how often you searched
 			for games, matched a pasted list or imported from BoardGameGeek. These are kept for about a day, to slow down guessing

@@ -1,4 +1,5 @@
 import { readGroup } from '#lib/server/authz.ts';
+import { rememberGroup } from '#lib/server/cookies.ts';
 import { invitePath } from '#lib/server/codes.ts';
 import { pendingDetailsRead } from '#lib/server/importer.ts';
 import { membersRead } from '#lib/server/catalog.ts';
@@ -13,6 +14,8 @@ export const load: LayoutServerLoad = async (event) => {
 	const db = getDb();
 	// The join code, theme and PIN date come with the access check's one query (D59).
 	const { access, extras } = await readGroup(event, db, event.params.groupId);
+	// So the app on a home screen opens here next time (D76).
+	rememberGroup(event.cookies, event.url, access.group.id);
 	// Members see the join code so they can invite people; demo visitors never do, and nobody does
 	// while the group is archived (D50) or suspended, since joining is refused then.
 	const code = access.role && !access.group.isDemo && !access.group.archived && !access.group.suspended ? extras.code : null;

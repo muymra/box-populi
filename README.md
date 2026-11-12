@@ -19,7 +19,7 @@ A shared shelf for your board game group. Everyone adds the games they own, and 
 - **No accounts.** You join with the group's five-character code, your name and a six-digit PIN, which gets you back in on any device. No email, no password.
 - **Your data stays yours.** Download your games, your plays and your game nights as spreadsheets whenever you like. Your games paste straight into another Box Populi.
 - **Several groups, one shelf.** In two or more groups, switch between them from the top of the page; your games show in each, unless you hide some from a group.
-- **Made for phones.** It's a website, so there's nothing to install, and it works on any phone or computer.
+- **Made for phones.** It's a website that works on any phone or computer. Put it on your phone's home screen and it opens like an app, straight onto your group.
 
 | | |
 |---|---|

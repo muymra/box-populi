@@ -15,6 +15,8 @@ export const load: LayoutServerLoad = async ({ locals }) => ({
 	// The custom theme's stylesheet version (null when there's none) and the logo replacing the cube mark.
 	customTheme: locals.appearance.colors ? locals.appearance.version : null,
 	logoUrl: locals.appearance.logoUrl,
+	// The custom theme's page colour, for the bar around the installed app (D76).
+	customPage: locals.appearance.colors?.page ?? null,
 	// The picture pages' link previews use (TECH.md "Link previews").
 	preview: linkPreview(locals.config.instanceName, locals.instanceTheme, locals.appearance),
 	user: locals.user ? { name: locals.user.name } : null

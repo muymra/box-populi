@@ -65,7 +65,7 @@ A copy belongs to the user, not the group. When someone is in two groups, their 
 
 The first build (2026-11-06 to 2026-11-08): identity without accounts, with a PIN for other devices (D25, D47); groups with codes and invite links (D65); adding games by BGG search, collection import, Wikidata, a pasted list or by hand; the group catalog with search and filters; game pages; the picker with who's here; links to rules, videos and files; roles and group admin; the instance admin page; the public demo; the wishlist and the Wanted view; lending; themes and a custom theme (DESIGN.md "Themes"); public-sources mode (D31); hosting targets beyond Cloudflare Pages (D32); and instance settings from environment variables, so nothing about Carlo's deployment is hard-coded.
 
-Since then: game nights (D38), the play log (D37), archiving a group (D50), help getting back in (D48, D52), Find on BoardGameGeek (D57), favourites and Play soon (D63, D64), member profiles (D61), hiding games from a group (D66), who came to a night (D67), member colours that stay put (D69), the play log a page at a time (D70), configurable play rules and fillers (D71), link previews (D72) and expansions that change the player count (D73). STATUS.md lists every item.
+Since then: game nights (D38), the play log (D37), archiving a group (D50), help getting back in (D48, D52), Find on BoardGameGeek (D57), favourites and Play soon (D63, D64), member profiles (D61), hiding games from a group (D66), who came to a night (D67), member colours that stay put (D69), the play log a page at a time (D70), configurable play rules and fillers (D71), link previews (D72), expansions that change the player count (D73) and installing on a home screen (D76). STATUS.md lists every item.
 
 ### Must keep working
 
@@ -73,16 +73,14 @@ Import, the picker, the demo group, the phone layout, and the instance admin bas
 
 ### Planned or possible, in rough priority
 
-- **Passkeys** as an optional second way to sign in on a new device, for people who'd rather not keep a link.
-- **CSV export** of the group catalog: game name, year, BGG link and owners. No BGG descriptions or statistics, so the export can't work as a copy of BGG's data.
-- **Installable PWA** so it sits on a phone home screen.
+- **CSV export** of the group catalog: game name, year, BGG link and owners. No BGG descriptions or statistics, so the export can't work as a copy of BGG's data. Picked for 0.7.0 and put back (Carlo, 2026-11-11): without BGG's player counts and times, a BGG game's row holds little the shelf doesn't show, so it waits until someone asks for it with a use in mind.
 - **Fill in details with an AI chatbot** (Carlo's idea, 2026-11-08, a maybe). A copyable prompt lists the person's games that lack details and asks a chatbot to research players, play time and complexity from publishers and rulebooks, not BGG, saying "unknown" rather than guessing, with a source per game. It answers in Paste a list's format with a fourth column for complexity as light, medium or heavy (D55): `Title | 2-4 | 30-60 | medium`. The column also takes a number from 1 to 5, decimals allowed (`2.31`), such as a BGG weight someone copies, and keeps only its complexity level (D62); the number itself isn't stored, so a non-BGG instance never holds BGG's figure. The prompt still asks for the chatbot's own judgment from the rules and the publisher's age and length, so it doesn't go to BGG for it. Pasting the answer fills only empty details on games already on the shelf, shared with every group (D54), after a preview of what changes. Today Paste a list skips games already on the shelf and has no complexity column. About 4 hours.
 - **Moving a group to another instance** (Carlo, 2026-11-10; low priority, planned in STATUS item 46): the owner downloads the group as one file and starts a group from it on another Box Populi; members claim their names there with a sign-in code, and each brings their own games with Your data's games file.
 - **A two-ended complexity range on the shelf** (was cut order item 3; the shelf filters by complexity level instead).
 
 ### Not doing
 
-Ratings and reviews (a favourite's heart is a yes or no, not a score: D63), a trading marketplace, chat, notifications, a native app, cross-group discovery, hosting rulebooks or images ourselves, and anything that needs payment. Rules content is linked, never copied. No hosted service: Carlo's instance serves his own circle and the demo, not the public. No links between instances, no one-click deploy button. Cloudflare Pages is the main hosting target; Docker, Workers, Vercel and Netlify builds exist too (D32). No public API, ads, donations or sponsorship links: BGG's terms prohibit services that hand its data to other applications, and count any payment or ad as commercial use.
+Passkeys (Carlo, 2026-11-11: no; the PIN and the backup sign-in link stay the ways onto a new device, D47). Ratings and reviews (a favourite's heart is a yes or no, not a score: D63), a trading marketplace, chat, notifications, a native app, cross-group discovery, hosting rulebooks or images ourselves, and anything that needs payment. Rules content is linked, never copied. No hosted service: Carlo's instance serves his own circle and the demo, not the public. No links between instances, no one-click deploy button. Cloudflare Pages is the main hosting target; Docker, Workers, Vercel and Netlify builds exist too (D32). No public API, ads, donations or sponsorship links: BGG's terms prohibit services that hand its data to other applications, and count any payment or ad as commercial use.
 
 ## Feature detail
 
@@ -292,6 +290,10 @@ On Carlo's instance, `/demo` shows a read-only group of about 400 invented games
 ### Link previews
 
 Pasted in a chat app, an instance's links show a card (D72): a standard home page, a group's link (its join link, which members also sign in by), the demo, and the sign-in page, which is where any other group link lands for a chat app's crawler, since it isn't signed in. A game night's link shows "Sign in to Dice Den", not the night. A group's card may name the group, as its page does for anyone with the code, but never its members. The picture is the instance's: the cube mark in its theme's colours, with no text, or the hoster's logo as a small square beside the text when one is set. Never BGG box art (D30). A demo instance's home page keeps its own picture of the example shelf.
+
+### Home screen
+
+Box Populi installs on a phone's home screen or as an app on a computer (D76): Chrome offers Install or Add to Home screen in its menu, Safari has Share, Add to Home Screen. It opens in its own window without the browser's bar, under the instance's name with the cube mark, and goes straight to the group last open on that device; the mark at the top leads to all your groups. It needs a connection, as the site does. On an iPhone the app keeps its sign-in apart from Safari's, so the first time it opens you sign in there: type your group's code, tap your name and type your PIN.
 
 ### Self-hosting
 

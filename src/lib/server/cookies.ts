@@ -46,6 +46,13 @@ export function setThemeCookie(cookies: Cookies, url: URL, theme: string): void 
 	cookies.set(THEME_COOKIE, theme, { ...base(url), maxAge: MAX_SESSION_DAYS * 86_400 });
 }
 
+export const LAST_GROUP_COOKIE = 'bp_group';
+
+/** The group this device had open last, so the app on a home screen opens there (D76). Written only when it changes. */
+export function rememberGroup(cookies: Cookies, url: URL, groupId: string): void {
+	if (cookies.get(LAST_GROUP_COOKIE) !== groupId) cookies.set(LAST_GROUP_COOKIE, groupId, { ...base(url), maxAge: MAX_SESSION_DAYS * 86_400 });
+}
+
 /**
  * For pages that show or carry a personal link: never cached, and never sent as a referrer to
  * another site. `same-origin`, not `no-referrer`: with `no-referrer` the browser sends

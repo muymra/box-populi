@@ -4,6 +4,8 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
+		<!-- Here rather than in the layout, so pages not rendered on the server (the shelf) have it too (D76). -->
+		<link rel="manifest" href="/manifest.webmanifest" />
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="tap">

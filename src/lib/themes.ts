@@ -478,6 +478,19 @@ export function isDeviceTheme(value: unknown): value is string {
 	return value === AUTO_THEME || isThemeId(value);
 }
 
+/** The cube shelf's page colour in each mode, from app.css (its own palette isn't in THEMES). */
+export const CUBE_LAMINATE: Record<Mode, string> = { light: '#f4f4f2', dark: '#1c1916' };
+
+/**
+ * A theme's page colour in light and dark, for the browser's own bar around an installed app
+ * (`<meta name="theme-color">`, D76). The custom theme has one palette, so it's the same in both.
+ */
+export function themeBarColors(id: string, customPage: string | null): Record<Mode, string> {
+	if (id === CUSTOM_THEME && customPage) return { light: customPage, dark: customPage };
+	const preset = THEMES.find((t) => t.id === id);
+	return preset ? { light: preset.light.laminate, dark: preset.dark.laminate } : CUBE_LAMINATE;
+}
+
 /** What a page shows: the device's pick, else the group's theme (on its pages), else the instance default. */
 export function resolveTheme(device: string | null | undefined, group: string | null | undefined, instance: string): string {
 	if (isThemeId(device)) return device;

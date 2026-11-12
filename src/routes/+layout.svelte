@@ -7,7 +7,7 @@
 	import BggCredit from '#lib/components/BggCredit.svelte';
 	import CubeMark from '#lib/components/CubeMark.svelte';
 	import { SOURCE_URL } from '#lib/project.ts';
-	import { resolveTheme } from '#lib/themes.ts';
+	import { resolveTheme, themeBarColors } from '#lib/themes.ts';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
@@ -21,10 +21,12 @@
 	$effect(() => {
 		deviceTheme = data.deviceTheme;
 	});
+	const theme = $derived(resolveTheme(deviceTheme, (page.data as { groupTheme?: string | null }).groupTheme, data.instanceTheme));
 	$effect(() => {
-		const groupTheme = (page.data as { groupTheme?: string | null }).groupTheme;
-		document.documentElement.dataset.theme = resolveTheme(deviceTheme, groupTheme, data.instanceTheme);
+		document.documentElement.dataset.theme = theme;
 	});
+	// The browser's own bar around the installed app takes the page's colour (D76).
+	const bar = $derived(themeBarColors(theme, data.customPage));
 
 	// Group pages draw their own top bar with the group's name in it. When the group itself failed
 	// to load (a wrong or removed group), there's no group bar, so this one shows with the error.
@@ -35,6 +37,10 @@
 	<link rel="icon" href={favicon} />
 	<!-- In static/, so iPhones find it without asking the app for guessed names (D59). -->
 	<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+	<!-- Installable (D76): app.html links the manifest; iPhones take the app's name from this. -->
+	<meta name="apple-mobile-web-app-title" content={data.instanceName} />
+	<meta name="theme-color" media="(prefers-color-scheme: light)" content={bar.light} />
+	<meta name="theme-color" media="(prefers-color-scheme: dark)" content={bar.dark} />
 	<title>{data.instanceName}</title>
 	{#if data.customTheme != null}<link rel="stylesheet" href="/custom-theme.css?v={data.customTheme}" />{/if}
 </svelte:head>
