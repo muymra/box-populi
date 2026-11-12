@@ -5,6 +5,8 @@ import { DEFAULT_FILTERS, filterGames, shelfExtensions, widenedFor, type Filters
 import { assignBands, fitsBand, isCopyAtHand, misfits, needsSplit, roomIsBig, seededRng, splitFillers, SPREAD_BANDS } from './pick.ts';
 import { maskFromCounts } from './players.ts';
 import { copy, game } from './testing.ts';
+import { nightExpansions, type Night, type NightGame } from '../nights.ts';
+import type { CatalogGame } from './types.ts';
 
 const members = new Set(['u1', 'u2', 'u3']);
 const f = (overrides: Partial<Filters>): Filters => ({ ...DEFAULT_FILTERS, ...overrides });
@@ -222,5 +224,47 @@ describe('an owner’s count on their copy (D75)', () => {
 		const adding = expansionsAdding(base, expansionsOnHand([base], () => true));
 		expect(addedCounts(base, adding, names)?.text).toBe('7');
 		expect(addedCounts(base, adding, names)?.line).toBe('Up to 7 with Bram’s expansions (Bram’s count)');
+	});
+});
+
+describe('a night’s suggestions (item 55)', () => {
+	const night = (going: string[], games: NightGame[] = [], hostId: string | null = null): Night => ({
+		id: 'n',
+		name: 'Café',
+		nightOn: '2026-11-14',
+		startsAt: null,
+		hostId,
+		createdBy: 'u1',
+		people: going.map((userId) => ({ userId, guestName: null, going: true, came: null })),
+		games
+	});
+	const brought = (gameId: number, broughtBy: string, stayedHome = false): NightGame => ({ gameId, broughtBy, guestName: null, addedBy: broughtBy, stayedHome });
+	const six = f({ players: 6, availableOnly: false });
+	const fitsSix = (n: Night, games: CatalogGame[]) => filterGames(games.filter((g) => !g.isExpansion), six, members, { onHand: nightExpansions(n, games, members) }).map((g) => g.name);
+
+	it('count an expansion its owner is going with', () => {
+		const { games } = catanShelf();
+		expect(fitsSix(night(['u1', 'u2']), games)).toEqual(['CATAN']);
+		expect(fitsSix(night(['u1', 'u3']), games)).toEqual([]);
+	});
+
+	it('count one on the bring list, but not one that stays home', () => {
+		const { extension, games } = catanShelf();
+		expect(fitsSix(night(['u1', 'u3'], [brought(extension.id, 'u2')]), games)).toEqual(['CATAN']);
+		expect(fitsSix(night(['u1', 'u3'], [brought(extension.id, 'u2', true)]), games)).toEqual([]);
+	});
+
+	it('count the host’s at their home, and not one its owner has lent out', () => {
+		const { games } = catanShelf();
+		expect(fitsSix(night(['u1'], [], 'u2'), games)).toEqual(['CATAN']);
+		const lent = games.map((g) => (g.isExpansion ? { ...g, copies: [copy('u2', { lentOut: true })] } : g));
+		expect(fitsSix(night(['u1', 'u2']), lent)).toEqual([]);
+	});
+
+	it('count an owner’s count on a going member’s copy (D75)', () => {
+		const cosmic = game({ name: 'Cosmic Encounter', minPlayers: 3, maxPlayers: 5, copies: [copy('u3', { maxWith: 7 })] });
+		const seven = (n: Night) => filterGames([cosmic], f({ players: 7, availableOnly: false }), members, { onHand: nightExpansions(n, [cosmic], members) });
+		expect(seven(night(['u1', 'u3']))).toEqual([cosmic]);
+		expect(seven(night(['u1', 'u2']))).toEqual([]);
 	});
 });

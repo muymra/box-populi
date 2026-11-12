@@ -518,8 +518,8 @@ STATUS item 30, the plan Carlo agreed on 2026-11-09, as built. The catalog gives
 - **Which expansions count.** On the shelf, the group's, and one lent outside the group only when lent-out games are shown. At Play tonight, one whose owner is here (the host's too at a member's home) or that's on tonight's list; with nobody ticked, any the group can borrow. Fillers, split tables, spreads, a big room and "Not for 6 players" all count them.
 - **Every number stays BGG's and with its own game** (TECH.md "Access and terms"). The shelf keeps the base's own "3–4p" and flags the game "With expansion", the expansion named in the flag's tooltip and in the label a screen reader hears, since its name doesn't fit the cube's pill. Play tonight's row adds "With the 5-6 Player Extension (Bram's)", and the game page "Up to 6 with the 5-6 Player Extension (Bram's)", each naming the expansion and its owner. The expansion's name drops its base's title, with "the" before an add-on word (extension, expansion, pack and the like). (Since D74 the shelf and Play tonight also show the expansion's own count beside the game's, after a puzzle piece.)
 **Why:** the shelf should find what the group can play at that size with what's in its boxes (Carlo, 2026-11-09), without changing BGG's figures.
-**Trade-offs accepted:** the night page's "suggest games to bring" still reads base ranges only; the game page lists the group's expansions whoever has them, not only those available.
-**Revisit if:** groups want the night's suggestions to count expansions, or an expansion's count should show on the cube itself.
+**Trade-offs accepted:** the game page lists the group's expansions whoever has them, not only those available.
+**Revisit if:** an expansion's count should show on the cube itself. (A night's suggestions count expansions since 0.7.0, STATUS item 55: the going members' and the bring list's.)
 
 ## D74. An expansion's own count shows beside its base game's, on the shelf and at Play tonight (2026-11-11)
 

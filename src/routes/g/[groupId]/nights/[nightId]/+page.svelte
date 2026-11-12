@@ -7,6 +7,7 @@
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import X from '@lucide/svelte/icons/x';
 	import Dices from '@lucide/svelte/icons/dices';
+	import Puzzle from '@lucide/svelte/icons/puzzle';
 	import Trophy from '@lucide/svelte/icons/trophy';
 	import CopyButton from '#lib/components/CopyButton.svelte';
 	import ListRow from '#lib/components/ListRow.svelte';
@@ -17,12 +18,13 @@
 	import { cachedCatalog, fetchCatalog } from '#lib/catalog/client.ts';
 	import { normalize } from '#lib/catalog/normalize.ts';
 	import { playerColor } from '#lib/catalog/colors.ts';
+	import { addedCounts, expansionsAdding } from '#lib/catalog/extensions.ts';
 	import { DEFAULT_FILTERS, filterGames } from '#lib/catalog/filter.ts';
 	import { formatPlayerRange } from '#lib/catalog/players.ts';
 	import { formatPlaytime } from '#lib/catalog/buckets.ts';
 	import { favouritesAmong, pick, pickWeight, withInterest } from '#lib/catalog/pick.ts';
 	import type { CatalogGame } from '#lib/catalog/types.ts';
-	import { bringList, cameChecked, cameList, chatText, goingMembers, nightDate, nightGuests, nightPlayers, nightPoolIds, playOutcome, recapText } from '#lib/nights.ts';
+	import { bringList, cameChecked, cameList, chatText, goingMembers, nightDate, nightExpansions, nightGuests, nightPlayers, nightPoolIds, playOutcome, recapText } from '#lib/nights.ts';
 	import { nightOf } from '#lib/table/regulars.ts';
 	import { getTable } from '#lib/table/table.svelte.ts';
 	import type { PageProps } from './$types';
@@ -78,6 +80,17 @@
 	const candidates = $derived(
 		(catalog ?? []).filter((g) => !g.isExpansion && !onList.has(g.id) && g.copies.some((c) => going.includes(c.ownerId) && !c.lentOut && c.lentToUserId == null))
 	);
+	// Expansions count as at Play tonight (D73, item 55): those of the people going, and the bring list's.
+	const onHand = $derived(catalog ? nightExpansions(night, catalog, memberIds) : undefined);
+	/** "5–6 with the 5-6 Player Extension (Bram’s)", or an owner's count, under a game an expansion here adds players to (D74, D75). */
+	function withLine(g: CatalogGame): string | null {
+		if (!onHand) return null;
+		const whose = (e: CatalogGame) => {
+			const names = [...new Set(e.copies.map((c) => c.ownerId))].flatMap((id) => (memberById.has(id) ? [`${memberById.get(id)!.name}’s`] : []));
+			return names.length ? ` (${names.length <= 2 ? names.join(' or ') : `${names[0]} or ${names.length - 1} others`})` : '';
+		};
+		return addedCounts(g, expansionsAdding(g, onHand), (id) => memberById.get(id)?.name ?? 'Someone', whose)?.line ?? null;
+	}
 	const goingOwners = (g: CatalogGame) => [...new Set(g.copies.filter((c) => going.includes(c.ownerId) && !c.lentOut).map((c) => c.ownerId))];
 	let suggestions = $state<CatalogGame[]>([]);
 	let seen = $state<number[]>([]);
@@ -99,7 +112,7 @@
 		return null;
 	}
 	function suggest() {
-		const fit = filterGames(candidates, { ...DEFAULT_FILTERS, players, availableOnly: false }, memberIds);
+		const fit = filterGames(candidates, { ...DEFAULT_FILTERS, players, availableOnly: false }, memberIds, { onHand });
 		const result = pick(fit.length ? fit : candidates, players, Math.random, new Set(seen), 3, withInterest(pickWeight, interest));
 		suggestions = result.games;
 		seen = result.reset ? result.games.map((g) => g.id) : [...seen, ...result.games.map((g) => g.id)];
@@ -456,7 +469,8 @@
 			{#snippet gameRow(g: CatalogGame)}
 				<li>
 					<span class="title"><a href="{base}/game/{g.id}">{g.name}</a>
-						<span class="muted small num">{formatPlayerRange(g.minPlayers, g.maxPlayers) ?? '?'}p{#if formatPlaytime(g.minPlaytime, g.maxPlaytime)} · {formatPlaytime(g.minPlaytime, g.maxPlaytime)}{/if}</span>
+						<span class="muted small num">{formatPlayerRange(g.minPlayers, g.maxPlayers) ?? '?'}p{#if formatPlaytime(g.minPlaytime, g.maxPlaytime)}{' · '}{formatPlaytime(g.minPlaytime, g.maxPlaytime)}{/if}</span>
+						{#if withLine(g)}<span class="muted small with num"><Puzzle size={13} aria-hidden="true" />{withLine(g)}</span>{/if}
 						{#if soonNote(g)}<span class="muted small soon-note">{soonNote(g)}</span>{/if}</span>
 					{@render bringButton(g)}
 				</li>
@@ -850,6 +864,13 @@
 	.title {
 		display: grid;
 		font-weight: 650;
+	}
+	.with {
+		font-weight: 400;
+	}
+	.with :global(svg) {
+		vertical-align: -2px;
+		margin-right: 3px;
 	}
 	.bring-it {
 		display: flex;

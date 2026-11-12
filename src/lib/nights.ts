@@ -1,5 +1,6 @@
 // Game nights (PRD "Game night"): the pool a night plays from, who's going, and the text for the
 // group chat. Pure, so the pages, the server and the tests share it.
+import { expansionsOnHand, type OnHand } from './catalog/extensions.ts';
 import { isCopyAtHand } from './catalog/pick.ts';
 import type { CatalogGame } from './catalog/types.ts';
 
@@ -89,6 +90,18 @@ export function nightPoolIds(night: Night, catalog: readonly CatalogGame[], memb
 		for (const game of catalog) if (game.copies.some((c) => c.ownerId === night.hostId && isCopyAtHand(c, host))) ids.add(game.id);
 	}
 	return ids;
+}
+
+/**
+ * The expansions a night's suggestions count (D73, STATUS item 55), as Play tonight does with the
+ * night's people here: one a member going (or the host) has at hand, or one on the bring list that
+ * isn't staying home.
+ */
+export function nightExpansions(night: Night, catalog: readonly CatalogGame[], memberIds: ReadonlySet<string>): OnHand {
+	const listed = nightPoolIds(night, catalog, memberIds);
+	const people = new Set(goingMembers(night, memberIds));
+	if (night.hostId && memberIds.has(night.hostId)) people.add(night.hostId);
+	return expansionsOnHand(catalog, (c, g) => listed.has(g.id) || isCopyAtHand(c, people));
 }
 
 /**
