@@ -83,7 +83,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--s-2);
-		min-height: 36px;
+		min-height: max(36px, var(--tap));
 	}
 	.items {
 		list-style: none;

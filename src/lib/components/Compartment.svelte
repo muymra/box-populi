@@ -29,7 +29,7 @@
 		href?: string | null;
 		name?: string;
 		src?: string | null;
-		/** What a screen reader hears for the cube: the name, then anything the picture says. */
+		/** What a screen reader hears for the cube: the name, then anything the picture and caption say. */
 		lead?: string;
 		/** One flag on the box (Lent out, With expansion, Info missing, Expansion). */
 		flag?: string | null;
@@ -65,7 +65,8 @@
 		     (STATUS item 29). The line is there on every cube, empty under a printed front, so captions
 		     and edges stay level across a row. -->
 		<div class="name" aria-hidden="true">{src ? name : ''}</div>
-		<div class="caption num">{@render caption?.()}</div>
+		<!-- The lead says the caption in words, so a screen reader hears it once. -->
+		<div class="caption num" aria-hidden={lead ? 'true' : undefined}>{@render caption?.()}</div>
 		{@render edge?.()}
 	</svelte:element>
 {/if}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { announce } from '#lib/announce.svelte.ts';
 	// Your account (PRD "Identity"): your name, how you sign in elsewhere, your groups and loans, and
 	// deleting the account, as form panels like the rest of the app (DESIGN.md "Form panel").
 	import PersonalLink from '#lib/components/PersonalLink.svelte';
@@ -20,7 +21,7 @@
 		<p class="muted">A name and the devices you use. There’s no email or password.</p>
 	</header>
 
-	{#if data.deletedGroup}<p class="banner" role="status">{data.deletedGroup} is deleted. Its members keep their accounts and their games.</p>{/if}
+	{#if data.deletedGroup}<p class="banner" {@attach announce}>{data.deletedGroup} is deleted. Its members keep their accounts and their games.</p>{/if}
 	<section class="form-panel" aria-labelledby="you-h">
 		<div class="form-head">
 			<div>
@@ -36,12 +37,12 @@
 					<button class="btn">Save</button>
 				</form>
 				{#if form?.renameError}<p class="banner error" role="alert">{form.renameError}</p>{/if}
-				{#if form?.renamed}<p class="muted" role="status">Saved.</p>{/if}
+				{#if form?.renamed}<p class="muted" {@attach announce}>Saved.</p>{/if}
 			</div>
 		</div>
 		{#if data.viaCode && !form?.pinSaved}
 			<div class="form-block">
-				<p class="banner" role="status">You’re in with a sign-in code. Pick a new PIN now, so next time you can get back in on your own.</p>
+				<p class="banner" {@attach announce}>You’re in with a sign-in code. Pick a new PIN now, so next time you can get back in on your own.</p>
 			</div>
 		{/if}
 		<div class="form-row" id="pin-row">
@@ -56,7 +57,7 @@
 				</form>
 				{#if form?.pinError}<p class="banner error" role="alert">{form.pinError}</p>{/if}
 				{#if form?.pinSaved}
-					<p class="muted" role="status">PIN saved.</p>
+					<p class="muted" {@attach announce}>PIN saved.</p>
 				{:else if data.pinSetAt}
 					<p class="muted">Set {new Date(data.pinSetAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}. Six digits, not your bank card’s.</p>
 				{:else}

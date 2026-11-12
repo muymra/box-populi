@@ -201,7 +201,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--s-2);
-		min-height: 32px;
+		min-height: max(32px, var(--tap));
 	}
 	.pick-list input {
 		width: 18px;

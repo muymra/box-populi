@@ -90,6 +90,8 @@
 </script>
 
 <svelte:head>
+	<!-- Its own, so the title doesn't stay the last page's after an in-app link here. -->
+	<title>{data.instanceName}</title>
 	{#if data.demoMode}
 		<meta name="description" content={SHOWCASE_TEXT} />
 		<meta property="og:type" content="website" />

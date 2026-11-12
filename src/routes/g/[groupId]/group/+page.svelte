@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { announce } from '#lib/announce.svelte.ts';
 	import GuestPlays from '#lib/components/GuestPlays.svelte';
 	import { onMount } from 'svelte';
 	import { enhance } from '$app/forms';
@@ -9,7 +10,7 @@
 	import InviteCard from '#lib/components/InviteCard.svelte';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { lastActive } from '#lib/time.ts';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import { AUTO_THEME, CUSTOM_THEME, THEME_IDS, THEME_LABELS } from '#lib/themes.ts';
 	import type { PageProps } from './$types';
 
@@ -46,7 +47,7 @@
 		const body = new FormData();
 		body.set('theme', AUTO_THEME);
 		await fetch('/theme', { method: 'POST', body, headers: { accept: 'application/json' } });
-		await invalidateAll();
+		await refreshAll();
 	}
 	const shown = $derived.by(() => {
 		const q = query.trim().toLocaleLowerCase();
@@ -64,6 +65,8 @@
 	const sameName = (typed: string, name: string) => typed.replace(/\s+/g, ' ').trim().toLocaleLowerCase() === name.toLocaleLowerCase();
 </script>
 
+<svelte:head><title>Members and settings · {data.group.name}</title></svelte:head>
+
 <div class="group-page">
 	{#snippet newCode()}
 		<details class="confirm">
@@ -75,7 +78,7 @@
 				</form>
 			</div>
 		</details>
-		{#if form?.codeChanged}<p class="banner" role="status">New code made. The old one no longer works.</p>{/if}
+		{#if form?.codeChanged}<p class="banner" {@attach announce}>New code made. The old one no longer works.</p>{/if}
 		{#if form?.codeError}<p class="banner error" role="alert">{form.codeError}</p>{/if}
 	{/snippet}
 
@@ -88,10 +91,10 @@
 			</label>
 		{/if}
 		{#if form?.memberError}<p class="banner error" role="alert">{form.memberError}</p>{/if}
-		{#if form?.merged}<p class="banner" role="status">Merged. The older entry is gone; everything it had is on the new one.</p>{/if}
+		{#if form?.merged}<p class="banner" {@attach announce}>Merged. The older entry is gone; everything it had is on the new one.</p>{/if}
 		{#if form?.guestLinked}
 			{@const g = form.guestLinked}
-			<p class="banner" role="status">
+			<p class="banner" {@attach announce}>
 				{g.plays} {g.plays === 1 ? 'play' : 'plays'} and {g.nights} {g.nights === 1 ? 'night' : 'nights'} now count for {g.name}.
 				{#if g.skipped.length}Skipped, since {g.name} or another of those names was already in them: {g.skipped.map((s) => `${s.label} (${s.on})`).join(', ')}.{/if}
 			</p>
@@ -299,7 +302,7 @@
 			</select>
 			<button class="btn">Save</button>
 		</form>
-		{#if form?.nightsBySaved}<p class="muted small" role="status">Saved.</p>{/if}
+		{#if form?.nightsBySaved}<p class="muted small" {@attach announce}>Saved.</p>{/if}
 		{#if form?.nightsByError}<p class="banner error" role="alert">{form.nightsByError}</p>{/if}
 	{/snippet}
 	{#snippet fillerForm()}
@@ -316,7 +319,7 @@
 			</label>
 			<button class="btn">Save</button>
 		</form>
-		{#if form?.fillerSaved}<p class="muted small" role="status">Saved.</p>{/if}
+		{#if form?.fillerSaved}<p class="muted small" {@attach announce}>Saved.</p>{/if}
 		{#if form?.fillerError}<p class="banner error" role="alert">{form.fillerError}</p>{/if}
 	{/snippet}
 	{#snippet staleForm()}
@@ -328,7 +331,7 @@
 			</label>
 			<button class="btn">Save</button>
 		</form>
-		{#if form?.staleSaved}<p class="muted small" role="status">Saved.</p>{/if}
+		{#if form?.staleSaved}<p class="muted small" {@attach announce}>Saved.</p>{/if}
 		{#if form?.staleError}<p class="banner error" role="alert">{form.staleError}</p>{/if}
 	{/snippet}
 	{#snippet themeForm()}
@@ -341,7 +344,7 @@
 			</select>
 			<button class="btn">Save</button>
 		</form>
-		{#if form?.themeSaved}<p class="muted small" role="status">Saved.</p>{/if}
+		{#if form?.themeSaved}<p class="muted small" {@attach announce}>Saved.</p>{/if}
 		{#if deviceOverrides}
 			<div class="banner override">
 				<p>
@@ -724,7 +727,7 @@
 	}
 	.pbody .link-button,
 	.pfoot .link-button {
-		min-height: 36px;
+		min-height: max(36px, var(--tap));
 		font-weight: 650;
 	}
 	/* Role as segments, as elsewhere: the current one sits on the cube; the other is the button that changes it. */
@@ -738,7 +741,7 @@
 	.seg {
 		display: inline-flex;
 		align-items: center;
-		min-height: 36px;
+		min-height: max(36px, var(--tap));
 		padding: 0 12px;
 		border: 0;
 		border-radius: var(--r-ctl);

@@ -352,8 +352,8 @@
 	.step {
 		display: grid;
 		place-items: center;
-		width: 36px;
-		height: 40px;
+		width: max(36px, var(--tap));
+		height: max(40px, var(--tap));
 		border: 0;
 		border-radius: var(--r-ctl);
 		background: none;

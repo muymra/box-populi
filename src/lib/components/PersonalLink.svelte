@@ -41,7 +41,7 @@
 	input {
 		width: 100%;
 		font-size: var(--t-small);
-		min-height: 42px;
+		min-height: max(42px, var(--tap));
 		padding: 0 var(--s-3);
 		border: 1.5px solid var(--rule);
 		border-radius: var(--r-ctl);

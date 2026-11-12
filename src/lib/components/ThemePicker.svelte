@@ -5,7 +5,7 @@
 -->
 <script lang="ts">
 	import { page } from '$app/state';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import Palette from '@lucide/svelte/icons/palette';
 	import { AUTO_THEME, CUSTOM_THEME, THEME_IDS, THEME_LABELS } from '#lib/themes.ts';
 
@@ -17,12 +17,21 @@
 		enhanced = true;
 	});
 
-	function pick(event: Event & { currentTarget: HTMLSelectElement }) {
+	let failed = $state(false);
+	async function pick(event: Event & { currentTarget: HTMLSelectElement }) {
+		const before = current;
 		current = event.currentTarget.value;
+		failed = false;
 		// Saved, then reloaded so anything that depends on this device's setting (the Group tab's note) is current.
-		fetch('/theme', { method: 'POST', body: new FormData(event.currentTarget.form!), headers: { accept: 'application/json' } })
-			.then(() => invalidateAll())
-			.catch(() => {});
+		// If it doesn't save, the page goes back to the theme it had, since the next page would.
+		try {
+			const res = await fetch('/theme', { method: 'POST', body: new FormData(event.currentTarget.form!), headers: { accept: 'application/json' } });
+			if (!res.ok) throw new Error(`theme ${res.status}`);
+			await refreshAll();
+		} catch {
+			current = before;
+			failed = true;
+		}
 	}
 </script>
 
@@ -38,13 +47,20 @@
 		</select>
 	</label>
 	{#if !enhanced}<button class="link-button">Use</button>{/if}
+	{#if failed}<span class="failed" role="alert">Not saved. Try again.</span>{/if}
 </form>
 
 <style>
 	.picker {
 		display: inline-flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: var(--s-2);
+	}
+	.failed {
+		color: var(--danger);
+		font-size: var(--t-small);
+		font-weight: 650;
 	}
 	label {
 		display: inline-flex;
@@ -53,7 +69,7 @@
 	}
 	select {
 		appearance: none;
-		min-height: 36px;
+		min-height: max(36px, var(--tap));
 		padding: 0 28px 0 var(--s-2);
 		border: 1.5px solid var(--rule);
 		border-radius: var(--r-ctl);

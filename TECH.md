@@ -75,7 +75,9 @@ box-populi/
     app.d.ts                    App.Locals: config, user, isAdmin and the theme fields
     hooks.server.ts             config check, session → locals.user, admin cookie, theme, security headers
     lib/                        shared by browser and server: the rules as pure TS (plays.ts, nights.ts,
-                                profile.ts, themes.ts, csv files), components/, and:
+                                profile.ts, themes.ts, csv files), components/, announce.svelte.ts (the
+                                one status region, in the root layout, that a message appearing after an
+                                action is read out from: `{@attach announce}` on the message), and:
       catalog/                  the catalog's types, filters, search normalization, player colours,
                                 box shapes, expansions' player counts (extensions.ts) and the picker's
                                 draw; pure, run in browser, server and tests

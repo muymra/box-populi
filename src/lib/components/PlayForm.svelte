@@ -374,8 +374,8 @@
 	.remove {
 		display: grid;
 		place-items: center;
-		width: 32px;
-		height: 32px;
+		width: max(32px, var(--tap));
+		height: max(32px, var(--tap));
 		border: 0;
 		border-radius: var(--r-ctl);
 		background: none;

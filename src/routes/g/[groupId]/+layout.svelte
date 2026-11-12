@@ -95,7 +95,7 @@
 <svelte:window onpointerdown={closeOutside} onkeydown={closeOnEscape} />
 
 <header class="group-bar">
-	<a class="home" href="/" aria-label="{data.instanceName}: all your groups">
+	<a class="home" class:mark={!data.logoUrl} href="/" aria-label="{data.instanceName}: all your groups">
 		{#if data.logoUrl}<img class="logo" src={data.logoUrl} alt="" />{:else}<CubeMark size={24} />{/if}
 	</a>
 	<div class="title" bind:this={switchEl}>
@@ -226,8 +226,14 @@
 	.home {
 		display: grid;
 		place-items: center;
+		min-width: var(--tap);
+		min-height: var(--tap);
 		color: var(--ink);
 		flex: none;
+	}
+	/* The 24px mark keeps its 24px in the bar on a touch screen; the 44px target reaches into the gaps. */
+	.home.mark {
+		margin-inline: min(0px, calc((24px - var(--tap)) / 2));
 	}
 	.title {
 		flex: 1;
@@ -257,7 +263,7 @@
 		gap: 4px;
 		min-width: 0;
 		max-width: 100%;
-		min-height: 40px;
+		min-height: max(40px, var(--tap));
 		padding: 0 6px 0 8px;
 		border: 0;
 		border-radius: var(--r-ctl);
@@ -370,6 +376,7 @@
 		font-weight: 600;
 		text-decoration: none;
 		padding: 8px 2px;
+		padding-block: max(8px, calc((var(--tap) - 1lh) / 2));
 	}
 	.me:hover {
 		text-decoration: underline;
@@ -389,6 +396,7 @@
 		border-radius: var(--r-ctl);
 		background: none;
 		padding: 8px 4px 8px 8px;
+		min-height: var(--tap);
 		cursor: pointer;
 	}
 	button.me:hover,

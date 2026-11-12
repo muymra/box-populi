@@ -275,6 +275,9 @@
 	}
 </script>
 
+<!-- Its own, so the title doesn't stay the last tab's after an in-app link here. -->
+<svelte:head><title>{data.group.name} · {data.instanceName}</title></svelte:head>
+
 {#if pinNudge}
 	<aside class="pin-nudge" aria-label="Set a PIN">
 		<KeyRound size={20} aria-hidden="true" />
@@ -480,7 +483,7 @@
 		gap: var(--s-3);
 	}
 	.nudge-actions .link-button {
-		min-height: 36px;
+		min-height: max(36px, var(--tap));
 		font-weight: 650;
 	}
 
@@ -575,7 +578,7 @@
 	}
 	.controls select,
 	.chip {
-		min-height: 38px;
+		min-height: max(38px, var(--tap));
 		border-radius: 4px;
 		border: 1.5px solid var(--label-line);
 		background: transparent;
@@ -680,7 +683,7 @@
 		display: flex;
 		gap: var(--s-2);
 		align-items: center;
-		min-height: 32px;
+		min-height: max(32px, var(--tap));
 	}
 	input[type='checkbox'] {
 		accent-color: var(--ink);
@@ -710,7 +713,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--s-2);
-		min-height: 40px;
+		min-height: max(40px, var(--tap));
 		padding: 0 14px 0 10px;
 		border-radius: 999px;
 		border: 1.5px solid var(--rule);
@@ -744,7 +747,7 @@
 		margin-top: var(--s-2);
 		font-size: var(--t-small);
 		font-weight: 600;
-		min-height: 32px;
+		min-height: max(32px, var(--tap));
 	}
 
 	/* The count and the view controls on one line; what the default hides leave out goes under them
@@ -793,7 +796,7 @@
 	}
 	.sort {
 		appearance: none;
-		min-height: 38px;
+		min-height: max(38px, var(--tap));
 		border-radius: var(--r-ctl);
 		border: 1.5px solid var(--rule);
 		background: var(--cube) var(--chevron) no-repeat right 10px center;
@@ -810,8 +813,8 @@
 	.seg button {
 		display: grid;
 		place-items: center;
-		width: 40px;
-		height: 36px;
+		width: max(40px, var(--tap));
+		height: max(36px, var(--tap));
 		border: 0;
 		background: var(--cube);
 		color: var(--ink-2);

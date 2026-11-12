@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { announce } from '#lib/announce.svelte.ts';
 	// One game night (PRD "Game night"): when and where, who's going, the bring list, suggestions of
 	// what to bring, and on the night, what stayed home and the plays logged.
 	import { onMount, untrack } from 'svelte';
@@ -537,7 +538,7 @@
 					<button type="button" class="btn small" onclick={() => (logOpen = true)}><Trophy size={16} aria-hidden="true" /> Log a play</button>
 				{/if}
 			</div>
-			{#if logged}<div class="form-block"><p class="banner" role="status">Play logged.</p></div>{/if}
+			{#if logged}<div class="form-block"><p class="banner" {@attach announce}>Play logged.</p></div>{/if}
 			{#if data.plays.length}
 				<div class="form-block"><PlayList plays={data.plays} {members} {table} groupId={data.group.id} nights={data.nightList} /></div>
 			{/if}
@@ -700,7 +701,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--s-2);
-		min-height: 40px;
+		min-height: max(40px, var(--tap));
 		padding: 0 14px 0 10px;
 		border-radius: 999px;
 		border: 1.5px solid var(--rule);
@@ -744,8 +745,8 @@
 	.remove {
 		display: grid;
 		place-items: center;
-		width: 28px;
-		height: 28px;
+		width: max(28px, var(--tap));
+		height: max(28px, var(--tap));
 		border: 0;
 		border-radius: 999px;
 		background: none;
@@ -794,8 +795,8 @@
 		gap: 6px;
 	}
 	.games .remove {
-		width: 36px;
-		height: 36px;
+		width: max(36px, var(--tap));
+		height: max(36px, var(--tap));
 	}
 	.games li {
 		display: grid;
@@ -825,7 +826,7 @@
 	}
 	.here {
 		min-width: 7rem;
-		min-height: 36px;
+		min-height: max(36px, var(--tap));
 		padding: 0 12px;
 		border-radius: 999px;
 		border: 1.5px solid var(--rule);
@@ -878,7 +879,7 @@
 		align-items: center;
 	}
 	.small-select {
-		min-height: 36px;
+		min-height: max(36px, var(--tap));
 		width: auto;
 	}
 	.find {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { announce } from '#lib/announce.svelte.ts';
 	import { APP_VERSION, CHANGELOG_URL } from '#lib/project.ts';
 	import { onMount, untrack } from 'svelte';
 	import { enhance } from '$app/forms';
@@ -177,7 +178,7 @@
 	{#snippet logoInput()}<input id="logo-url" class="field" name="logoUrl" type="url" value={data.look.logoUrl} placeholder="https://example.com/logo.svg" />{/snippet}
 	{#snippet lookMessages()}
 		{#if form?.lookError}<p class="banner error" role="alert">{form.lookError}</p>{/if}
-		{#if form?.lookSaved}<p class="muted" role="status">Saved. Other pages pick it up within a minute.</p>{/if}
+		{#if form?.lookSaved}<p class="muted" {@attach announce}>Saved. Other pages pick it up within a minute.</p>{/if}
 	{/snippet}
 	{#snippet lookButtons()}
 		<div class="inline">
@@ -247,7 +248,7 @@
 		</div>
 	{/snippet}
 	{#snippet groupList()}
-		{#if done}<p class="banner" role="status">{done}</p>{/if}
+		{#if done}<p class="banner" {@attach announce}>{done}</p>{/if}
 		{#if data.groups.length === 0}
 			<p class="muted">No groups yet.</p>
 		{:else}
@@ -622,7 +623,7 @@
 	}
 	.sort .field {
 		width: auto;
-		min-height: 40px;
+		min-height: max(40px, var(--tap));
 	}
 	.groups {
 		list-style: none;
@@ -728,7 +729,7 @@
 	}
 	.abody .link-button,
 	.afoot .link-button {
-		min-height: 36px;
+		min-height: max(36px, var(--tap));
 		font-weight: 650;
 	}
 	.afoot {

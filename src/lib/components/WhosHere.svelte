@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { announce } from '#lib/announce.svelte.ts';
 	// "Who's here" toggles plus guests typed in by name (PRD "Picker"). Used by the picker and the start
 	// player modal; both edit the same Table, so ticking someone in one shows in the other. Regulars come
 	// first; in a big group the rest fold behind "N more".
@@ -108,7 +109,7 @@
 		/>
 		<button type="button" class="btn" disabled={!guestName.trim()} onclick={addGuest}><UserRoundPlus size={18} aria-hidden="true" /> Add</button>
 	</div>
-	{#if guestNote}<p class="hint" role="status">{guestNote}</p>{/if}
+	{#if guestNote}<p class="hint" {@attach announce}>{guestNote}</p>{/if}
 </div>
 
 <style>
@@ -125,7 +126,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--s-2);
-		min-height: 40px;
+		min-height: max(40px, var(--tap));
 		padding: 0 14px 0 10px;
 		border-radius: 999px;
 		border: 1.5px solid var(--rule);
@@ -171,8 +172,8 @@
 	.remove {
 		display: grid;
 		place-items: center;
-		width: 32px;
-		height: 32px;
+		width: max(32px, var(--tap));
+		height: max(32px, var(--tap));
 		border: 0;
 		border-radius: 999px;
 		background: none;

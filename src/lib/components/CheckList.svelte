@@ -72,7 +72,7 @@
 	}
 	input[type='search'] {
 		width: 100%;
-		min-height: 40px;
+		min-height: max(40px, var(--tap));
 		padding: 0 var(--s-3);
 		border: 1.5px solid var(--rule);
 		border-radius: var(--r-ctl);
@@ -88,7 +88,7 @@
 		display: flex;
 		gap: var(--s-2);
 		align-items: center;
-		min-height: 36px;
+		min-height: max(36px, var(--tap));
 		font-size: var(--t-body);
 	}
 	input[type='checkbox'] {

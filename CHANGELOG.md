@@ -10,6 +10,11 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 - A game night's "Suggest three" counts expansions as Play tonight does: one a member going has, or one on the bring list. With Bram going and his 5-6 Player Extension, Catan can come up for six. Its suggestions and search results say so under the game, as Play tonight's rows do.
 - Two expansions with the same count show it once after the puzzle piece ("🧩3–6", not "🧩3–6, 3–6").
 - Box Populi can go on a phone's home screen, or be installed as an app on a computer: Chrome's menu has Install or Add to Home screen, Safari has Share, Add to Home Screen. It opens in its own window, with the cube mark as its icon and the instance's name under it, straight onto the group you had open last on that device. It still needs a connection. On an iPhone the app keeps its own sign-in, so the first time you sign in there with your group's code and your PIN.
+- On a phone or tablet, small buttons, filter chips, the people toggles, the edit and remove buttons, dropdowns and the cube mark in the top bar are at least 44 pixels tall, so they're easier to tap. With a mouse nothing changes.
+- Screen readers hear a game on the shelf as "Catan, 1995. 3 to 4 players, 60 to 120 minutes. Owned by Ada" instead of "3–4p · 60–120 min", and Play tonight's "We played this" says which game. Messages that appear after you save something ("Saved.", "Link added.", "Marked as lent.") are now read out, as is Play tonight's note when it starts over.
+- Game night, the leaderboard and the Group tab have their own page titles, and going back to the shelf or the home page in the app no longer leaves the last page's title on the tab.
+- If the theme picker can't save your choice, it says so and goes back to the theme you had. If a copy button can't reach the clipboard, it says "Couldn't copy" and shows the text to copy by hand.
+- Going from one game's page to another (an expansion's, say) starts the new page fresh, instead of keeping a form you had open on the first.
 
 ## 0.6.1 (2026-11-11)
 

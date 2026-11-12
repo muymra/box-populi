@@ -279,7 +279,7 @@
 		display: flex;
 		align-items: flex-start;
 		gap: var(--s-3);
-		min-height: 40px;
+		min-height: max(40px, var(--tap));
 		cursor: pointer;
 	}
 	input[type='checkbox'] {
@@ -333,7 +333,7 @@
 	}
 	.pick select {
 		max-width: 100%;
-		min-height: 40px;
+		min-height: max(40px, var(--tap));
 	}
 	.muted-row .title {
 		color: var(--ink-2);

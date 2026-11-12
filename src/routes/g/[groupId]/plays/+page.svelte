@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { announce } from '#lib/announce.svelte.ts';
 	// The play log (PRD "Play log"): the leaderboard for this year or all time, led by a podium for the
 	// top three; the plays as a timeline by night, each date said once in the gutter; then the group's
 	// points and the CSV export in one panel.
@@ -44,6 +45,8 @@
 		if (!data.isMember) who = 'all';
 	});
 </script>
+
+<svelte:head><title>Leaderboard and plays · {data.group.name}</title></svelte:head>
 
 <div class="plays-page">
 	<section aria-labelledby="board-h">
@@ -166,7 +169,7 @@
 						</form>
 						<p class="hint">One to five numbers, first place first. Changing them rescores every play.</p>
 					</details>
-					{#if form?.pointsSaved}<p class="banner" role="status">Points saved. The leaderboard uses them for every play.</p>{/if}
+					{#if form?.pointsSaved}<p class="banner" {@attach announce}>Points saved. The leaderboard uses them for every play.</p>{/if}
 					{#if form?.pointsError}<p class="banner error" role="alert">{form.pointsError}</p>{/if}
 				{/if}
 			</div>
@@ -191,7 +194,7 @@
 						</form>
 						<p class="hint">Points for each player, 0 to 100, whatever the podium gives. Changing it rescores every play.</p>
 					</details>
-					{#if form?.coopSaved}<p class="banner" role="status">Saved. The leaderboard uses it for every co-op play.</p>{/if}
+					{#if form?.coopSaved}<p class="banner" {@attach announce}>Saved. The leaderboard uses it for every co-op play.</p>{/if}
 					{#if form?.coopError}<p class="banner error" role="alert">{form.coopError}</p>{/if}
 				{/if}
 			</div>

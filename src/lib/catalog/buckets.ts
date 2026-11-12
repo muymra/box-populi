@@ -35,6 +35,14 @@ export function formatWeight(weight: number | null): string | null {
 	return weight == null ? null : `${weight.toFixed(2)} / 5`;
 }
 
+/** formatPlaytime for a screen reader: "45 minutes", "60 to 90 minutes". */
+export function spokenPlaytime(min: number | null, max: number | null): string | null {
+	if (min == null && max == null) return null;
+	if (min != null && max != null && min !== max) return `${min} to ${max} minutes`;
+	const n = max ?? min;
+	return `${n} ${n === 1 ? 'minute' : 'minutes'}`;
+}
+
 export function formatPlaytime(min: number | null, max: number | null): string | null {
 	if (min == null && max == null) return null;
 	if (min != null && max != null && min !== max) return `${min}–${max} min`;

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { announcer } from '#lib/announce.svelte.ts';
 	import '@fontsource-variable/archivo/standard.css';
 	import '../app.css';
 	import '#lib/themes.css';
@@ -67,6 +68,8 @@
 <main class="container">
 	{@render children()}
 </main>
+<!-- Messages that appear after an action are read out from here (announce.svelte.ts). -->
+<p class="visually-hidden" role="status">{announcer.text}</p>
 
 <BggCredit bind:deviceTheme custom={data.customTheme != null} bgg={data.bggCredit} wikidata={data.wikidataCredit} />
 
@@ -98,11 +101,13 @@
 		font-stretch: 85%;
 		font-size: 1.125rem;
 		letter-spacing: -0.01em;
+		min-height: var(--tap);
 	}
 	.me {
 		font-weight: 600;
 		text-decoration: none;
 		padding: 8px 2px;
+		padding-block: max(8px, calc((var(--tap) - 1lh) / 2));
 	}
 	.me:hover {
 		text-decoration: underline;

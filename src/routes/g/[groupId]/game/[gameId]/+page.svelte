@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { announce } from '#lib/announce.svelte.ts';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import EyeOff from '@lucide/svelte/icons/eye-off';
 	import UsersRound from '@lucide/svelte/icons/users-round';
@@ -13,7 +14,7 @@
 	import Heart from '@lucide/svelte/icons/heart';
 	import CalendarClock from '@lucide/svelte/icons/calendar-clock';
 	import Gift from '@lucide/svelte/icons/gift';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -149,6 +150,24 @@
 			kind = '';
 		}
 	}
+
+	// Each game starts fresh. SvelteKit keeps this page when one game links to another (an expansion,
+	// a base game), so what was open, typed or just saved on the last one would carry over; the markup
+	// is keyed on the game too, for the fields and forms that keep their own state.
+	let shownGame = untrack(() => data.game.id);
+	$effect.pre(() => {
+		if (g.id === shownGame) return;
+		shownGame = g.id;
+		logOpen = false;
+		logged = false;
+		expanded = false;
+		sending = null;
+		editOpen = false;
+		playersWithOpen = false;
+		adding = false;
+		kind = '';
+		kindPicked = false;
+	});
 </script>
 
 <!-- The owner's count on their copy (D75), under their name in "On whose shelf". -->
@@ -172,13 +191,14 @@
 				<button class="btn small" disabled={sending === 'playersWith'}>{sending === 'playersWith' ? 'Saving…' : 'Save'}</button>
 			</div>
 			<p id="max-with-hint" class="muted">Your own count, shown as yours. Leave it empty to go by BoardGameGeek’s.</p>
-			{#if form?.playersWithError}<p class="banner error" role="alert">{form.playersWithError}</p>{:else if form?.playersWithSaved}<p class="muted" role="status">Saved.</p>{/if}
+			{#if form?.playersWithError}<p class="banner error" role="alert">{form.playersWithError}</p>{:else if form?.playersWithSaved}<p class="muted" {@attach announce}>Saved.</p>{/if}
 		</form>
 	</details>
 {/snippet}
 
 <svelte:head><title>{g.name} · {data.group.name}</title></svelte:head>
 
+{#key g.id}
 <a class="back" href={base} onclick={backToShelf}><ArrowLeft size={18} aria-hidden="true" /> Shelf</a>
 
 <article class="game">
@@ -250,7 +270,7 @@
 
 		{#if data.canEditDetails || data.editedByName}
 			<section class="details-edit" aria-label="Game details">
-				{#if form?.detailsSaved}<p class="banner" role="status">Details saved.</p>{/if}
+				{#if form?.detailsSaved}<p class="banner" {@attach announce}>Details saved.</p>{/if}
 				{#if data.editedByName}<p class="muted small">Details last edited by {data.editedByName}.</p>{/if}
 				{#if data.canEditDetails}
 					{#if missing.length}<p class="muted small">Missing: {missing.join(', ')}.</p>{/if}
@@ -318,7 +338,7 @@
 					</li>
 				</ul>
 				{#if form?.deleteError}<p class="banner error" role="alert">{form.deleteError}</p>{/if}
-				{#if form?.linkAdded}<p class="banner" role="status">Link added.</p>{/if}
+				{#if form?.linkAdded}<p class="banner" {@attach announce}>Link added.</p>{/if}
 
 				{#if data.canEdit}
 					<details class="add-link" bind:open={adding}>
@@ -495,7 +515,7 @@
 						<p class="hint soon-hint">Play soon: you’d like to try it, or get it to the table again soon. Play tonight leans towards it when you’re there; owners planning a night see only that someone going would like to play it.</p>
 					{/if}
 					{/if}
-					{#if form?.lent}<p class="banner" role="status">Marked as lent.</p>{:else if form?.returned}<p class="banner" role="status">Marked as returned.</p>{/if}
+					{#if form?.lent}<p class="banner" {@attach announce}>Marked as lent.</p>{:else if form?.returned}<p class="banner" {@attach announce}>Marked as returned.</p>{/if}
 					{#if data.mine && !data.myLoan && !data.hiddenHere}
 						<details class="lend" open={!!form?.lendError}>
 							<summary class="link-button">Lend your copy…</summary>
@@ -539,7 +559,7 @@
 						<PlayList plays={recentPlays} members={data.tableMembers} {table} groupId={data.group.id} nights={data.nightList} />
 					</div>
 				{/if}
-				{#if logged}<div class="form-block"><p class="banner" role="status">Play logged.</p></div>{/if}
+				{#if logged}<div class="form-block"><p class="banner" {@attach announce}>Play logged.</p></div>{/if}
 				{#if data.canLog || data.playCount > recentPlays.length}
 					<div class="form-foot">
 						<div class="foot-row">
@@ -569,6 +589,7 @@
 		{/if}
 	</Modal>
 </article>
+{/key}
 
 <style>
 	.back {
@@ -970,7 +991,7 @@
 		display: grid;
 		place-items: center;
 		min-width: 76px;
-		height: 40px;
+		height: max(40px, var(--tap));
 		padding: 0 var(--s-3);
 		background: var(--cube);
 		color: var(--ink-2);

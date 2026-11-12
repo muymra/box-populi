@@ -3,8 +3,8 @@
 	import Compartment from './Compartment.svelte';
 	import OwnerEdge from './OwnerEdge.svelte';
 	import Puzzle from '@lucide/svelte/icons/puzzle';
-	import { formatPlaytime } from '#lib/catalog/buckets.ts';
-	import { formatPlayersShort } from '#lib/catalog/players.ts';
+	import { formatPlaytime, spokenPlaytime } from '#lib/catalog/buckets.ts';
+	import { formatPlayersShort, spokenPlayers, spokenRanges } from '#lib/catalog/players.ts';
 	import { isCopyAvailable } from '#lib/catalog/filter.ts';
 	import { addedCounts } from '#lib/catalog/extensions.ts';
 	import type { CatalogGame, CatalogMember, CubeGame } from '#lib/catalog/types.ts';
@@ -49,13 +49,20 @@
 	// One flag fits on a box: lent out first, then the filter notes, then expansion. An expansion's name
 	// is too long for the pill, so the pill says "With expansion" and its title names it.
 	const flag = $derived(unavailable ? 'Lent out' : via ? 'With expansion' : unknown ? 'Info missing' : game.isExpansion ? 'Expansion' : null);
-	// The link is named by its contents, so a screen reader hears the caption and the owners too. The
-	// name leads, with every flag that applies (only one fits on the box).
-	const lead = $derived(
-		[game.name, game.year, unavailable && 'lent out', via?.toLowerCase(), unknown && 'info missing', game.isExpansion && 'expansion', addedTitle]
-			.filter(Boolean)
-			.join(', ') + '.'
-	);
+	// The link is named by its contents: this lead, then the owners from the edge. The name leads, with
+	// every flag that applies (only one fits on the box), then the caption in words, since "3–4p · 🧩7"
+	// reads badly aloud; Compartment hides the drawn caption from screen readers when there's a lead.
+	const lead = $derived.by(() => {
+		const head = [game.name, game.year, unavailable && 'lent out', via?.toLowerCase(), unknown && 'info missing', game.isExpansion && 'expansion'];
+		const facts = [
+			spokenPlayers(game.minPlayers, game.maxPlayers),
+			added && spokenRanges(added.line).replace(/^Up to/, 'up to'),
+			spokenPlaytime(game.minPlaytime, game.maxPlaytime),
+			!captionText && game.isManual && 'hand-entered'
+		];
+		const said = facts.filter(Boolean).join(', ');
+		return `${head.filter(Boolean).join(', ')}.${said ? ` ${said}.` : ''}`;
+	});
 </script>
 
 <Compartment {href} name={game.name} src={game.thumbUrl} {lead} {flag} flagTitle={!unavailable ? via : null} out={unavailable}>

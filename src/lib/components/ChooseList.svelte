@@ -151,7 +151,7 @@
 	}
 	/* A toggle like a person in who's here: marigold once chosen (Marigold Means Chosen). */
 	.toggle {
-		min-height: 40px;
+		min-height: max(40px, var(--tap));
 		min-width: 6rem;
 		padding: 0 14px;
 		border-radius: 999px;

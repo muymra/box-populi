@@ -13,7 +13,7 @@
 
 <style>
 	.want {
-		min-height: 36px;
+		min-height: max(36px, var(--tap));
 		padding: 0 14px;
 		border-radius: 999px;
 		border: 1.5px solid var(--rule);

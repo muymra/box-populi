@@ -48,6 +48,10 @@
 	--s-6: 32px;
 	--s-7: 48px;
 
+	/* The least a control measures on a touch screen (DESIGN.md "The Thumb Reach Rule"): controls drawn
+	   smaller take max(their size, var(--tap)), so they keep their size under a mouse. */
+	--tap: 0px;
+
 	--t-small: 0.8125rem; /* 13 */
 	--t-body: 1rem; /* 16 */
 	--t-lead: 1.125rem; /* 18 */
@@ -59,6 +63,12 @@
 	--on-light: block;
 	--on-dark: none;
 	color-scheme: light;
+}
+
+@media (pointer: coarse) {
+	:root {
+		--tap: 44px;
+	}
 }
 
 @media (prefers-color-scheme: dark) {
@@ -279,7 +289,7 @@ textarea {
 }
 
 .btn.small {
-	min-height: 36px;
+	min-height: max(36px, var(--tap));
 	padding: 0 var(--s-3);
 	font-size: var(--t-small);
 }
@@ -596,7 +606,7 @@ select.field {
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
-	min-height: 40px;
+	min-height: max(40px, var(--tap));
 	padding: 0 14px;
 	border-radius: 999px;
 	border: 1.5px solid var(--rule);
@@ -662,7 +672,7 @@ select.field {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	min-height: 40px;
+	min-height: max(40px, var(--tap));
 	padding: 0 14px;
 	border-radius: var(--r-ctl);
 	font-weight: 650;

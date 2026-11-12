@@ -348,7 +348,7 @@ Breakpoints, as used: 480px (spines move their facts to a second line below this
 ### Named Rules
 **The Shelf Gap Rule.** Cubes are separated by the shelf-gap colour showing between them, not by borders or shadows. A new grid of games sits on the same gap ground.
 
-**The Thumb Reach Rule.** Below 900px the group tabs are a fixed bottom bar with 52px targets and safe-area padding; below 760px the filter row scrolls sideways in one line rather than wrapping. Tap targets are 44px for buttons and search, 38px for filter chips, 40px for person toggles.
+**The Thumb Reach Rule.** Below 900px the group tabs are a fixed bottom bar with 52px targets and safe-area padding; below 760px the filter row scrolls sideways in one line rather than wrapping. Tap targets are 44px for buttons and search, 38px for filter chips, 40px for person toggles. On a touch screen (`pointer: coarse`) nothing drawn as a button is under 44px: `--tap` (app.css) is 44px there and 0 under a mouse, and small buttons, chips, segments, person toggles, icon buttons, selects and the cube mark's link take `max(their size, var(--tap))`. Text links and link buttons keep their line height (24px, inside WCAG's minimum).
 
 ## Elevation & Depth
 
@@ -542,6 +542,7 @@ The cube shelf above is the default and the reference design. Twelve presets rec
 - **Do** hotlink BGG box art and fall back to the printed front when it is missing or fails to load.
 - **Do** render the footer on every page, including new routes outside the root layout. It carries the BGG credit whenever the instance shows BGG data; an instance that has never had BGG on shows only Privacy, Source, the version and the theme select.
 - **Do** give any new motion a reduced-motion state with no animation. A static tilt (the game page's box, the landing's boxes) may stay.
+- **Do** put `{@attach announce}` on a message that appears after an action ("Saved.", "Link added."), so a screen reader hears it, and give each page its own `<title>`. An error that appears takes `role="alert"` instead.
 
 ### Don't:
 - **Don't** use marigold for facts. The picker's "Best at N" tag is a neutral cube-white tag with a rule outline, and the cube mark's second box is kraft cardboard, not marigold.

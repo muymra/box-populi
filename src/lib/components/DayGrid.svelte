@@ -150,8 +150,8 @@
 	.page {
 		display: grid;
 		place-items: center;
-		width: 40px;
-		height: 40px;
+		width: max(40px, var(--tap));
+		height: max(40px, var(--tap));
 		border: 1.5px solid var(--rule);
 		border-radius: var(--r-ctl);
 		background: var(--cube);
@@ -280,7 +280,7 @@
 			padding: 3px;
 		}
 		.day {
-			min-height: 40px;
+			min-height: max(40px, var(--tap));
 		}
 	}
 </style>

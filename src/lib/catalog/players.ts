@@ -51,6 +51,18 @@ export function formatPlayerRange(min: number | null, max: number | null): strin
 	return min == null ? `up to ${max}` : `${min}+`;
 }
 
+/** For a screen reader, where "2–4p" reads badly: "2 to 4 players", "1 player", "up to 5 players", "2 or more players". */
+export function spokenPlayers(min: number | null, max: number | null): string | null {
+	if (min == null && max == null) return null;
+	if (min != null && max != null) return min === max ? `${min} ${min === 1 ? 'player' : 'players'}` : `${min} to ${max} players`;
+	return min == null ? `up to ${max} players` : `${min} or more players`;
+}
+
+/** Ranges in a line made for the eye ("5–6 with the 5-6 Player Extension") said as words: "5 to 6 with…". */
+export function spokenRanges(text: string): string {
+	return text.replace(/(\d+)–(\d+)/g, '$1 to $2');
+}
+
 /** The shelf's short form: "2–4p", "up to 5p", "2p+". */
 export function formatPlayersShort(min: number | null, max: number | null): string | null {
 	const range = formatPlayerRange(min, max);

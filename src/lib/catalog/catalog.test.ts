@@ -8,9 +8,11 @@ import {
 	formatPlayersShort,
 	maskFromCounts,
 	maskHas,
-	playerChoiceLabel
+	playerChoiceLabel,
+	spokenPlayers,
+	spokenRanges
 } from './players.ts';
-import { BUCKET_WEIGHTS, formatPlaytime, formatWeight, WEIGHT_BUCKETS, weightBucket } from './buckets.ts';
+import { BUCKET_WEIGHTS, formatPlaytime, formatWeight, spokenPlaytime, WEIGHT_BUCKETS, weightBucket } from './buckets.ts';
 import { staleCutoff, staleLabel, DEFAULT_FILTERS, filterGames, hiddenByDefault, keepMatching, parseFilters, passedOnUnknown, serializeFilters, SORT_KEYS, sortGames, type Filters } from './filter.ts';
 import {
 	MAX_CHOSEN,
@@ -81,6 +83,9 @@ describe('player masks', () => {
 		expect(formatPlayerRange(2, null)).toBe('2+');
 		expect(formatPlayerRange(null, null)).toBeNull();
 		expect([formatPlayersShort(2, 4), formatPlayersShort(null, 5), formatPlayersShort(2, null)]).toEqual(['2–4p', 'up to 5p', '2p+']);
+		// Said aloud on the shelf's cubes, where "2–4p" reads badly.
+		expect([spokenPlayers(2, 4), spokenPlayers(1, 1), spokenPlayers(3, 3), spokenPlayers(null, 5), spokenPlayers(2, null), spokenPlayers(null, null)]).toEqual(['2 to 4 players', '1 player', '3 players', 'up to 5 players', '2 or more players', null]);
+		expect(spokenRanges('5–6 with the 5-6 Player Extension')).toBe('5 to 6 with the 5-6 Player Extension');
 	});
 });
 
@@ -108,6 +113,7 @@ describe('weight and time', () => {
 	it('formats play time', () => {
 		expect(formatPlaytime(60, 120)).toBe('60–120 min');
 		expect(formatPlaytime(45, 45)).toBe('45 min');
+		expect([spokenPlaytime(60, 120), spokenPlaytime(45, 45), spokenPlaytime(null, 30), spokenPlaytime(null, null)]).toEqual(['60 to 120 minutes', '45 minutes', '30 minutes', null]);
 		expect(formatPlaytime(null, null)).toBeNull();
 	});
 });

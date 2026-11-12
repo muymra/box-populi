@@ -246,7 +246,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--s-2);
-		min-height: 40px;
+		min-height: max(40px, var(--tap));
 		padding: 0 14px 0 10px;
 		border-radius: 999px;
 		border: 1.5px solid var(--rule);

@@ -3,6 +3,7 @@
 	matching, the person ticks what to add, then rows are added twenty-five at a time.
 -->
 <script lang="ts">
+	import { announce } from '#lib/announce.svelte.ts';
 	import Check from '@lucide/svelte/icons/check';
 	import { formatPlayerRange } from '#lib/catalog/players.ts';
 	import { formatPlaytime } from '#lib/catalog/buckets.ts';
@@ -205,7 +206,7 @@
 			</button>
 		</div>
 	{:else}
-		<p class="summary">
+		<p class="summary" {@attach announce}>
 			<strong class="num">{result.added}</strong> {result.added === 1 ? 'game' : 'games'} added to your shelf{#if result.skipped}, {result.skipped} skipped{/if}.
 		</p>
 		<div class="inline">
@@ -271,7 +272,7 @@
 		cursor: pointer;
 	}
 	.main {
-		min-height: 40px;
+		min-height: max(40px, var(--tap));
 	}
 	.swap {
 		margin: var(--s-1) 0 0 calc(18px + var(--s-3));

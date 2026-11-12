@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { announce } from '#lib/announce.svelte.ts';
 	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -580,6 +581,8 @@
 	}
 </script>
 
+<svelte:head><title>Game night · {data.group.name}</title></svelte:head>
+
 <div class="pick">
 	<section class="nights" aria-labelledby="nights-h">
 		<h2 id="nights-h">Game nights</h2>
@@ -804,7 +807,7 @@
 							{#if soonLine(game)}<span class="soon">{soonLine(game)}</span>{/if}
 						</div>
 						<div class="acts">
-							{#if canLog}<a class="played" href="/g/{data.group.id}/game/{game.id}?log=1">We played this</a>{/if}
+							{#if canLog}<a class="played" href="/g/{data.group.id}/game/{game.id}?log=1" aria-label="We played this: {game.name}">We played this</a>{/if}
 							{@render keep(isKept, game.name, toggle)}
 						</div>
 					</li>
@@ -853,7 +856,7 @@
 								)}
 							{/each}
 						</ul>
-						{#if note}<p class="muted">{note}</p>{/if}
+						{#if note}<p class="muted" {@attach announce}>{note}</p>{/if}
 					{/if}
 				</div>
 
@@ -1163,7 +1166,7 @@
 	}
 	.limit .field {
 		width: auto;
-		min-height: 40px;
+		min-height: max(40px, var(--tap));
 		border: 0;
 		padding-left: 6px;
 		padding-right: 28px;
@@ -1213,7 +1216,7 @@
 
 	.count {
 		min-width: 44px;
-		min-height: 40px;
+		min-height: max(40px, var(--tap));
 		padding: 0 12px;
 		border-radius: 999px;
 		border: 1.5px solid var(--rule);
@@ -1302,7 +1305,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		min-height: 36px;
+		min-height: max(36px, var(--tap));
 		padding: 0 12px 0 10px;
 		border-radius: 999px;
 		border: 1.5px solid var(--rule);

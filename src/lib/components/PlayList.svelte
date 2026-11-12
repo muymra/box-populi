@@ -173,8 +173,8 @@
 	.icon {
 		display: grid;
 		place-items: center;
-		width: 36px;
-		height: 36px;
+		width: max(36px, var(--tap));
+		height: max(36px, var(--tap));
 		border: 0;
 		border-radius: var(--r-ctl);
 		background: none;
