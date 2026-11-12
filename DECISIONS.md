@@ -355,7 +355,7 @@ Replaces D35. Filling in or correcting a hand-entered or Wikidata game (name, pl
 The edit form offered 1 to 5, labelled 1 light, 2 medium, 3 and 4 heavy, 5 very heavy, while the shelf filters on three levels (D15). Carlo noticed the two "heavy"s and the "very heavy" no filter has. The form now offers Light, Medium and Heavy, stored in `weight` as the middle of each band (1.5, 2.5, 4) so members' ratings sort among BGG weights. Choosing the level a game already has keeps its stored value, so earlier ratings of 4 and 5 stay as they were. The game page shows the word for a member's rating and keeps "2.31 / 5" for BGG's weight.
 **Why:** the form matches the only levels the shelf, the picker and the spines show.
 **Trade-offs accepted:** a member can't say "very heavy"; two heavy games rated by members sort as equals.
-**Revisit if:** the shelf gets the complexity range slider (PRD cut order item 3), which would want finer values.
+**Revisit if:** the shelf gets the complexity range slider (PRD cut order item 3), which would want finer values. (Dropped: Carlo, 2026-11-12.)
 
 ## D56. Heavy starts at 4 (2026-11-08). Superseded by D62: BGG's five vote labels, rounded
 
@@ -412,7 +412,7 @@ Planned, not built (STATUS item 34). Carlo's idea, 2026-11-09, checked against t
 Replaces D56 (and D15 before it). Complexity has five levels, the labels BGG offers its voters: Light, Medium light, Medium, Medium heavy and Heavy. A weight takes the label of the vote it rounds to: Light under 1.5, Medium light from 1.5 to under 2.5, Medium to under 3.5, Medium heavy to under 4.5, and Heavy from 4.5. A member's level for a game without BGG details is stored as that vote, 1 to 5, so it reads back as the same level and sorts with BGG's weights; migration 0013 moves existing ratings (1.5 to 1, 4.5 to 5, 3 unchanged) and never touches BGG's own weights. Fillers keep their own line, under 2 or unknown (`FILLER_MAX_WEIGHT`), so short games such as Hanabi still count. Carlo chose this on 2026-11-09 over splitting each of D56's three levels in two (Light under 1.5, Medium light to 2, Medium 2 to 3, Medium heavy 3 to 4, Heavy from 4).
 **Why:** three levels hardly narrowed a real shelf: on Carlo's instance, 72 of 144 base games were Light and 70 Medium. Five split party and filler games (48 under 1.5) from gateway games, and with BGG's own labels the level beside "2.31 / 5" on a game page says what BGG's voters would call it.
 **Trade-offs accepted:** Heavy starts at 4.5, so it's empty on many shelves (Carlo's has none) and a 4.3 game is Medium heavy, as BGG's scale calls it. The shelf's filter row is longer, which phones already scroll sideways. Old filter links keep working, with `light`, `medium` and `heavy` now naming the narrower levels.
-**Revisit if:** groups want to filter by a span (a two-ended range would replace the chips, PRD cut order item 3), or the five chips crowd the desktop strip once more filters join it.
+**Revisit if:** the five chips crowd the desktop strip once more filters join it. A two-ended range in place of the chips was dropped (Carlo, 2026-11-12): neighbouring chips already filter a span.
 
 ## D63. Favourites: a heart the group sees (2026-11-09)
 
