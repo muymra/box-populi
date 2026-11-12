@@ -4,7 +4,9 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
-**Upgrading:** apply migration `0021_copy_players_with.sql` before deploying (SELF_HOSTING.md "Upgrading"). No new settings.
+## 0.7.0 (2026-11-12)
+
+**Upgrading:** one migration, `0021_copy_players_with.sql`. On Cloudflare, note a Time Travel bookmark and export a backup first, then apply it before deploying (SELF_HOSTING.md "Upgrading" has the commands and how to roll back). Docker, Vercel and Netlify apply it on their first request. It gives each copy a place for its owner's count; nothing changes until someone sets one. No new settings, and a demo group needs no reseed.
 
 - If your expansions stack in a way BoardGameGeek's counts can't say (two that each add a player), say how many your copy takes on the game's page, under your name: "With your expansions, how many can play?". The shelf then shows "3–5p · 🧩7", the players filter and Play tonight count it while your copy is there, and everyone sees it's your count. The link to set it starts folded unless the group has an expansion of the game. "Download your games" on Your account has it too, in a last column, `players_with_expansions`.
 - A game night's "Suggest three" counts expansions as Play tonight does: one a member going has, or one on the bring list. With Bram going and his 5-6 Player Extension, Catan can come up for six. Its suggestions and search results say so under the game, as Play tonight's rows do.
