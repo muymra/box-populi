@@ -2,7 +2,7 @@
 
 Last updated 2026-11-13. Everything under Done is built, and 614 tests pass. Two instances run on Cloudflare Pages: the public demo at `box-populi.pages.dev` (`INSTANCE_MODE=demo`) and Carlo's private instance for his own groups, whose address stays out of this public repo. Both run v0.7.0. **Migrations 0001 to 0021 are applied to production, so they're frozen: schema changes go in new migration files.** 0022 to 0024 (night descriptions, the chat link, member standing; D77 to D79) wait for the next release; they're applied only to local databases.
 
-**Next up:** 0.7.0 is live on both instances (2026-11-12). Next, a plan for BGG's 30-day refresh and the ranks-file search index; item 46 (moving a group between instances, D68) is low priority. Passkeys and the two-ended complexity range are off the list, and the catalog CSV export went back to the PRD's list (Carlo, 2026-11-11 and 2026-11-12). The PRD's "Planned or possible" list also has filling in details with an AI chatbot (a maybe).
+**Next up:** 0.8.0 is cut and tagged (2026-11-13): push `main` with its tag, then deploy the demo before the private instance, each with a backup and migrations 0022 to 0024, and reseed the demo. After it: a plan for BGG's 30-day refresh and the ranks-file search index; item 46 (moving a group between instances, D68) is low priority. Passkeys and the two-ended complexity range are off the list, and the catalog CSV export went back to the PRD's list (Carlo, 2026-11-11 and 2026-11-12). The PRD's "Planned or possible" list also has filling in details with an AI chatbot (a maybe).
 
 Agents: tick items as they're done, add a line to the session log at the bottom, and move assumptions to "Verified" with a date and source when you confirm them.
 
