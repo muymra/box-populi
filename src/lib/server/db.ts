@@ -106,6 +106,7 @@ export function deletePersonStatements(db: DB, userId: string): D1PreparedStatem
 		stmt(db, 'DELETE FROM sign_in_codes WHERE user_id = ?1', userId),
 		stmt(db, 'UPDATE sign_in_codes SET created_by = NULL WHERE created_by = ?1', userId),
 		stmt(db, 'UPDATE groups SET archived_by = NULL WHERE archived_by = ?1', userId),
+		stmt(db, 'UPDATE memberships SET suspended_by = NULL WHERE suspended_by = ?1', userId),
 		stmt(db, 'DELETE FROM hidden_copies WHERE user_id = ?1', userId),
 		stmt(db, 'DELETE FROM memberships WHERE user_id = ?1', userId),
 		stmt(db, 'DELETE FROM copies WHERE user_id = ?1', userId),

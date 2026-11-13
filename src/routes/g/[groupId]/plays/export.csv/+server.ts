@@ -20,6 +20,8 @@ export const GET: RequestHandler = async (event) => {
 	const db = getDb();
 	const { groupId } = event.params;
 	const access = await requireRead(event, db, groupId);
+	// The files name everyone in them, so not before someone's let in (D79); a suspended member keeps them.
+	if (access.standing === 'waiting') error(403, 'The plays and nights open once you’re let in.');
 	const nights = event.url.searchParams.get('what') === 'nights';
 	const mine = event.url.searchParams.get('who') !== 'all';
 	const me = event.locals.user;

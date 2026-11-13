@@ -34,13 +34,19 @@
 			shows only in the group where you added it.
 		</li>
 		<li>Links you add to games, credited to you within that group.</li>
+		<li>A link to a group's chat, if its owner or a co-admin adds one. Only the group's members see it.</li>
+		<li>
+			In a group that asks new members to wait to be let in, that you're waiting and since when; the group's members see it. If the owner or a co-admin
+			suspends you in a group, when, by whom and their note, if they leave one; the note is shown to you alone and deleted when you're reinstated.
+		</li>
 		<li>
 			Plays logged in a group: the game, the date, who played, and places or scores. That includes the names of guests at
 			the table who aren't members, as typed by whoever logged the play.
 		</li>
 		<li>
-			Game nights planned in a group: the date and place, who's going or not and, afterwards, who came, guests' names, and which games each person
-			is bringing, including titles typed in for games that aren't on anyone's shelf.
+			Game nights planned in a group: the date and place, a description and the web addresses of its pictures if whoever planned it added them,
+			who's going or not and, afterwards, who came, guests' names, and which games each person is bringing, including titles typed in for games
+			that aren't on anyone's shelf.
 		</li>
 		<li>
 			The six-digit PIN you choose, for getting back in through a group's link. The server stores only a scrambled fingerprint of
@@ -110,8 +116,9 @@
 		<p>Games on this instance are entered by their owners. Nothing is fetched from BoardGameGeek.</p>
 	{/if}
 	<p>
-		Box pictures load in your browser straight from where they're kept, such as BoardGameGeek's image servers or a web
-		address a member typed in. That server sees your network address, as any website you visit does.
+		Box pictures, and the pictures on a game night's page, load in your browser straight from where they're kept, such as
+		BoardGameGeek's image servers or a web address a member typed in. That server sees your network address, as any website you
+		visit does. A game night's pictures are asked for without saying which page they're on.
 	</p>
 </article>
 <nav class="contents" aria-label="On this page">

@@ -10,6 +10,9 @@
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import X from '@lucide/svelte/icons/x';
 	import KeyRound from '@lucide/svelte/icons/key-round';
+	import MessageCircle from '@lucide/svelte/icons/message-circle';
+	import GroupChatButton from '#lib/components/GroupChatButton.svelte';
+	import { chatLink } from '#lib/group-chat.ts';
 	import Modal from '#lib/components/Modal.svelte';
 	import Cube from '#lib/components/Cube.svelte';
 	import Compartment from '#lib/components/Compartment.svelte';
@@ -172,6 +175,19 @@
 		pinNudge = false;
 	}
 
+	// Someone who joined lately hears where the group talks (D78), until they open it or say "Not now"
+	// on this device; a new link shows it again. The PIN note goes first, so there's one note at a time.
+	const chatKey = $derived(`bp:chat-nudge:${data.group.id}`);
+	let chatNudge = $state(false);
+	$effect(() => {
+		chatNudge = data.chatNudge && data.groupChat != null && storage.get(chatKey) !== data.groupChat;
+	});
+	const chat = $derived(data.groupChat ? chatLink(data.groupChat) : null);
+	function chatSeen() {
+		storage.set(chatKey, data.groupChat ?? '');
+		chatNudge = false;
+	}
+
 	// On a phone More is a sheet from the bottom, with the count at hand; from 760px it opens under the strip.
 	let phone = $state(false);
 	onMount(() => {
@@ -285,6 +301,18 @@
 		<div class="nudge-actions">
 			<a class="btn small" href="/me#pin-row">Set a PIN</a>
 			<button type="button" class="link-button" onclick={notNow}>Not now</button>
+		</div>
+	</aside>
+{:else if chatNudge && data.groupChat && chat}
+	<aside class="pin-nudge" aria-label="The group chat">
+		<MessageCircle size={20} aria-hidden="true" />
+		<p>
+			{#if chat.service}<strong>{data.group.name} talks on {chat.service}.</strong> Join the group chat to hear about game nights and plans.
+			{:else}<strong>{data.group.name} has a group chat</strong> on {chat.host}. Join it to hear about game nights and plans.{/if}
+		</p>
+		<div class="nudge-actions">
+			<GroupChatButton url={data.groupChat} small onclick={chatSeen} />
+			<button type="button" class="link-button" onclick={chatSeen}>Not now</button>
 		</div>
 	</aside>
 {/if}
@@ -413,7 +441,7 @@
 	<div class="empty">
 		<h2>The shelf is empty</h2>
 		<p class="muted">Nobody in this group has added a game yet.</p>
-		{#if data.role && !data.readonly}<a class="btn primary" href="/g/{data.group.id}/add">Add your games</a>{/if}
+		{#if data.role && data.shelfOpen}<a class="btn primary" href="/g/{data.group.id}/add">Add your games</a>{/if}
 	</div>
 {:else if payload && results.length === 0}
 	<div class="empty">

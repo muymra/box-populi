@@ -3,6 +3,7 @@
 // play or night that was someone else with the same name. Their places and scores then count on the
 // leaderboard, which works points out from the plays. Only this group's plays and nights move.
 import { all, readAll, rowsOf, stmt, type DB } from './db.ts';
+import { standingOf } from '#lib/standing.ts';
 import { can } from './permissions.ts';
 import type { Actor } from './group-admin.ts';
 import type { Role } from '#lib/catalog/types.ts';
@@ -93,9 +94,15 @@ export async function linkGuestPlays(
 ): Promise<LinkResult> {
 	const names = [...new Set(input.names.map((n) => n.trim()).filter(Boolean))].slice(0, 20);
 	if (names.length === 0) return { ok: false, error: 'Pick the name they used as a guest.' };
-	const target = await all<{ role: Role }>(db, 'SELECT role FROM memberships WHERE group_id = ?1 AND user_id = ?2', groupId, input.userId);
+	const target = await all<{ role: Role; waiting_since: number | null; suspended_at: number | null }>(
+		db,
+		'SELECT role, waiting_since, suspended_at FROM memberships WHERE group_id = ?1 AND user_id = ?2',
+		groupId,
+		input.userId
+	);
 	if (!target[0]) return { ok: false, error: 'They’re no longer in the group.' };
-	if (!can(actor.role, 'link_guest_plays', { targetRole: target[0].role, targetIsSelf: input.userId === actor.id })) {
+	// Only to a full member (D79): someone waiting is let in first, someone suspended reinstated.
+	if (!can(actor.role, 'link_guest_plays', { targetRole: target[0].role, targetStanding: standingOf(target[0]), targetIsSelf: input.userId === actor.id })) {
 		return { ok: false, error: 'Only the owner or a co-admin can do that, and not for themselves.' };
 	}
 	const namesJson = JSON.stringify(names);

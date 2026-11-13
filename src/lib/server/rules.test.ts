@@ -91,10 +91,40 @@ describe('permissions', () => {
 		['owner', 'archive_group', undefined, false, true],
 		['member', 'claim_ownership', undefined, false, false],
 		['admin', 'claim_ownership', undefined, false, false], // only once the owner is away, below
-		['owner', 'claim_ownership', undefined, false, false]
+		['owner', 'claim_ownership', undefined, false, false],
+		// probation and suspending (D79): the setting is the co-admins' and owner's; suspending reaches whom removing does
+		['member', 'set_probation', undefined, false, false],
+		['admin', 'set_probation', undefined, false, true],
+		['owner', 'set_probation', undefined, false, true],
+		['owner', 'suspend_member', 'member', false, true],
+		['owner', 'suspend_member', 'admin', false, true],
+		['owner', 'suspend_member', 'owner', true, false],
+		['admin', 'suspend_member', 'member', false, true],
+		['admin', 'suspend_member', 'admin', false, false],
+		['admin', 'suspend_member', 'owner', false, false],
+		['member', 'suspend_member', 'member', false, false],
+		['admin', 'let_in', 'member', false, false] // only someone waiting, below
 	];
 	it.each(cases)('%s %s on %s (self=%s) → %s', (actor, action, targetRole, targetIsSelf, expected) => {
 		expect(can(actor, action, { targetRole, targetIsSelf })).toBe(expected);
+	});
+	it('lets in only someone waiting, and gives a role or guest plays only to a full member (D79)', () => {
+		const waiting = { targetRole: 'member' as const, targetStanding: 'waiting' as const };
+		const suspended = { targetRole: 'member' as const, targetStanding: 'suspended' as const };
+		expect(can('admin', 'let_in', waiting)).toBe(true);
+		expect(can('owner', 'let_in', waiting)).toBe(true);
+		expect(can('member', 'let_in', waiting)).toBe(false);
+		expect(can('admin', 'let_in', { ...waiting, targetIsSelf: true })).toBe(false);
+		expect(can('admin', 'let_in', suspended)).toBe(false);
+		for (const ctx of [waiting, suspended]) {
+			expect(can('owner', 'promote', ctx)).toBe(false);
+			expect(can('owner', 'transfer_ownership', ctx)).toBe(false);
+			expect(can('owner', 'link_guest_plays', ctx)).toBe(false);
+			expect(can('owner', 'remove_member', ctx)).toBe(true); // declining someone waiting is removing them
+		}
+		expect(can('owner', 'suspend_member', waiting)).toBe(false); // someone waiting is let in or declined
+		expect(can('owner', 'suspend_member', suspended)).toBe(true); // reinstating
+		expect(can('owner', 'demote', { targetRole: 'admin', targetStanding: 'suspended' })).toBe(true);
 	});
 	it('lets any member plan nights unless the group limits it to co-admins and the owner', () => {
 		expect(can('member', 'plan_night', { openToMembers: true })).toBe(true);

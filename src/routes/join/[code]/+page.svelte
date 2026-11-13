@@ -68,6 +68,13 @@
 							{:else}
 								<p>Pick the name the group knows you by, and a PIN. There’s no email or password.</p>
 							{/if}
+							{#if data.probation}
+								<!-- Probation (D79): said before joining, so nobody's surprised by the wait. -->
+								<p>
+									In {data.groupName}, the owner or a co-admin lets new members in. Until they do, you can add your games and look around. Let them know
+									you’ve joined.
+								</p>
+							{/if}
 						</div>
 					</div>
 					{#if !data.you}

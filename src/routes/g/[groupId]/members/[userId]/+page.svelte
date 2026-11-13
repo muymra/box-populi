@@ -4,6 +4,7 @@
 	// here you haven't played, with their own record and wants beside it. Your own profile swaps the
 	// comparison for figures only you see: your year, your win rate by table size, who you play with,
 	// how much of your shelf gets played, and your Play soon list.
+	import { profileHref } from '#lib/profiles.svelte.ts';
 	import { untrack } from 'svelte';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import ProfileShelf from './ProfileShelf.svelte';
@@ -184,7 +185,7 @@
 									{#each ordered(p) as x, i (i)}
 										{@const m = x.userId ? byId.get(x.userId) : null}
 										<span class:win={p.coop == null && x.place === 1 && places.some((q) => q != null && q > 1)}>
-											<span class="sq" class:guest={!m} style:background={m ? fill(m.colorIndex) : null}></span>{#if m && m.id !== s.id}<a href="{base}/members/{m.id}">{m.name}</a>{:else}{m?.name ?? x.guestName ?? 'a former member'}{/if}{p.coop == null && x.place ? ` ${ordinal(x.place)}` : ''}
+											<span class="sq" class:guest={!m} style:background={m ? fill(m.colorIndex) : null}></span>{#if m && m.id !== s.id}<a href={profileHref(m.id)}>{m.name}</a>{:else}{m?.name ?? x.guestName ?? 'a former member'}{/if}{p.coop == null && x.place ? ` ${ordinal(x.place)}` : ''}
 										</span>
 									{/each}
 									{#if p.coop}<span>Co-op, {p.coop}</span>{/if}
@@ -243,7 +244,7 @@
 								{#if m}
 									<li>
 										<span class="sq" style:background={fill(m.colorIndex)}></span>
-										<a class="name" href="{base}/members/{m.id}">{m.name}</a>
+										<a class="name" href={profileHref(m.id)}>{m.name}</a>
 										<span class="num">{plural(c.together, 'play', 'plays')}</span>
 										<span class="muted num">ahead {c.ahead} · behind {c.behind}</span>
 									</li>

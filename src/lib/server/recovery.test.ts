@@ -86,6 +86,21 @@ describe('merging an old entry into a new one', () => {
 		await run(db, `INSERT INTO night_games (night_id, game_id, brought_by, added_by) VALUES ('n1', 1, 'bo', 'bo')`);
 	});
 
+	it('lets the merged entry in if either was, and keeps a suspension from either (D79)', async () => {
+		const standing = async () => one(db, "SELECT waiting_since AS w, suspended_at AS s, suspended_by AS b, suspended_note AS n FROM memberships WHERE group_id = 'g1' AND user_id = 'bo2'");
+		// The old entry was a full member and suspended; the new one joined again and is waiting.
+		await run(db, `UPDATE memberships SET suspended_at = 7, suspended_by = 'cy', suspended_note = 'Later' WHERE group_id = 'g1' AND user_id = 'bo'`);
+		await run(db, `UPDATE memberships SET waiting_since = 9 WHERE group_id = 'g1' AND user_id = 'bo2'`);
+		expect(await mergeMember(db, 'g1', owner, { oldId: 'bo', newId: 'bo2' })).toEqual({ ok: true });
+		expect(await standing()).toEqual({ w: null, s: 7, b: 'cy', n: 'Later' });
+	});
+
+	it('keeps the new entry waiting when both were', async () => {
+		await run(db, `UPDATE memberships SET waiting_since = 3 WHERE group_id = 'g1' AND user_id IN ('bo', 'bo2')`);
+		expect(await mergeMember(db, 'g1', owner, { oldId: 'bo', newId: 'bo2' })).toEqual({ ok: true });
+		expect(await one(db, "SELECT waiting_since AS w, suspended_at AS s FROM memberships WHERE group_id = 'g1' AND user_id = 'bo2'")).toEqual({ w: 3, s: null });
+	});
+
 	it('moves everything to the new entry, keeps the old colour, and deletes the old one', async () => {
 		const version = (await one<{ catalog_version: number }>(db, "SELECT catalog_version FROM groups WHERE id = 'g1'"))!.catalog_version;
 		expect(await mergeMember(db, 'g1', owner, { oldId: 'bo', newId: 'bo2' })).toEqual({ ok: true });

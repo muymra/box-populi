@@ -324,7 +324,7 @@
 		try {
 			payload = cached ?? (await fetchCatalog(data.group.id));
 			// A shared link wins; otherwise this device's "who's here" for this group, if it's from tonight.
-			table.load(data.group.id, tonightSeed(nightOn(data.nights, nightOf(Date.now())), new Set(data.tableMembers.map((m) => m.id))));
+			table.load(data.group.id, tonightSeed(nightOn(data.nights, nightOf(Date.now())), new Set(data.tableMembers.filter((m) => m.active).map((m) => m.id))));
 			const params = page.url.searchParams;
 			readSetup(params);
 			const linked = ['keep', 'fkeep', 'at'].some((k) => params.has(k));
@@ -691,7 +691,7 @@
 					<span id="who-q" class="form-q">Who’s here</span>
 					<span class="hint">{bigRoom ? 'Nobody is put at a table.' : 'Guests count as players.'}</span>
 				</div>
-				<div class="form-body"><WhosHere members={payload.members} {table} /></div>
+				<div class="form-body"><WhosHere members={payload.members.filter((m) => m.standing === 'full')} {table} /></div>
 			</div>
 
 			{#if !tonight}

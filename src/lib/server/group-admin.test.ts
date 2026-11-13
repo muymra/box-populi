@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
-import { all, one, run } from './db.ts';
+import { all, deletePersonStatements, one, run } from './db.ts';
 import {
 	archiveGroup,
 	claimOwnership,
@@ -14,12 +14,19 @@ import {
 	setCoAdmin,
 	transferOwnership,
 	setGroupTheme,
+	setGroupChat,
+	setProbation,
+	letIn,
+	suspendMember,
+	reinstateMember,
+	memberPlace,
 	setFillerRule,
 	setStaleDays,
 	groupThemeFor,
 	type Actor
 } from './group-admin.ts';
 import { lastActive } from '../time.ts';
+import { joinGroup } from './groups.ts';
 
 let db: ReturnType<typeof createTestDb>;
 
@@ -44,13 +51,22 @@ beforeEach(async () => {
 
 describe('memberActions', () => {
 	it('offers each actor only what the role table allows', () => {
-		expect(memberActions(owner, { id: 'bo', role: 'member' })).toEqual(['promote', 'transfer_ownership', 'remove_member']);
-		expect(memberActions(owner, { id: 'cy', role: 'admin' })).toEqual(['demote', 'transfer_ownership', 'remove_member']);
-		expect(memberActions(owner, { id: 'ada', role: 'owner' })).toEqual([]);
-		expect(memberActions(admin, { id: 'bo', role: 'member' })).toEqual(['remove_member']);
-		expect(memberActions(admin, { id: 'ada', role: 'owner' })).toEqual([]);
-		expect(memberActions({ id: 'zz', role: 'admin' }, { id: 'cy', role: 'admin' })).toEqual([]);
-		expect(memberActions(member, { id: 'di', role: 'member' })).toEqual([]);
+		const full = 'full' as const;
+		expect(memberActions(owner, { id: 'bo', role: 'member', standing: full })).toEqual(['promote', 'transfer_ownership', 'remove_member', 'suspend_member']);
+		expect(memberActions(owner, { id: 'cy', role: 'admin', standing: full })).toEqual(['demote', 'transfer_ownership', 'remove_member', 'suspend_member']);
+		expect(memberActions(owner, { id: 'ada', role: 'owner', standing: full })).toEqual([]);
+		expect(memberActions(admin, { id: 'bo', role: 'member', standing: full })).toEqual(['remove_member', 'suspend_member']);
+		expect(memberActions(admin, { id: 'ada', role: 'owner', standing: full })).toEqual([]);
+		expect(memberActions({ id: 'zz', role: 'admin' }, { id: 'cy', role: 'admin', standing: full })).toEqual([]);
+		expect(memberActions(member, { id: 'di', role: 'member', standing: full })).toEqual([]);
+	});
+
+	it('lets someone waiting in or out, and keeps a role for full members (D79)', () => {
+		expect(memberActions(owner, { id: 'bo', role: 'member', standing: 'waiting' })).toEqual(['remove_member', 'let_in']);
+		expect(memberActions(admin, { id: 'bo', role: 'member', standing: 'waiting' })).toEqual(['remove_member', 'let_in']);
+		expect(memberActions(member, { id: 'bo', role: 'member', standing: 'waiting' })).toEqual([]);
+		expect(memberActions(owner, { id: 'bo', role: 'member', standing: 'suspended' })).toEqual(['remove_member', 'suspend_member']);
+		expect(memberActions(owner, { id: 'cy', role: 'admin', standing: 'suspended' })).toEqual(['demote', 'remove_member', 'suspend_member']);
 	});
 });
 
@@ -142,6 +158,20 @@ describe('archiving the group', () => {
 		expect(await archiveGroup(db, 'g1', admin, 11 * day, 10)).toEqual({ ok: true });
 		expect(await restoreGroup(db, 'g1', admin, 12 * day, 10)).toEqual({ ok: true });
 		expect(await claimOwnership(db, 'g1', admin, 12 * day, 10)).toEqual({ ok: true });
+	});
+});
+
+describe('group chat', () => {
+	it('lets co-admins and the owner set, change and clear it, as a cleaned https address (D78)', async () => {
+		const chat = async () => (await one<{ c: string | null }>(db, "SELECT chat_url AS c FROM groups WHERE id = 'g1'"))?.c;
+		expect(await chat()).toBeNull();
+		expect((await setGroupChat(db, 'g1', member, 'https://chat.whatsapp.com/abc')).ok).toBe(false);
+		expect(await setGroupChat(db, 'g1', admin, ' discord.gg/abc ')).toEqual({ ok: true });
+		expect(await chat()).toBe('https://discord.gg/abc');
+		for (const bad of ['http://discord.gg/abc', 'javascript:alert(1)', 'not a link', null]) expect((await setGroupChat(db, 'g1', owner, bad)).ok).toBe(false);
+		expect(await chat()).toBe('https://discord.gg/abc');
+		expect(await setGroupChat(db, 'g1', owner, '')).toEqual({ ok: true });
+		expect(await chat()).toBeNull();
 	});
 });
 
@@ -240,3 +270,72 @@ describe('group themes', () => {
 		expect(await groupThemeFor(db, 'g1', 'bo')).toBeNull();
 	});
 });
+
+describe('probation and suspending (D79)', () => {
+	const place = (id: string) => memberPlace(db, 'g1', id);
+	const join = async (id: string) => {
+		await run(db, `INSERT INTO users (id, name, created_at) VALUES ('${id}', '${id}', 0)`);
+		await joinGroup(db, { groupId: 'g1', userId: id, now: 1000 });
+	};
+
+	it('lets people straight in until the group turns probation on, then makes them wait', async () => {
+		await join('ed');
+		expect(await place('ed')).toEqual({ role: 'member', standing: 'full' });
+		expect((await setProbation(db, 'g1', member, 'on', false)).ok).toBe(false);
+		expect((await setProbation(db, 'g1', admin, 'maybe', false)).ok).toBe(false);
+		expect(await setProbation(db, 'g1', admin, 'on', false)).toEqual({ ok: true });
+		await join('fi');
+		expect(await place('fi')).toEqual({ role: 'member', standing: 'waiting' });
+	});
+
+	it('lets someone waiting in, by the owner or a co-admin only', async () => {
+		await setProbation(db, 'g1', owner, 'on', false);
+		await join('fi');
+		expect((await letIn(db, 'g1', member, 'fi')).ok).toBe(false);
+		expect((await letIn(db, 'g1', admin, 'bo')).ok).toBe(false); // Bo isn't waiting
+		expect(await letIn(db, 'g1', admin, 'fi')).toEqual({ ok: true });
+		expect((await place('fi'))?.standing).toBe('full');
+	});
+
+	it('turns probation off only with a confirmation when people are waiting, and lets them all in', async () => {
+		await setProbation(db, 'g1', owner, 'on', false);
+		await join('fi');
+		await join('gu');
+		const refused = await setProbation(db, 'g1', owner, 'off', false);
+		expect(refused).toEqual({ ok: false, error: '2 people are waiting. Turning this off lets them in; confirm to go ahead.' });
+		expect((await place('fi'))?.standing).toBe('waiting');
+		expect(await setProbation(db, 'g1', owner, 'off', true)).toEqual({ ok: true, letIn: 2 });
+		expect((await place('fi'))?.standing).toBe('full');
+		expect((await place('gu'))?.standing).toBe('full');
+		expect((await one<{ p: number }>(db, "SELECT probation AS p FROM groups WHERE id = 'g1'"))?.p).toBe(0);
+		// With nobody waiting there's nothing to confirm.
+		await setProbation(db, 'g1', owner, 'on', false);
+		expect(await setProbation(db, 'g1', owner, 'off', false)).toEqual({ ok: true, letIn: 0 });
+	});
+
+	it('suspends and reinstates whom removing reaches, keeping a note until then', async () => {
+		expect((await suspendMember(db, 'g1', member, 'di', '')).ok).toBe(false);
+		expect((await suspendMember(db, 'g1', admin, 'ada', '')).ok).toBe(false); // the owner
+		expect((await suspendMember(db, 'g1', admin, 'cy', '')).ok).toBe(false); // themselves
+		expect((await suspendMember(db, 'g1', admin, 'bo', 'x'.repeat(201))).ok).toBe(false);
+		expect(await suspendMember(db, 'g1', admin, 'bo', '  Talk  to me ', 50)).toEqual({ ok: true });
+		const row = async () => one<{ at: number | null; by: string | null; note: string | null }>(db, "SELECT suspended_at AS at, suspended_by AS by, suspended_note AS note FROM memberships WHERE group_id = 'g1' AND user_id = 'bo'");
+		expect(await row()).toEqual({ at: 50, by: 'cy', note: 'Talk to me' });
+		expect((await suspendMember(db, 'g1', admin, 'bo', '')).ok).toBe(false); // already
+		expect((await reinstateMember(db, 'g1', admin, 'di')).ok).toBe(false); // not suspended
+		expect(await reinstateMember(db, 'g1', owner, 'bo')).toEqual({ ok: true });
+		expect(await row()).toEqual({ at: null, by: null, note: null });
+		// A co-admin can't suspend another; the owner can.
+		expect((await suspendMember(db, 'g1', { id: 'zz', role: 'admin' }, 'cy', '')).ok).toBe(false);
+		expect((await suspendMember(db, 'g1', owner, 'cy', '')).ok).toBe(true);
+		// A suspended co-admin can't be made the owner.
+		expect((await transferOwnership(db, 'g1', owner, 'cy', 'Cy')).ok).toBe(false);
+	});
+
+	it('forgets who suspended someone when that person deletes their account', async () => {
+		await suspendMember(db, 'g1', admin, 'bo', '');
+		await db.batch(deletePersonStatements(db, 'cy'));
+		expect(await one(db, "SELECT suspended_at AS at, suspended_by AS by FROM memberships WHERE group_id = 'g1' AND user_id = 'bo'")).toEqual({ at: expect.any(Number), by: null });
+	});
+});
+

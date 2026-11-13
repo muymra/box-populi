@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { RequestEvent } from '@sveltejs/kit';
 import { createTestDb } from './testing/d1.ts';
 import { one, run } from './db.ts';
-import { readGroup, requireActiveMember, requireRead } from './authz.ts';
+import { readGroup, requireActiveMember, requireRead, requireRole } from './authz.ts';
 import { refuseInactive } from './bgg/http.ts';
 
 let db: ReturnType<typeof createTestDb>;
@@ -51,7 +51,7 @@ describe('requireActiveMember', () => {
 		expect(await refuseInactive(as('ada'), db, undefined)).toBeNull();
 		const refused = await refuseInactive(as('ada'), db, 'shut');
 		expect(refused?.status).toBe(403);
-		expect(await refused?.json()).toEqual({ error: 'This group is suspended' });
+		expect(await refused?.json()).toEqual({ error: 'This group is suspended by the host' });
 		expect((await refuseInactive(as('bo'), db, 42))?.status).toBe(403);
 	});
 });
@@ -63,9 +63,22 @@ describe('readGroup (D59)', () => {
 	it('reads the group, the role and the layout’s extras in one go', async () => {
 		await run(db, `UPDATE groups SET theme = 'nord' WHERE id = 'open'`);
 		await run(db, `UPDATE users SET pin_set_at = 123 WHERE id = 'ada'`);
+		await run(db, `UPDATE groups SET chat_url = 'https://chat.whatsapp.com/K7M4P' WHERE id = 'open'`);
 		const { access, extras } = await readGroup(as('ada'), db, 'open');
 		expect(access).toMatchObject({ role: 'owner', readonly: false, group: { id: 'open', isDemo: false } });
-		expect(extras).toEqual({ code: 'AAAAA', linkKey: null, theme: 'nord', pinSetAt: 123, nightsBy: 'members', filler: { maxMinutes: 30, maxWeight: 2 }, staleDays: 90, catalogVersion: 0 });
+		expect(extras).toEqual({
+			code: 'AAAAA',
+			linkKey: null,
+			theme: 'nord',
+			pinSetAt: 123,
+			nightsBy: 'members',
+			filler: { maxMinutes: 30, maxWeight: 2 },
+			staleDays: 90,
+			catalogVersion: 0,
+			chatUrl: 'https://chat.whatsapp.com/K7M4P',
+			joinedAt: 0,
+			probation: false
+		});
 		expect(await requireRead(as('ada'), db, 'open')).toEqual(access);
 	});
 
@@ -112,3 +125,39 @@ describe('readGroup on one request (D65)', () => {
 		expect(calls).toBe(3);
 	});
 });
+
+describe('standing (D79)', () => {
+	beforeEach(async () => {
+		// Cy waits to be let in to Open; Bo, also in Open now, was suspended there by Ada with a note.
+		await run(db, `INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at, waiting_since) VALUES ('open', 'cy', 'member', 0, 0, 10)`);
+		await run(
+			db,
+			`INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at, suspended_at, suspended_by, suspended_note) VALUES ('open', 'bo', 'admin', 0, 0, 20, 'ada', 'Talk to me')`
+		);
+	});
+
+	it('reads someone waiting as read-only, with their shelf open', async () => {
+		const { access } = await readGroup(as('cy'), db, 'open');
+		expect(access).toMatchObject({ role: 'member', readonly: true, standing: 'waiting', shelfOpen: true, suspension: null });
+		expect(await status(requireRole(as('cy'), db, 'open', 'member'))).toBe(403);
+		expect(await status(requireRole(as('cy'), db, 'open', 'member', { ownShelf: true }))).toBe('ok');
+		expect(await status(requireActiveMember(as('cy'), db, 'open'))).toBe('ok');
+		expect(await status(requireActiveMember(as('cy'), db, null))).toBe('ok');
+	});
+
+	it('reads a suspended member as read-only, shelf closed, with who suspended them and the note', async () => {
+		const { access } = await readGroup(as('bo'), db, 'open');
+		expect(access).toMatchObject({ role: 'admin', readonly: true, standing: 'suspended', shelfOpen: false, suspension: { at: 20, byName: 'Ada', note: 'Talk to me' } });
+		expect(await status(requireRole(as('bo'), db, 'open', 'member', { ownShelf: true }))).toBe(403);
+		expect(await status(requireRole(as('bo'), db, 'open', 'admin'))).toBe(403); // a suspended co-admin can't use the role
+		expect(await status(requireActiveMember(as('bo'), db, 'open'))).toBe(403);
+	});
+
+	it('keeps the group’s own suspension apart from a member’s', async () => {
+		// The membership's suspended_at must not hide the host's on the group, or the other way round.
+		expect((await readGroup(as('bo'), db, 'open')).access.group.suspended).toBe(false);
+		expect((await readGroup(as('ada'), db, 'shut')).access).toMatchObject({ readonly: true, standing: 'full', shelfOpen: false, group: { suspended: true } });
+		expect((await readGroup(as('ada'), db, 'open')).access).toMatchObject({ readonly: false, standing: 'full', shelfOpen: true });
+	});
+});
+

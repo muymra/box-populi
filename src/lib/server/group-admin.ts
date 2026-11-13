@@ -11,6 +11,8 @@ import { isThemeId } from '#lib/themes.ts';
 import { FILLER_MINUTES_RANGE } from '#lib/catalog/pick.ts';
 import { STALE_DAYS_RANGE } from '#lib/catalog/filter.ts';
 import { wholeNumberIn } from '#lib/numbers.ts';
+import { cleanChatUrl } from '#lib/group-chat.ts';
+import { MAX_SUSPENDED_NOTE, standingOf, type Standing } from '#lib/standing.ts';
 
 export type Actor = { id: string; role: Role };
 export type AdminResult = { ok: true } | { ok: false; error: string };
@@ -19,14 +21,26 @@ const refused: AdminResult = { ok: false, error: 'You can’t do that in this gr
 const gone: AdminResult = { ok: false, error: 'That person isn’t in this group any more.' };
 
 export async function memberRole(db: DB, groupId: string, userId: string): Promise<Role | null> {
-	const row = await one<{ role: Role }>(db, 'SELECT role FROM memberships WHERE group_id = ?1 AND user_id = ?2', groupId, userId);
-	return row?.role ?? null;
+	return (await memberPlace(db, groupId, userId))?.role ?? null;
 }
 
+/** A member's role and standing (D79), or null for someone not in the group. */
+export async function memberPlace(db: DB, groupId: string, userId: string): Promise<{ role: Role; standing: Standing } | null> {
+	const row = await one<{ role: Role; waiting_since: number | null; suspended_at: number | null }>(
+		db,
+		'SELECT role, waiting_since, suspended_at FROM memberships WHERE group_id = ?1 AND user_id = ?2',
+		groupId,
+		userId
+	);
+	return row ? { role: row.role, standing: standingOf(row) } : null;
+}
+
+export type MemberAction = 'promote' | 'demote' | 'transfer_ownership' | 'remove_member' | 'suspend_member' | 'let_in';
+
 /** Which member-targeted actions `actor` may take on each member, for the settings page. */
-export function memberActions(actor: Actor, target: { id: string; role: Role }): Array<'promote' | 'demote' | 'transfer_ownership' | 'remove_member'> {
-	const ctx = { targetRole: target.role, targetIsSelf: target.id === actor.id };
-	return (['promote', 'demote', 'transfer_ownership', 'remove_member'] as const).filter((action) => can(actor.role, action, ctx));
+export function memberActions(actor: Actor, target: { id: string; role: Role; standing: Standing }): MemberAction[] {
+	const ctx = { targetRole: target.role, targetStanding: target.standing, targetIsSelf: target.id === actor.id };
+	return (['promote', 'demote', 'transfer_ownership', 'remove_member', 'suspend_member', 'let_in'] as const).filter((action) => can(actor.role, action, ctx));
 }
 
 export async function renameGroup(db: DB, groupId: string, actor: Actor, rawName: unknown): Promise<AdminResult> {
@@ -52,16 +66,84 @@ export async function regenerateCode(db: DB, groupId: string, actor: Actor): Pro
 	throw new Error('Could not generate a unique group code');
 }
 
-async function targeted(db: DB, groupId: string, actor: Actor, targetId: string, action: GroupAction): Promise<Role | AdminResult> {
-	const targetRole = await memberRole(db, groupId, targetId);
-	if (!targetRole) return gone;
-	if (!can(actor.role, action, { targetRole, targetIsSelf: targetId === actor.id })) return refused;
-	return targetRole;
+async function targeted(db: DB, groupId: string, actor: Actor, targetId: string, action: GroupAction): Promise<{ role: Role; standing: Standing } | AdminResult> {
+	const target = await memberPlace(db, groupId, targetId);
+	if (!target) return gone;
+	if (!can(actor.role, action, { targetRole: target.role, targetStanding: target.standing, targetIsSelf: targetId === actor.id })) return refused;
+	return target;
+}
+
+const isRefusal = (r: { role: Role; standing: Standing } | AdminResult): r is AdminResult => 'ok' in r;
+
+/**
+ * Whether people who join wait to be let in (D79). Turning it off lets in everyone waiting, so the form
+ * says how many first and sends `letEveryoneIn`; without it, a group with people waiting keeps the setting.
+ */
+export async function setProbation(db: DB, groupId: string, actor: Actor, raw: unknown, letEveryoneIn: boolean): Promise<AdminResult & { letIn?: number }> {
+	if (!can(actor.role, 'set_probation')) return refused;
+	if (raw !== 'on' && raw !== 'off') return { ok: false, error: 'Pick whether new members wait to be let in.' };
+	if (raw === 'on') {
+		await stmt(db, 'UPDATE groups SET probation = 1 WHERE id = ?1', groupId).run();
+		return { ok: true };
+	}
+	const waiting = (await one<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM memberships WHERE group_id = ?1 AND waiting_since IS NOT NULL', groupId))?.n ?? 0;
+	if (waiting > 0 && !letEveryoneIn) return { ok: false, error: `${waiting === 1 ? 'Someone is' : `${waiting} people are`} waiting. Turning this off lets them in; confirm to go ahead.` };
+	await db.batch([
+		stmt(db, 'UPDATE groups SET probation = 0 WHERE id = ?1', groupId),
+		stmt(db, 'UPDATE memberships SET waiting_since = NULL WHERE group_id = ?1 AND waiting_since IS NOT NULL', groupId),
+		bumpCatalogForGroup(db, groupId)
+	]);
+	return { ok: true, letIn: waiting };
+}
+
+/** Lets in someone waiting (D79): from now on they're a full member. */
+export async function letIn(db: DB, groupId: string, actor: Actor, targetId: string): Promise<AdminResult> {
+	const check = await targeted(db, groupId, actor, targetId, 'let_in');
+	if (isRefusal(check)) return check;
+	await db.batch([stmt(db, 'UPDATE memberships SET waiting_since = NULL WHERE group_id = ?1 AND user_id = ?2', groupId, targetId), bumpCatalogForGroup(db, groupId)]);
+	return { ok: true };
+}
+
+/**
+ * Suspends a full member (D79): read-only here until reinstated. Their games, plays and nights stay.
+ * The note is optional and shown to them alone; it goes when they're reinstated.
+ */
+export async function suspendMember(db: DB, groupId: string, actor: Actor, targetId: string, rawNote: unknown, now = Date.now()): Promise<AdminResult> {
+	const check = await targeted(db, groupId, actor, targetId, 'suspend_member');
+	if (isRefusal(check)) return check;
+	if (check.standing !== 'full') return { ok: false, error: 'They’re already suspended.' };
+	const note = typeof rawNote === 'string' ? rawNote.replace(/\s+/g, ' ').trim() : '';
+	if (note.length > MAX_SUSPENDED_NOTE || /\p{C}/u.test(note)) return { ok: false, error: `Keep the note to ${MAX_SUSPENDED_NOTE} characters.` };
+	await db.batch([
+		stmt(
+			db,
+			'UPDATE memberships SET suspended_at = ?1, suspended_by = ?2, suspended_note = ?3 WHERE group_id = ?4 AND user_id = ?5',
+			now,
+			actor.id,
+			note || null,
+			groupId,
+			targetId
+		),
+		bumpCatalogForGroup(db, groupId)
+	]);
+	return { ok: true };
+}
+
+/** Reinstates a suspended member (D79), and drops the note. */
+export async function reinstateMember(db: DB, groupId: string, actor: Actor, targetId: string): Promise<AdminResult> {
+	const check = await targeted(db, groupId, actor, targetId, 'suspend_member');
+	if (isRefusal(check)) return check;
+	if (check.standing !== 'suspended') return { ok: false, error: 'They aren’t suspended.' };
+	await db.batch([
+		stmt(db, 'UPDATE memberships SET suspended_at = NULL, suspended_by = NULL, suspended_note = NULL WHERE group_id = ?1 AND user_id = ?2', groupId, targetId),
+		bumpCatalogForGroup(db, groupId)
+	]);
+	return { ok: true };
 }
 
 export async function setCoAdmin(db: DB, groupId: string, actor: Actor, targetId: string, makeAdmin: boolean): Promise<AdminResult> {
 	const check = await targeted(db, groupId, actor, targetId, makeAdmin ? 'promote' : 'demote');
-	if (typeof check === 'object') return check;
+	if (isRefusal(check)) return check;
 	await db.batch([
 		stmt(db, 'UPDATE memberships SET role = ?1 WHERE group_id = ?2 AND user_id = ?3', makeAdmin ? 'admin' : 'member', groupId, targetId),
 		bumpCatalogForGroup(db, groupId)
@@ -72,7 +154,7 @@ export async function setCoAdmin(db: DB, groupId: string, actor: Actor, targetId
 /** Removes a member. Their copies leave the shelf with them; they can rejoin with the code. */
 export async function removeMember(db: DB, groupId: string, actor: Actor, targetId: string): Promise<AdminResult> {
 	const check = await targeted(db, groupId, actor, targetId, 'remove_member');
-	if (typeof check === 'object') return check;
+	if (isRefusal(check)) return check;
 	await db.batch([
 		stmt(db, 'DELETE FROM memberships WHERE group_id = ?1 AND user_id = ?2', groupId, targetId),
 		bumpCatalogForGroup(db, groupId)
@@ -86,7 +168,7 @@ export async function removeMember(db: DB, groupId: string, actor: Actor, target
  */
 export async function transferOwnership(db: DB, groupId: string, actor: Actor, targetId: string, typedName: unknown): Promise<AdminResult> {
 	const check = await targeted(db, groupId, actor, targetId, 'transfer_ownership');
-	if (typeof check === 'object') return check;
+	if (isRefusal(check)) return check;
 	const target = await one<{ name: string }>(db, 'SELECT name FROM users WHERE id = ?1', targetId);
 	const typed = typeof typedName === 'string' ? typedName.replace(/\s+/g, ' ').trim() : '';
 	if (!target || typed.toLocaleLowerCase() !== target.name.toLocaleLowerCase()) {
@@ -243,6 +325,15 @@ export async function setStaleDays(db: DB, groupId: string, actor: Actor, raw: u
 	const days = wholeNumberIn(raw, min, max);
 	if (days == null) return { ok: false, error: `Give the days as a whole number from ${min} to ${max}.` };
 	await stmt(db, 'UPDATE groups SET stale_days = ?1 WHERE id = ?2', days, groupId).run();
+	return { ok: true };
+}
+
+/** Sets the group's chat link (D78); an empty field removes it, a missing one changes nothing. Co-admins and the owner, like renaming. */
+export async function setGroupChat(db: DB, groupId: string, actor: Actor, raw: unknown): Promise<AdminResult> {
+	if (!can(actor.role, 'rename')) return refused;
+	const url = typeof raw === 'string' ? cleanChatUrl(raw) : 'bad';
+	if (url === 'bad') return { ok: false, error: 'Give the link as a web address, like https://chat.whatsapp.com/…' };
+	await stmt(db, 'UPDATE groups SET chat_url = ?1 WHERE id = ?2', url, groupId).run();
 	return { ok: true };
 }
 

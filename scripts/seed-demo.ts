@@ -251,7 +251,17 @@ dates.forEach((date, i) => {
 });
 // Next Friday at the café, still being planned.
 const next = 'demo-night-next';
-nights.push({ id: next, group_id: 'demo', name: 'Café', night_on: new Date(NOW + 7 * DAY).toISOString().slice(0, 10), starts_at: '19:30', host_id: null, created_by: OWNER, created_at: NOW });
+nights.push({
+	id: next,
+	group_id: 'demo',
+	name: 'Café',
+	night_on: new Date(NOW + 7 * DAY).toISOString().slice(0, 10),
+	starts_at: '19:30',
+	host_id: null,
+	created_by: OWNER,
+	created_at: NOW,
+	description: 'Upstairs room; ask at the bar. The kitchen closes at 21:00, so eat first or order early.'
+});
 for (const [user, going] of [['demo-ada', 1], ['demo-bram', 1], ['demo-chen', 1], ['demo-dewi', 0]] as const) nightPeople.push({ night_id: next, user_id: user, guest_name: null, going });
 nightPeople.push({ night_id: next, user_id: null, guest_name: 'Sam', going: 1 });
 for (const user of ['demo-ada', 'demo-ada', 'demo-bram', 'demo-chen']) {

@@ -231,7 +231,12 @@ export async function mergeMember(
 			                      THEN (SELECT color_index FROM memberships WHERE group_id = ?1 AND user_id = ?2) ELSE color_index END,
 			   joined_at = MIN(joined_at, (SELECT joined_at FROM memberships WHERE group_id = ?1 AND user_id = ?2)),
 			   last_seen_at = MAX(last_seen_at, (SELECT last_seen_at FROM memberships WHERE group_id = ?1 AND user_id = ?2)),
-			   role = ?4
+			   role = ?4,
+			   -- Standing (D79): let in if either entry was; suspended if either was, keeping who did it and the note.
+			   waiting_since = CASE WHEN (SELECT waiting_since FROM memberships WHERE group_id = ?1 AND user_id = ?2) IS NULL THEN NULL ELSE waiting_since END,
+			   suspended_by = CASE WHEN suspended_at IS NULL THEN (SELECT suspended_by FROM memberships WHERE group_id = ?1 AND user_id = ?2) ELSE suspended_by END,
+			   suspended_note = CASE WHEN suspended_at IS NULL THEN (SELECT suspended_note FROM memberships WHERE group_id = ?1 AND user_id = ?2) ELSE suspended_note END,
+			   suspended_at = COALESCE(suspended_at, (SELECT suspended_at FROM memberships WHERE group_id = ?1 AND user_id = ?2))
 			 WHERE group_id = ?1 AND user_id = ?3`,
 			groupId,
 			oldId,

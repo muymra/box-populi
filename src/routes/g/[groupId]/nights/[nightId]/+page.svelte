@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { profileHref } from '#lib/profiles.svelte.ts';
 	import { announce } from '#lib/announce.svelte.ts';
 	// One game night (PRD "Game night"): when and where, who's going, the bring list, suggestions of
 	// what to bring, and on the night, what stayed home and the plays logged.
@@ -11,6 +12,7 @@
 	import Puzzle from '@lucide/svelte/icons/puzzle';
 	import Trophy from '@lucide/svelte/icons/trophy';
 	import CopyButton from '#lib/components/CopyButton.svelte';
+	import GroupChatButton from '#lib/components/GroupChatButton.svelte';
 	import ListRow from '#lib/components/ListRow.svelte';
 	import Modal from '#lib/components/Modal.svelte';
 	import NightFields from '#lib/components/NightFields.svelte';
@@ -26,6 +28,8 @@
 	import { favouritesAmong, pick, pickWeight, withInterest } from '#lib/catalog/pick.ts';
 	import type { CatalogGame } from '#lib/catalog/types.ts';
 	import { bringList, cameChecked, cameList, chatText, goingMembers, nightDate, nightExpansions, nightGuests, nightPlayers, nightPoolIds, playOutcome, recapText } from '#lib/nights.ts';
+	import { linkHost } from '#lib/link-kinds.ts';
+	import { prose } from '#lib/prose.ts';
 	import { nightOf } from '#lib/table/regulars.ts';
 	import { getTable } from '#lib/table/table.svelte.ts';
 	import type { PageProps } from './$types';
@@ -174,7 +178,7 @@
 	const chat = $derived(
 		isPast
 			? recapText(night, came, data.plays, broughtNotPlayed.map((g) => gameName(g.gameId)), (id) => memberById.get(id)?.name ?? 'someone', url)
-			: chatText(night, memberIds, { member: (id) => memberById.get(id)?.name ?? 'someone', game: gameName }, url)
+			: chatText(night, memberIds, { member: (id) => memberById.get(id)?.name ?? 'someone', game: gameName }, url, data.about)
 	);
 	const when = $derived(`${nightDate(night.nightOn)}${night.startsAt ? `, ${night.startsAt}` : ''}`);
 	const whoSummary = $derived(
@@ -191,6 +195,10 @@
 	);
 	let editing = $state(false);
 	let confirmDelete = $state(false);
+
+	// The description and pictures (D77). A picture that doesn't load becomes a link to where it's kept.
+	const description = $derived(data.about.description ? prose(data.about.description) : []);
+	let failedPictures = $state<Record<string, true>>({});
 </script>
 
 <svelte:head><title>{night.name}, {nightDate(night.nightOn)} · {data.group.name}</title></svelte:head>
@@ -208,10 +216,46 @@
 		</div>
 		<div class="row actions">
 			<CopyButton text={chat} label="Copy for the chat" />
+			<!-- Copy the plan, then open the chat to paste it (D78). -->
+			{#if data.groupChat}<GroupChatButton url={data.groupChat} />{/if}
 			{#if isTonight}<a class="btn primary" href="{base}/pick"><Dices size={18} aria-hidden="true" /> Play tonight</a>{/if}
 		</div>
 		{#if form?.nightError}<p class="banner error" role="alert">{form.nightError}</p>{/if}
 	</header>
+
+	{#if description.length || data.about.pictures.length}
+		<section class="about" aria-label="About {night.name}">
+			{#each description as paragraph, i (i)}
+				<p>
+					{#each paragraph as line, j (j)}{#if j}<br />{/if}{#each line as part, k (k)}{#if 'url' in part}<a href={part.url} rel="noopener noreferrer nofollow ugc" target="_blank">{part.url}</a
+								>{:else}{part.text}{/if}{/each}{/each}
+				</p>
+			{/each}
+			{#if data.about.pictures.length}
+				<ul class="pictures">
+					{#each data.about.pictures as src, i (src)}
+						<li>
+							{#if failedPictures[src]}
+								<a class="failed" href={src} rel="noopener noreferrer nofollow ugc" target="_blank">Picture on {linkHost(src)}</a>
+								<span class="hint">It didn’t load here.</span>
+							{:else}
+								<a href={src} rel="noopener noreferrer nofollow ugc" target="_blank"
+									><img
+										{src}
+										alt="Picture {i + 1} of {data.about.pictures.length} for {night.name}"
+										loading="lazy"
+										decoding="async"
+										referrerpolicy="no-referrer"
+										onerror={() => (failedPictures[src] = true)}
+									/></a
+								>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</section>
+	{/if}
 
 	{#if data.canAnswer && !isPast}
 		<section class="form-panel" aria-labelledby="answer-q">
@@ -268,7 +312,7 @@
 											</button>
 										</form>
 									{:else}
-										<a class="person" class:going={c} href="{base}/members/{m.id}" title={inPlay ? 'In a play logged on this night' : undefined}
+										<a class="person" class:going={c} href={profileHref(m.id)} title={inPlay ? 'In a play logged on this night' : undefined}
 											><span class="dot" style:background={col.fill}></span>{m.name}</a
 										>
 									{/if}
@@ -344,11 +388,12 @@
 				</div>
 				<div class="form-body">
 					<ul class="people">
-						{#each members as m (m.id)}
+						<!-- Someone waiting to be let in or suspended (D79) shows only with an answer already given, and can't be marked. -->
+						{#each members.filter((m) => m.active || answer(m.id) != null) as m (m.id)}
 							{@const a = answer(m.id)}
 							{@const c = playerColor(m.colorIndex)}
 							<li>
-								{#if data.canChange && !isPast}
+								{#if data.canChange && !isPast && m.active}
 									<form method="POST" action="?/going" use:enhance>
 										<input type="hidden" name="userId" value={m.id} />
 										<input type="hidden" name="going" value={a === true ? '0' : '1'} />
@@ -357,7 +402,7 @@
 										</button>
 									</form>
 								{:else}
-									<a class="person" href="{base}/members/{m.id}" class:going={a === true} class:no={a === false}><span class="dot" style:background={c.fill}></span>{m.name}</a>
+									<a class="person" href={profileHref(m.id)} class:going={a === true} class:no={a === false}><span class="dot" style:background={c.fill}></span>{m.name}</a>
 								{/if}
 							</li>
 						{/each}
@@ -412,7 +457,7 @@
 		{#each byBringer as b (b.label)}
 			<div class="form-row" role="group" aria-label="What {b.label} brings">
 				<div class="form-label">
-					<span class="form-q bringer"><span class="dot" class:guest={!b.color} style:background={b.color}></span>{#if b.id}<a href="{base}/members/{b.id}">{b.label}</a>{:else}{b.label}{/if}</span>
+					<span class="form-q bringer"><span class="dot" class:guest={!b.color} style:background={b.color}></span>{#if b.id}<a href={profileHref(b.id)}>{b.label}</a>{:else}{b.label}{/if}</span>
 				</div>
 				<ul class="form-body games">
 					{#each b.games as g (g.gameId)}
@@ -549,7 +594,7 @@
 		<section class="manage" aria-labelledby="manage-h">
 			<h2 id="manage-h" class="visually-hidden">Change the night</h2>
 			<details bind:open={editing}>
-				<summary class="link-button">Change the name, date or place…</summary>
+				<summary class="link-button">Change the name, date, place or description…</summary>
 				<form
 					method="POST"
 					action="?/edit"
@@ -560,7 +605,20 @@
 							if (result.type === 'success') editing = false;
 						}}
 				>
-					<NightFields {members} values={{ name: night.name, nightOn: night.nightOn, startsAt: night.startsAt, host: night.hostId }} planned={data.nights} editing={night.id} me={data.myId} />
+					<NightFields
+						{members}
+						values={{
+							name: night.name,
+							nightOn: night.nightOn,
+							startsAt: night.startsAt,
+							host: night.hostId,
+							description: data.about.description,
+							pictures: data.about.pictures.join('\n')
+						}}
+						planned={data.nights}
+						editing={night.id}
+						me={data.myId}
+					/>
 					<div class="form-foot indent"><div><button class="btn primary">Save</button></div></div>
 				</form>
 			</details>
@@ -643,6 +701,45 @@
 	}
 	.night-head .muted {
 		margin-top: 2px;
+	}
+	/* The description reads as running text; pictures stand in a row at one height and their own width. */
+	.about {
+		display: grid;
+		gap: var(--s-3);
+	}
+	.about p {
+		max-width: 68ch;
+		margin: 0;
+		overflow-wrap: anywhere;
+	}
+	.pictures {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--s-3);
+		margin: var(--s-1) 0 0;
+		padding: 0;
+		list-style: none;
+	}
+	.pictures li {
+		max-width: 100%;
+	}
+	.pictures a:has(img) {
+		display: block;
+		border-radius: 8px;
+	}
+	.pictures img {
+		display: block;
+		height: clamp(10rem, 40vw, 16rem);
+		width: auto;
+		max-width: 100%;
+		object-fit: contain;
+		border: 1px solid var(--rule);
+		border-radius: 8px;
+		background: var(--cube);
+	}
+	.failed {
+		font-weight: 650;
+		overflow-wrap: anywhere;
 	}
 	/* From 760px the night's actions sit beside its name, as a form panel's head does. */
 	@media (min-width: 760px) {

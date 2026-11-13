@@ -33,6 +33,14 @@ describe('lending', () => {
 		expect(copy).toMatchObject({ lentToUserId: 'bo', lentOut: false });
 	});
 
+	it('lends only to a member who can take part (D79)', async () => {
+		await run(db, `UPDATE memberships SET waiting_since = 1 WHERE group_id = 'g1' AND user_id = 'bo'`);
+		expect((await lendCopy(db, 'g1', 'ada', 1, { toUserId: 'bo' })).ok).toBe(false);
+		await run(db, `UPDATE memberships SET waiting_since = NULL, suspended_at = 1 WHERE group_id = 'g1' AND user_id = 'bo'`);
+		expect((await lendCopy(db, 'g1', 'ada', 1, { toUserId: 'bo' })).ok).toBe(false);
+		expect(await loan()).toEqual({ lent_to_user_id: null, lent_to_text: null });
+	});
+
 	it('lends outside the app by name, and clears on return', async () => {
 		expect(await lendCopy(db, 'g1', 'ada', 1, { toText: '  my   sister ' })).toEqual({ ok: true });
 		expect(await loan()).toEqual({ lent_to_user_id: null, lent_to_text: 'my sister' });

@@ -1,6 +1,7 @@
 // The play log on the server (PRD "Play log"): reading the form, saving, reading back and deleting
 // plays, and the group's podium points. Every function takes the group, and nothing crosses groups.
 import { all, mapRead, one, readAll, rowsOf, stmt, type DB, type Read } from './db.ts';
+import { fullMember } from './standing.ts';
 import { bumpCatalogForGroup } from './catalog.ts';
 import { can } from './permissions.ts';
 import { gameOnNight, nightDay } from './nights.ts';
@@ -113,11 +114,12 @@ export async function gameOnShelf(db: DB, groupId: string, gameId: number): Prom
 	);
 }
 
+/** Whether everyone new in a play can take part (D79): in the group, not waiting, not suspended. */
 async function allMembers(db: DB, groupId: string, ids: string[]): Promise<boolean> {
 	if (ids.length === 0) return true;
 	const rows = await all<{ user_id: string }>(
 		db,
-		`SELECT user_id FROM memberships WHERE group_id = ?1 AND user_id IN (${ids.map((_, i) => `?${i + 2}`).join(', ')})`,
+		`SELECT m.user_id FROM memberships m WHERE m.group_id = ?1 AND ${fullMember()} AND m.user_id IN (${ids.map((_, i) => `?${i + 2}`).join(', ')})`,
 		groupId,
 		...ids
 	);

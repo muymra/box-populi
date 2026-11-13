@@ -1,6 +1,7 @@
 // Lending (PRD "Lending"). Only a copy's owner lends it: to a member of the group they're in, or to
 // someone outside the app by name. A copy shows in all its owner's groups, so a loan does too.
 import { all, mapRead, one, readAll, rowsOf, stmt, type DB, type Read } from './db.ts';
+import { fullMember } from './standing.ts';
 import { bumpCatalogForUser } from './catalog.ts';
 import { cleanDisplayName } from './identity.ts';
 
@@ -32,7 +33,8 @@ export async function lendCopy(
 	let text: string | null = null;
 	if (to.toUserId) {
 		if (to.toUserId === ownerId) return { ok: false, error: 'You can’t lend a game to yourself.' };
-		const member = await one(db, 'SELECT 1 AS x FROM memberships WHERE group_id = ?1 AND user_id = ?2', groupId, to.toUserId);
+		// Someone waiting to be let in or suspended isn't offered (D79).
+		const member = await one(db, `SELECT 1 AS x FROM memberships m WHERE m.group_id = ?1 AND m.user_id = ?2 AND ${fullMember()}`, groupId, to.toUserId);
 		if (!member) return { ok: false, error: 'That person isn’t in this group.' };
 		userId = to.toUserId;
 	} else {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Logged plays, newest first (PRD "Play log"): the date, the game when it's a list of several,
 	// and who finished where. Whoever logged a play, its players and co-admins can edit or delete it.
+	import { profileHref } from '#lib/profiles.svelte.ts';
 	import { enhance } from '$app/forms';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
@@ -95,7 +96,7 @@
 					{@const who = nameOf(p)}
 					<li class:winner={!play.coop && isWin(p.place, places)}>
 						<span class="dot" class:guest={!who.color} style:background={who.color}></span>
-						<span class="name">{#if who.id}<a href="/g/{groupId}/members/{who.id}">{who.name}</a>{:else}{who.name}{/if}</span>
+						<span class="name">{#if who.id}<a href={profileHref(who.id)}>{who.name}</a>{:else}{who.name}{/if}</span>
 						{#if !play.coop && p.place != null}<span class="num muted">{ordinal(p.place)}</span>{/if}
 						{#if p.score != null}<span class="num muted">· {p.score}</span>{/if}
 					</li>

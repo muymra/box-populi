@@ -21,6 +21,6 @@ export const POST: RequestHandler = async (event) => {
 		return reply(400, { error: `Send 1 to ${ADD_CHUNK} games.` });
 	}
 	const db = getDb();
-	await requireRole(event, db, body.groupId, 'member');
+	await requireRole(event, db, body.groupId, 'member', { ownShelf: true });
 	return reply(200, await addListItems(db, body.groupId, event.locals.user.id, items as AddItem[], Date.now()));
 };

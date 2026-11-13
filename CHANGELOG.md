@@ -4,6 +4,14 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+**Upgrading so far:** three migrations: `0022_night_about.sql`, which gives game nights a place for a description and pictures; `0023_group_chat.sql`, which gives groups a place for their chat link; and `0024_member_standing.sql`, for probation and suspended members. Nothing changes for a group until it uses them. No new settings.
+
+- A game night can have a description: where to park, what to eat, that the doorbell's broken. Whoever planned the night, and co-admins and the owner, write it while planning or later under "Change the name, date, place or description…". Web addresses in it become links. Under it, "Add pictures…" takes up to four pictures that are already online, by their web address; they show on the night's page and open full size when tapped. Box Populi doesn't keep a copy, so the site they're on sees who looks at them. Before the night, "Copy for the chat" includes the description and the picture addresses.
+- A group can ask new members to wait to be let in: "New members" under Settings on the Group tab, off unless you turn it on. Someone who joins then waits until the owner or a co-admin taps "Let in" (or "Decline…"); meanwhile they can add their games and look around, but can't take part, open other members' pages or see the join code. Turning it off lets everyone waiting in, after a warning.
+- The owner or a co-admin can suspend a member from their Manage panel, with an optional note for them, as a step before removing them or reinstating them. A suspended member can still sign in and look around, but can't change anything in that group; their games, plays and nights stay.
+- The Group tab's Settings fold: each setting shows as its name and current value, and opens to change it, so the panel is less than half its old length.
+- The owner and co-admins can link the group's chat (a WhatsApp, Signal or Telegram group, a Discord server, a Facebook group) under Settings on the Group tab. Members then find "Open WhatsApp group" (or whatever it is) on the Group tab and beside "Copy for the chat" on every game night, and someone who joined in the last two weeks gets a note about it on the shelf. Only members see it: not the front door, and not demo visitors.
+
 ## 0.7.0 (2026-11-12)
 
 **Upgrading:** one migration, `0021_copy_players_with.sql`. On Cloudflare, note a Time Travel bookmark and export a backup first, then apply it before deploying (SELF_HOSTING.md "Upgrading" has the commands and how to roll back). Docker, Vercel and Netlify apply it on their first request. It gives each copy a place for its owner's count; nothing changes until someone sets one. No new settings, and a demo group needs no reseed.

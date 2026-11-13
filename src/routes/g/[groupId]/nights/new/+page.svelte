@@ -22,7 +22,14 @@
 			planned={data.nights}
 			me={data.myId}
 			values={form?.entered
-				? { name: form.entered.name, nightOn: form.entered.nightOn, startsAt: form.entered.startsAt, host: form.entered.host }
+				? {
+						name: form.entered.name,
+						nightOn: form.entered.nightOn,
+						startsAt: form.entered.startsAt,
+						host: form.entered.host,
+						description: form.entered.description,
+						pictures: form.entered.pictures
+					}
 				: { name: 'Game night', nightOn: nightOf(Date.now()) }}
 		/>
 		<div class="form-foot indent">

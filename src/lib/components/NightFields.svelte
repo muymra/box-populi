@@ -1,22 +1,24 @@
 <script lang="ts">
-	// The fields of a game night (PRD "Game night"): name, date, start time and where, as rows of a
-	// form panel (app.css). Shared by planning a night and editing one; the caller supplies the panel
-	// and its foot.
+	// The fields of a game night (PRD "Game night"): name, date, start time, where, and a description
+	// with pictures (D77), as rows of a form panel (app.css). Shared by planning a night and editing
+	// one; the caller supplies the panel and its foot.
 	import { untrack } from 'svelte';
 	import DayGrid from './DayGrid.svelte';
 	import { startTimes } from '#lib/days.ts';
+	import { MAX_NIGHT_DESCRIPTION, MAX_NIGHT_PICTURES } from '#lib/nights.ts';
 	import { nightOf } from '#lib/table/regulars.ts';
 
-	type Member = { id: string; name: string };
+	/** `active` false: waiting to be let in or suspended (D79), so not offered as a host. */
+	type Member = { id: string; name: string; active?: boolean };
 	let {
-		members,
+		members: everyone,
 		values = {},
 		planned = [],
 		editing,
 		me = null
 	}: {
 		members: Member[];
-		values?: { name?: string; nightOn?: string; startsAt?: string | null; host?: string | null };
+		values?: { name?: string; nightOn?: string; startsAt?: string | null; host?: string | null; description?: string | null; pictures?: string | null };
 		/** The group's nights, shown on the day grid so a second one isn't planned over them unseen. */
 		planned?: Array<{ id: string; name: string; nightOn: string }>;
 		/** The night being edited, left off the grid's marks. */
@@ -25,6 +27,8 @@
 		me?: string | null;
 	} = $props();
 	const id = $props.id();
+	// Hosts to pick from: members who can take part, and a night's own host when it's being edited.
+	const members = $derived(everyone.filter((m) => m.active !== false || m.id === values.host));
 
 	let nightOn = $state(untrack(() => values.nightOn ?? nightOf(Date.now())));
 	// Planning looks ahead; an older night being edited can stay on its own date.
@@ -48,6 +52,9 @@
 		atHome = true;
 		if (!host) host = members.find((m) => m.id === me)?.id ?? members[0]?.id ?? '';
 	}
+
+	// Pictures are addresses of pictures already online (D77); folded until a night has some.
+	let showPictures = $state(untrack(() => !!values.pictures));
 </script>
 
 <div class="form-row">
@@ -106,6 +113,42 @@
 		<input type="hidden" name="host" value={atHome ? host : ''} />
 	</div>
 </div>
+<div class="form-row">
+	<div class="form-label">
+		<label class="form-q" for="{id}-description">Description</label>
+		<span class="hint">Optional</span>
+	</div>
+	<div class="form-body">
+		<textarea
+			id="{id}-description"
+			class="field"
+			name="description"
+			rows="4"
+			maxlength={MAX_NIGHT_DESCRIPTION}
+			placeholder="What to bring, where to park, the doorbell…"
+			value={values.description ?? ''}
+		></textarea>
+		{#if showPictures}
+			<label class="form-sub">
+				<span>Pictures</span>
+				<textarea
+					class="field"
+					name="pictures"
+					rows="2"
+					placeholder="https://…"
+					autocomplete="off"
+					spellcheck="false"
+					wrap="off"
+					aria-describedby="{id}-pictures-hint"
+					value={values.pictures ?? ''}
+				></textarea>
+			</label>
+			<p class="hint" id="{id}-pictures-hint">The web address of each picture, one per line, up to {MAX_NIGHT_PICTURES}. They show on the night’s page, loaded from where they’re kept.</p>
+		{:else}
+			<button type="button" class="link-button add-pictures" onclick={() => (showPictures = true)}>Add pictures…</button>
+		{/if}
+	</div>
+</div>
 
 <style>
 	.field {
@@ -117,6 +160,13 @@
 	.time {
 		max-width: 14rem;
 		margin-top: var(--s-1);
+	}
+	textarea.field {
+		padding: var(--s-2) var(--s-3);
+		resize: vertical;
+	}
+	.add-pictures {
+		justify-self: start;
 	}
 	.when .form-sub {
 		gap: var(--s-2);

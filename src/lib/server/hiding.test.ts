@@ -82,7 +82,7 @@ describe('hiding a copy from one group (D66)', () => {
 		expect(await playSoonOfPeople(db, 'g2', ['bo'], NOW, DEFAULT_PLAY_SOON)).toEqual([]);
 		expect(await playSoonOfPeople(db, 'g1', ['bo'], NOW, DEFAULT_PLAY_SOON)).toEqual([{ gameId: 1, userIds: ['bo'] }]);
 
-		const night = await createNight(db, 'g2', { id: 'bo', role: 'owner' }, { name: 'Lunch', nightOn: '2026-11-14', startsAt: null, hostId: null });
+		const night = await createNight(db, 'g2', { id: 'bo', role: 'owner' }, { name: 'Lunch', nightOn: '2026-11-14', startsAt: null, hostId: null, description: null, pictures: [] });
 		if (!night.ok) throw new Error(night.error);
 		await setGoing(db, 'g2', { id: 'ada', role: 'member' }, night.value, 'ada', true);
 		const brought = await bringCopy(db, 'g2', { id: 'ada', role: 'member' }, night.value, 1, 'ada');

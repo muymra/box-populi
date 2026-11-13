@@ -19,7 +19,8 @@
 	import { addDays, dayName, shortDay } from '#lib/days.ts';
 	import { Selection, type Table } from '#lib/table/table.svelte.ts';
 
-	type Member = { id: string; name: string; colorIndex: number };
+	/** `active` false: waiting to be let in or suspended (D79), so not offered as a new player. */
+	type Member = { id: string; name: string; colorIndex: number; active?: boolean };
 	type Initial = { id: string; playedOn: string; coop: Coop | null; lowestWins: boolean; players: PlayPlayer[]; night?: { id: string; name: string } | null };
 	type NightOption = { id: string; name: string; nightOn: string };
 	let {
@@ -58,7 +59,7 @@
 	// Read once: the modal mounts a fresh form each time it opens, starting from the play being edited
 	// or from who's here, and from then on the form belongs to whoever fills it in.
 	const start = untrack(() => {
-		const memberIds = new Set(members.map((m) => m.id));
+		const memberIds = new Set(members.filter((m) => m.active !== false).map((m) => m.id));
 		const from = initial?.players ?? [];
 		return {
 			selection: initial
@@ -144,6 +145,9 @@
 	let sending = $state(false);
 
 	const memberById = $derived(new Map(members.map((m) => [m.id, m])));
+	// Who can be ticked: members who can take part (D79), and anyone already in the play being edited.
+	const inPlay = untrack(() => new Set((initial?.players ?? []).flatMap((p) => (p.userId ? [p.userId] : []))));
+	const offered = $derived(members.filter((m) => m.active !== false || inPlay.has(m.id)));
 	const rows = $derived([
 		...selection.members.map((mid) => {
 			const m = memberById.get(mid);
@@ -188,7 +192,7 @@
 
 	<fieldset>
 		<legend>Who played</legend>
-		<WhosHere {members} table={selection} />
+		<WhosHere members={offered} table={selection} />
 	</fieldset>
 
 	<fieldset class="ending">

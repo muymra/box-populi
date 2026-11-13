@@ -149,7 +149,7 @@ describe('a night that’s over (D70)', () => {
 });
 
 describe('moving a night to another day (D70)', () => {
-	const cafe = (nightOn: string) => ({ name: 'Café', nightOn, startsAt: null, hostId: null });
+	const cafe = (nightOn: string) => ({ name: 'Café', nightOn, startsAt: null, hostId: null, description: null, pictures: [] });
 	const version = async () => (await all<{ v: number }>(db, "SELECT catalog_version AS v FROM groups WHERE id = 'g1'"))[0].v;
 
 	it('moves its plays with it, since they were played at the night', async () => {

@@ -1,5 +1,6 @@
 // Shapes shared by the server (which builds them) and the browser (which filters them).
 // See TECH.md "Catalog delivery".
+import type { Standing } from '../standing.ts';
 
 export type Role = 'owner' | 'admin' | 'member';
 
@@ -12,6 +13,8 @@ export type CatalogMember = {
 	lastSeenAt: number;
 	/** Index into PLAYER_COLORS, assigned by join order so it never changes. */
 	colorIndex: number;
+	/** Waiting to be let in, suspended, or a full member (D79). Only full members are offered as players, going or here. */
+	standing: Standing;
 };
 
 export type CatalogCopy = {

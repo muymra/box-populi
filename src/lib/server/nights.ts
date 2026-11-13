@@ -2,18 +2,31 @@
 // list, and reading nights back. Every function takes the group; nothing crosses groups.
 import { all, known, mapRead, one, readAll, rowOf, rowsOf, stmt, type DB, type Read } from './db.ts';
 import { can } from './permissions.ts';
+import { fullMember } from './standing.ts';
 import { GAME_COLUMNS, bumpCatalogForGroup, toCatalogGame } from './catalog.ts';
 import { FIRST_DAY, LAST_DAY, pageStart } from './log-pages.ts';
 import { buildSearchText, normalize } from '#lib/catalog/normalize.ts';
 import { MAX_GUESTS, cleanGuestName } from '#lib/table/here.ts';
-import { MAX_NIGHT_NAME, cleanTime, type Night, type NightGame, type NightPerson } from '#lib/nights.ts';
+import {
+	MAX_NIGHT_DESCRIPTION,
+	MAX_NIGHT_NAME,
+	MAX_NIGHT_PICTURES,
+	NO_ABOUT,
+	cleanDescription,
+	cleanPictures,
+	cleanTime,
+	type Night,
+	type NightAbout,
+	type NightGame,
+	type NightPerson
+} from '#lib/nights.ts';
 import type { CatalogGame, Role } from '#lib/catalog/types.ts';
 import type { NightGameInfo } from '#lib/nights-csv.ts';
 import type { GameSource } from '#lib/csv.ts';
 
 export type Actor = { id: string; role: Role };
 export type Result<T = undefined> = { ok: true; value: T } | { ok: false; error: string };
-export type NightInput = { name: string; nightOn: string; startsAt: string | null; hostId: string | null };
+export type NightInput = { name: string; nightOn: string; startsAt: string | null; hostId: string | null } & NightAbout;
 
 const ok = <T>(value: T): Result<T> => ({ ok: true, value });
 const done: Result = { ok: true, value: undefined };
@@ -26,7 +39,10 @@ function validDay(value: string): boolean {
 	return d.toISOString().slice(0, 10) === value && value >= '2000-01-01' && value <= '2100-12-31';
 }
 
-/** The plan form: `name`, `nightOn`, an optional `startsAt` and `host` (a member id, or empty for somewhere else). */
+/**
+ * The plan form: `name`, `nightOn`, an optional `startsAt` and `host` (a member id, or empty for
+ * somewhere else), and an optional `description` and `pictures`, picture addresses one per line (D77).
+ */
 export function parseNightForm(form: FormData): Result<NightInput> {
 	const name = String(form.get('name') ?? '').replace(/\s+/g, ' ').trim();
 	if (!name || name.length > MAX_NIGHT_NAME || /\p{C}/u.test(name)) return no(`Give the night a name, up to ${MAX_NIGHT_NAME} characters, like “Café”.`);
@@ -35,11 +51,17 @@ export function parseNightForm(form: FormData): Result<NightInput> {
 	const startsAt = cleanTime(String(form.get('startsAt') ?? ''));
 	if (startsAt === 'bad') return no('Give the start time as hours and minutes, like 19:30.');
 	const hostId = String(form.get('host') ?? '') || null;
-	return ok({ name, nightOn, startsAt, hostId });
+	const description = cleanDescription(String(form.get('description') ?? ''));
+	if (description === 'long') return no(`The description can be up to ${MAX_NIGHT_DESCRIPTION.toLocaleString('en-GB')} characters.`);
+	const pictures = cleanPictures(String(form.get('pictures') ?? ''));
+	if (pictures === 'bad') return no('Picture addresses start with https://, one per line.');
+	if (pictures === 'many') return no(`Up to ${MAX_NIGHT_PICTURES} pictures, one address per line.`);
+	return ok({ name, nightOn, startsAt, hostId, description, pictures });
 }
 
+/** A member who can take part (D79): not waiting to be let in, not suspended. */
 async function isMember(db: DB, groupId: string, userId: string): Promise<boolean> {
-	return (await one(db, 'SELECT 1 AS x FROM memberships WHERE group_id = ?1 AND user_id = ?2', groupId, userId)) != null;
+	return (await one(db, `SELECT 1 AS x FROM memberships m WHERE m.group_id = ?1 AND m.user_id = ?2 AND ${fullMember()}`, groupId, userId)) != null;
 }
 
 /** Whether this person may plan nights in the group, by the group's `nights_by` setting. */
@@ -54,7 +76,12 @@ export function mayPlanNights(role: Role, nightsBy: string | null): boolean {
 }
 
 async function nightRow(db: DB, groupId: string, nightId: string) {
-	return one<{ created_by: string | null; night_on: string }>(db, 'SELECT created_by, night_on FROM game_nights WHERE id = ?1 AND group_id = ?2', nightId, groupId);
+	return one<{ created_by: string | null; night_on: string; host_id: string | null }>(
+		db,
+		'SELECT created_by, night_on, host_id FROM game_nights WHERE id = ?1 AND group_id = ?2',
+		nightId,
+		groupId
+	);
 }
 
 /**
@@ -72,6 +99,20 @@ export function canChangeNight(actor: Actor, night: { createdBy: string | null }
 	return can(actor.role, 'change_night', { targetIsSelf: night.createdBy === actor.id });
 }
 
+/** Pictures as stored: addresses one per line, NULL for none (migration 0022). */
+const picturesColumn = (pictures: readonly string[]) => (pictures.length ? pictures.join('\n') : null);
+
+/**
+ * A night's description and pictures (D77), for its own page. Kept out of `nightReads`, so the group
+ * layout's nights and the plays page's long lists don't carry them.
+ */
+export function nightAboutRead(db: DB, groupId: string, nightId: string): Read<NightAbout> {
+	return mapRead(
+		rowOf<{ description: string | null; pictures: string | null }>(db, 'SELECT description, pictures FROM game_nights WHERE id = ?1 AND group_id = ?2', nightId, groupId),
+		(row) => (row ? { description: row.description, pictures: row.pictures ? row.pictures.split('\n') : [] } : NO_ABOUT)
+	);
+}
+
 /** Plans a night; whoever plans it is marked going. */
 export async function createNight(db: DB, groupId: string, actor: Actor, input: NightInput, now = Date.now()): Promise<Result<string>> {
 	if (!(await canPlanNights(db, groupId, actor.role))) return no('In this group, only the owner and co-admins plan game nights.');
@@ -80,7 +121,8 @@ export async function createNight(db: DB, groupId: string, actor: Actor, input: 
 	await db.batch([
 		stmt(
 			db,
-			'INSERT INTO game_nights (id, group_id, name, night_on, starts_at, host_id, created_by, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)',
+			`INSERT INTO game_nights (id, group_id, name, night_on, starts_at, host_id, created_by, created_at, description, pictures)
+			 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
 			id,
 			groupId,
 			input.name,
@@ -88,7 +130,9 @@ export async function createNight(db: DB, groupId: string, actor: Actor, input: 
 			input.startsAt,
 			input.hostId,
 			actor.id,
-			now
+			now,
+			input.description,
+			picturesColumn(input.pictures)
 		),
 		stmt(db, 'INSERT INTO night_people (night_id, user_id, going) VALUES (?1, ?2, 1)', id, actor.id)
 	]);
@@ -99,7 +143,8 @@ export async function updateNight(db: DB, groupId: string, actor: Actor, nightId
 	const night = await nightRow(db, groupId, nightId);
 	if (!night) return no('That night is gone. Reload the page.');
 	if (!canChangeNight(actor, { createdBy: night.created_by })) return no('Only whoever planned the night and co-admins can change it.');
-	if (input.hostId && !(await isMember(db, groupId, input.hostId))) return no('Pick a host from the group, or “somewhere else”.');
+	// The night's own host stays possible, whatever their standing now; a new one has to be able to take part (D79).
+	if (input.hostId && input.hostId !== night.host_id && !(await isMember(db, groupId, input.hostId))) return no('Pick a host from the group, or “somewhere else”.');
 	const moved = input.nightOn !== night.night_on;
 	// Its plays were played at the night, so they move with it (D70); a play can't be dated after today.
 	const hasPlays = moved && (await one(db, 'SELECT 1 AS x FROM plays WHERE night_id = ?1 AND +group_id = ?2 LIMIT 1', nightId, groupId)) != null;
@@ -107,11 +152,13 @@ export async function updateNight(db: DB, groupId: string, actor: Actor, nightId
 	await db.batch([
 		stmt(
 			db,
-			'UPDATE game_nights SET name = ?1, night_on = ?2, starts_at = ?3, host_id = ?4 WHERE id = ?5',
+			'UPDATE game_nights SET name = ?1, night_on = ?2, starts_at = ?3, host_id = ?4, description = ?5, pictures = ?6 WHERE id = ?7',
 			input.name,
 			input.nightOn,
 			input.startsAt,
 			input.hostId,
+			input.description,
+			picturesColumn(input.pictures),
 			nightId
 		),
 		...(hasPlays
@@ -296,7 +343,7 @@ export async function bringCopy(db: DB, groupId: string, actor: Actor, nightId: 
 	const r = await readAll(db, {
 		night: rowOf<{ created_by: string | null; night_on: string }>(db, 'SELECT created_by, night_on FROM game_nights WHERE id = ?1 AND group_id = ?2', nightId, groupId),
 		actorGoing: rowOf(db, going, nightId, actor.id),
-		ownerGoing: rowOf(db, `${going} AND EXISTS (SELECT 1 FROM memberships WHERE group_id = ?3 AND user_id = ?2)`, nightId, ownerId, groupId),
+		ownerGoing: rowOf(db, `${going} AND EXISTS (SELECT 1 FROM memberships m WHERE m.group_id = ?3 AND m.user_id = ?2 AND ${fullMember()})`, nightId, ownerId, groupId),
 		// On their shelf in this group: a copy hidden from it isn't offered (D66).
 		copy: rowOf(db, 'SELECT 1 AS x FROM group_copies WHERE group_id = ?3 AND user_id = ?1 AND game_id = ?2', ownerId, gameId, groupId)
 	});

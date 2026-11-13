@@ -30,7 +30,8 @@
 			{ href: base, label: 'Shelf', icon: LayoutGrid, show: true },
 			{ href: `${base}/pick`, label: 'Game night', icon: Dices, show: true },
 			{ href: `${base}/wanted`, label: 'Wanted', icon: Gift, show: true },
-			{ href: `${base}/add`, label: 'Add games', icon: Plus, show: !!data.role && !data.readonly },
+			// Someone waiting to be let in can fill their shelf (D79); nobody can in a read-only group or while suspended.
+			{ href: `${base}/add`, label: 'Add games', icon: Plus, show: !!data.role && data.shelfOpen },
 			{ href: `${base}/group`, label: 'Group', icon: Users, show: true }
 		].filter((t) => t.show)
 	);
@@ -85,7 +86,7 @@
 	$effect(() => {
 		// Re-read when switching groups and each time the modal opens, so a table left overnight has reset.
 		const groupId = data.group.id;
-		const seed = tonightSeed(nightOn(data.nights, nightOf(Date.now())), new Set(data.tableMembers.map((m) => m.id)));
+		const seed = tonightSeed(nightOn(data.nights, nightOf(Date.now())), new Set(data.tableMembers.filter((m) => m.active).map((m) => m.id)));
 		void startOpen;
 		untrack(() => table.load(groupId, seed));
 	});
@@ -192,6 +193,25 @@
 		The host has suspended this group{data.group.suspendedReason ? `: ${data.group.suspendedReason}` : ''}. It's read-only.
 		Questions go to <a href={data.contact}>{data.contact.replace(/^mailto:/, '')}</a>.
 	</p>
+{:else if data.standing === 'waiting'}
+	<!-- Probation (D79): someone who joined waits to be let in, and can fill their shelf meanwhile. -->
+	<p class="banner">
+		You’re waiting to be let in to {data.group.name}. The owner or a co-admin does that; until then you can
+		<a href="/g/{data.group.id}/add">add your games</a> and look around.
+	</p>
+{:else if data.standing === 'suspended' && data.suspension}
+	<p class="banner">
+		{data.suspension.byName ? `${data.suspension.byName} suspended you` : 'You were suspended'} in {data.group.name} on
+		{new Date(data.suspension.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}{data.suspension.note
+			? `: “${data.suspension.note}”`
+			: '.'}
+		You can look around, but not change anything here. To leave the group, go to <a href="/me">your account</a>.
+	</p>
+{:else if data.waiting > 0 && !page.url.pathname.endsWith('/group')}
+	<p class="banner">
+		{data.waiting === 1 ? 'Someone is' : `${data.waiting} people are`} waiting to be let in.
+		<a href="/g/{data.group.id}/group#waiting-h">See who on the Group tab</a>.
+	</p>
 {/if}
 
 <div class="group-body">
@@ -199,7 +219,7 @@
 </div>
 
 <Modal bind:open={startOpen} title="Who goes first?">
-	{#key data.group.id}<StartPlayer members={data.tableMembers} {table} />{/key}
+	{#key data.group.id}<StartPlayer members={data.tableMembers.filter((m) => m.active)} {table} />{/key}
 </Modal>
 <Modal bind:open={diceOpen} title="Dice">
 	<DiceRoller />

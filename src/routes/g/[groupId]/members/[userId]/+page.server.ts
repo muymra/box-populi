@@ -18,6 +18,10 @@ export const load: PageServerLoad = async (event) => {
 	// A visitor to the demo can look but isn't anyone here, so there's no "you" to compare with.
 	const viewerId = access.role && event.locals.user ? event.locals.user.id : null;
 	const self = viewerId === userId;
+	// Someone waiting to be let in or suspended opens only their own page (D79).
+	if (!self && access.standing !== 'full') {
+		error(403, access.standing === 'waiting' ? 'You can open other members’ pages once you’re let in.' : 'You can’t open other members’ pages while you’re suspended here.');
+	}
 	const now = Date.now();
 	const today = new Date(now).toISOString().slice(0, 10);
 	const year = new Date(now).getUTCFullYear();

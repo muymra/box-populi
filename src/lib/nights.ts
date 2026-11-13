@@ -20,6 +20,12 @@ export type Night = {
 
 export const MAX_NIGHT_NAME = 60;
 
+/** A night's description and pictures (D77), read only by the night's own page. */
+export type NightAbout = { description: string | null; pictures: string[] };
+export const NO_ABOUT: NightAbout = { description: null, pictures: [] };
+export const MAX_NIGHT_DESCRIPTION = 2000;
+export const MAX_NIGHT_PICTURES = 4;
+
 /** Members marked going who are still in the group, in the order they were added. */
 export function goingMembers(night: Night, memberIds: ReadonlySet<string>): string[] {
 	return night.people.flatMap((p) => (p.userId && p.going && memberIds.has(p.userId) ? [p.userId] : []));
@@ -176,12 +182,52 @@ export function cleanTime(raw: string): string | null | 'bad' {
 	return `${m[1].padStart(2, '0')}:${m[2]}`;
 }
 
-/** What "Copy for the chat" copies: date and place, who's going, the bring list by person, the link. */
+/**
+ * A description as typed (D77): Windows line ends and tabs evened out, control characters and the
+ * ones that reverse text direction dropped, spaces at line ends trimmed, at most one blank line in a
+ * row. Null when empty, 'long' past MAX_NIGHT_DESCRIPTION.
+ */
+export function cleanDescription(raw: string): string | null | 'long' {
+	const text = raw
+		.replace(/\r\n?/g, '\n')
+		.replace(/\t/g, ' ')
+		.replace(/[\u0000-\u0009\u000B-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/g, '')
+		.replace(/[^\S\n]+$/gm, '')
+		.replace(/\n{3,}/g, '\n\n')
+		.trim();
+	if (!text) return null;
+	return text.length > MAX_NIGHT_DESCRIPTION ? 'long' : text;
+}
+
+/**
+ * Picture addresses as typed (D77), one per line (or separated by spaces): each https, with no
+ * password in it, repeats dropped. 'bad' for anything else, 'many' past MAX_NIGHT_PICTURES.
+ */
+export function cleanPictures(raw: string): string[] | 'bad' | 'many' {
+	const out: string[] = [];
+	for (const word of raw.split(/\s+/).filter(Boolean)) {
+		let url: URL;
+		try {
+			url = new URL(word);
+		} catch {
+			return 'bad';
+		}
+		if (url.protocol !== 'https:' || url.username || url.password || url.href.length > 2000) return 'bad';
+		if (!out.includes(url.href)) out.push(url.href);
+	}
+	return out.length > MAX_NIGHT_PICTURES ? 'many' : out;
+}
+
+/**
+ * What "Copy for the chat" copies: date and place, the description and its pictures as links (D77),
+ * who's going, the bring list by person, the link.
+ */
 export function chatText(
 	night: Night,
 	memberIds: ReadonlySet<string>,
 	names: { member: (id: string) => string; game: (id: number) => string },
-	url: string
+	url: string,
+	about: NightAbout = NO_ABOUT
 ): string {
 	const when = `${nightDate(night.nightOn)}${night.startsAt ? `, ${night.startsAt}` : ''}`;
 	const where = night.hostId && memberIds.has(night.hostId) ? `at ${names.member(night.hostId)}'s` : night.name;
@@ -192,6 +238,9 @@ export function chatText(
 		byPerson.set(who, [...(byPerson.get(who) ?? []), names.game(g.gameId)]);
 	}
 	const lines = [`${night.name}: ${when}${where === night.name ? '' : `, ${where}`}`];
+	// The description and pictures, set off by a blank line so the lists after them don't read as part of it.
+	const aboutLines = [...(about.description ? [about.description] : []), ...about.pictures];
+	if (aboutLines.length) lines.push(...aboutLines, '');
 	if (going.length) lines.push(`Going: ${going.join(', ')}`);
 	if (byPerson.size) {
 		lines.push('Bringing:');

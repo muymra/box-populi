@@ -8,6 +8,7 @@ import { getDb } from '#lib/server/platform.ts';
 import { myGroupsRead } from '#lib/server/identity.ts';
 import { known, readAll, rowOf } from '#lib/server/db.ts';
 import { myPlaySoonRead } from '#lib/server/interest.ts';
+import { chatForViewer } from '#lib/group-chat.ts';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async (event) => {
@@ -17,8 +18,9 @@ export const load: LayoutServerLoad = async (event) => {
 	// So the app on a home screen opens here next time (D76).
 	rememberGroup(event.cookies, event.url, access.group.id);
 	// Members see the join code so they can invite people; demo visitors never do, and nobody does
-	// while the group is archived (D50) or suspended, since joining is refused then.
-	const code = access.role && !access.group.isDemo && !access.group.archived && !access.group.suspended ? extras.code : null;
+	// while the group is archived (D50) or suspended, since joining is refused then. Nor does someone
+	// waiting to be let in or suspended (D79).
+	const code = access.role && access.standing === 'full' && !access.group.isDemo && !access.group.archived && !access.group.suspended ? extras.code : null;
 	// The invite link carries the group's link key after the code (D65), which spares it the limit on wrong codes.
 	const invite = code ? invitePath(code, extras.linkKey) : null;
 	// The group's theme, for switching colours without a reload when moving between groups.
@@ -43,7 +45,11 @@ export const load: LayoutServerLoad = async (event) => {
 		// Whether the group has a night behind it, for the Game night tab's "Past nights" link (STATUS item 45).
 		pastNight: rowOf<{ x: number }>(db, 'SELECT 1 AS x FROM game_nights WHERE group_id = ?1 AND night_on < ?2 LIMIT 1', access.group.id, day(0))
 	});
-	const tableMembers = reads.members.map((m) => ({ id: m.id, name: m.name, colorIndex: m.colorIndex }));
+	// `active`: a full member (D79). Only they're offered as here, going, players, hosts or borrowers;
+	// everyone stays in what already happened.
+	const tableMembers = reads.members.map((m) => ({ id: m.id, name: m.name, colorIndex: m.colorIndex, active: m.standing === 'full' }));
+	// For the owner and co-admins, a note on every page while anyone waits to be let in (D79).
+	const waiting = access.role && access.role !== 'member' && access.standing === 'full' ? reads.members.filter((m) => m.standing === 'waiting').length : 0;
 	const nights = assembleNights(reads.nights, reads.people, reads.games);
 	const mayPlan = access.role && !access.readonly ? mayPlanNights(access.role, extras.nightsBy) : false;
 	// A member's live groups, this one included, by name so they keep their places. Empty unless
@@ -64,6 +70,12 @@ export const load: LayoutServerLoad = async (event) => {
 		myId: event.locals.user?.id ?? null,
 		// A member without a PIN is nudged on the shelf to set one (D47, D48).
 		myPinSet: access.role && event.locals.user ? extras.pinSetAt != null : true,
+		// Where the group talks (D78), for full members only (D79), and whether the shelf mentions it to someone new.
+		...chatForViewer({ role: access.standing === 'full' ? access.role : null, readonly: access.readonly, joinedAt: extras.joinedAt }, extras.chatUrl, Date.now()),
+		waiting,
+		probation: access.role && access.standing === 'full' ? extras.probation : false,
+		// Other members' profiles (D79); see profileHref.
+		profilesOpen: access.standing === 'full',
 		contact: event.locals.config.instanceContact,
 		pendingDetails: reads.pending,
 		myPlaySoon: reads.myPlaySoon,

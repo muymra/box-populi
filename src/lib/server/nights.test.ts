@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
-import { deleteGroupStatements, deletePersonStatements, one, run } from './db.ts';
+import { deleteGroupStatements, deletePersonStatements, one, readAll, run } from './db.ts';
 import {
 	addNightGuest,
 	bringCopy,
@@ -8,6 +8,7 @@ import {
 	createNight,
 	deleteNight,
 	loadNights,
+	nightAboutRead,
 	nightOnlyGames,
 	parseNightForm,
 	removeNightGuest,
@@ -20,7 +21,7 @@ import {
 } from './nights.ts';
 import { loadPlays, savePlay } from './plays.ts';
 import { gameVisibleInGroup } from './games.ts';
-import { chatText, cleanTime, goingMembers, nightOn, nightOptions, nightPoolIds, type Night } from '#lib/nights.ts';
+import { chatText, cleanDescription, cleanPictures, cleanTime, goingMembers, nightOn, nightOptions, nightPoolIds, type Night } from '#lib/nights.ts';
 import { copy, game } from '#lib/catalog/testing.ts';
 
 // These nights are on 2026-11-14; the night actions lock once a night is over (D70), so the clock is pinned before it.
@@ -76,6 +77,29 @@ describe('night rules', () => {
 		const text = chatText(night(), members, { member: (id) => ({ ada: 'Ada', bo: 'Bo' })[id] ?? id, game: (id) => `Game ${id}` }, 'https://x/n');
 		expect(text).toBe(['Café: Sat 14 Nov, 19:00', 'Going: Ada, Sam', 'Bringing:', 'Ada: Game 1, Game 4', 'Sam: Game 3', 'https://x/n'].join('\n'));
 	});
+	it('puts the description and its pictures in the message, set off by a blank line (D77)', () => {
+		const names = { member: (id: string) => ({ ada: 'Ada' })[id] ?? id, game: (id: number) => `Game ${id}` };
+		const about = { description: 'Doorbell’s broken.\n\nPark round the back.', pictures: ['https://img.example/a.jpg'] };
+		const text = chatText(night({ games: [] }), members, names, 'https://x/n', about);
+		expect(text).toBe(['Café: Sat 14 Nov, 19:00', 'Doorbell’s broken.', '', 'Park round the back.', 'https://img.example/a.jpg', '', 'Going: Ada, Sam', 'https://x/n'].join('\n'));
+		expect(chatText(night({ games: [] }), members, names, 'https://x/n', { description: null, pictures: [] })).toBe(['Café: Sat 14 Nov, 19:00', 'Going: Ada, Sam', 'https://x/n'].join('\n'));
+	});
+	it('tidies a description as typed (D77)', () => {
+		expect(cleanDescription('  Bring snacks.  \r\n\r\n\r\n\r\nParking\tround back  ')).toBe('Bring snacks.\n\nParking round back');
+		expect(cleanDescription('a\u0007b\u202Ec')).toBe('abc');
+		expect(cleanDescription(' \n ')).toBeNull();
+		expect(cleanDescription('x'.repeat(2000))).toHaveLength(2000);
+		expect(cleanDescription('x'.repeat(2001))).toBe('long');
+	});
+	it('takes up to four https picture addresses (D77)', () => {
+		expect(cleanPictures('')).toEqual([]);
+		expect(cleanPictures(' https://i.example/a.jpg \r\n\nhttps://i.example/b.png https://i.example/a.jpg')).toEqual(['https://i.example/a.jpg', 'https://i.example/b.png']);
+		expect(cleanPictures('http://i.example/a.jpg')).toBe('bad');
+		expect(cleanPictures('i.example/a.jpg')).toBe('bad');
+		expect(cleanPictures('javascript:alert(1)')).toBe('bad');
+		expect(cleanPictures('https://me:secret@i.example/a.jpg')).toBe('bad');
+		expect(cleanPictures([1, 2, 3, 4, 5].map((n) => `https://i.example/${n}.jpg`).join('\n'))).toBe('many');
+	});
 });
 
 describe('planning nights', () => {
@@ -88,7 +112,7 @@ describe('planning nights', () => {
 		for (const [k, v] of Object.entries(entries)) f.append(k, v);
 		return f;
 	};
-	const input = { name: 'Café', nightOn: '2026-11-14', startsAt: '19:00', hostId: null };
+	const input = { name: 'Café', nightOn: '2026-11-14', startsAt: '19:00', hostId: null, description: null, pictures: [] as string[] };
 	const plan = async (actor = ada) => {
 		const r = await createNight(db, 'g1', actor, input);
 		if (!r.ok) throw new Error(r.error);
@@ -112,6 +136,22 @@ describe('planning nights', () => {
 		expect(parseNightForm(form({ name: '', nightOn: '2026-11-14' })).ok).toBe(false);
 		expect(parseNightForm(form({ name: 'Café', nightOn: '2026-02-30' })).ok).toBe(false);
 		expect(parseNightForm(form({ name: 'Café', nightOn: '2026-11-14', startsAt: '7pm' })).ok).toBe(false);
+		const about = { name: 'Café', nightOn: '2026-11-14', description: ' Park at the back. ', pictures: 'https://i.example/a.jpg\n' };
+		expect(parseNightForm(form(about))).toMatchObject({ ok: true, value: { description: 'Park at the back.', pictures: ['https://i.example/a.jpg'] } });
+		expect(parseNightForm(form({ ...about, pictures: 'not an address' }))).toEqual({ ok: false, error: 'Picture addresses start with https://, one per line.' });
+		expect(parseNightForm(form({ ...about, description: 'x'.repeat(2001) })).ok).toBe(false);
+	});
+
+	it('keeps a description and pictures, changes and clears them, and only for its own group (D77)', async () => {
+		const id = await createNight(db, 'g1', ada, { ...input, description: 'Snacks welcome.', pictures: ['https://i.example/a.jpg', 'https://i.example/b.jpg'] });
+		if (!id.ok) throw new Error(id.error);
+		const about = async (group = 'g1') => (await readAll(db, { a: nightAboutRead(db, group, id.value) })).a;
+		expect(await about()).toEqual({ description: 'Snacks welcome.', pictures: ['https://i.example/a.jpg', 'https://i.example/b.jpg'] });
+		expect(await about('g2')).toEqual({ description: null, pictures: [] });
+		expect((await updateNight(db, 'g1', ada, id.value, { ...input, description: null, pictures: ['https://i.example/c.jpg'] })).ok).toBe(true);
+		expect(await about()).toEqual({ description: null, pictures: ['https://i.example/c.jpg'] });
+		expect((await updateNight(db, 'g1', ada, id.value, input)).ok).toBe(true);
+		expect(await about()).toEqual({ description: null, pictures: [] });
 	});
 
 	it('lets any member plan by default, and only co-admins when the group says so', async () => {
@@ -122,6 +162,24 @@ describe('planning nights', () => {
 		expect((await createNight(db, 'g1', bo, input)).ok).toBe(false);
 		expect((await createNight(db, 'g1', cy, input)).ok).toBe(true);
 		expect((await createNight(db, 'g1', ada, { ...input, hostId: 'out' })).ok).toBe(false); // host from outside
+	});
+
+	it('offers only members who can take part as going, host or players, and keeps what already happened (D79)', async () => {
+		const id = await plan();
+		const bo1 = { userId: 'bo', guestName: null, place: null, score: null };
+		const ada1 = { userId: 'ada', guestName: null, place: null, score: null };
+		const play = { playedOn: '2026-11-10', coop: 'won' as const, lowestWins: false, nightId: null };
+		const before = await savePlay(db, 'g1', ada, 1, { ...play, players: [ada1, bo1] });
+		if (!before.ok) throw new Error(before.error);
+		await run(db, `UPDATE memberships SET suspended_at = 5, suspended_by = 'ada' WHERE group_id = 'g1' AND user_id = 'bo'`);
+		expect((await setGoing(db, 'g1', cy, id, 'bo', true)).ok).toBe(false);
+		expect((await createNight(db, 'g1', ada, { ...input, hostId: 'bo' })).ok).toBe(false);
+		expect((await savePlay(db, 'g1', ada, 1, { ...play, players: [ada1, bo1] })).ok).toBe(false); // a new play
+		expect((await savePlay(db, 'g1', ada, 1, { ...play, playedOn: '2026-11-09', players: [ada1, bo1] }, before.value)).ok).toBe(true); // an edit keeps them
+		await run(db, `UPDATE memberships SET suspended_at = NULL, waiting_since = 5 WHERE group_id = 'g1' AND user_id = 'bo'`);
+		expect((await setGoing(db, 'g1', cy, id, 'bo', true)).ok).toBe(false);
+		await run(db, `UPDATE memberships SET waiting_since = NULL WHERE group_id = 'g1' AND user_id = 'bo'`);
+		expect((await setGoing(db, 'g1', cy, id, 'bo', true)).ok).toBe(true);
 	});
 
 	it('lets the planner and co-admins change or delete a night, and keeps its plays', async () => {

@@ -11,6 +11,7 @@ import {
 	setCame,
 	deleteNight,
 	assembleNights,
+	nightAboutRead,
 	nightOnlyGamesRead,
 	nightListRead,
 	nightReads,
@@ -38,6 +39,7 @@ export const load: PageServerLoad = async (event) => {
 		// The nights a play can be put on (STATUS item 42).
 		nightList: nightListRead(db, groupId, Date.now()),
 		...nightReads(db, groupId, { id: nightId }),
+		about: nightAboutRead(db, groupId, nightId),
 		otherGames: nightOnlyGamesRead(db, groupId, { ids: [nightId] }),
 		plays: playsRead(db, groupId, { nightId }),
 		// The bring list's titles, with this group's corrections, before the catalog loads in the browser.
@@ -54,10 +56,11 @@ export const load: PageServerLoad = async (event) => {
 	});
 	const [night] = assembleNights(r.nights, r.people, r.games);
 	if (!night) error(404, 'Game night not found');
-	const { otherGames, plays, names, soon } = r;
+	const { about, otherGames, plays, names, soon } = r;
 	const actor = me && access.role && !access.readonly ? { id: me.id, role: access.role } : null;
 	return {
 		night,
+		about,
 		otherGames,
 		gameNames: Object.fromEntries(names.map((n) => [n.id, n.name])) as Record<number, string>,
 		plays: plays.map((p) => ({ ...p, canChange: actor != null && canChangePlay(actor, p) })),

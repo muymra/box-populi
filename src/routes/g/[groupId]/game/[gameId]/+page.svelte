@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { profileHref } from '#lib/profiles.svelte.ts';
 	import { announce } from '#lib/announce.svelte.ts';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import EyeOff from '@lucide/svelte/icons/eye-off';
@@ -432,9 +433,9 @@
 							{@const c = playerColor(o.colorIndex)}
 							<li>
 								<span class="chip" style:background={c.fill} style:color={c.ink} aria-hidden="true">{o.name.slice(0, 1).toUpperCase()}</span>
-								<span class="who"><strong><a href="{base}/members/{o.id}">{o.name}</a></strong></span>
+								<span class="who"><strong><a href={profileHref(o.id)}>{o.name}</a></strong></span>
 								{#if o.status}<span class="tag">{o.status}</span>{/if}
-								{#if o.isMe && data.canEdit}{@render playersWith()}{/if}
+								{#if o.isMe && data.shelfOpen}{@render playersWith()}{/if}
 							</li>
 						{/each}
 					</ul>
@@ -444,15 +445,16 @@
 					<p class="muted">Nobody in the group owns this yet.</p>
 				{/if}
 				{#if data.wishers.length}
-					<p class="muted wanted">Wanted by {#each data.wishers as w, i (w.id)}{i ? ', ' : ''}<a href="{base}/members/{w.id}">{w.name}</a>{/each}</p>
+					<p class="muted wanted">Wanted by {#each data.wishers as w, i (w.id)}{i ? ', ' : ''}<a href={profileHref(w.id)}>{w.name}</a>{/each}</p>
 				{/if}
 				{#if data.favourites.length}
 					<p class="muted favoured">
 						<span class="squares" aria-hidden="true">{#each data.favourites.slice(0, 4) as f (f.id)}<i style:background={playerColor(f.colorIndex).fill}></i>{/each}</span>
-						Favourite of {#each data.favourites as f, i (f.id)}{i ? ', ' : ''}<a href="{base}/members/{f.id}">{f.name}</a>{/each}
+						Favourite of {#each data.favourites as f, i (f.id)}{i ? ', ' : ''}<a href={profileHref(f.id)}>{f.name}</a>{/each}
 					</p>
 				{/if}
-				{#if data.canEdit}
+				<!-- Someone waiting to be let in (D79) manages their own copy here; the rest waits for a full member. -->
+				{#if data.shelfOpen}
 					<div class="copy-actions">
 						<form method="POST" action={data.mine ? '?/remove' : '?/add'}>
 							<button class="btn">{data.mine ? 'Remove from my games' : data.owners.length ? 'I own this too' : 'I own this'}</button>
@@ -467,12 +469,12 @@
 								</button>
 							</form>
 						{/if}
-						{#if data.mine && data.myLoan}
+						{#if data.canEdit && data.mine && data.myLoan}
 							<form method="POST" action="?/returned" use:enhance={send('returned')}>
 								<button class="btn" disabled={sending === 'returned'}>Mark as returned</button>
 							</form>
 						{/if}
-						{#if !data.mine}
+						{#if data.canEdit && !data.mine}
 							<form method="POST" action="?/want" use:enhance={send('want')}>
 								<input type="hidden" name="on" value={data.wanted ? '0' : '1'} />
 								<button class="btn want" aria-pressed={data.wanted} disabled={sending === 'want'}>
@@ -486,7 +488,7 @@
 						<p class="hint">Hidden from {data.group.name}: nobody else here sees it, and it can’t be lent or brought to a night from here. Your other groups still see it.</p>
 					{/if}
 					<!-- Favourite (D63) and Play soon (D64): the viewer's own marks, said in their own words. -->
-					{#if !data.hiddenHere || data.owners.length}
+					{#if data.canEdit && (!data.hiddenHere || data.owners.length)}
 					<div class="copy-actions marks">
 						{#if data.owners.length}
 							<form method="POST" action="?/favourite" use:enhance={send('favourite')}>
@@ -516,7 +518,7 @@
 					{/if}
 					{/if}
 					{#if form?.lent}<p class="banner" {@attach announce}>Marked as lent.</p>{:else if form?.returned}<p class="banner" {@attach announce}>Marked as returned.</p>{/if}
-					{#if data.mine && !data.myLoan && !data.hiddenHere}
+					{#if data.canEdit && data.mine && !data.myLoan && !data.hiddenHere}
 						<details class="lend" open={!!form?.lendError}>
 							<summary class="link-button">Lend your copy…</summary>
 							<form method="POST" action="?/lend" class="lend-form" use:enhance={send('lend')}>

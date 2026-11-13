@@ -47,12 +47,31 @@ export async function createGroup(
 	throw new Error('Could not generate a unique group code');
 }
 
-export type JoinTarget = { id: string; name: string; memberCount: number; isDemo: boolean; suspended: boolean; archived?: boolean; linkKey?: string | null };
+export type JoinTarget = {
+	id: string;
+	name: string;
+	memberCount: number;
+	isDemo: boolean;
+	suspended: boolean;
+	archived?: boolean;
+	linkKey?: string | null;
+	/** People who join wait to be let in (D79). */
+	probation?: boolean;
+};
 
 export async function findGroupByCode(db: DB, code: string): Promise<JoinTarget | null> {
-	const row = await one<{ id: string; name: string; is_demo: number; suspended_at: number | null; archived_at: number | null; member_count: number; link_key: string | null }>(
+	const row = await one<{
+		id: string;
+		name: string;
+		is_demo: number;
+		suspended_at: number | null;
+		archived_at: number | null;
+		member_count: number;
+		link_key: string | null;
+		probation: number;
+	}>(
 		db,
-		`SELECT g.id, g.name, g.is_demo, g.suspended_at, g.archived_at, g.link_key, (SELECT COUNT(*) FROM memberships m WHERE m.group_id = g.id) AS member_count
+		`SELECT g.id, g.name, g.is_demo, g.suspended_at, g.archived_at, g.link_key, g.probation, (SELECT COUNT(*) FROM memberships m WHERE m.group_id = g.id) AS member_count
 		 FROM groups g WHERE g.code = ?1`,
 		code
 	);
@@ -64,7 +83,8 @@ export async function findGroupByCode(db: DB, code: string): Promise<JoinTarget 
 		suspended: row.suspended_at != null,
 		archived: row.archived_at != null,
 		memberCount: row.member_count,
-		linkKey: row.link_key
+		linkKey: row.link_key,
+		probation: row.probation === 1
 	};
 }
 
@@ -88,9 +108,13 @@ export async function joinGroup(
 ): Promise<void> {
 	await db.batch([
 		...(opts.before ?? []),
+		// In a group with probation on, they wait to be let in (D79); the group's setting is read in the
+		// same statement, so a change between the page and the post can't slip past it.
 		stmt(
 			db,
-			"INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES (?1, ?2, 'member', ?3, ?3) ON CONFLICT DO NOTHING",
+			`INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at, waiting_since)
+			 SELECT ?1, ?2, 'member', ?3, ?3, CASE WHEN probation = 1 THEN ?3 END FROM groups WHERE id = ?1
+			 ON CONFLICT DO NOTHING`,
 			opts.groupId,
 			opts.userId,
 			opts.now

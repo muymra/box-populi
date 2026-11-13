@@ -24,7 +24,9 @@ const GROUP = 'sandbox';
 if (values.print) {
 	const people = JSON.parse(readFileSync(LINKS_FILE, 'utf8')) as Array<{ name: string; role: string; token: string }>;
 	console.log('\nSandbox loaded. Open a link in your browser to be that person on this device:\n');
-	for (const p of people) console.log(`  ${p.name.padEnd(5)} ${p.role.padEnd(9)} ${values.origin}/key/${p.token}`);
+	// Lena waits to be let in and Ivo is suspended (D79), so their pages show the banners.
+	const standing: Record<string, string> = { Lena: 'waiting', Ivo: 'suspended' };
+	for (const p of people) console.log(`  ${p.name.padEnd(5)} ${(standing[p.name] ?? p.role).padEnd(9)} ${values.origin}/key/${p.token}`);
 	console.log(`\nThen the group is at ${values.origin}/g/${GROUP}`);
 	console.log(`Or use the front door: ${values.origin}/join/SNDBX, tap a name, PIN 123456 (Kai and Lena have none).\n`);
 	process.exit(0);
@@ -229,7 +231,18 @@ const shelfOf = (user: string, nightId: string, n: number) =>
 		.slice(0, n)
 		.map((c) => c.game_id as number);
 // Tonight at the café: four going, Eli can't, a guest bringing a game that's on nobody's shelf.
-nights.push({ id: 'sbx-night-tonight', group_id: GROUP, name: 'Café', night_on: TONIGHT, starts_at: '19:30', host_id: null, created_by: OWNER, created_at: NOW });
+// Tonight's has a description (D77), with a link, so the night page shows one.
+nights.push({
+	id: 'sbx-night-tonight',
+	group_id: GROUP,
+	name: 'Café',
+	night_on: TONIGHT,
+	starts_at: '19:30',
+	host_id: null,
+	created_by: OWNER,
+	created_at: NOW,
+	description: 'Upstairs room; ask at the bar. The kitchen closes at 21:00, so eat first or order early.\n\nMenu: https://example.com/menu'
+});
 for (const [user, going] of [['sbx-ada', 1], ['sbx-bram', 1], ['sbx-chen', 1], ['sbx-dewi', 1], ['sbx-eli', 0]] as const) nightPeople.push({ night_id: 'sbx-night-tonight', user_id: user, guest_name: null, going });
 nightPeople.push({ night_id: 'sbx-night-tonight', user_id: null, guest_name: 'Sam', going: 1 });
 for (const [user, n] of [['sbx-ada', 3], ['sbx-bram', 2], ['sbx-chen', 2]] as const) {
@@ -295,6 +308,11 @@ const statements = [
 	`DELETE FROM game_links WHERE group_id = '${GROUP}' OR ${SANDBOX_GAMES};`,
 	`DELETE FROM game_corrections WHERE group_id = '${GROUP}' OR ${SANDBOX_GAMES};`,
 	`DELETE FROM wishlist WHERE user_id LIKE 'sbx-%' OR ${SANDBOX_GAMES};`,
+	// Marks someone made on sandbox games while trying it out, which would otherwise hold the games in place.
+	`DELETE FROM favourites WHERE user_id LIKE 'sbx-%' OR ${SANDBOX_GAMES};`,
+	`DELETE FROM play_soon WHERE user_id LIKE 'sbx-%' OR ${SANDBOX_GAMES};`,
+	`DELETE FROM hidden_copies WHERE group_id = '${GROUP}' OR user_id LIKE 'sbx-%' OR ${SANDBOX_GAMES};`,
+	`DELETE FROM sign_in_codes WHERE group_id = '${GROUP}' OR user_id LIKE 'sbx-%' OR created_by LIKE 'sbx-%';`,
 	`DELETE FROM copies WHERE user_id LIKE 'sbx-%' OR ${SANDBOX_GAMES};`,
 	"UPDATE copies SET lent_to_user_id = NULL WHERE lent_to_user_id LIKE 'sbx-%';",
 	"DELETE FROM sessions WHERE user_id LIKE 'sbx-%';",
@@ -305,9 +323,25 @@ const statements = [
 	"DELETE FROM users WHERE id LIKE 'sbx-%';",
 	insert('users', members.map((m) => ({ id: m.id, name: m.name, created_at: NOW - 200 * DAY, ...(pins.get(m.id) ?? {}) }))),
 	insert('personal_links', links.map((l) => ({ user_id: l.id, token_hash: l.hash, created_at: NOW }))),
-	`INSERT INTO groups (id, name, code, is_demo, catalog_version, created_at) VALUES ('${GROUP}', 'Sandbox', 'SNDBX', 0, ${NOW}, ${NOW - 200 * DAY});`,
+	// New members wait to be let in here (D79), so the waiting list and banners show.
+	// A chat link (D78), an example address, so its card and buttons show.
+	`INSERT INTO groups (id, name, code, is_demo, catalog_version, created_at, probation, chat_url) VALUES ('${GROUP}', 'Sandbox', 'SNDBX', 0, ${NOW}, ${NOW - 200 * DAY}, 1, 'https://chat.whatsapp.com/SandboxExample');`,
 	// Joined in list order, so the player colours follow it.
-	insert('memberships', members.map((m, i) => ({ group_id: GROUP, user_id: m.id, role: m.role, joined_at: NOW - (200 - i) * DAY, last_seen_at: NOW - m.seen * DAY }))),
+	// Lena joined four days ago and waits to be let in; Bram suspended Ivo ten days ago (D79).
+	insert(
+		'memberships',
+		members.map((m, i) => ({
+			group_id: GROUP,
+			user_id: m.id,
+			role: m.role,
+			joined_at: m.id === 'sbx-lena' ? NOW - 4 * DAY : NOW - (200 - i) * DAY,
+			last_seen_at: NOW - m.seen * DAY,
+			waiting_since: m.id === 'sbx-lena' ? NOW - 4 * DAY : null,
+			suspended_at: m.id === 'sbx-ivo' ? NOW - 10 * DAY : null,
+			suspended_by: m.id === 'sbx-ivo' ? 'sbx-bram' : null,
+			suspended_note: m.id === 'sbx-ivo' ? 'Let’s talk at the next night.' : null
+		}))
+	),
 	insert('games', games.map((g) => ({ ...GAME_DEFAULTS, ...g }))),
 	insert('copies', copies),
 	insert('wishlist', wishlist),

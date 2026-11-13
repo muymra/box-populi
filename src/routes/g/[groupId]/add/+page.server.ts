@@ -13,7 +13,7 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async (event) => {
 	const db = getDb();
 	const { groupId } = event.params;
-	await requireRole(event, db, groupId, 'member');
+	await requireRole(event, db, groupId, 'member', { ownShelf: true });
 	const user = event.locals.user!;
 	const source = activeGameSource(event.locals.config);
 	// One round trip after the access check (D59, D65).
@@ -33,7 +33,7 @@ export const actions: Actions = {
 	showHere: async (event) => {
 		const db = getDb();
 		const { groupId } = event.params;
-		await requireRole(event, db, groupId, 'member');
+		await requireRole(event, db, groupId, 'member', { ownShelf: true });
 		const gameId = Number((await event.request.formData()).get('gameId'));
 		if (!Number.isInteger(gameId) || !(await setCopyHidden(db, groupId, event.locals.user!.id, gameId, false, Date.now()))) {
 			return fail(400, { hideError: 'That game isn’t on your shelf any more.' });
@@ -45,7 +45,7 @@ export const actions: Actions = {
 	hideNew: async (event) => {
 		const db = getDb();
 		const { groupId } = event.params;
-		await requireRole(event, db, groupId, 'member');
+		await requireRole(event, db, groupId, 'member', { ownShelf: true });
 		const form = await event.request.formData();
 		const on = form.get('on') === '1';
 		const shown = form
@@ -58,7 +58,7 @@ export const actions: Actions = {
 
 	add: async (event) => {
 		const db = getDb();
-		await requireRole(event, db, event.params.groupId, 'member');
+		await requireRole(event, db, event.params.groupId, 'member', { ownShelf: true });
 		const gameId = Number((await event.request.formData()).get('gameId'));
 		const userId = event.locals.user!.id;
 		if (
@@ -90,7 +90,7 @@ export const actions: Actions = {
 
 	manual: async (event) => {
 		const db = getDb();
-		await requireRole(event, db, event.params.groupId, 'member');
+		await requireRole(event, db, event.params.groupId, 'member', { ownShelf: true });
 		const form = await event.request.formData();
 		const parsed = parseManualGame(form);
 		if (!parsed.ok) return fail(400, { manualError: parsed.error, manual: Object.fromEntries([...form.entries()].map(([k, v]) => [k, String(v)])) });

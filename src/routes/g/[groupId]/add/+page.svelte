@@ -157,14 +157,17 @@
 						{#if r.owned}
 							<span class="owned"><Check size={16} aria-hidden="true" /> On your shelf</span>
 						{:else}
-							<form method="POST" action="?/want" use:enhance={act(r, (d) => (r.wanted = d.wanted === true))}>
-								<input type="hidden" name="gameId" value={r.gameId} />
-								<input type="hidden" name="on" value={r.wanted ? '0' : '1'} />
-								<button class="btn want" aria-pressed={r.wanted} aria-label="Want {r.name}" disabled={busy[r.gameId]}>
-									<Gift size={16} aria-hidden="true" />
-									<span class="want-text">{r.wanted ? 'Wanted' : 'Want'}</span>
-								</button>
-							</form>
+							<!-- The wishlist waits until someone's let in (D79); their own shelf doesn't. -->
+							{#if data.standing === 'full'}
+								<form method="POST" action="?/want" use:enhance={act(r, (d) => (r.wanted = d.wanted === true))}>
+									<input type="hidden" name="gameId" value={r.gameId} />
+									<input type="hidden" name="on" value={r.wanted ? '0' : '1'} />
+									<button class="btn want" aria-pressed={r.wanted} aria-label="Want {r.name}" disabled={busy[r.gameId]}>
+										<Gift size={16} aria-hidden="true" />
+										<span class="want-text">{r.wanted ? 'Wanted' : 'Want'}</span>
+									</button>
+								</form>
+							{/if}
 							<form
 								method="POST"
 								action="?/add"

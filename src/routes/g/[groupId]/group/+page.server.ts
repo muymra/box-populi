@@ -14,13 +14,18 @@ import {
 	regenerateCode,
 	removeMember,
 	renameGroup,
+	letIn,
+	reinstateMember,
+	setProbation,
+	suspendMember,
+	setGroupChat,
 	setCoAdmin,
 	setGroupTheme,
 	transferOwnership,
 	type Actor,
 	type AdminResult
 } from '#lib/server/group-admin.ts';
-import { known, one, readAll, type DB } from '#lib/server/db.ts';
+import { known, one, readAll, rowsOf, type DB } from '#lib/server/db.ts';
 import { setNightPlanners } from '#lib/server/nights.ts';
 import { formatSignInCode, makeSignInCode, memberReachRead, mergeMember, recoveryTools } from '#lib/server/recovery.ts';
 import { assembleGuestHistory, guestHistoryReads, linkGuestPlays } from '#lib/server/guest-plays.ts';
@@ -41,16 +46,25 @@ export const load: PageServerLoad = async (event) => {
 		members: membersRead(db, groupId),
 		counts: gameCountsRead(db, groupId),
 		reach: memberReachRead(db, groupId),
+		// Since when someone's been waiting or suspended (D79), for the waiting list and the tags.
+		since: rowsOf<{ user_id: string; waiting_since: number | null; suspended_at: number | null }>(
+			db,
+			'SELECT user_id, waiting_since, suspended_at FROM memberships WHERE group_id = ?1 AND (waiting_since IS NOT NULL OR suspended_at IS NOT NULL)',
+			groupId
+		),
 		away: access.role === 'admin' ? ownerAwayRead(db, groupId, Date.now(), event.locals.config.ownerAwayDays) : known(false),
 		// Guest plays to a member (D37): the guest names and what they were in, for the owner and co-admins.
 		...(manages ? guestHistoryReads(db, groupId) : { guestPlays: known([]), guestNights: known([]) })
 	});
 	const { members, counts, reach, away } = r;
+	const since = new Map(r.since.map((s) => [s.user_id, s.waiting_since ?? s.suspended_at ?? 0]));
 	const guests = manages ? assembleGuestHistory(r.guestPlays, r.guestNights) : [];
 	return {
 		guests,
 		now: Date.now(),
 		nightsBy: extras.nightsBy === 'admins' ? ('admins' as const) : ('members' as const),
+		// New members wait to be let in (D79). Everyone sees who's waiting; the owner and co-admins act.
+		probationOn: extras.probation,
 		canManage: actor != null && actor.role !== 'member',
 		// Deleting stays open to the owner of a suspended group.
 		// Archiving (D50): the owner archives and restores, and a co-admin once the owner has been away
@@ -74,6 +88,9 @@ export const load: PageServerLoad = async (event) => {
 			id: m.id,
 			name: m.name,
 			role: m.role,
+			standing: m.standing,
+			/** When they started waiting, or were suspended (D79). */
+			since: since.get(m.id) ?? null,
 			colorIndex: m.colorIndex,
 			lastSeenAt: m.lastSeenAt,
 			games: counts.get(m.id) ?? 0,
@@ -82,7 +99,8 @@ export const load: PageServerLoad = async (event) => {
 			// For the owner and co-admins only: who still needs a PIN, and who can be helped back in (D48).
 			noPin: actor != null && actor.role !== 'member' && reach.get(m.id)?.hasPin === false,
 			tools: actor ? recoveryTools(actor, m, reach.get(m.id)?.groups ?? 0) : [],
-			canLinkGuests: actor != null && guests.length > 0 && can(actor.role, 'link_guest_plays', { targetRole: m.role, targetIsSelf: m.id === actor.id }),
+			canLinkGuests:
+				actor != null && guests.length > 0 && can(actor.role, 'link_guest_plays', { targetRole: m.role, targetStanding: m.standing, targetIsSelf: m.id === actor.id }),
 			// Why the helping-back-in tools aren't offered, said in the panel rather than left out silently.
 			helpNote:
 				actor && actor.role !== 'member' && m.id !== me?.id
@@ -118,6 +136,11 @@ export const actions: Actions = {
 	rename: async (event) => {
 		const result = await act(event, 'admin', (db, id, actor, form) => renameGroup(db, id, actor, form.get('name')));
 		return result.ok ? { renamed: true } : fail(400, { renameError: result.error });
+	},
+
+	chat: async (event) => {
+		const result = await act(event, 'admin', (db, id, actor, form) => setGroupChat(db, id, actor, form.get('chatUrl')));
+		return result.ok ? { chatSaved: true } : fail(400, { chatError: result.error });
 	},
 
 	nightsBy: async (event) => {
@@ -194,6 +217,27 @@ export const actions: Actions = {
 		if (!result.ok) return fail(400, { memberError: result.error });
 		const name = (await one<{ name: string }>(db, 'SELECT name FROM users WHERE id = ?1', target(form)))?.name ?? 'them';
 		return { guestLinked: { name, plays: result.plays, nights: result.nights, skipped: result.skipped } };
+	},
+
+	// New members wait to be let in (D79). Turning it off lets everyone waiting in, once the form confirms it.
+	probation: async (event) => {
+		const result = await act(event, 'admin', (db, id, actor, form) => setProbation(db, id, actor, form.get('probation'), form.get('letEveryoneIn') === '1'));
+		return result.ok ? { probationSaved: true, letIn: 'letIn' in result ? (result.letIn ?? 0) : 0 } : fail(400, { probationError: result.error });
+	},
+
+	letIn: async (event) => {
+		const result = await act(event, 'admin', (db, id, actor, form) => letIn(db, id, actor, target(form)));
+		return result.ok ? { memberChanged: true } : fail(400, { memberError: result.error });
+	},
+
+	suspend: async (event) => {
+		const result = await act(event, 'admin', (db, id, actor, form) => suspendMember(db, id, actor, target(form), form.get('note')));
+		return result.ok ? { memberChanged: true } : fail(400, { memberError: result.error });
+	},
+
+	reinstate: async (event) => {
+		const result = await act(event, 'admin', (db, id, actor, form) => reinstateMember(db, id, actor, target(form)));
+		return result.ok ? { memberChanged: true } : fail(400, { memberError: result.error });
 	},
 
 	remove: async (event) => {

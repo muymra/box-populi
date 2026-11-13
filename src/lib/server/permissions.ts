@@ -1,6 +1,7 @@
 // The PRD's role table as one pure function. Actions call this after `requireRole`, with the
 // target's role read fresh from the database (TECH.md "Authorization").
 import type { Role } from '#lib/catalog/types.ts';
+import type { Standing } from '#lib/standing.ts';
 
 export type GroupAction =
 	| 'rename'
@@ -22,11 +23,16 @@ export type GroupAction =
 	| 'merge_member'
 	| 'archive_group'
 	| 'claim_ownership'
-	| 'link_guest_plays';
+	| 'link_guest_plays'
+	| 'set_probation'
+	| 'let_in'
+	| 'suspend_member';
 
 export type PermissionContext = {
 	/** Role of the member being acted on, for member-targeted actions. */
 	targetRole?: Role;
+	/** Standing of the member being acted on (D79); a full member when not given. */
+	targetStanding?: Standing;
 	/** True when the target is the actor, or for `change_play`, when the actor logged the play or played in it. */
 	targetIsSelf?: boolean;
 	/** Members in the group other than the actor, for `leave`. */
@@ -44,14 +50,19 @@ export function atLeast(role: Role, min: Role): boolean {
 }
 
 export function can(actor: Role, action: GroupAction, ctx: PermissionContext = {}): boolean {
-	const { targetRole, targetIsSelf = false, otherMembers = 0, openToMembers = true, ownerAway = false } = ctx;
+	const { targetRole, targetStanding = 'full', targetIsSelf = false, otherMembers = 0, openToMembers = true, ownerAway = false } = ctx;
+	const full = targetStanding === 'full';
 	switch (action) {
 		case 'rename':
 		case 'regenerate_code':
 		case 'delete_any_link':
 		case 'set_points':
 		case 'set_night_planners':
+		case 'set_probation':
 			return atLeast(actor, 'admin');
+		// Letting in someone waiting (D79): the owner or a co-admin. Declining is removing them.
+		case 'let_in':
+			return atLeast(actor, 'admin') && !targetIsSelf && targetStanding === 'waiting';
 		case 'plan_night':
 			return openToMembers || atLeast(actor, 'admin');
 		case 'change_night':
@@ -67,15 +78,19 @@ export function can(actor: Role, action: GroupAction, ctx: PermissionContext = {
 		// reach the same people removing does: anyone but the owner for the owner, members for a co-admin.
 		case 'make_sign_in_code':
 		case 'merge_member':
+		// Suspending and reinstating (D79) reach them too; whether the target is suspended yet is the action's to check.
+		case 'suspend_member':
 			if (targetIsSelf || targetRole == null || targetRole === 'owner') return false;
+			if (action === 'suspend_member' && targetStanding === 'waiting') return false;
 			if (actor === 'owner') return true;
 			return actor === 'admin' && targetRole === 'member';
+		// Only a full member takes on a role (D79): someone waiting is let in first, someone suspended reinstated.
 		case 'promote':
-			return actor === 'owner' && !targetIsSelf && targetRole === 'member';
+			return actor === 'owner' && !targetIsSelf && targetRole === 'member' && full;
 		case 'demote':
 			return actor === 'owner' && !targetIsSelf && targetRole === 'admin';
 		case 'transfer_ownership':
-			return actor === 'owner' && !targetIsSelf && targetRole != null && targetRole !== 'owner';
+			return actor === 'owner' && !targetIsSelf && targetRole != null && targetRole !== 'owner' && full;
 		case 'delete_group':
 			return actor === 'owner';
 		// Archiving and restoring (D50): the owner, or a co-admin once the owner has been away a while, so
@@ -89,7 +104,7 @@ export function can(actor: Role, action: GroupAction, ctx: PermissionContext = {
 		// Guest plays to a member (D37): the owner or a co-admin, for anyone in the group but themselves,
 		// so nobody takes a guest's wins for their own.
 		case 'link_guest_plays':
-			return atLeast(actor, 'admin') && !targetIsSelf && targetRole != null;
+			return atLeast(actor, 'admin') && !targetIsSelf && targetRole != null && full;
 		case 'leave':
 			return actor !== 'owner' || otherMembers === 0;
 	}

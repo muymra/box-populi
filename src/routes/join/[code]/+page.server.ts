@@ -42,6 +42,8 @@ export const load: PageServerLoad = async (event) => {
 		refusal: refusal ? REFUSALS[refusal] : null,
 		groupName: target.name,
 		memberCount: target.memberCount,
+		// New members wait to be let in (D79), so the door says so.
+		probation: !refusal && target.probation === true,
 		gameCount: refusal ? 0 : await groupGameCount(db, target.id),
 		/** Signed in on this device: they join as this person, with no name to type. */
 		you: event.locals.user?.name ?? null,

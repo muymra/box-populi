@@ -222,8 +222,11 @@ export const load: PageServerLoad = async (event) => {
 		editedByName,
 		myLoan: myCopy && (myCopy.lent_to_user_id || myCopy.lent_to_text) ? { toUserId: myCopy.lent_to_user_id, toText: myCopy.lent_to_text } : null,
 		// Borrowers to pick from: this group's other members, most recently active first.
-		lendTo: me && !hiddenHere ? members.filter((m) => m.id !== me.id).map((m) => ({ id: m.id, name: m.name })) : [],
+		// Not someone waiting to be let in or suspended (D79).
+		lendTo: me && !hiddenHere ? members.filter((m) => m.id !== me.id && m.standing === 'full').map((m) => ({ id: m.id, name: m.name })) : [],
 		canEdit,
+		// Their own copy: a full member, or someone waiting to be let in (D79).
+		shelfOpen: access.shelfOpen,
 		game: {
 			id: game.id,
 			bggId: game.bgg_id,
@@ -315,7 +318,7 @@ function gameIdParam(raw: string): number {
 export const actions: Actions = {
 	add: async (event) => {
 		const db = getDb();
-		await requireRole(event, db, event.params.groupId, 'member');
+		await requireRole(event, db, event.params.groupId, 'member', { ownShelf: true });
 		const gameId = gameIdParam(event.params.gameId);
 		const userId = event.locals.user!.id;
 		if (!(await gameUsableInGroup(db, event.params.groupId, userId, gameId)) || !(await addCopy(db, userId, gameId, Date.now()))) {
@@ -326,7 +329,7 @@ export const actions: Actions = {
 
 	remove: async (event) => {
 		const db = getDb();
-		await requireRole(event, db, event.params.groupId, 'member');
+		await requireRole(event, db, event.params.groupId, 'member', { ownShelf: true });
 		await removeCopy(db, event.locals.user!.id, gameIdParam(event.params.gameId));
 		// If nobody else in the group owns it, the game page would now 404, so go back to the catalog.
 		redirect(303, `/g/${event.params.groupId}`);
@@ -335,7 +338,7 @@ export const actions: Actions = {
 	hideHere: async (event) => {
 		const db = getDb();
 		const { groupId } = event.params;
-		await requireRole(event, db, groupId, 'member');
+		await requireRole(event, db, groupId, 'member', { ownShelf: true });
 		const hidden = (await event.request.formData()).get('hidden') === '1';
 		if (!(await setCopyHidden(db, groupId, event.locals.user!.id, gameIdParam(event.params.gameId), hidden, Date.now()))) error(404, 'Game not found');
 		return { hiddenChanged: true };
@@ -355,7 +358,7 @@ export const actions: Actions = {
 
 	playersWith: async (event) => {
 		const db = getDb();
-		await requireRole(event, db, event.params.groupId, 'member');
+		await requireRole(event, db, event.params.groupId, 'member', { ownShelf: true });
 		const result = await setPlayersWith(db, event.locals.user!.id, gameIdParam(event.params.gameId), (await event.request.formData()).get('maxWith'));
 		return result.ok ? { playersWithSaved: true } : fail(400, { playersWithError: result.error });
 	},

@@ -1,13 +1,18 @@
 <script lang="ts">
+	import { profileHref } from '#lib/profiles.svelte.ts';
+	import { MAX_SUSPENDED_NOTE } from '#lib/standing.ts';
 	import { announce } from '#lib/announce.svelte.ts';
 	import GuestPlays from '#lib/components/GuestPlays.svelte';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '$app/forms';
 	import { page } from '$app/state';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Search from '@lucide/svelte/icons/search';
 	import InviteCard from '#lib/components/InviteCard.svelte';
+	import SettingRow from '#lib/components/SettingRow.svelte';
+	import GroupChatButton from '#lib/components/GroupChatButton.svelte';
+	import { chatLink } from '#lib/group-chat.ts';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { lastActive } from '#lib/time.ts';
 	import { refreshAll } from '$app/navigation';
@@ -17,6 +22,7 @@
 	let { data, form }: PageProps = $props();
 	const ROLE = { owner: 'Owner', admin: 'Co-admin', member: 'Member' } as const;
 	const inviteLink = $derived(data.invite ? `${page.url.origin}/join/${data.invite}` : null);
+	const chat = $derived(data.groupChat ? chatLink(data.groupChat) : null);
 	let query = $state('');
 	// The owner, and how long since they were last here, for the 60-day rule on archiving (D50).
 	const owner = $derived(data.members.find((m) => m.role === 'owner') ?? null);
@@ -28,7 +34,7 @@
 		if (open !== openRows.includes(id)) openRows = open ? [...openRows, id] : openRows.filter((r) => r !== id);
 	}
 	// The one confirmation open in the members list: whose, and for what.
-	type Confirm = 'role' | 'owner' | 'code' | 'merge' | 'guest' | 'remove';
+	type Confirm = 'role' | 'owner' | 'code' | 'merge' | 'guest' | 'remove' | 'suspend' | 'decline';
 	let confirmFor = $state<{ id: string; kind: Confirm } | null>(null);
 	// What's typed to confirm a new owner; cleared whenever another confirmation opens.
 	let ownerTyped = $state('');
@@ -49,10 +55,17 @@
 		await fetch('/theme', { method: 'POST', body, headers: { accept: 'application/json' } });
 		await refreshAll();
 	}
+	// Someone waiting to be let in (D79) is listed apart, above the members.
+	const waitingList = $derived(data.members.filter((m) => m.standing === 'waiting').sort((a, b) => (a.since ?? 0) - (b.since ?? 0)));
+	const inGroup = $derived(data.members.filter((m) => m.standing !== 'waiting'));
 	const shown = $derived.by(() => {
 		const q = query.trim().toLocaleLowerCase();
-		return q ? data.members.filter((m) => m.name.toLocaleLowerCase().includes(q)) : data.members;
+		return q ? inGroup.filter((m) => m.name.toLocaleLowerCase().includes(q)) : inGroup;
 	});
+	const sinceDay = (at: number | null) => (at ? new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '');
+	// New members (D79): turning probation off with people waiting lets them in, so the form says so first.
+	let probationChoice = $state(untrack(() => (data.probationOn ? 'on' : 'off')));
+	const letsIn = $derived(data.probationOn && probationChoice === 'off' ? waitingList.length : 0);
 	// Deleting for good (D50): the button waits for the typed name once the page is running; without
 	// JavaScript the server checks it.
 	let deleteOpen = $state(false);
@@ -82,8 +95,52 @@
 		{#if form?.codeError}<p class="banner error" role="alert">{form.codeError}</p>{/if}
 	{/snippet}
 
+	{#snippet waitingBlock()}
+		<!-- New members waiting to be let in (D79): everyone sees who, the owner and co-admins let them in or decline. -->
+		<section class="waiting" aria-labelledby="waiting-h">
+			<h2 id="waiting-h">Waiting to be let in <span class="muted num">{waitingList.length}</span></h2>
+			<p class="muted">They joined while new members wait to be let in. Until then they can add their games and look around.</p>
+			<ul class="members">
+				{#each waitingList as m (m.id)}
+					{@const c = playerColor(m.colorIndex)}
+					{@const mine = confirmFor?.id === m.id ? confirmFor.kind : null}
+					<li>
+						<div class="row">
+							<span class="cube-chip" style:background={c.fill} style:color={c.ink} aria-hidden="true">{m.name.slice(0, 1).toUpperCase()}</span>
+							<span class="who">
+								<strong><a class="profile-link" href={profileHref(m.id)}>{m.name}</a>{#if m.isMe}<span class="muted">{' (you)'}</span>{/if}</strong>
+								<span class="muted">Joined {sinceDay(m.since)}{' · '}<span class="num">{m.games}</span> {m.games === 1 ? 'game' : 'games'}</span>
+							</span>
+							{#if m.actions.includes('let_in')}
+								<div class="wait-actions">
+									<form method="POST" action="?/letIn" use:enhance={closeAfter}>
+										<input type="hidden" name="userId" value={m.id} />
+										<button class="btn small">Let in</button>
+									</form>
+									<button type="button" class="link-button" aria-expanded={mine === 'decline'} onclick={() => toggle(m.id, 'decline')}>Decline…</button>
+								</div>
+							{/if}
+						</div>
+						{#if mine === 'decline'}
+							<div class="confirm-well decline">
+								<p>{m.name} leaves the group and their games come off the shelf. They can ask again with the code unless you make a new one.</p>
+								<div class="cbtns">
+									<form method="POST" action="?/remove" use:enhance={closeAfter}>
+										<input type="hidden" name="userId" value={m.id} />
+										<button class="btn small danger">Decline {m.name}</button>
+									</form>
+									<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
+								</div>
+							</div>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{/snippet}
+
 	{#snippet memberList()}
-		{#if data.members.length > 8}
+		{#if inGroup.length > 8}
 			<label class="find">
 				<Search size={18} aria-hidden="true" />
 				<span class="visually-hidden">Find a member</span>
@@ -105,7 +162,12 @@
 				{#snippet person()}
 					<span class="cube-chip" style:background={c.fill} style:color={c.ink} aria-hidden="true">{m.name.slice(0, 1).toUpperCase()}</span>
 					<span class="who">
-						<strong><a class="profile-link" href="/g/{data.group.id}/members/{m.id}">{m.name}</a>{#if m.isMe}<span class="muted">{' (you)'}</span>{/if}{#if m.noPin}{' '}<span class="tag">No PIN yet</span>{/if}</strong>
+						<strong
+							><a class="profile-link" href={profileHref(m.id)}>{m.name}</a>{#if m.isMe}<span class="muted">{' (you)'}</span>{/if}{#if m.standing === 'suspended'}{' '}<span
+									class="tag"
+									title="Suspended {sinceDay(m.since)}">Suspended</span
+								>{/if}{#if m.noPin}{' '}<span class="tag">No PIN yet</span>{/if}</strong
+						>
 						<span class="muted">
 							{ROLE[m.role]}{' · '}<span class="num">{m.games}</span> {m.games === 1 ? 'game' : 'games'}{' · '}{c.pattern === 'solid' ? '' : `${c.pattern} `}{c.name.toLowerCase()}{' · '}<span class="nowrap">{lastActive(m.lastSeenAt, data.now)}</span>
 						</span>
@@ -168,8 +230,17 @@
 										{/if}
 									</div>
 								</div>
-								{#if m.tools.includes('merge') || m.canLinkGuests || m.actions.includes('remove_member')}
+								{#if m.tools.includes('merge') || m.canLinkGuests || m.actions.includes('remove_member') || m.actions.includes('suspend_member')}
 									<div class="pfoot">
+										<!-- Suspending (D79): a step before removing someone, undone with Reinstate. -->
+										{#if m.actions.includes('suspend_member') && m.standing === 'suspended'}
+											<form method="POST" action="?/reinstate" use:enhance={closeAfter}>
+												<input type="hidden" name="userId" value={m.id} />
+												<button class="btn small">Reinstate {m.name}</button>
+											</form>
+										{:else if m.actions.includes('suspend_member')}
+											<button type="button" class="link-button" aria-expanded={mine === 'suspend'} onclick={() => toggle(m.id, 'suspend')}>Suspend…</button>
+										{/if}
 										{#if m.tools.includes('merge')}
 											<button type="button" class="link-button" aria-expanded={mine === 'merge'} onclick={() => toggle(m.id, 'merge')}>Merge into another entry…</button>
 										{/if}
@@ -258,6 +329,21 @@
 											{/if}
 										{:else if mine === 'guest'}
 											<GuestPlays member={m} guests={data.guests} onclose={() => (confirmFor = null)} done={closeAfter} />
+										{:else if mine === 'suspend'}
+											<p>
+												{m.name} can still sign in and look around, but can’t change anything here: no plays, nights, loans or marks, and no shelf changes
+												from this group. Their games stay on the shelf and their plays in the log. They see that you suspended them and when, with your note
+												if you leave one. Reinstate them, or remove them, later.
+											</p>
+											<form method="POST" action="?/suspend" use:enhance={closeAfter} class="cbtns">
+												<input type="hidden" name="userId" value={m.id} />
+												<label class="into">
+													<span>A note for {m.name} (optional)</span>
+													<input class="field" name="note" maxlength={MAX_SUSPENDED_NOTE} autocomplete="off" />
+												</label>
+												<button class="btn small danger">Suspend {m.name}</button>
+												<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
+											</form>
 										{:else if mine === 'remove'}
 											<p>{m.name}’s games leave the shelf. They can rejoin with the code unless you make a new one.</p>
 											<div class="cbtns">
@@ -292,6 +378,56 @@
 			<button class="btn">Rename</button>
 		</form>
 		{#if form?.renameError}<p class="banner error" role="alert">{form.renameError}</p>{/if}
+	{/snippet}
+	{#snippet chatForm()}
+		<form method="POST" action="?/chat" class="rename" use:enhance={() => async ({ update }) => update({ reset: false })}>
+			<label class="visually-hidden" for="group-chat">Link to the group chat</label>
+			<input
+				id="group-chat"
+				class="field"
+				name="chatUrl"
+				inputmode="url"
+				autocomplete="off"
+				spellcheck="false"
+				placeholder="https://chat.whatsapp.com/…"
+				value={data.groupChat ?? ''}
+			/>
+			<button class="btn">Save</button>
+		</form>
+		{#if form?.chatSaved}<p class="muted small" {@attach announce}>Saved.</p>{/if}
+		{#if form?.chatError}<p class="banner error" role="alert">{form.chatError}</p>{/if}
+		<p class="hint">
+			{#if chat}
+				Members see it as “{chat.label}” here, beside Copy for the chat on game nights, and once on the shelf after they join. Empty the field to remove it.
+			{:else}
+				Members see it here, beside Copy for the chat on game nights, and once on the shelf after they join.
+			{/if}
+		</p>
+	{/snippet}
+	{#snippet probationForm()}
+		<form id="probation-form" method="POST" action="?/probation" class="rename" use:enhance={() => async ({ update }) => update({ reset: false })}>
+			<label class="visually-hidden" for="probation">When new members can take part</label>
+			<select id="probation" class="field" name="probation" bind:value={probationChoice}>
+				<option value="off">Straight away</option>
+				<option value="on">Once they’re let in</option>
+			</select>
+			{#if letsIn}
+				<input type="hidden" name="letEveryoneIn" value="1" />
+			{:else}
+				<button class="btn">Save</button>
+			{/if}
+		</form>
+		{#if letsIn}
+			<!-- Turning probation off with people waiting lets them in (D79): said, then confirmed with its own button. -->
+			<div class="banner probation-off">
+				<p>
+					{letsIn === 1 ? `${waitingList[0].name} is waiting. Turning this off lets them in now, as a full member.` : `${letsIn} people are waiting. Turning this off lets them all in now, as full members.`}
+				</p>
+				<button class="btn small" form="probation-form">{letsIn === 1 ? `Let ${waitingList[0].name} in and turn it off` : `Let all ${letsIn} in and turn it off`}</button>
+			</div>
+		{/if}
+		{#if form?.probationSaved}<p class="muted small" {@attach announce}>Saved.{form.letIn ? ` ${form.letIn === 1 ? 'One person' : `${form.letIn} people`} let in.` : ''}</p>{/if}
+		{#if form?.probationError}<p class="banner error" role="alert">{form.probationError}</p>{/if}
 	{/snippet}
 	{#snippet nightsForm()}
 		<form method="POST" action="?/nightsBy" class="rename" use:enhance={() => async ({ update }) => update({ reset: false })}>
@@ -391,38 +527,44 @@
 
 	<!-- The settings as form-panel rows, every question above its controls in the narrow column. -->
 	{#snippet settingsRows()}
-		<div class="form-row">
-			<div class="form-label"><label class="form-q" for="group-name">Name</label></div>
-			<div class="form-body">{@render nameForm()}</div>
-		</div>
-		<div class="form-row">
-			<div class="form-label">
-				<label class="form-q" for="nights-by">Game nights</label>
-				<span class="hint">Who can plan one. Everyone can still answer and bring games.</span>
-			</div>
-			<div class="form-body">{@render nightsForm()}</div>
-		</div>
-		<div class="form-row">
-			<div class="form-label">
-				<label class="form-q" for="filler-minutes">Fillers</label>
-				<span class="hint">What Play tonight offers while people arrive or between longer games. A game nobody has set a complexity for still counts.</span>
-			</div>
-			<div class="form-body">{@render fillerForm()}</div>
-		</div>
-		<div class="form-row">
-			<div class="form-label">
-				<label class="form-q" for="stale-days">Not played lately</label>
-				<span class="hint">How far back the shelf’s filter looks. Games never logged here always count.</span>
-			</div>
-			<div class="form-body">{@render staleForm()}</div>
-		</div>
-		<div class="form-row">
-			<div class="form-label">
-				<label class="form-q" for="group-theme">Theme</label>
-				<span class="hint">What everyone sees here, unless they picked their own in the footer.</span>
-			</div>
-			<div class="form-body">{@render themeForm()}</div>
-		</div>
+		<!-- Each setting folds to its name and value, so the panel stays short; one opens to its form. -->
+		<SettingRow label="Name" value={data.group.name} error={!!form?.renameError}>{@render nameForm()}</SettingRow>
+		<SettingRow
+			label="Group chat"
+			value={chat?.label ?? 'None yet'}
+			hint="Where the group talks: a WhatsApp or Signal group, a Discord server, a Facebook group. Only members see it."
+			error={!!form?.chatError}>{@render chatForm()}</SettingRow
+		>
+		<SettingRow
+			label="New members"
+			value={data.probationOn ? 'Wait to be let in by the owner or a co-admin' : 'Take part straight away'}
+			hint="Anyone with the code can join. Turn this on and new people wait until the owner or a co-admin lets them in; meanwhile they can add their games and look around."
+			error={!!form?.probationError}>{@render probationForm()}</SettingRow
+		>
+		<SettingRow
+			label="Game nights"
+			value={data.nightsBy === 'admins' ? 'The owner and co-admins plan them' : 'Any member plans them'}
+			hint="Who can plan one. Everyone can still answer and bring games."
+			error={!!form?.nightsByError}>{@render nightsForm()}</SettingRow
+		>
+		<SettingRow
+			label="Fillers"
+			value="Up to {data.filler.maxMinutes} minutes, complexity under {data.filler.maxWeight}"
+			hint="What Play tonight offers while people arrive or between longer games. A game nobody has set a complexity for still counts."
+			error={!!form?.fillerError}>{@render fillerForm()}</SettingRow
+		>
+		<SettingRow
+			label="Not played lately"
+			value="The last {data.staleDays} days"
+			hint="How far back the shelf’s filter looks. Games never logged here always count."
+			error={!!form?.staleError}>{@render staleForm()}</SettingRow
+		>
+		<SettingRow
+			label="Theme"
+			value={data.groupTheme ? (THEME_LABELS[data.groupTheme] ?? data.groupTheme) : 'This site’s default'}
+			hint="What everyone sees here, unless they picked their own in the footer."
+			error={!!form?.themeError}>{@render themeForm()}</SettingRow
+		>
 		{#if data.archiveWaits}
 			<div class="form-row">
 				<div class="form-label">
@@ -494,15 +636,27 @@
 
 	<!-- From 900px: the invite and the settings in a left column, the people filling the right. On phones: invite, people, settings. -->
 	<div class="two">
-		{#if data.code && inviteLink}
+		{#if (data.code && inviteLink) || (data.groupChat && chat)}
 			<div class="invite-slot">
-				<InviteCard code={data.code} link={inviteLink}>
-					{#if data.canManage}{@render newCode()}{/if}
-				</InviteCard>
+				{#if data.code && inviteLink}
+					<InviteCard code={data.code} link={inviteLink}>
+						{#if data.canManage}{@render newCode()}{/if}
+					</InviteCard>
+				{/if}
+				<!-- Where the group talks (D78), for every member: the setting is under Settings. -->
+				{#if data.groupChat && chat}
+					<section class="chat-card" aria-labelledby="chat-h">
+						<h2 id="chat-h">Group chat</h2>
+						<p class="muted">Where {data.group.name} talks between game nights.</p>
+						<div><GroupChatButton url={data.groupChat} /></div>
+						{#if chat.service}<p class="where">{chat.host}</p>{/if}
+					</section>
+				{/if}
 			</div>
 		{/if}
 		<section class="people" aria-labelledby="members-h">
-			<h2 id="members-h">Members <span class="muted num">{data.members.length}</span></h2>
+			{#if waitingList.length}{@render waitingBlock()}{/if}
+			<h2 id="members-h">Members <span class="muted num">{inGroup.length}</span></h2>
 			<p class="muted">Each person’s colour runs along the bottom of the cubes holding their games. Most recently active first.</p>
 			{@render memberList()}
 		</section>
@@ -590,6 +744,52 @@
 	}
 	.danger-row .btn.danger {
 		justify-self: start;
+	}
+	/* New members waiting to be let in (D79), above the members. */
+	.waiting {
+		margin-bottom: var(--s-5);
+	}
+	.waiting h2 {
+		margin-bottom: var(--s-2);
+	}
+	.wait-actions {
+		margin-left: auto;
+		display: flex;
+		align-items: center;
+		gap: var(--s-3);
+		flex: none;
+	}
+	.probation-off {
+		display: grid;
+		gap: var(--s-2);
+		justify-items: start;
+	}
+	.probation-off p {
+		margin: 0;
+	}
+	.confirm-well.decline {
+		margin: 0 var(--s-3) var(--s-3);
+	}
+	/* The group chat (D78) under the invite, as a plain panel: the invite keeps the dark label surface. */
+	.invite-slot {
+		display: grid;
+		gap: var(--s-4);
+	}
+	.chat-card {
+		display: grid;
+		gap: var(--s-2);
+		padding: var(--s-5);
+		background: var(--cube);
+		border: 1px solid var(--rule);
+		border-radius: 10px;
+	}
+	.chat-card h2,
+	.chat-card p {
+		margin: 0;
+	}
+	.chat-card .where {
+		font-size: var(--t-small);
+		color: var(--ink-2);
 	}
 	/* Invite and settings on the left, the people on the right, from 900px. */
 	.two {

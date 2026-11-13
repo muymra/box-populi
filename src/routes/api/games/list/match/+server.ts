@@ -16,7 +16,7 @@ export const POST: RequestHandler = async (event) => {
 	if (typeof body?.groupId !== 'string' || lines.length === 0 || lines.length > MATCH_CHUNK) return reply(400, { error: `Send 1 to ${MATCH_CHUNK} lines.` });
 
 	const db = getDb();
-	await requireRole(event, db, body.groupId, 'member');
+	await requireRole(event, db, body.groupId, 'member', { ownShelf: true });
 	const userId = event.locals.user.id;
 	const now = Date.now();
 	if (!(await take(db, now, [userId, LIMITS.listMatch])).ok) return reply(429, { error: 'That’s a lot of lists. Wait ten minutes.' });
