@@ -16,6 +16,7 @@ A shared shelf for your board game group. Everyone adds the games they own, and 
 - **At the table.** Buttons at the top pick who goes first from the people there, guests included, and roll any mix of dice or flip a coin.
 - **Wishlists and lending.** See which games someone wants that nobody in the group has yet, and who borrowed whose copy.
 - **Rulebooks, videos and files.** Save links to the rules, a how-to video, score sheets or a 3D-printable insert once, next to the game, for everyone.
+- **Running the group.** The owner and co-admins can link the group's chat, ask new members to wait until they're let in, suspend someone for a while or remove them, and make a new code if the old one got around.
 - **No accounts.** You join with the group's five-character code, your name and a six-digit PIN, which gets you back in on any device. No email, no password.
 - **Your data stays yours.** Download your games, your plays and your game nights as spreadsheets whenever you like. Your games paste straight into another Box Populi.
 - **Several groups, one shelf.** In two or more groups, switch between them from the top of the page; your games show in each, unless you hide some from a group.

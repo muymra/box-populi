@@ -77,7 +77,9 @@ box-populi/
     lib/                        shared by browser and server: the rules as pure TS (plays.ts, nights.ts,
                                 profile.ts, themes.ts, csv files), components/, announce.svelte.ts (the
                                 one status region, in the root layout, that a message appearing after an
-                                action is read out from: `{@attach announce}` on the message), and:
+                                action is read out from: `{@attach announce}` on the message),
+                                standing.ts (a member's standing, D79; server/standing.ts has its SQL),
+                                profiles.svelte.ts (profile links as the viewer may follow them), and:
       catalog/                  the catalog's types, filters, search normalization, player colours,
                                 box shapes, expansions' player counts (extensions.ts) and the picker's
                                 draw; pure, run in browser, server and tests

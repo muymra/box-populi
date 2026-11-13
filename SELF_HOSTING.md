@@ -101,7 +101,7 @@ In `wrangler.jsonc` under `"vars"`:
 | `THEME` | `cube`, the default look. Or a preset such as `dracula`, `catppuccin` or `nord`; the full list is in `src/lib/themes.ts`. Visitors can still pick their own from the footer. |
 | `GAME_SOURCE` | `wikidata`. While you have no BGG token, members search Wikidata for games; set `manual` to have them type everything instead. |
 | `MAX_GROUPS_PER_USER` | Default `5`. |
-| `MAX_MEMBERS_PER_GROUP` | Default `100`. |
+| `MAX_MEMBERS_PER_GROUP` | Default `100`. People waiting to be let in to a group (D79) count too. |
 | `DEFAULT_POINTS` | Default `3,2,1`: the podium points of every group that hasn't set its own, first place first. Each group's owner and co-admins can still set theirs. |
 | `OWNER_AWAY_DAYS` | Default `60`: how long a group's owner can be away before a co-admin may archive the group or take it over. |
 | `PLAY_SOON_DAYS` | Default `56` (8 weeks): how long a member's Play soon mark lasts when nothing clears it. |
