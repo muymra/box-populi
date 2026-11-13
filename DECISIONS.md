@@ -601,3 +601,15 @@ Carlo asked for the 30-day refresh STATUS had planned, and whether 30 days was t
 **Why:** new releases' weight and "best at" votes settle over months, box art gets replaced, and BGG changes image addresses, which until now left a printed box in place of the cover for good.
 **Trade-offs accepted:** a game only refreshes when someone opens a shelf with it, so a group nobody visits keeps old details (it's also nobody's problem). With many stale games, 20 refresh per 10 minutes, so a big shelf takes hours or days to catch up after its games turn 30 days old together. BGG's policy pages are still to be read in a browser (STATUS); a caching rule there would change this.
 **Revisit if:** BGG publishes limits or a caching rule, `/admin` shows throttling, or the ranks-file index (TECH.md) changes how games are found.
+
+## D81. Browser support: Baseline widely available, newer only with a small fallback (2026-11-13)
+
+Carlo asked for a Modern Web Guidance audit of the frontend and took the defaults. Its `legacy-scan` (35 rules, about a fifth of the guidance) found the two hand-built progress bars, now native `<progress>`; a pass against the other guides found CopyButton announcing from the button itself, which it now does through the root layout's status region. Five more changes were weighed against what Safari supports and left out:
+- **Modal scroll lock.** `html:has(dialog[open]) { overflow: hidden }` stays. The guide's replacement, `overscroll-behavior: contain` on the dialog and its backdrop, doesn't hold in Safari, so the page would scroll behind the phone sheet on iPhones.
+- **`closedby="any"` on the modal.** Safari lacks it, so the pointer code that closes on a tap outside would stay as its fallback, and nothing gets shorter.
+- **The group switcher and "You" menus as popovers.** They hang from the header with `position: absolute`; from the top layer they'd need anchor positioning, which isn't Baseline, so a polyfill (a dependency) or a second layout.
+- **An exit animation for the modal.** It needs `overlay`, which only Chromium has, plus a JavaScript close path everywhere else.
+- **`Temporal.PlainDate`** for dates shown from `YYYY-MM-DD`. Safari has no Temporal, the polyfill is about 15 KB, and building the date at noon already keeps the day from drifting.
+**Why:** a group uses whatever phones its members have, and each of these traded something that works on an iPhone today for a few lines of newer code.
+**Trade-offs accepted:** opening a modal on a desktop with classic scrollbars (Windows) shifts the page behind the backdrop by the scrollbar's width.
+**Revisit if:** Safari ships `overscroll-behavior` on containers that don't scroll, `closedby` or Temporal, or anchor positioning becomes Baseline.

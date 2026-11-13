@@ -4,6 +4,7 @@
 // `announce` attachment copies its text here when it appears.
 
 let current = $state('');
+let last = '';
 let timer: ReturnType<typeof setTimeout> | undefined;
 
 /** What the root layout's status region says now. */
@@ -15,13 +16,18 @@ export const announcer = {
 
 /**
  * Say `message` through the status region. It's cleared first and set a moment later, so the same
- * words twice in a row ("Saved." after "Saved.") are read both times.
+ * words twice in a row ("Saved." after "Saved.") are read both times. VoiceOver skips a message equal
+ * to the one before even with the region emptied between, so a repeat gets a no-break space, which
+ * isn't read out.
  */
 export function say(message: string): void {
 	clearTimeout(timer);
 	current = '';
-	const text = message.replace(/\s+/g, ' ').trim();
-	if (text) timer = setTimeout(() => (current = text), 60);
+	let text = message.replace(/\s+/g, ' ').trim();
+	if (!text) return;
+	if (text === last) text += ' ';
+	last = text;
+	timer = setTimeout(() => (current = text), 60);
 }
 
 /** `{@attach announce}` on a message that appears after an action: says its text when it's drawn. */

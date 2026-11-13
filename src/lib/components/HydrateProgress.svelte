@@ -18,7 +18,6 @@
 	let stopped = false;
 
 	const total = $derived(done + remaining);
-	const percent = $derived(total ? Math.round((done / total) * 100) : 100);
 
 	const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -82,9 +81,7 @@
 		<a class="btn primary" href={shelfHref}>See the shelf</a>
 	{:else}
 		<p class="title">Loading details from BoardGameGeek</p>
-		<div class="track" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label="Games with details loaded">
-			<div class="fill" style:width="{percent}%"></div>
-		</div>
+		<progress class="progress" max={total} value={done} aria-label="Games with details loaded"></progress>
 		<p class="count num">{done} of {total} games</p>
 		<p class="muted small">
 			Your games are already on the shelf. Player counts, weight and mechanics fill in as this runs, one batch of 20
@@ -108,18 +105,6 @@
 		gap: var(--s-2);
 		font-weight: 700;
 		margin: 0;
-	}
-	.track {
-		width: 100%;
-		height: 10px;
-		background: var(--gap);
-		border-radius: var(--r-cube);
-		overflow: hidden;
-	}
-	.fill {
-		height: 100%;
-		background: var(--ink);
-		transition: width 0.4s var(--ease-out);
 	}
 	.count {
 		margin: 0;

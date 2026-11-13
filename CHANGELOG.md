@@ -5,6 +5,7 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 ## Unreleased
 
 - Game details from BoardGameGeek are fetched again once they're 30 days old, so a new game's complexity and "best at" votes catch up as BGG's settle, and box art BGG has moved shows again. It happens quietly when someone opens the shelf, a few games at a time. Hosters applying to BGG: SELF_HOSTING.md's sample application now says details are refreshed at most every 30 days.
+- Screen readers now hear "Copied" (or "Couldn't copy") when you use a copy button, and VoiceOver reads a message that repeats, such as "Saved." twice in a row, both times.
 
 ## 0.8.0 (2026-11-13)
 

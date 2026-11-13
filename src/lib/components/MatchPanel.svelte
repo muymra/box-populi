@@ -160,9 +160,7 @@
 		</details>
 	{:else if phase === 'finding'}
 		<p class="count"><span class="num">Checked {progress.done} of {progress.total}…</span></p>
-		<div class="track" role="progressbar" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.done} aria-label="Games looked up">
-			<div class="fill" style:width="{progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%"></div>
-		</div>
+		<progress class="progress" max={progress.total} value={progress.done} aria-label="Games looked up"></progress>
 		{#if waiting}<p class="banner">{waiting}</p>{/if}
 		<button type="button" class="link-button" onclick={() => (stopRequested = true)}>Stop and choose from what’s found</button>
 	{:else if phase === 'review' || phase === 'saving'}
@@ -245,18 +243,6 @@
 	}
 	.count {
 		font-weight: 650;
-	}
-	.track {
-		align-self: stretch;
-		height: 10px;
-		background: var(--gap);
-		border-radius: var(--r-cube);
-		overflow: hidden;
-	}
-	.fill {
-		height: 100%;
-		background: var(--ink);
-		transition: width 0.4s var(--ease-out);
 	}
 	.rows {
 		align-self: stretch;
