@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-08T12:00:00Z",
+  "generatedAt": "2026-11-13T05:07:33Z",
   "title": "Design System: Box Populi",
   "extensions": {
     "colorMeta": {
@@ -392,6 +392,21 @@
           "#b2ada7",
           "#d1cdc8",
           "#f1eeea"
+        ]
+      },
+      "label-ink-dark": {
+        "role": "neutral",
+        "displayName": "Label Ink (dark)",
+        "canonical": "oklch(94.7% 0.010 82)",
+        "tonalRamp": [
+          "#0d0b07",
+          "#27241e",
+          "#423f3a",
+          "#605d57",
+          "#807d76",
+          "#a29e97",
+          "#c7c4bd",
+          "#ebe7e0"
         ]
       },
       "label-ink-2-dark": {
@@ -803,27 +818,27 @@
     "typographyMeta": {
       "display": {
         "displayName": "Display",
-        "purpose": "Landing page headline only."
+        "purpose": "The headline on the landing page, capped at 14ch, the join code on the Group tab, and the winner's name in \"Who goes first?\"."
       },
       "headline": {
         "displayName": "Headline",
-        "purpose": "Page titles, game names on game pages, the name on the Who goes first reel and the dice total."
+        "purpose": "Page titles and game names on game pages."
       },
       "title": {
         "displayName": "Title",
-        "purpose": "Section headings, modal headings, and the group name in the top bar from 900px."
+        "purpose": "Section headings; the group name in the top bar uses this size from 900px and 18px (the lead size) below."
       },
       "title-small": {
         "displayName": "Title small",
-        "purpose": "Sub-section headings; at body weight, the lead size for intros, pick results and the 52px picker button."
+        "purpose": "Sub-section headings; the same 18px at body weight is the lead size for intros and pick results."
       },
       "box-title": {
         "displayName": "Box title",
-        "purpose": "Titles printed on box fronts, sized from the box width."
+        "purpose": "Titles printed on box fronts, clamped to four lines."
       },
       "spine-title": {
         "displayName": "Spine title",
-        "purpose": "Titles along spines in the Spines view."
+        "purpose": "Titles along spines, one line with ellipsis."
       },
       "body": {
         "displayName": "Body",
@@ -831,28 +846,48 @@
       },
       "label": {
         "displayName": "Label",
-        "purpose": "Form labels, hints, small buttons, list facts."
+        "purpose": "Form labels, hints at 400, small buttons, list facts."
       },
       "caption": {
         "displayName": "Caption",
-        "purpose": "Cube captions, tags, bottom tab labels, dice captions; tabular figures."
+        "purpose": "The players-and-time line under each cube and tags. Bottom tab labels are 12px at 650."
       }
     },
     "shadows": [
       {
+        "name": "stand",
+        "value": "0 1px 1px rgb(0 0 0 / 0.2), 4px 3px 9px -3px rgb(0 0 0 / 0.3)",
+        "purpose": "Every box standing in a cube, its shadow falling down and to the right from the one light at the upper left."
+      },
+      {
+        "name": "stand-dark",
+        "value": "0 1px 1px rgb(0 0 0 / 0.5), 4px 3px 9px -3px rgb(0 0 0 / 0.6)",
+        "purpose": "Stand in dark mode."
+      },
+      {
+        "name": "stand-lift",
+        "value": "0 1px 1px rgb(0 0 0 / 0.1), 7px 10px 16px -7px rgb(0 0 0 / 0.38)",
+        "purpose": "A cube's box when hovered or focused, with a 3px rise; the cubby's light, so it falls the same way as Stand."
+      },
+      {
+        "name": "stand-lift-dark",
+        "value": "0 1px 1px rgb(0 0 0 / 0.3), 7px 10px 16px -7px rgb(0 0 0 / 0.75)",
+        "purpose": "Shelf lift in dark mode."
+      },
+      {
         "name": "lift",
         "value": "0 1px 1px rgb(43 42 40 / 0.06), 0 6px 14px -6px rgb(43 42 40 / 0.18)",
-        "purpose": "A box off its shelf: hovered or focused cube, pulled picker boxes and fillers, game-page hero box."
+        "purpose": "Off the shelf: the picker's pulled boxes and fillers, a game page's hero box, rolled dice, the leaderboard's podium blocks."
       },
       {
         "name": "lift-dark",
         "value": "0 1px 1px rgb(0 0 0 / 0.3), 0 8px 18px -8px rgb(0 0 0 / 0.6)",
-        "purpose": "The lift shadow in dark mode."
+        "purpose": "Lift in dark mode."
       },
       {
         "name": "box-hairline",
         "value": "inset 0 0 0 1px rgb(0 0 0 / 0.08)",
-        "purpose": "Printed edge of box fronts and spines."
+        "purpose": "The printed edge of every box front and spine."
       }
     ],
     "motion": [
@@ -869,7 +904,12 @@
       {
         "name": "cube-lift",
         "value": "0.2s, translateY(-3px)",
-        "purpose": "Box rises with the lift shadow on hover or focus."
+        "purpose": "A cube's box rises 3px and takes the shelf lift on hover or focus."
+      },
+      {
+        "name": "fold",
+        "value": "0.2s rotate(180deg) on the ease-out curve",
+        "purpose": "A chevron turning over as Manage or a folding settings row opens."
       },
       {
         "name": "spine-slide",
@@ -903,7 +943,7 @@
       },
       {
         "name": "search-look",
-        "value": "1s ease-in-out infinite, \u00b12px with -12deg / 9deg turns",
+        "value": "1s ease-in-out infinite, ±2px with -12deg / 9deg turns",
         "purpose": "The label-strip magnifier looks around while a search runs; still under reduced motion."
       },
       {
@@ -1002,18 +1042,18 @@
     },
     {
       "name": "Cube",
-      "kind": "card",
+      "kind": "custom",
       "refersTo": "cube",
-      "description": "Signature: a printed box front standing in its cube, the players-and-time caption, and the owner-colour edge. The box lifts on hover. A flag pill (Lent out, Info missing, Expansion) sits at the bottom of the box.",
-      "html": "<div class=\"ds-shelf\"><a href=\"#\" class=\"ds-cube\"><div class=\"ds-slot\"><div class=\"ds-box\" style=\"--box-bg:#b49a7a;--box-ink:#1f1d1a\"><span class=\"ds-box-title\">Amber Lighthouse</span></div></div><div class=\"ds-cap\">3\u20136p \u00b7 20\u201340 min</div><div class=\"ds-edge\"><span style=\"background:#c8402e\"></span><span style=\"background:#2f62b0\"></span></div></a><a href=\"#\" class=\"ds-cube\"><div class=\"ds-slot\"><div class=\"ds-box\" style=\"--box-bg:#4b4038;--box-ink:#f4efe8\"><span class=\"ds-box-title\">Brass Foundry</span></div><span class=\"ds-flag\">Lent out</span></div><div class=\"ds-cap\">4p \u00b7 30\u201345 min</div><div class=\"ds-edge\"><span style=\"background:#6f4f96\"></span></div></a><a href=\"#\" class=\"ds-cube\"><div class=\"ds-slot\"><div class=\"ds-box\" style=\"--box-bg:#e3dccf;--box-ink:#2b2a28\"><span class=\"ds-box-title\">Amber Garden</span></div></div><div class=\"ds-cap\">3\u20134p \u00b7 15 min</div><div class=\"ds-edge\"><span style=\"background:#2e7d4f\"></span></div></a></div>",
-      "css": ".ds-shelf { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; display: grid; grid-template-columns: repeat(3, 142px); gap: 8px; padding: 8px; background: var(--gap, #e2dfd8); border-radius: 6px; width: max-content; } .ds-cube { display: flex; flex-direction: column; gap: 6px; padding: 8px 8px 0; background: var(--cube, #fbfbfa); color: var(--ink, #2b2a28); text-decoration: none; } .ds-cube:focus-visible { outline: 2px solid var(--focus, #2b2a28); outline-offset: 2px; } .ds-slot { position: relative; aspect-ratio: 1 / 1.04; padding: 0 6%; display: flex; align-items: flex-end; } .ds-box { position: relative; width: 100%; height: 100%; border-radius: 2px; background: var(--box-bg); color: var(--box-ink); overflow: hidden; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08); container-type: inline-size; transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1); } .ds-box::before { content: ''; position: absolute; left: 0; right: 0; top: 16%; height: 1px; background: color-mix(in srgb, var(--box-ink) 22%, transparent); } .ds-cube:hover .ds-box, .ds-cube:focus-visible .ds-box { transform: translateY(-3px); box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08), 0 1px 1px rgb(43 42 40 / 0.06), 0 6px 14px -6px rgb(43 42 40 / 0.18); } .ds-box-title { position: absolute; inset: 22% 9% 8%; font-weight: 800; font-stretch: 78%; line-height: 1.05; letter-spacing: -0.005em; font-size: clamp(0.5625rem, 15.5cqi, 1.875rem); overflow: hidden; } .ds-cap { font-size: 0.75rem; font-weight: 600; color: var(--ink-2, #57534d); text-align: center; font-variant-numeric: tabular-nums; } .ds-edge { display: flex; gap: 2px; height: 6px; } .ds-edge span { flex: 1; border-radius: 1px; } .ds-flag { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); padding: 1px 7px; border-radius: 999px; background: var(--cube, #fbfbfa); color: var(--ink, #2b2a28); font-size: 0.75rem; font-weight: 700; white-space: nowrap; box-shadow: 0 0 0 1px var(--rule, #d3cfc7); }"
+      "description": "Signature: a compartment drawn in one-point perspective from above, lit from the upper left; a box front stands on its floor with the Stand shadow, and in front of it on the floor the name line (empty under a printed front), the players-and-time caption and the owner edge. On hover or focus the box rises 3px with the shelf lift. A flag pill sits 6px above the box's base.",
+      "html": "<div class=\"ds-shelf\"><a href=\"#\" class=\"ds-cube\"><div class=\"ds-slot\"><div class=\"ds-box\" style=\"--box-bg:#b49a7a;--box-ink:#1f1d1a\"><span class=\"ds-box-title\">Amber Lighthouse</span></div></div><div class=\"ds-name\"></div><div class=\"ds-cap\">3–6p · 20–40 min</div><div class=\"ds-edge\"><span style=\"background:#c8402e\"></span><span style=\"background:#2f62b0\"></span></div></a><a href=\"#\" class=\"ds-cube\"><div class=\"ds-slot\"><div class=\"ds-box\" style=\"--box-bg:#4b4038;--box-ink:#f4efe8\"><span class=\"ds-box-title\">Brass Foundry</span></div><span class=\"ds-flag\">Lent out</span></div><div class=\"ds-name\"></div><div class=\"ds-cap\">4p · 30–45 min</div><div class=\"ds-edge\"><span style=\"background:#6f4f96\"></span></div></a><a href=\"#\" class=\"ds-cube\"><div class=\"ds-slot\"><div class=\"ds-box\" style=\"--box-bg:#e3dccf;--box-ink:#2b2a28\"><span class=\"ds-box-title\">Amber Garden</span></div></div><div class=\"ds-name\"></div><div class=\"ds-cap\">3–4p · 15 min</div><div class=\"ds-edge\"><span style=\"background:#2e7d4f\"></span></div></a></div>",
+      "css": ".ds-shelf { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; display: grid; grid-template-columns: repeat(3, 142px); gap: 8px; padding: 8px; background: var(--gap, #e2dfd8); border-radius: 6px; width: max-content; } .ds-cube { --c: var(--cube, #fbfbfa); --wall: color-mix(in oklab, var(--c) 92%, black); --shade: color-mix(in oklab, var(--c) 88%, black); --ceiling: color-mix(in oklab, var(--c) 84%, black); --side: color-mix(in oklab, var(--c) 88.5%, black); --lit: color-mix(in oklab, var(--c) 95%, black); --floor: color-mix(in oklab, var(--c) 96.5%, black); --wall-d: 19%; --wall-t: 6px; --wall-b: 76px; display: flex; flex-direction: column; gap: 6px; padding: 7% 0 0; color: var(--ink, #2b2a28); text-decoration: none; background: linear-gradient(to top right, var(--side) calc(50% - 0.5px), var(--ceiling) calc(50% + 0.5px)) 0 0 / var(--wall-d) var(--wall-t) no-repeat, linear-gradient(to bottom right, var(--ceiling) calc(50% - 0.5px), var(--lit) calc(50% + 0.5px)) 100% 0 / var(--wall-d) var(--wall-t) no-repeat, linear-gradient(to bottom right, var(--side) calc(50% - 0.5px), var(--floor) calc(50% + 0.5px)) 0 100% / var(--wall-d) var(--wall-b) no-repeat, linear-gradient(to top right, var(--floor) calc(50% - 0.5px), var(--lit) calc(50% + 0.5px)) 100% 100% / var(--wall-d) var(--wall-b) no-repeat, linear-gradient(var(--ceiling) 0 0) 0 0 / 100% var(--wall-t) no-repeat, linear-gradient(var(--floor) 0 0) 0 100% / 100% var(--wall-b) no-repeat, linear-gradient(var(--side) 0 0) 0 0 / var(--wall-d) 100% no-repeat, linear-gradient(var(--lit) 0 0) 100% 0 / var(--wall-d) 100% no-repeat, linear-gradient(to bottom, var(--shade), var(--wall) 35%); } .ds-cube:focus-visible { outline: 2px solid var(--focus, #2b2a28); outline-offset: 2px; } .ds-slot { position: relative; margin: 0 12%; aspect-ratio: 0.886; display: flex; align-items: flex-end; justify-content: center; } .ds-box { position: relative; width: 100%; aspect-ratio: 1; border-radius: 2px; background: var(--box-bg); color: var(--box-ink); overflow: hidden; container-type: inline-size; box-shadow: 0 1px 1px rgb(0 0 0 / 0.2), 4px 3px 9px -3px rgb(0 0 0 / 0.3), inset 0 0 0 1px rgb(0 0 0 / 0.08); transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1); } .ds-box::before { content: ''; position: absolute; left: 0; right: 0; top: 16%; height: 1px; background: color-mix(in srgb, var(--box-ink) 22%, transparent); } .ds-cube:hover .ds-box, .ds-cube:focus-visible .ds-box { transform: translateY(-3px); box-shadow: 0 1px 1px rgb(0 0 0 / 0.1), 7px 10px 16px -7px rgb(0 0 0 / 0.38), inset 0 0 0 1px rgb(0 0 0 / 0.08); } .ds-box-title { position: absolute; inset: 22% 9% 8%; font-weight: 800; font-stretch: 78%; line-height: 1.05; letter-spacing: -0.005em; font-size: clamp(0.5625rem, 15.5cqi, 1.875rem); overflow: hidden; } .ds-name { min-height: 1.2em; margin-bottom: -3px; padding: 0 6px; font-size: 0.8125rem; font-weight: 700; line-height: 1.2; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-cap { padding: 0 6px; margin-bottom: 2px; font-size: 0.75rem; font-weight: 600; color: var(--ink-2, #57534d); text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; } .ds-edge { display: flex; gap: 2px; height: 6px; } .ds-edge span { flex: 1; border-radius: 1px; } .ds-flag { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); padding: 1px 7px; border-radius: 999px; background: var(--cube, #fbfbfa); color: var(--ink, #2b2a28); font-size: 0.75rem; font-weight: 700; white-space: nowrap; box-shadow: 0 0 0 1px var(--rule, #d3cfc7); }"
     },
     {
       "name": "Spine",
       "kind": "custom",
       "refersTo": "",
       "description": "The Spines view row: a box lying on its side in its cardboard print, owners' colours on its end.",
-      "html": "<div class=\"ds-list\"><a href=\"#\" class=\"ds-spine\" style=\"--sb:#c4b59c;--si:#2b2a28\"><span class=\"ds-st\">Amber Guild</span><span class=\"ds-sf\">2\u20134p \u00b7 120 min \u00b7 Medium</span><span class=\"ds-end\"><span style=\"background:#b23f78\"></span></span></a><a href=\"#\" class=\"ds-spine\" style=\"--sb:#6b5948;--si:#ffffff\"><span class=\"ds-st\">Amber Canals</span><span class=\"ds-sf\">1\u20132p \u00b7 30 min \u00b7 Light</span><span class=\"ds-end\"><span style=\"background:#c8402e\"></span><span style=\"background:#17706f\"></span></span></a></div>",
+      "html": "<div class=\"ds-list\"><a href=\"#\" class=\"ds-spine\" style=\"--sb:#c4b59c;--si:#2b2a28\"><span class=\"ds-st\">Amber Guild</span><span class=\"ds-sf\">2–4p · 120 min · Medium</span><span class=\"ds-end\"><span style=\"background:#b23f78\"></span></span></a><a href=\"#\" class=\"ds-spine\" style=\"--sb:#6b5948;--si:#ffffff\"><span class=\"ds-st\">Amber Canals</span><span class=\"ds-sf\">1–2p · 30 min · Light</span><span class=\"ds-end\"><span style=\"background:#c8402e\"></span><span style=\"background:#17706f\"></span></span></a></div>",
       "css": ".ds-list { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; display: flex; flex-direction: column; gap: 4px; padding: 8px; background: var(--gap, #e2dfd8); border-radius: 6px; max-width: 36rem; } .ds-spine { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 46px; padding-left: 12px; background: var(--sb); color: var(--si); text-decoration: none; border-radius: 2px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08); transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1); } .ds-spine:hover, .ds-spine:focus-visible { transform: translateX(4px); } .ds-spine:focus-visible { outline: 2px solid var(--focus, #2b2a28); outline-offset: 2px; } .ds-st { font-weight: 800; font-stretch: 80%; font-size: 1.0625rem; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-sf { font-size: 0.8125rem; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; } .ds-end { align-self: stretch; display: flex; flex-direction: column; gap: 2px; width: 12px; } .ds-end > span { flex: 1; }"
     },
     {
@@ -1028,7 +1068,7 @@
       "name": "Banner",
       "kind": "card",
       "refersTo": "banner",
-      "description": "A note pinned to the shelf: demo, suspended, errors.",
+      "description": "A note under the top bar: the demo, an archived group, one suspended by the host, a member waiting to be let in or suspended, someone waiting for the owner and co-admins, and errors.",
       "html": "<p class=\"ds-banner\">The host has suspended this group. It's read-only.</p><p class=\"ds-banner ds-err\">The shelf didn't load. Reload the page to try again.</p>",
       "css": ".ds-banner { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; padding: 12px 16px; border-radius: 8px; background: var(--note, #fbf1d9); color: var(--ink, #2b2a28); margin: 12px 0; max-width: 68ch; } .ds-err { background: var(--danger-soft, #f6e1dc); }"
     },
@@ -1045,7 +1085,7 @@
       "kind": "custom",
       "refersTo": "well",
       "description": "The answer leads: a laminate well with the winner's 56px colour square and the name in Display, 'goes first' under it; the Pick button below; who's here folded to one line with Change.",
-      "html": "<div class=\"ds-start\"><div class=\"ds-well\"><div class=\"ds-row\"><span class=\"ds-cube\" style=\"background:#b23f78\"></span><span class=\"ds-who\">Kai</span></div><p class=\"ds-goes\">goes first</p></div><button class=\"ds-btn\">\u21bb Pick again</button><div class=\"ds-here\"><p><strong>6 here</strong><span class=\"ds-muted\">: Ada, Chen, Kai, Bram and 2 more</span></p><button class=\"ds-link\">Change</button></div></div>",
+      "html": "<div class=\"ds-start\"><div class=\"ds-well\"><div class=\"ds-row\"><span class=\"ds-cube\" style=\"background:#b23f78\"></span><span class=\"ds-who\">Kai</span></div><p class=\"ds-goes\">goes first</p></div><button class=\"ds-btn\">↻ Pick again</button><div class=\"ds-here\"><p><strong>6 here</strong><span class=\"ds-muted\">: Ada, Chen, Kai, Bram and 2 more</span></p><button class=\"ds-link\">Change</button></div></div>",
       "css": ".ds-start { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; display: grid; gap: 16px; max-width: 26rem; color: var(--ink, #2b2a28); } .ds-well { padding: 12px 24px 16px; border-radius: 10px; background: var(--laminate, #f4f4f2); box-shadow: inset 0 0 0 1px var(--rule, #d3cfc7); } .ds-row { display: flex; align-items: center; gap: 16px; height: 72px; } .ds-cube { width: 56px; height: 56px; border-radius: 8px; flex: none; } .ds-who { font-size: clamp(2rem, 6vw, 3.25rem); font-weight: 800; font-stretch: 82%; line-height: 1.1; } .ds-goes { margin: -14px 0 0; padding-left: 72px; color: var(--ink-2, #57534d); font-size: 1.125rem; font-weight: 650; } .ds-btn { justify-self: start; min-height: 52px; padding: 0 24px; border: 0; border-radius: 8px; background: var(--ink, #2b2a28); color: var(--laminate, #f4f4f2); font: inherit; font-size: 1.125rem; font-weight: 650; cursor: pointer; } .ds-btn:focus-visible { outline: 2px solid var(--focus, #2b2a28); outline-offset: 2px; } .ds-here { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-top: 16px; border-top: 1px solid var(--rule, #d3cfc7); } .ds-here p { margin: 0; } .ds-muted { color: var(--ink-2, #57534d); } .ds-link { border: 0; background: none; padding: 0; font: inherit; font-weight: 650; color: inherit; text-decoration: underline; text-underline-offset: 0.2em; cursor: pointer; min-height: 44px; }"
     },
     {
@@ -1053,7 +1093,7 @@
       "kind": "custom",
       "refersTo": "well",
       "description": "Dice first: faces in a laminate well (kept in marigold), the total in Display and the coin's last result at the right; Roll and Flip a coin side by side; the mix as slim one-line steppers; five lines of Recent held from the start, so nothing moves.",
-      "html": "<div class=\"ds-dice\"><div class=\"ds-well\"><ul class=\"ds-faces\"><li><button class=\"ds-face\" aria-pressed=\"true\">4</button><span>d6 kept</span></li><li><button class=\"ds-face\">3</button><span>d6</span></li></ul><div class=\"ds-side\"><p class=\"ds-total\">Total <b>7</b></p><p class=\"ds-coin\">Heads</p></div></div><div class=\"ds-actions\"><button class=\"ds-btn\">Roll the other 1</button><button class=\"ds-btn2\">Flip a coin</button></div><div class=\"ds-kinds\"><span class=\"ds-kind\">\u2212 d4 +</span><span class=\"ds-kind ds-some\">\u2212 2d6 +</span><span class=\"ds-kind\">\u2212 d20 +</span></div></div>",
+      "html": "<div class=\"ds-dice\"><div class=\"ds-well\"><ul class=\"ds-faces\"><li><button class=\"ds-face\" aria-pressed=\"true\">4</button><span>d6 kept</span></li><li><button class=\"ds-face\">3</button><span>d6</span></li></ul><div class=\"ds-side\"><p class=\"ds-total\">Total <b>7</b></p><p class=\"ds-coin\">Heads</p></div></div><div class=\"ds-actions\"><button class=\"ds-btn\">Roll the other 1</button><button class=\"ds-btn2\">Flip a coin</button></div><div class=\"ds-kinds\"><span class=\"ds-kind\">− d4 +</span><span class=\"ds-kind ds-some\">− 2d6 +</span><span class=\"ds-kind\">− d20 +</span></div></div>",
       "css": ".ds-dice { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; display: grid; gap: 16px; max-width: 28rem; color: var(--ink, #2b2a28); } .ds-well { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: end; gap: 12px 16px; padding: 16px 24px; border-radius: 10px; background: var(--laminate, #f4f4f2); box-shadow: inset 0 0 0 1px var(--rule, #d3cfc7); } .ds-faces { list-style: none; margin: 0; padding: 0; display: flex; gap: 8px; } .ds-faces li { display: grid; justify-items: center; gap: 4px; font-size: 0.75rem; font-weight: 600; color: var(--ink-2, #57534d); } .ds-face { width: 64px; height: 64px; border: 1.5px solid var(--ink-3, #6b665e); border-radius: 8px; background: var(--cube, #fbfbfa); color: var(--ink, #2b2a28); font: inherit; font-size: 1.875rem; font-weight: 800; box-shadow: 0 1px 1px rgb(43 42 40 / 0.06), 0 6px 14px -6px rgb(43 42 40 / 0.18); cursor: pointer; } .ds-face[aria-pressed='true'] { background: var(--mark, #e9b44c); border-color: var(--mark, #e9b44c); color: var(--mark-ink, #2b2a28); } .ds-side { display: grid; justify-items: end; gap: 2px; } .ds-side p { margin: 0; } .ds-total { font-weight: 650; color: var(--ink-2, #57534d); } .ds-total b { font-size: clamp(2rem, 6vw, 3.25rem); font-weight: 800; font-stretch: 82%; color: var(--ink, #2b2a28); margin-left: 6px; line-height: 1; } .ds-coin { font-size: 1.375rem; font-weight: 780; font-stretch: 88%; } .ds-actions { display: flex; gap: 12px; } .ds-btn, .ds-btn2 { min-height: 52px; padding: 0 20px; border-radius: 8px; font: inherit; font-weight: 650; cursor: pointer; } .ds-btn { min-width: 14rem; border: 0; background: var(--ink, #2b2a28); color: var(--laminate, #f4f4f2); font-size: 1.125rem; } .ds-btn2 { border: 1.5px solid var(--rule, #d3cfc7); background: var(--cube, #fbfbfa); color: var(--ink, #2b2a28); } .ds-kinds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; } .ds-kind { display: grid; place-items: center; min-height: 44px; border: 1.5px solid var(--rule, #d3cfc7); border-radius: 8px; background: var(--laminate, #f4f4f2); color: var(--ink-2, #57534d); font-weight: 650; } .ds-kind.ds-some { border-color: var(--ink-3, #6b665e); background: var(--cube, #fbfbfa); color: var(--ink, #2b2a28); font-weight: 800; }"
     },
     {
@@ -1061,14 +1101,14 @@
       "kind": "custom",
       "refersTo": "result-row",
       "description": "Play tonight's results, right under the pull button: compact rows with a small box front, the facts, whose copy it is by name, tags, and We played this / Keep at the right. Kept rows take a 2px marigold border. Rows rise 16px over 0.45s, staggered 60ms.",
-      "html": "<ul class=\"ds-results\"><li class=\"ds-res ds-kept\"><span class=\"ds-thumb\" style=\"background:#6b5948\"></span><div class=\"ds-facts\"><a href=\"#\" class=\"ds-name\">Moss Tavern</a><span class=\"ds-meta\">3\u20135 players \u00b7 120\u2013180 min \u00b7 Heavy</span><span class=\"ds-owners\"><i style=\"background:#c8402e\"></i>Ada\u2019s <span class=\"ds-tag\">Best at 4</span></span></div><div class=\"ds-acts\"><a href=\"#\" class=\"ds-played\">We played this</a><button class=\"ds-keep\" aria-pressed=\"true\">Kept</button></div></li><li class=\"ds-res\"><span class=\"ds-thumb\" style=\"background:#a8ab9a\"></span><div class=\"ds-facts\"><a href=\"#\" class=\"ds-name\">Brass Village</a><span class=\"ds-meta\">2\u20135 players \u00b7 60 min \u00b7 Light</span><span class=\"ds-owners\"><i style=\"background:#c8402e\"></i>Ada\u2019s <span class=\"ds-tag\">For 4 or 5</span></span></div><div class=\"ds-acts\"><a href=\"#\" class=\"ds-played\">We played this</a><button class=\"ds-keep\" aria-pressed=\"false\">Keep</button></div></li></ul>",
+      "html": "<ul class=\"ds-results\"><li class=\"ds-res ds-kept\"><span class=\"ds-thumb\" style=\"background:#6b5948\"></span><div class=\"ds-facts\"><a href=\"#\" class=\"ds-name\">Moss Tavern</a><span class=\"ds-meta\">3–5 players · 120–180 min · Heavy</span><span class=\"ds-owners\"><i style=\"background:#c8402e\"></i>Ada’s <span class=\"ds-tag\">Best at 4</span></span></div><div class=\"ds-acts\"><a href=\"#\" class=\"ds-played\">We played this</a><button class=\"ds-keep\" aria-pressed=\"true\">Kept</button></div></li><li class=\"ds-res\"><span class=\"ds-thumb\" style=\"background:#a8ab9a\"></span><div class=\"ds-facts\"><a href=\"#\" class=\"ds-name\">Brass Village</a><span class=\"ds-meta\">2–5 players · 60 min · Light</span><span class=\"ds-owners\"><i style=\"background:#c8402e\"></i>Ada’s <span class=\"ds-tag\">For 4 or 5</span></span></div><div class=\"ds-acts\"><a href=\"#\" class=\"ds-played\">We played this</a><button class=\"ds-keep\" aria-pressed=\"false\">Keep</button></div></li></ul>",
       "css": ".ds-results { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-width: 44rem; } .ds-res { display: grid; grid-template-columns: 56px minmax(0,1fr) auto; align-items: center; gap: 12px; padding: 8px 12px 8px 8px; background: var(--cube, #fbfbfa); border: 1px solid var(--rule, #d3cfc7); border-radius: 10px; color: var(--ink, #2b2a28); } .ds-res.ds-kept { border: 2px solid var(--mark, #e9b44c); padding: 7px 11px 7px 7px; } .ds-thumb { width: 56px; aspect-ratio: 1 / 1.04; border-radius: 2px; box-shadow: 0 1px 1px rgb(43 42 40 / 0.06), 0 6px 14px -6px rgb(43 42 40 / 0.18); } .ds-facts { display: grid; gap: 1px; min-width: 0; } .ds-name { font-size: 1.125rem; font-weight: 700; color: inherit; text-decoration: none; } .ds-name:hover { text-decoration: underline; } .ds-meta { font-size: 0.8125rem; color: var(--ink-2, #57534d); } .ds-owners { display: flex; align-items: center; gap: 6px; font-size: 0.8125rem; } .ds-owners i { width: 10px; height: 10px; border-radius: 3px; } .ds-tag { padding: 0 7px; border-radius: 999px; background: var(--cube, #fbfbfa); box-shadow: inset 0 0 0 1px var(--rule, #d3cfc7); font-size: 0.75rem; font-weight: 700; } .ds-acts { display: flex; align-items: center; gap: 12px; } .ds-played { font-size: 0.8125rem; font-weight: 650; color: inherit; } .ds-keep { min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--rule, #d3cfc7); background: var(--laminate, #f4f4f2); color: var(--ink, #2b2a28); font: inherit; font-size: 0.8125rem; font-weight: 650; cursor: pointer; } .ds-keep:hover { border-color: var(--ink-3, #6b665e); } .ds-keep[aria-pressed='true'] { background: var(--mark, #e9b44c); border-color: var(--mark, #e9b44c); color: var(--mark-ink, #2b2a28); } .ds-keep:focus-visible { outline: 2px solid var(--focus, #2b2a28); outline-offset: 2px; }"
     },
     {
       "name": "Play Log Form",
       "kind": "custom",
       "refersTo": "segments",
-      "description": "Logging or editing a play: titled with the game; who played, then Result as Segments, then the scoresheet well with a row per player (place dropdown, or score with the place worked out); the date folded to 'Played today \u00b7 Change' beside Cancel and Log it.",
+      "description": "Logging or editing a play: titled with the game; who played, then Result as Segments, then the scoresheet well with a row per player (place dropdown, or score with the place worked out); the date folded to 'Played today · Change' beside Cancel and Log it.",
       "html": "<div class=\"ds-log\"><p class=\"ds-q\">Result</p><div class=\"ds-seg\"><label><input type=\"radio\" name=\"m\"><span>Places</span></label><label><input type=\"radio\" name=\"m\" checked><span>Scores</span></label><label><input type=\"radio\" name=\"m\"><span>Co-op</span></label></div><ol class=\"ds-sheet\"><li><span><i style=\"background:#c8402e\"></i>Ada</span><span class=\"ds-pl\">2nd</span><input value=\"62\"></li><li><span><i style=\"background:#b23f78\"></i>Chen</span><span class=\"ds-pl\">1st</span><input value=\"71\"></li></ol><div class=\"ds-foot\"><span class=\"ds-muted\">Played today <u>Change</u></span><span><button class=\"ds-b2\">Cancel</button> <button class=\"ds-b1\">Log it</button></span></div></div>",
       "css": ".ds-log { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; display: grid; gap: 12px; max-width: 28rem; color: var(--ink, #2b2a28); } .ds-q { margin: 0; font-size: 1.125rem; font-weight: 780; font-stretch: 88%; } .ds-seg { display: inline-flex; gap: 4px; padding: 4px; background: var(--gap, #e2dfd8); border-radius: 12px; justify-self: start; } .ds-seg label { position: relative; } .ds-seg input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; } .ds-seg span { display: flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 8px; font-weight: 650; color: var(--ink-2, #57534d); } .ds-seg input:checked + span { background: var(--cube, #fbfbfa); color: var(--ink, #2b2a28); box-shadow: inset 0 0 0 1px var(--rule, #d3cfc7); } .ds-sheet { list-style: none; margin: 0; padding: 0; border-radius: 10px; background: var(--laminate, #f4f4f2); box-shadow: inset 0 0 0 1px var(--rule, #d3cfc7); } .ds-sheet li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; min-height: 56px; padding: 6px 12px 6px 16px; font-weight: 650; } .ds-sheet li + li { border-top: 1px solid var(--gap, #e2dfd8); } .ds-sheet i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-right: 8px; vertical-align: -2px; } .ds-pl { color: var(--ink-2, #57534d); } .ds-sheet input { width: 6.5rem; min-height: 44px; border: 1.5px solid var(--rule, #d3cfc7); border-radius: 8px; background: var(--cube, #fbfbfa); text-align: right; padding: 0 12px; font: inherit; } .ds-foot { display: flex; justify-content: space-between; align-items: center; padding-top: 16px; border-top: 1px solid var(--rule, #d3cfc7); } .ds-muted { color: var(--ink-2, #57534d); } .ds-b1, .ds-b2 { min-height: 44px; padding: 0 16px; border-radius: 8px; font: inherit; font-weight: 650; } .ds-b1 { border: 0; background: var(--ink, #2b2a28); color: var(--laminate, #f4f4f2); } .ds-b2 { border: 1.5px solid var(--rule, #d3cfc7); background: var(--cube, #fbfbfa); }"
     },
@@ -1077,7 +1117,7 @@
       "kind": "card",
       "refersTo": "",
       "description": "One logged play: date in label size and ink-2, the game as a link in mixed lists, a neutral co-op tag, 36px edit and delete icons; players in finishing order with 12px colour squares, the winner at 700. Delete confirms inline with a danger-outlined button.",
-      "html": "<ol class=\"ds-plays\"><li><div class=\"ds-ph\"><span class=\"ds-when\">Sat 1 Nov</span><a href=\"#\" class=\"ds-game\">Amber Guild</a><span class=\"ds-tools2\"><button class=\"ds-ic\" aria-label=\"Edit this play\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\"/><path d=\"m15 5 4 4\"/></svg></button><button class=\"ds-ic\" aria-label=\"Delete this play\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 6h18\"/><path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6\"/><path d=\"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\"/><path d=\"M10 11v6\"/><path d=\"M14 11v6\"/></svg></button></span></div><ul class=\"ds-res\"><li class=\"ds-win\"><span class=\"ds-sq2\" style=\"background:#c8402e\"></span><span class=\"ds-n\">Ada</span><span class=\"ds-m\">1st</span><span class=\"ds-m\">\u00b7 64</span></li><li><span class=\"ds-sq2\" style=\"background:#2f62b0\"></span><span class=\"ds-n\">Bram</span><span class=\"ds-m\">2nd</span><span class=\"ds-m\">\u00b7 51</span></li><li><span class=\"ds-sq2 ds-gs\"></span><span class=\"ds-n\">Noor</span><span class=\"ds-m\">3rd</span><span class=\"ds-m\">\u00b7 40</span></li></ul><div class=\"ds-confirm\"><span>Delete this play of Amber Guild?</span><button class=\"ds-sbtn ds-danger\">Delete</button><button class=\"ds-sbtn\">Keep it</button></div></li><li><div class=\"ds-ph\"><span class=\"ds-when\">Fri 31 Oct</span><a href=\"#\" class=\"ds-game\">Pocket Harbour</a><span class=\"ds-tag2\">Co-op, won</span></div><ul class=\"ds-res\"><li><span class=\"ds-sq2\" style=\"background:#2e7d4f\"></span><span class=\"ds-n\">Ines</span></li><li><span class=\"ds-sq2\" style=\"background:#6f4f96\"></span><span class=\"ds-n\">Jun</span></li></ul></li></ol>",
+      "html": "<ol class=\"ds-plays\"><li><div class=\"ds-ph\"><span class=\"ds-when\">Sat 1 Nov</span><a href=\"#\" class=\"ds-game\">Amber Guild</a><span class=\"ds-tools2\"><button class=\"ds-ic\" aria-label=\"Edit this play\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\"/><path d=\"m15 5 4 4\"/></svg></button><button class=\"ds-ic\" aria-label=\"Delete this play\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 6h18\"/><path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6\"/><path d=\"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\"/><path d=\"M10 11v6\"/><path d=\"M14 11v6\"/></svg></button></span></div><ul class=\"ds-res\"><li class=\"ds-win\"><span class=\"ds-sq2\" style=\"background:#c8402e\"></span><span class=\"ds-n\">Ada</span><span class=\"ds-m\">1st</span><span class=\"ds-m\">· 64</span></li><li><span class=\"ds-sq2\" style=\"background:#2f62b0\"></span><span class=\"ds-n\">Bram</span><span class=\"ds-m\">2nd</span><span class=\"ds-m\">· 51</span></li><li><span class=\"ds-sq2 ds-gs\"></span><span class=\"ds-n\">Noor</span><span class=\"ds-m\">3rd</span><span class=\"ds-m\">· 40</span></li></ul><div class=\"ds-confirm\"><span>Delete this play of Amber Guild?</span><button class=\"ds-sbtn ds-danger\">Delete</button><button class=\"ds-sbtn\">Keep it</button></div></li><li><div class=\"ds-ph\"><span class=\"ds-when\">Fri 31 Oct</span><a href=\"#\" class=\"ds-game\">Pocket Harbour</a><span class=\"ds-tag2\">Co-op, won</span></div><ul class=\"ds-res\"><li><span class=\"ds-sq2\" style=\"background:#2e7d4f\"></span><span class=\"ds-n\">Ines</span></li><li><span class=\"ds-sq2\" style=\"background:#6f4f96\"></span><span class=\"ds-n\">Jun</span></li></ul></li></ol>",
       "css": ".ds-plays { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; list-style: none; margin: 0; padding: 0; color: var(--ink, #2b2a28); max-width: 36rem; } .ds-plays > li { padding: 12px 0; border-top: 1px solid var(--rule, #d3cfc7); } .ds-plays > li:first-child { border-top: 0; } .ds-ph { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-height: 32px; } .ds-when { font-size: 0.8125rem; font-weight: 650; color: var(--ink-2, #57534d); font-variant-numeric: tabular-nums; } .ds-game { font-weight: 650; color: inherit; text-decoration-thickness: 1px; text-underline-offset: 0.2em; } .ds-tag2 { display: inline-flex; padding: 1px 7px; border-radius: 999px; background: var(--gap, #e2dfd8); color: var(--ink-2, #57534d); font-size: 0.75rem; font-weight: 600; } .ds-tools2 { display: flex; margin-left: auto; } .ds-ic { display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 8px; background: none; color: var(--ink-2, #57534d); cursor: pointer; } .ds-ic:hover { background: var(--gap, #e2dfd8); color: var(--ink, #2b2a28); } .ds-ic:focus-visible, .ds-sbtn:focus-visible { outline: 2px solid var(--focus, #2b2a28); outline-offset: 2px; } .ds-res { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; } .ds-res li { display: inline-flex; align-items: center; gap: 6px; } .ds-win .ds-n { font-weight: 700; } .ds-sq2 { flex: none; width: 12px; height: 12px; border-radius: 3px; } .ds-gs { box-shadow: inset 0 0 0 2px var(--ink-3, #6b665e); } .ds-m { color: var(--ink-2, #57534d); font-variant-numeric: tabular-nums; } .ds-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 0.8125rem; } .ds-sbtn { font: inherit; min-height: 36px; padding: 0 12px; border-radius: 8px; border: 1.5px solid var(--rule, #d3cfc7); background: var(--cube, #fbfbfa); color: var(--ink, #2b2a28); font-size: 0.8125rem; font-weight: 650; cursor: pointer; } .ds-sbtn:hover { border-color: var(--ink-3, #6b665e); } .ds-danger { border-color: var(--danger, #a8321f); color: var(--danger, #a8321f); } .ds-danger:hover { border-color: var(--danger, #a8321f); }"
     },
     {
@@ -1093,23 +1133,23 @@
       "kind": "custom",
       "refersTo": "",
       "description": "Waiting shows the shape of what is coming, never a spinner: shelf-gap blocks with a band of light sweeping every 1.6s, neighbours starting 90 to 120ms apart so the sweep ripples. Still under reduced motion.",
-      "html": "<ul class=\"ds-sk-shelf\" aria-hidden=\"true\"><li class=\"ds-sk-cube\" style=\"--i:0\"><span class=\"ds-sk ds-sk-box\"></span><span class=\"ds-sk ds-sk-line\"></span></li><li class=\"ds-sk-cube\" style=\"--i:1\"><span class=\"ds-sk ds-sk-box\"></span><span class=\"ds-sk ds-sk-line\"></span></li><li class=\"ds-sk-cube\" style=\"--i:2\"><span class=\"ds-sk ds-sk-box\"></span><span class=\"ds-sk ds-sk-line\"></span></li></ul><p class=\"ds-vh2\" role=\"status\">Loading\u2026</p>",
+      "html": "<ul class=\"ds-sk-shelf\" aria-hidden=\"true\"><li class=\"ds-sk-cube\" style=\"--i:0\"><span class=\"ds-sk ds-sk-box\"></span><span class=\"ds-sk ds-sk-line\"></span></li><li class=\"ds-sk-cube\" style=\"--i:1\"><span class=\"ds-sk ds-sk-box\"></span><span class=\"ds-sk ds-sk-line\"></span></li><li class=\"ds-sk-cube\" style=\"--i:2\"><span class=\"ds-sk ds-sk-box\"></span><span class=\"ds-sk ds-sk-line\"></span></li></ul><p class=\"ds-vh2\" role=\"status\">Loading…</p>",
       "css": ".ds-sk-shelf { list-style: none; margin: 0; display: grid; grid-template-columns: repeat(3, 104px); gap: 6px; padding: 6px; background: var(--gap, #e2dfd8); border-radius: 6px; width: max-content; } .ds-sk-cube { aspect-ratio: 1 / 1.3; background: var(--cube, #fbfbfa); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px 10px; } .ds-sk { display: block; border-radius: 2px; background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--cube, #fbfbfa) 55%, transparent) 50%, transparent 70%) var(--gap, #e2dfd8); background-size: 250% 100%; animation: ds-sweep 1.6s ease-in-out infinite; animation-delay: calc(var(--i) * 90ms); } .ds-sk-box { width: 78%; flex: 1; } .ds-sk-line { width: 58%; height: 9px; border-radius: 999px; } @keyframes ds-sweep { from { background-position: 120% 0; } to { background-position: -120% 0; } } @media (prefers-reduced-motion: reduce) { .ds-sk { animation: none; } } .ds-vh2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }"
     },
     {
       "name": "BGG Credit Footer",
       "kind": "custom",
       "refersTo": "",
-      "description": "The footer on every page: \"Game data from BoardGameGeek\", an outlined Powered by BGG badge, the non-affiliation line, Privacy and Source; the Theme select sits at the far right (wrapping under the credit on narrow screens). The select offers Automatic, the cube shelf, twelve palette presets and, when a hoster defines one, Custom; themes recolour tokens only.",
-      "html": "<footer class=\"ds-credit\"><div class=\"ds-ci\"><div class=\"ds-ct\"><p>Game data from <a href=\"#\">BoardGameGeek</a> <a class=\"ds-badge\" href=\"#\">Powered by BGG</a></p><p>Box Populi is not affiliated with or endorsed by BoardGameGeek. <a href=\"#\">Privacy</a> \u00b7 <a href=\"#\">Source</a></p></div><form class=\"ds-theme\"><label><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z\"/><circle cx=\"13.5\" cy=\"6.5\" r=\".5\" fill=\"currentColor\"/><circle cx=\"17.5\" cy=\"10.5\" r=\".5\" fill=\"currentColor\"/><circle cx=\"6.5\" cy=\"12.5\" r=\".5\" fill=\"currentColor\"/><circle cx=\"8.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\"/></svg><span>Theme</span><select><option>Automatic</option><option>Cube shelf</option><option>Dracula</option><option>Catppuccin</option><option>Solarized</option><option>Gruvbox</option><option>Tokyo Night</option><option>Kanagawa</option><option>Nord</option><option>Everforest</option><option>Ros\u00e9 Pine</option><option>One</option><option>GitHub</option><option>Ayu</option></select></label></form></div></footer>",
-      "css": ".ds-credit { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; border-top: 1px solid var(--rule, #d3cfc7); padding: 24px 0 32px; font-size: 0.8125rem; color: var(--ink-2, #57534d); } .ds-ci { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; } .ds-ct { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .ds-ct p { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; } .ds-credit a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 0.2em; } .ds-credit a:focus-visible, .ds-theme select:focus-visible { outline: 2px solid var(--focus, #2b2a28); outline-offset: 2px; } .ds-credit .ds-badge { display: inline-block; padding: 1px 8px; border: 1.5px solid currentColor; border-radius: 4px; font-weight: 700; text-decoration: none; color: var(--ink, #2b2a28); } .ds-theme { margin-left: auto; } .ds-theme label { display: inline-flex; align-items: center; gap: 6px; } .ds-theme select { font: inherit; font-weight: 650; appearance: none; min-height: 36px; padding: 0 28px 0 8px; border: 1.5px solid var(--rule, #d3cfc7); border-radius: 8px; background: var(--cube, #fbfbfa) url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%232b2a28' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\") no-repeat right 10px center; color: var(--ink, #2b2a28); } .ds-theme select:focus { border-color: var(--ink-3, #6b665e); }"
+      "description": "The footer on every page: \"Game data from BoardGameGeek\", BGG's own Powered by BGG logo at 28px tall (the colour file on light themes, the reversed one on dark, never redrawn; the slot here stands in for it), the Wikidata line on an instance using Wikidata, the non-affiliation line, Privacy, Source and the version linked to the changelog; the Theme select at the far right, wrapping under on a narrow screen.",
+      "html": "<footer class=\"ds-credit\"><div class=\"ds-ci\"><div class=\"ds-ct\"><p>Game data from <a href=\"#\">BoardGameGeek</a> <a class=\"ds-logo\" href=\"#\" aria-label=\"Powered by BGG\">BGG logo file, 28px</a></p><p>Game details from <a href=\"#\">Wikidata</a>, free to reuse (CC0).</p><p class=\"ds-small\">Box Populi is not affiliated with or endorsed by BoardGameGeek. <a href=\"#\">Privacy</a> · <a href=\"#\">Source</a> · <a class=\"ds-num\" href=\"#\">v0.8.0</a></p></div><form class=\"ds-theme\"><label><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z\"/><circle cx=\"13.5\" cy=\"6.5\" r=\".5\" fill=\"currentColor\"/><circle cx=\"17.5\" cy=\"10.5\" r=\".5\" fill=\"currentColor\"/><circle cx=\"6.5\" cy=\"12.5\" r=\".5\" fill=\"currentColor\"/><circle cx=\"8.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\"/></svg><span>Theme</span><select><option>Automatic</option><option>Cube shelf</option><option>Dracula</option><option>Catppuccin</option><option>Solarized</option><option>Gruvbox</option><option>Tokyo Night</option><option>Kanagawa</option><option>Nord</option><option>Everforest</option><option>Rosé Pine</option><option>One</option><option>GitHub</option><option>Ayu</option></select></label></form></div></footer>",
+      "css": ".ds-credit { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; border-top: 1px solid var(--rule, #d3cfc7); padding: 24px 0 32px; font-size: 0.8125rem; color: var(--ink-2, #57534d); } .ds-ci { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; } .ds-ct { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .ds-ct p { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; } .ds-credit a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 0.2em; } .ds-credit a:focus-visible, .ds-theme select:focus-visible { outline: 2px solid var(--focus, #2b2a28); outline-offset: 2px; } .ds-ct p { max-width: none; } .ds-small { display: block; } .ds-num { font-variant-numeric: tabular-nums; } .ds-logo { display: inline-flex; align-items: center; height: 28px; padding: 0 8px; border: 1px dashed var(--rule, #d3cfc7); border-radius: 4px; font-size: 0.6875rem; color: var(--ink-3, #6b665e); text-decoration: none; } .ds-theme select:focus-visible { outline: 2px solid var(--focus, #2b2a28); outline-offset: 2px; } .ds-credit .ds-badge { display: inline-block; padding: 1px 8px; border: 1.5px solid currentColor; border-radius: 4px; font-weight: 700; text-decoration: none; color: var(--ink, #2b2a28); } .ds-theme { margin-left: auto; } .ds-theme label { display: inline-flex; align-items: center; gap: 6px; } .ds-theme select { font: inherit; font-weight: 650; appearance: none; min-height: 36px; padding: 0 28px 0 8px; border: 1.5px solid var(--rule, #d3cfc7); border-radius: 8px; background: var(--cube, #fbfbfa) url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%232b2a28' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\") no-repeat right 10px center; color: var(--ink, #2b2a28); } .ds-theme select:focus { border-color: var(--ink-3, #6b665e); }"
     },
     {
       "name": "Segments",
       "kind": "custom",
       "refersTo": "segments",
       "description": "One choice from two to four on a shelf-gap track; the chosen option sits on the cube with a rule ring. A setting, never marigold. Whose games in Play tonight, the result type when logging a play.",
-      "html": "<div class=\"ds-segments\" role=\"radiogroup\"><label><input type=\"radio\" name=\"w\"><span>Everything they own</span></label><label><input type=\"radio\" name=\"w\" checked><span>At someone\u2019s home</span></label></div>",
+      "html": "<div class=\"ds-segments\" role=\"radiogroup\"><label><input type=\"radio\" name=\"w\"><span>Everything they own</span></label><label><input type=\"radio\" name=\"w\" checked><span>At someone’s home</span></label></div>",
       "css": ".ds-segments { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; display: inline-flex; gap: 4px; padding: 4px; background: var(--gap, #e2dfd8); border-radius: 12px; } .ds-segments label { position: relative; cursor: pointer; } .ds-segments input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; } .ds-segments span { display: flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 8px; font-weight: 650; color: var(--ink-2, #57534d); white-space: nowrap; } .ds-segments label:hover span { color: var(--ink, #2b2a28); } .ds-segments input:checked + span { background: var(--cube, #fbfbfa); color: var(--ink, #2b2a28); box-shadow: inset 0 0 0 1px var(--rule, #d3cfc7); } .ds-segments input:focus-visible + span { outline: 2px solid var(--focus, #2b2a28); outline-offset: 2px; }"
     },
     {
@@ -1117,38 +1157,46 @@
       "kind": "card",
       "refersTo": "form-panel",
       "description": "The shape every form takes: a cube panel with a head (title and one line of context), rows with the question at lead size beside its controls from 760px, and a foot band on the laminate with the main action.",
-      "html": "<section class=\"ds-fp\"><div class=\"ds-fh\"><h2>Plan a night</h2><p>Pick when and where first. Next you\u2019ll mark who\u2019s going.</p></div><div class=\"ds-fr\"><span class=\"ds-fq\">Name</span><input class=\"ds-field\" value=\"Game night\"></div><div class=\"ds-ff\"><button class=\"ds-btn\">Next: who\u2019s going \u2192</button></div></section>",
+      "html": "<section class=\"ds-fp\"><div class=\"ds-fh\"><h2>Plan a night</h2><p>Pick when and where first. Next you’ll mark who’s going.</p></div><div class=\"ds-fr\"><span class=\"ds-fq\">Name</span><input class=\"ds-field\" value=\"Game night\"></div><div class=\"ds-ff\"><button class=\"ds-btn\">Next: who’s going →</button></div></section>",
       "css": ".ds-fp { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; max-width: 34rem; background: var(--cube, #fbfbfa); border: 1px solid var(--rule, #d3cfc7); border-radius: 10px; color: var(--ink, #2b2a28); } .ds-fh { padding: 24px 24px 16px; } .ds-fh h2 { margin: 0; font-size: 1.375rem; font-weight: 780; font-stretch: 88%; } .ds-fh p { margin: 6px 0 0; color: var(--ink-2, #57534d); } .ds-fr { display: grid; grid-template-columns: 8rem 1fr; gap: 24px; align-items: center; padding: 24px; border-top: 1px solid var(--rule, #d3cfc7); } .ds-fq { font-size: 1.125rem; font-weight: 780; font-stretch: 88%; } .ds-field { min-height: 46px; padding: 0 12px; border: 1.5px solid var(--rule, #d3cfc7); border-radius: 8px; background: var(--cube, #fbfbfa); font: inherit; } .ds-field:focus { border-color: var(--ink-3, #6b665e); outline: none; } .ds-ff { padding: 24px; padding-left: calc(24px + 8rem + 24px); background: var(--laminate, #f4f4f2); border-top: 1px solid var(--rule, #d3cfc7); border-radius: 0 0 9px 9px; } .ds-btn { min-height: 44px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--ink, #2b2a28); color: var(--laminate, #f4f4f2); font: inherit; font-weight: 650; cursor: pointer; } .ds-btn:focus-visible { outline: 2px solid var(--focus, #2b2a28); outline-offset: 2px; }"
+    },
+    {
+      "name": "Setting Row",
+      "kind": "custom",
+      "refersTo": "form-panel",
+      "description": "A group setting folded to its name and current value, with an ink-2 chevron that turns over when open; open, its hint and form follow under it. Rows sit 12px from the rules; one opens by itself when its form comes back with an error.",
+      "html": "<section class=\"ds-sp\"><div class=\"ds-sh\"><h2>Settings</h2></div><details class=\"ds-sr\"><summary><span class=\"ds-st\"><span class=\"ds-sq\">Name</span><span class=\"ds-sv\">Sandbox</span></span><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m6 9 6 6 6-6\"/></svg></summary><div class=\"ds-sb\"><input class=\"ds-field\" value=\"Sandbox\"><button class=\"ds-btn2\">Rename</button></div></details><details class=\"ds-sr\" open><summary><span class=\"ds-st\"><span class=\"ds-sq\">Fillers</span><span class=\"ds-sv\">Up to 30 minutes, complexity under 2</span></span><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m6 9 6 6 6-6\"/></svg></summary><div class=\"ds-sb\"><p class=\"ds-hint\">What Play tonight offers while people arrive or between longer games.</p><input class=\"ds-field\" value=\"30\" style=\"max-width:5rem\"><button class=\"ds-btn2\">Save</button></div></details><details class=\"ds-sr\"><summary><span class=\"ds-st\"><span class=\"ds-sq\">Theme</span><span class=\"ds-sv\">This site’s default</span></span><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m6 9 6 6 6-6\"/></svg></summary><div class=\"ds-sb\"><select class=\"ds-field\"><option>This site’s default</option></select><button class=\"ds-btn2\">Save</button></div></details></section>",
+      "css": ".ds-sp { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; width: 22rem; background: var(--cube, #fbfbfa); border: 1px solid var(--rule, #d3cfc7); border-radius: 10px; color: var(--ink, #2b2a28); } .ds-sh { padding: 24px 24px 16px; } .ds-sh h2 { margin: 0; font-size: 1.375rem; font-weight: 780; font-stretch: 88%; } .ds-sr { padding: 12px 24px; border-top: 1px solid var(--rule, #d3cfc7); } .ds-sr summary { display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer; list-style: none; } .ds-sr summary::-webkit-details-marker { display: none; } .ds-sr summary:focus-visible { outline: 2px solid var(--focus, #2b2a28); outline-offset: 2px; border-radius: 4px; } .ds-st { display: grid; gap: 2px; flex: 1; min-width: 0; } .ds-sq { font-size: 1.125rem; font-weight: 780; font-stretch: 88%; } .ds-sv { font-size: 0.8125rem; color: var(--ink-2, #57534d); } .ds-sr svg { flex: none; color: var(--ink-2, #57534d); transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1); } .ds-sr summary:hover svg { color: var(--ink, #2b2a28); } .ds-sr[open] svg { transform: rotate(180deg); } .ds-sb { display: flex; flex-wrap: wrap; gap: 12px; padding-top: 12px; } .ds-hint { flex-basis: 100%; margin: 0; font-size: 0.8125rem; color: var(--ink-2, #57534d); } .ds-field { flex: 1; min-width: 0; min-height: 46px; padding: 0 12px; border: 1.5px solid var(--rule, #d3cfc7); border-radius: 8px; background: var(--cube, #fbfbfa); color: var(--ink, #2b2a28); font: inherit; } .ds-field:focus { border-color: var(--ink-3, #6b665e); outline: none; } .ds-btn2 { min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1.5px solid var(--rule, #d3cfc7); background: var(--cube, #fbfbfa); color: var(--ink, #2b2a28); font: inherit; font-weight: 650; cursor: pointer; } .ds-btn2:hover { border-color: var(--ink-3, #6b665e); } .ds-btn2:focus-visible { outline: 2px solid var(--focus, #2b2a28); outline-offset: 2px; }"
     },
     {
       "name": "Panel Tabs",
       "kind": "nav",
       "refersTo": "panel-tab",
       "description": "Two tabs inside a panel's top edge (Play tonight, Plan a night): the row on the shelf-gap colour, the open tab cut from the panel in cube white and joined to it, the other in ink-2. Nothing above the panel, no marigold.",
-      "html": "<div class=\"ds-tabbed\"><div class=\"ds-tabs\" role=\"tablist\"><button role=\"tab\" aria-selected=\"true\" class=\"ds-tab\">Play tonight</button><button role=\"tab\" aria-selected=\"false\" class=\"ds-tab\">Plan a night</button></div><div class=\"ds-body\">No night planned, so pick from the games at Ada\u2019s.</div></div>",
+      "html": "<div class=\"ds-tabbed\"><div class=\"ds-tabs\" role=\"tablist\"><button role=\"tab\" aria-selected=\"true\" class=\"ds-tab\">Play tonight</button><button role=\"tab\" aria-selected=\"false\" class=\"ds-tab\">Plan a night</button></div><div class=\"ds-body\">No night planned, so pick from the games at Ada’s.</div></div>",
       "css": ".ds-tabbed { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; max-width: 34rem; background: var(--cube, #fbfbfa); border: 1px solid var(--rule, #d3cfc7); border-radius: 10px; color: var(--ink, #2b2a28); } .ds-tabs { display: flex; gap: 4px; padding: 6px 8px 0; background: var(--gap, #e2dfd8); border-bottom: 1px solid var(--rule, #d3cfc7); border-radius: 9px 9px 0 0; } .ds-tab { min-height: 46px; margin-bottom: -1px; padding: 0 16px 1px; border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0; background: none; color: var(--ink-2, #57534d); font: inherit; font-size: 1.125rem; font-weight: 700; cursor: pointer; } .ds-tab:hover { color: var(--ink, #2b2a28); } .ds-tab[aria-selected='true'] { background: var(--cube, #fbfbfa); border-color: var(--rule, #d3cfc7); color: var(--ink, #2b2a28); } .ds-tab:focus-visible { outline: 2px solid var(--focus, #2b2a28); outline-offset: -4px; } .ds-body { padding: 20px 24px; color: var(--ink-2, #57534d); }"
     }
   ],
   "narrative": {
     "northStar": "The Cube Shelf",
-    "overview": "**Creative North Star: \"The Cube Shelf\"**\n\nThe catalog is drawn as the group's shared cube-storage shelf. Each game is a box standing in its own square cube; the cubes sit in a grid separated by grey shelf gaps; the front edge of every cube is painted in the player colours of the people who own the game. Filters live on a dark shelf label above the grid. The ground is pale laminate, the ink is near-black, and almost everything else is low-chroma cardboard, so the owner edges are the only saturated colour on the shelf.\n\nDensity follows the use: three cubes across on a phone at the table, five to seven on a desktop at home, and a denser Spines view (boxes lying on their sides) for scanning long collections. The type is one family, Archivo, used heavy and semi-condensed for anything printed on a box and at normal width for interface text. Dark mode is the same shelf in black-brown laminate, with the same roles swapped value for value.\n\nThe world refuses the category default for game catalogs: a dark app with a grid of box-art cards and a filter sidebar. Box art from BoardGameGeek appears inside the cube when a game has it, hotlinked and cover-fitted, never copied; games without art get a printed box front so a hand-entered shelf still looks like a shelf.",
+    "overview": "The catalog is drawn as the group's shared cube-storage shelf. Each game is a box standing in its own cube, a little taller than wide; the cubes sit in a grid separated by grey shelf gaps; the front edge of every cube is painted in the player colours of the people who own the game. Filters live on a dark shelf label above the grid. The ground is pale laminate, the ink is near-black, and almost everything else is low-chroma cardboard, so the owner edges are the only saturated colour on the shelf.\n\nDensity follows the use: three cubes across on a phone at the table, five to seven on a desktop at home, and a denser Spines view (boxes lying on their sides) for scanning long collections. The type is one family, Archivo, used heavy and semi-condensed for anything printed on a box and at normal width for interface text. Dark mode is the same shelf in black-brown laminate, with the same roles swapped value for value.\n\nThe world refuses the category default for game catalogs: a dark app with a grid of box-art cards and a filter sidebar. Box art from BoardGameGeek appears inside the cube when a game has it, hotlinked, never copied, standing at its own shape; games without art get a printed box front so a hand-entered shelf still looks like a shelf.",
     "keyCharacteristics": [
       "Square cubes on a shelf-gap grid, each closed by a 6px owner-colour edge.",
       "Pale laminate ground, near-black ink, one dark label strip per screen for filters and search.",
-      "Player colours by join order are the only saturated colour; marigold marks what is chosen.",
+      "Player colours, each member's from the day they join, are the only saturated colour; marigold marks what is chosen.",
       "Printed box fronts in cardboard tones with a lid seam and a heavy condensed title.",
       "Archivo alone, steered by weight (400 to 800) and width (78% to 100%).",
-      "Flat at rest; a box lifts with one soft shadow when touched, a game's own page shows its box slightly tilted, and the things that stand for objects on the table (dice, podium blocks) carry the same lift."
+      "Each cube is a compartment drawn in perspective and lit from the upper left: its box stands on the floor at the cover's own shape and casts a short shadow down and to the right, and the name and caption sit on the floor in front of it. Touched, the box lifts. A game's own page shows its box slightly tilted, and the things that stand for objects on the table (dice, podium blocks) carry the lift."
     ],
     "rules": [
       {
         "name": "The Marigold Means Chosen Rule",
-        "body": "Marigold appears only on something the person has turned on: an active filter, the current tab, a selected person, selected text, a focused field in the label strip. It never decorates, never marks ownership, and never fills a button.",
+        "body": "Marigold appears only on something the person has turned on: an active filter, the current tab, a selected person, selected text, a focused field in the label strip. It never decorates, never marks ownership, and never fills a button. One exception, Carlo's pick: the Wanted tab's \"Most wanted\" pill, which marks a fact, with its own small shadow.",
         "section": "colors"
       },
       {
         "name": "The Owner Edge Rule",
-        "body": "Player colours are the only saturated colour on the shelf, and they always mean a person. Assign them by join order, never by preference or by game, and never add a player colour that shares a hue with marigold.",
+        "body": "Player colours are the only saturated colour on the shelf, and they always mean a person. Assign them when someone joins (D69), never by preference or by game, and never add a player colour that shares a hue with marigold.",
         "section": "colors"
       },
       {
@@ -1163,7 +1211,7 @@
       },
       {
         "name": "The One Family Rule",
-        "body": "Archivo carries every role. Hierarchy comes from weight and the width axis; no second family, no letter-spaced uppercase labels. The join code is the one tracked-out uppercase setting, because it is a code people read aloud.",
+        "body": "Archivo carries every role. Hierarchy comes from weight and the width axis; no second family, no letter-spaced uppercase labels. Codes are the one tracked-out uppercase setting (the join code and sign-in codes), because they're read aloud.",
         "section": "typography"
       },
       {
@@ -1173,23 +1221,24 @@
       },
       {
         "name": "The Thumb Reach Rule",
-        "body": "Below 900px the group tabs are a fixed bottom bar with 52px targets and safe-area padding; the filter row scrolls sideways in one line rather than wrapping. Tap targets are 44px for buttons and search, 38px for filter chips, 40px for person toggles.",
+        "body": "Below 900px the group tabs are a fixed bottom bar with 52px targets and safe-area padding; below 760px the filter row scrolls sideways in one line rather than wrapping. Tap targets are 44px for buttons and search, 38px for filter chips, 40px for person toggles. On a touch screen (`pointer: coarse`) nothing drawn as a button is under 44px: `--tap` (app.css) is 44px there and 0 under a mouse, and small buttons, chips, segments, person toggles, icon buttons, selects and the cube mark's link take `max(their size, var(--tap))`. Text links and link buttons keep their line height (24px, inside WCAG's minimum).",
         "section": "layout"
       },
       {
         "name": "The Lift On Touch Rule",
-        "body": "Only a thing that stands for an object on the table gets a shadow: a box off its shelf (touched, pulled, or shown on its own page), a rolled die, a podium block. Panels, wells, buttons and chips stay flat.",
+        "body": "Only a thing that stands for an object gets a shadow: a box standing in its cube, a box off its shelf (touched, pulled, or shown on its own page), a rolled die, a podium block. Panels, wells, buttons and chips stay flat.",
         "section": "elevation"
       }
     ],
     "dos": [
       "**Do** put every grid of games on the shelf-gap ground with 6px gaps (8px from 760px) and close each cube with the owner edge.",
-      "**Do** take player colours from `playerColor()` by join order and box prints from `boxColor()` by name; both live in `src/lib/catalog/colors.ts`.",
+      "**Do** take player colours from `playerColor()` by the member's stored `colorIndex` and box prints from `boxColor()` by name; both live in `src/lib/catalog/colors.ts`.",
       "**Do** keep marigold for state: active filters, the current tab, selected people, text selection and focused label-strip fields.",
       "**Do** set box and spine titles at 800 and 78 to 80% width, and interface headings at 780 and 88%.",
       "**Do** hotlink BGG box art and fall back to the printed front when it is missing or fails to load.",
-      "**Do** render the footer on every page, including new routes outside the root layout. It carries the BGG credit whenever the instance shows BGG data; an instance that has never had BGG on shows only Privacy, Source and the theme select.",
-      "**Do** give any new motion a reduced-motion state with no animation and no tilt."
+      "**Do** render the footer on every page, including new routes outside the root layout. It carries the BGG credit whenever the instance shows BGG data; an instance that has never had BGG on shows only Privacy, Source, the version and the theme select.",
+      "**Do** give any new motion a reduced-motion state with no animation. A static tilt (the game page's box, the landing's boxes) may stay.",
+      "**Do** put `{@attach announce}` on a message that appears after an action (\"Saved.\", \"Link added.\"), so a screen reader hears it, and give each page its own `<title>`. An error that appears takes `role=\"alert\"` instead."
     ],
     "donts": [
       "**Don't** use marigold for facts. The picker's \"Best at N\" tag is a neutral cube-white tag with a rule outline, and the cube mark's second box is kraft cardboard, not marigold.",
@@ -1198,7 +1247,7 @@
       "**Don't** add a box print that is saturated, sits in a player hue, or falls below 4.5:1 with its ink; keep dark prints to about a quarter of the set.",
       "**Don't** download, proxy or re-host BGG box art.",
       "**Don't** put eyebrows or kickers above headings: no small uppercase labels, no label that repeats the tab or title just above it, no group-size label over a game's name. Put that fact in a tag or the line of context.",
-      "**Don't** use hard offset shadows; the lift shadow is the only shadow.",
+      "**Don't** use hard offset shadows. The shadows are Stand and the shelf lift for boxes in cubes and Lift off the shelf, all soft, and on the shelf all from the one light at the upper left.",
       "**Don't** use gradient text.",
       "**Don't** separate cubes with borders or card shadows; the shelf gap does that."
     ]
