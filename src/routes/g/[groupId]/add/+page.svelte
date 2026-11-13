@@ -224,7 +224,7 @@
 	<!-- Typed-in and Wikidata games have no BGG id, so loading details never reaches them (D57). One
 	     line until it's opened: a few homemade games that will never match shouldn't take the page. -->
 	{#if bggOn && data.unmatched.length > 0}
-		<section class="panel unmatched" aria-label="Games without BoardGameGeek details">
+		<section class="panel unmatched" aria-label="Games still without details">
 			<MatchPanel groupId={data.group.id} shelfHref="/g/{data.group.id}" games={data.unmatched} />
 		</section>
 	{/if}

@@ -193,7 +193,7 @@
 							<span class="mini"><BoxFront name={pick.name} src={pick.thumbUrl} size="mini" /></span>
 							<div class="pick-text">
 								{#if candidates.length > 1}
-									<label class="visually-hidden" for="pick-{g.gameId}">BoardGameGeek match for {g.name}</label>
+									<label class="visually-hidden" for="pick-{g.gameId}">Match for {g.name}</label>
 									<select id="pick-{g.gameId}" class="field" bind:value={choice[g.gameId]} disabled={phase === 'saving'}>
 										{#each candidates as c (c.gameId)}<option value={c.gameId}>{label(c)}</option>{/each}
 									</select>
