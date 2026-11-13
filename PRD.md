@@ -143,6 +143,7 @@ Rules that follow from the table:
 - One tap adds a copy. Games already in the shared cache add instantly.
 - Manual entry covers BGG outages and obscure titles: name, player range, play time, optional image URL. Manual games have no mechanics, themes or best-at data, and the UI marks them as hand-entered. A group can fill in the rest later (see "Correcting games").
 - Expansions are searchable and addable. They're hidden from the catalog by default and listed on their base game's page.
+- BGG's details for a game are fetched again once they're 30 days old (D80), so new releases pick up their settled weight and "best at" votes and replaced box art. It happens in the background when someone opens the shelf, 20 games at a time and at most one request every 10 minutes across the instance; nothing changes on screen until the next load. 30 days is the shortest interval Carlo's BGG application allows. A game BGG no longer lists keeps the details it had.
 - An instance can run without a BGG connection, for example while the hoster waits for BGG to approve their application. By default (`GAME_SOURCE=wikidata`) the add page then searches Wikidata for titles, years and player counts; with `GAME_SOURCE=manual` it offers manual entry only and says why.
 
 ### BGG collection import

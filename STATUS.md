@@ -1,8 +1,8 @@
 # Status
 
-Last updated 2026-11-13. Everything under Done is built, and 614 tests pass. Two instances run on Cloudflare Pages: the public demo at `box-populi.pages.dev` (`INSTANCE_MODE=demo`) and Carlo's private instance for his own groups, whose address stays out of this public repo. Both run v0.8.0. **Migrations 0001 to 0024 are applied to production, so they're frozen: schema changes go in new migration files.**
+Last updated 2026-11-13. Everything under Done is built, and 618 tests pass. Two instances run on Cloudflare Pages: the public demo at `box-populi.pages.dev` (`INSTANCE_MODE=demo`) and Carlo's private instance for his own groups, whose address stays out of this public repo. Both run v0.8.0. **Migrations 0001 to 0024 are applied to production, so they're frozen: schema changes go in new migration files.**
 
-**Next up:** 0.8.0 is live on both instances (2026-11-13). Next, a plan for BGG's 30-day refresh and the ranks-file search index; item 46 (moving a group between instances, D68) is low priority. Passkeys and the two-ended complexity range are off the list, and the catalog CSV export went back to the PRD's list (Carlo, 2026-11-11 and 2026-11-12). The PRD's "Planned or possible" list also has filling in details with an AI chatbot (a maybe).
+**Next up:** 0.8.0 is live on both instances (2026-11-13). The 30-day BGG refresh is built (item 60, D80) and waits for the next release. Next, a plan for the ranks-file search index; item 46 (moving a group between instances, D68) is low priority. Passkeys and the two-ended complexity range are off the list, and the catalog CSV export went back to the PRD's list (Carlo, 2026-11-11 and 2026-11-12). The PRD's "Planned or possible" list also has filling in details with an AI chatbot (a maybe).
 
 Agents: tick items as they're done, add a line to the session log at the bottom, and move assumptions to "Verified" with a date and source when you confirm them.
 
@@ -95,6 +95,7 @@ One line per item; the planning detail is in DECISIONS.md and the session log. T
 57. [x] A game night's description and pictures (Carlo, 2026-11-13, D77; migration 0022, with 0.8.0).
 58. [x] A group chat link, for members only (Carlo, 2026-11-13, D78; migration 0023, with 0.8.0).
 59. [x] Probation for new members and suspending a member (Carlo, 2026-11-13, D79; migration 0024, with 0.8.0). Planned by a subagent; Carlo's answers in D79.
+60. [x] BGG details refreshed after 30 days, from the shelf in the background (Carlo, 2026-11-13, D80). No migration.
 - Error references (Carlo, 2026-11-10: "our errors should include a few details or error codes... keep it visually minimal"): an unexpected error's page shows "Error 500 · ref K7M4PQ", and the log line carries the same reference with the error.
 
 ## Unverified assumptions
@@ -147,8 +148,10 @@ From memory when the docs were written. Check each before relying on it, then mo
 
 ## Known issues
 
-- BGG games keep the details they were first fetched with: the 30-day background refresh (TECH.md "Refresh") isn't built.
+- None known.
 
 ## Session log
 
 Entries since the last release; older ones are in [docs/history/session-log.md](./docs/history/session-log.md).
+- 2026-11-13: The 30-day BGG refresh (item 60, D80). Carlo asked whether 30 days was too short: it's the floor his BGG application promised, about 11 requests a month for his instance. He took the defaults. `src/lib/server/refresh.ts` (`staleGames`, `refreshGames`), `POST /api/bgg/refresh`, the `bgg_refresh` limit (one per 10 minutes across the instance), the layout's `bggRefresh` and the shelf's quiet post, at most hourly from a device. Checked on the dev server with fake BGG: a stale game took BGG's name and weight back and bumped the catalog, an id BGG doesn't know kept its details with its date moved on, a second batch within 10 minutes answered "later", the demo group 403, and the shelf posted once and not on a reload. SELF_HOSTING.md's sample application now says details are refreshed at most every 30 days. 4 new tests (618). BGG's policy pages are still to be read in a browser.
+

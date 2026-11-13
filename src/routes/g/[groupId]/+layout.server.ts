@@ -76,6 +76,9 @@ export const load: LayoutServerLoad = async (event) => {
 		probation: access.role && access.standing === 'full' ? extras.probation : false,
 		// Other members' profiles (D79); see profileHref.
 		profilesOpen: access.standing === 'full',
+		// The shelf asks for BGG details older than 30 days to be fetched again (D80): with BGG on, for a
+		// member who can fill their shelf here (not the demo, an archived or suspended group, or while suspended).
+		bggRefresh: event.locals.config.bggMode !== 'off' && access.role != null && access.shelfOpen,
 		contact: event.locals.config.instanceContact,
 		pendingDetails: reads.pending,
 		myPlaySoon: reads.myPlaySoon,

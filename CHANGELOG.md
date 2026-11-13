@@ -4,6 +4,8 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+- Game details from BoardGameGeek are fetched again once they're 30 days old, so a new game's complexity and "best at" votes catch up as BGG's settle, and box art BGG has moved shows again. It happens quietly when someone opens the shelf, a few games at a time. Hosters applying to BGG: SELF_HOSTING.md's sample application now says details are refreshed at most every 30 days.
+
 ## 0.8.0 (2026-11-13)
 
 **Upgrading:** three migrations, `0022_night_about.sql`, `0023_group_chat.sql` and `0024_member_standing.sql`. On Cloudflare, note a Time Travel bookmark and export a backup first, then apply them before deploying (SELF_HOSTING.md "Upgrading" has the commands and how to roll back). Docker, Vercel and Netlify apply them on their first request. They give game nights a place for a description and pictures, groups a place for a chat link and the probation setting, and members a standing; nothing changes for a group until someone uses them, and probation starts off. No new settings. Reseed a demo group to give its next night a description; nothing breaks without it.

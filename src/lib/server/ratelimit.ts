@@ -25,7 +25,10 @@ export const LIMITS = {
 	// About a game every ten seconds in the bulk lane (D58), so this rarely bites; then the page pauses.
 	bggMatch: { kind: 'bgg_match', max: 120, windowMs: 10 * 60_000 },
 	// Each step fills in 20 games, so 1,200 games per 10 minutes; past that the page pauses, then carries on.
-	bggHydrate: { kind: 'bgg_hydrate', max: 60, windowMs: 10 * 60_000 }
+	bggHydrate: { kind: 'bgg_hydrate', max: 60, windowMs: 10 * 60_000 },
+	// Refreshing details older than 30 days (D80): one batch of 20 per 10 minutes across the instance
+	// (subject INSTANCE), however many shelves ask.
+	bggRefresh: { kind: 'bgg_refresh', max: 1, windowMs: 10 * 60_000 }
 } satisfies Record<string, Limit>;
 
 /** The subject for limits that count the whole instance. */

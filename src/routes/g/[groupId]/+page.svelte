@@ -175,6 +175,16 @@
 		pinNudge = false;
 	}
 
+	// BGG details older than 30 days are fetched again in the background (D80): one quiet request when the
+	// shelf opens, at most hourly from a device. The server decides what's stale and paces BGG; nothing
+	// here waits on it, and the next load shows what changed.
+	const REFRESH_KEY = 'bp:bgg-refresh';
+	onMount(() => {
+		if (!data.bggRefresh || Date.now() - Number(storage.get(REFRESH_KEY) ?? 0) < 3_600_000) return;
+		storage.set(REFRESH_KEY, String(Date.now()));
+		fetch('/api/bgg/refresh', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ groupId: data.group.id }) }).catch(() => {});
+	});
+
 	// Someone who joined lately hears where the group talks (D78), until they open it or say "Not now"
 	// on this device; a new link shows it again. The PIN note goes first, so there's one note at a time.
 	const chatKey = $derived(`bp:chat-nudge:${data.group.id}`);
