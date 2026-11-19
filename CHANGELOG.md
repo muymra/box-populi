@@ -4,7 +4,11 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
-- Fixed: loading a group's shelf read far more of the database than it needed (about 61,000 rows for a shelf of 250 games, now about 1,000), so on Cloudflare's free plan a busy day could use up D1's 5 million daily reads and every page answered with an error until midnight UTC. Hosters on the free plan should upgrade to this release.
+## 0.9.0 (2026-11-19)
+
+**Upgrading:** no migrations and no new settings, so no backup or demo reseed is needed: pull and deploy. Hosters on Cloudflare's free plan should take this release soon, for the first line below.
+
+- Fixed: loading a group's shelf read far more of the database than it needed (about 62,000 rows for a shelf of 250 games, now about 1,500), so on Cloudflare's free plan a busy day could use up D1's 5 million daily reads and every page answered with an error until midnight UTC. Hosters on the free plan should upgrade to this release.
 - A game night's "Suggest three" has a "Fillers too" checkbox, as Play tonight does: ticked, it also suggests up to three short, light games from the shelves of the people going, in a row of their own, and the three leave fillers to that row.
 - Game details from BoardGameGeek are fetched again once they're 30 days old, so a new game's complexity and "best at" votes catch up as BGG's settle, and box art BGG has moved shows again. It happens quietly when someone opens the shelf, a few games at a time. Hosters applying to BGG: SELF_HOSTING.md's sample application now says details are refreshed at most every 30 days.
 - Screen readers now hear "Copied" (or "Couldn't copy") when you use a copy button, and VoiceOver reads a message that repeats, such as "Saved." twice in a row, both times.
