@@ -1,6 +1,6 @@
 // The play log on the server (PRD "Play log"): reading the form, saving, reading back and deleting
 // plays, and the group's podium points. Every function takes the group, and nothing crosses groups.
-import { all, mapRead, one, readAll, rowsOf, stmt, type DB, type Read } from './db.ts';
+import { all, mapRead, one, readAll, rowOf, rowsOf, run, stmt, type DB, type Read } from './db.ts';
 import { fullMember } from './standing.ts';
 import { bumpCatalogForGroup } from './catalog.ts';
 import { can } from './permissions.ts';
@@ -389,6 +389,82 @@ export function standingsRead(db: DB, groupId: string, since?: string, before?: 
 		),
 		(rows) => rows.map((r) => ({ userId: r.user_id, plays: r.plays, wins: r.wins ?? 0, coopWins: r.coop_wins ?? 0, scored: [r.s1 ?? 0, r.s2 ?? 0, r.s3 ?? 0, r.s4 ?? 0, r.s5 ?? 0], latest: r.latest }))
 	);
+}
+
+/** Figures kept in `plays_cache` (D82): the value if it's still current, else what's needed to count and keep it. */
+export type CachedFigures<T> = { groupId: string; key: string; version: number; value: T | null };
+
+/** A string as long as this isn't kept: D1 refuses a string over 2,000,000 bytes. */
+const KEPT_FIGURES_MAX = 1_900_000;
+
+/**
+ * A figure counted from the group's plays, as kept in `plays_cache`, for a batch (D59): one row. It's
+ * current while the group's `standings_version` stands, which triggers bump whenever plays, their seats
+ * or the group's members change (migration 0025). `keptFigures` counts and keeps it when not.
+ */
+function cachedFiguresRead<T>(db: DB, groupId: string, key: string): Read<CachedFigures<T>> {
+	return mapRead(
+		rowOf<{ version: number; cached: number | null; value: string | null }>(
+			db,
+			`SELECT g.standings_version AS version, k.version AS cached, k.value
+			 FROM groups g LEFT JOIN plays_cache k ON k.group_id = g.id AND k.key = ?2
+			 WHERE g.id = ?1`,
+			groupId,
+			key
+		),
+		(row) => ({
+			groupId,
+			key,
+			version: row?.version ?? 0,
+			value: row && row.value != null && row.cached === row.version ? (JSON.parse(row.value) as T) : null
+		})
+	);
+}
+
+/**
+ * The figure from `cachedFiguresRead`, counted with `read` and kept when it wasn't current. It's kept
+ * under the version read before counting, so a play logged meanwhile makes the next read count again.
+ */
+async function keptFigures<T>(db: DB, cached: CachedFigures<T>, read: Read<T>): Promise<T> {
+	if (cached.value != null) return cached.value;
+	const { value } = await readAll(db, { value: read });
+	const json = JSON.stringify(value);
+	if (json.length <= KEPT_FIGURES_MAX) {
+		await run(
+			db,
+			`INSERT INTO plays_cache (group_id, key, version, value) VALUES (?1, ?2, ?3, ?4)
+			 ON CONFLICT (group_id, key) DO UPDATE SET version = excluded.version, value = excluded.value`,
+			cached.groupId,
+			cached.key,
+			cached.version,
+			json
+		).catch(() => {}); // too long in bytes for D1: counted again next time
+	}
+	return value;
+}
+
+/** The leaderboard's counts for a period, kept: one row, where counting read about 18,000 rows for the year at the planned scale on every plays page and profile. */
+export type CachedStandings = CachedFigures<StandingCounts[]> & { since: string; before: string };
+
+export function cachedStandingsRead(db: DB, groupId: string, since?: string, before?: string): Read<CachedStandings> {
+	const from = since ?? FIRST_DAY;
+	const to = before ?? LAST_DAY;
+	return mapRead(cachedFiguresRead<StandingCounts[]>(db, groupId, `standings ${from} ${to}`), (c) => ({ ...c, since: from, before: to }));
+}
+
+export function standingsFor(db: DB, cached: CachedStandings): Promise<StandingCounts[]> {
+	return keptFigures(db, cached, standingsRead(db, cached.groupId, cached.since, cached.before));
+}
+
+/** A member's play history in the group for their profile (`playOutcomesRead` with `withUser`), kept: about 6,000 rows for a regular at the planned scale. */
+export type CachedOutcomes = CachedFigures<PlayOutcome[]> & { userId: string };
+
+export function cachedOutcomesRead(db: DB, groupId: string, userId: string): Read<CachedOutcomes> {
+	return mapRead(cachedFiguresRead<PlayOutcome[]>(db, groupId, `outcomes ${userId}`), (c) => ({ ...c, userId }));
+}
+
+export function outcomesFor(db: DB, cached: CachedOutcomes): Promise<PlayOutcome[]> {
+	return keptFigures(db, cached, playOutcomesRead(db, cached.groupId, { withUser: cached.userId }));
 }
 
 /**

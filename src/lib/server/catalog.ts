@@ -1,7 +1,7 @@
 // Server side of the catalog: builds the payload the browser filters (TECH.md "Catalog delivery")
 // and keeps `groups.catalog_version` current so the ETag changes when the payload does.
 import { standingOf } from '#lib/standing.ts';
-import { jsonArray, mapRead, one, readAll, rowsOf, stmt, type DB, type Read } from './db.ts';
+import { jsonArray, mapRead, one, readAll, rowsOf, run, stmt, type DB, type Read } from './db.ts';
 import { applyCorrection, correctionsRead } from './corrections.ts';
 import type { CatalogGame, CatalogMember, CatalogPayload, PollSource, Role } from '#lib/catalog/types.ts';
 
@@ -170,21 +170,76 @@ export function basesOnShelf(baseBggIds: string, idByBgg: ReadonlyMap<number, nu
 const CATALOG_CACHE_GROUPS = 20;
 const catalogCache = new Map<string, { key: string; json: string }>();
 
+/** D1 refuses a string over 2,000,000 bytes; a catalog that long is built each time instead of kept. */
+const STORED_CATALOG_MAX = 1_900_000;
+
 /**
  * The catalog as the JSON the endpoint sends. It's the same for everyone who may see the group, so the
- * last one built for each group is kept in memory under its version and the build, and a member who
- * opens the shelf after someone else costs no database reads and no work (D65). Any change to what
- * the catalog shows already bumps the version, which is what the ETag relies on too.
+ * last one built for each group is kept under its version and the build: in this server instance's
+ * memory, where a member who opens the shelf after someone else costs no reads and no work (D65), and
+ * in `catalog_cache`, where another instance reads it as one row (D82). Pages runs many short-lived
+ * instances, so the memory alone left most loads after a change rebuilding: about 19,000 rows at the
+ * planned scale. Any change to what the catalog shows already bumps the version, which is what the
+ * ETag relies on too.
  */
 export async function catalogJson(db: DB, groupId: string, version: number, build: string): Promise<string> {
 	const key = `${version}.${build}`;
 	const kept = catalogCache.get(groupId);
 	if (kept?.key === key) return kept.json;
-	const json = JSON.stringify(await loadCatalog(db, groupId, version));
+	const stored = await one<{ body: string }>(
+		db,
+		'SELECT body FROM catalog_cache WHERE group_id = ?1 AND version = ?2 AND build = ?3',
+		groupId,
+		version,
+		build
+	);
+	let json = stored?.body;
+	if (json == null) {
+		const payload = await loadCatalog(db, groupId, version);
+		json = JSON.stringify(payload);
+		await storeCatalog(db, groupId, version, build, payload, json);
+	}
 	catalogCache.delete(groupId);
 	catalogCache.set(groupId, { key, json });
 	if (catalogCache.size > CATALOG_CACHE_GROUPS) catalogCache.delete(catalogCache.keys().next().value!);
 	return json;
+}
+
+/** Keeps a built catalog and its counts in `catalog_cache`, replacing the group's last one (D82). */
+async function storeCatalog(db: DB, groupId: string, version: number, build: string, payload: CatalogPayload, json: string): Promise<void> {
+	const perMember: Record<string, number> = {};
+	let copies = 0;
+	for (const game of payload.games) {
+		for (const copy of game.copies) perMember[copy.ownerId] = (perMember[copy.ownerId] ?? 0) + 1;
+		copies += game.copies.length;
+	}
+	const counts = [groupId, version, build, payload.games.length, copies, JSON.stringify(perMember)];
+	const upsert = (body: string) =>
+		run(
+			db,
+			`INSERT INTO catalog_cache (group_id, version, build, game_count, copy_count, member_counts, body) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+			 ON CONFLICT (group_id) DO UPDATE SET version = excluded.version, build = excluded.build, game_count = excluded.game_count,
+			   copy_count = excluded.copy_count, member_counts = excluded.member_counts, body = excluded.body`,
+			...counts,
+			body
+		);
+	// Too long for a D1 row (counted in characters, which never exceed bytes; a name in another script can
+	// still push it over, which D1 refuses): the counts are kept without it, so the build happens again.
+	try {
+		await upsert(json.length <= STORED_CATALOG_MAX ? json : '');
+	} catch {
+		await upsert('');
+	}
+}
+
+/**
+ * How many games are on each group's shelf, from the last catalog kept (D82), for groups whose catalog
+ * hasn't been kept yet counted from the shelf. `groups` is SQL naming the group ids, such as a
+ * subquery; the count may trail a change until someone next opens the shelf.
+ */
+export function shelfSizeSql(groups: string): string {
+	return `SELECT g.id AS group_id, COALESCE(cc.game_count, (SELECT COUNT(DISTINCT gc.game_id) FROM group_copies gc WHERE gc.group_id = g.id)) AS n
+	 FROM groups g LEFT JOIN catalog_cache cc ON cc.group_id = g.id WHERE g.id IN (${groups})`;
 }
 
 /**

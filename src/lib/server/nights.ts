@@ -23,6 +23,7 @@ import {
 import type { CatalogGame, Role } from '#lib/catalog/types.ts';
 import type { NightGameInfo } from '#lib/nights-csv.ts';
 import type { GameSource } from '#lib/csv.ts';
+import { onShelf } from './shelf.ts';
 
 export type Actor = { id: string; role: Role };
 export type Result<T = undefined> = { ok: true; value: T } | { ok: false; error: string };
@@ -403,7 +404,7 @@ export async function bringOther(db: DB, groupId: string, actor: Actor, nightId:
 		db,
 		`SELECT g.id FROM games g
 		 WHERE instr('|' || g.search_text || '|', '|' || ?2 || '|') > 0 AND (
-			EXISTS (SELECT 1 FROM group_copies gc WHERE gc.group_id = ?1 AND gc.game_id = g.id)
+			${onShelf('?1', 'g.id')}
 			OR EXISTS (SELECT 1 FROM night_games ng JOIN game_nights n ON n.id = ng.night_id AND n.group_id = ?1 WHERE ng.game_id = g.id))
 		 ORDER BY g.id LIMIT 1`,
 		groupId,
@@ -585,7 +586,7 @@ export function nightOnlyGamesRead(db: DB, groupId: string, nights: { ids: strin
 			db,
 			`SELECT DISTINCT ${GAME_COLUMNS} FROM night_games ng JOIN games g ON g.id = ng.game_id
 			 WHERE ${which}
-			   AND NOT EXISTS (SELECT 1 FROM group_copies gc WHERE gc.group_id = ?1 AND gc.game_id = g.id)`,
+			   AND NOT ${onShelf('?1', 'g.id')}`,
 			groupId,
 			...params
 		),

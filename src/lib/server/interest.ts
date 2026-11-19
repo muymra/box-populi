@@ -6,6 +6,7 @@ import { all, mapRead, rowsOf, run, stmt, type DB, type Read } from './db.ts';
 import { bumpCatalogForUser } from './catalog.ts';
 import { gameVisibleInGroup } from './games.ts';
 import type { PlaySoonRule } from './instance.ts';
+import { onShelf } from './shelf.ts';
 
 /**
  * How long a Play soon mark lasts when nothing else clears it (8 weeks unless the instance sets
@@ -53,7 +54,7 @@ export function activeMark(now: string, since: string): string {
 }
 
 /** SQL for "game `s.game_id` is on the shelf of group ?1": a member's copy not hidden from it (D66). */
-const ON_GROUP_SHELF = `EXISTS (SELECT 1 FROM group_copies gc WHERE gc.group_id = ?1 AND gc.game_id = s.game_id)`;
+const ON_GROUP_SHELF = onShelf('?1', 's.game_id');
 
 /** A game the group's shelf has: favourites are for games on the shelf. */
 async function onGroupShelf(db: DB, groupId: string, gameId: number): Promise<boolean> {

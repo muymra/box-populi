@@ -9,6 +9,7 @@ import { bumpCatalogForUser } from './catalog.ts';
 import { copyStatement, manualGameStatements, usableGames } from './games.ts';
 import { cacheWikidataGames, type WikidataClient } from './wikidata.ts';
 import { normalize } from '#lib/catalog/normalize.ts';
+import { onShelf } from './shelf.ts';
 
 export const MAX_LIST_LINES = 200;
 export const MATCH_CHUNK = 10;
@@ -88,13 +89,19 @@ async function exactCandidates(db: DB, groupId: string, titles: string[]): Promi
 	// BGG games are never corrected, so their columns come straight from the row.
 	const corrected = (column: string) => `CASE WHEN g.source <> 'bgg' AND c.${column} IS NOT NULL THEN c.${column} ELSE g.${column} END`;
 	const text = `g.search_text || CASE WHEN g.source <> 'bgg' AND c.search_text IS NOT NULL THEN '|' || c.search_text ELSE '' END`;
-	const where = wanted.map((_, i) => `instr('|' || ${text} || '|', ?${i + 2}) > 0`).join(' OR ');
+	const matches = (column: string) => wanted.map((_, i) => `instr('|' || ${column} || '|', ?${i + 2}) > 0`).join(' OR ');
+	// The games whose own titles match, and those this group renamed to a match, found first; only those
+	// are joined to the group's corrections (D82). Joining every game first probed the corrections once
+	// per stored game, twice the rows of the scan itself. The scan stays: a title can match any game
+	// stored on the instance, and an index of every alternate title would cost far more to write.
 	const rows = await all<GameRow>(
 		db,
 		`SELECT g.id, ${corrected('name')} AS name, g.year, ${corrected('min_players')} AS min_players, ${corrected('max_players')} AS max_players,
 			${text} AS search_text, g.source, g.is_manual
-		 FROM games g LEFT JOIN game_corrections c ON c.game_id = g.id AND c.group_id = ?1
-		 WHERE ${where}`,
+		 FROM (SELECT g.id FROM games g WHERE ${matches('g.search_text')}
+		       UNION SELECT c.game_id FROM game_corrections c WHERE c.group_id = ?1 AND (${matches('c.search_text')})) m
+		 CROSS JOIN games g LEFT JOIN game_corrections c ON c.game_id = g.id AND c.group_id = ?1
+		 WHERE g.id = m.id AND (${matches(text)})`,
 		groupId,
 		...wanted.map((q) => `|${q}|`)
 	);
@@ -112,23 +119,33 @@ export async function matchLines(
 	wikidata: WikidataClient | null,
 	now: number
 ): Promise<MatchRow[]> {
-	const [mine, inGroup] = await Promise.all([
+	const parsedLines = lines.slice(0, MATCH_CHUNK).map((line) => ({ line, parsed: parseListLine(line) }));
+	const [mine, stored] = await Promise.all([
+		// Theirs, also for games Wikidata finds below.
 		all<{ game_id: number }>(db, 'SELECT game_id FROM copies WHERE user_id = ?1', userId),
-		all<{ game_id: number }>(
+		exactCandidates(
 			db,
-			`SELECT game_id FROM group_copies WHERE group_id = ?1
-			 UNION SELECT w.game_id FROM wishlist w JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1`,
-			groupId
+			groupId,
+			parsedLines.flatMap(({ parsed }) => ('error' in parsed ? [] : [parsed.title]))
 		)
 	]);
 	const owned = new Set(mine.map((r) => r.game_id));
-	const visible = new Set(inGroup.map((r) => r.game_id));
-
-	const parsedLines = lines.slice(0, MATCH_CHUNK).map((line) => ({ line, parsed: parseListLine(line) }));
-	const stored = await exactCandidates(
-		db,
-		groupId,
-		parsedLines.flatMap(({ parsed }) => ('error' in parsed ? [] : [parsed.title]))
+	// Which of the matches the group has on its shelf or a member's wishlist: asked of the matches alone
+	// (D82), where reading the whole shelf and every wishlist cost about 9,000 rows a chunk.
+	const matched = [...new Set([...stored.values()].flat().map((r) => r.id))];
+	const visible = new Set(
+		matched.length
+			? (
+					await all<{ id: number }>(
+						db,
+						`SELECT j.value AS id FROM json_each(?2) j
+						 WHERE ${onShelf('?1', 'j.value')}
+						    OR EXISTS (SELECT 1 FROM wishlist w JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1 WHERE w.game_id = j.value)`,
+						groupId,
+						JSON.stringify(matched)
+					)
+				).map((r) => r.id)
+			: []
 	);
 
 	const rows: MatchRow[] = [];

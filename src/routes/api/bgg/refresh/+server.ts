@@ -2,7 +2,8 @@
 // opens; nobody waits on it and nothing shows, so every answer is quiet, failures included.
 import { getBggClient } from '#lib/server/bgg/client.ts';
 import { bggFailure, jsonError, refuseInactive } from '#lib/server/bgg/http.ts';
-import { refreshGames, staleGames } from '#lib/server/refresh.ts';
+import { refreshDue, refreshGames } from '#lib/server/refresh.ts';
+import { one, run } from '#lib/server/db.ts';
 import { getDb } from '#lib/server/platform.ts';
 import { INSTANCE, LIMITS, take } from '#lib/server/ratelimit.ts';
 import type { RequestHandler } from './$types';
@@ -21,10 +22,15 @@ export const POST: RequestHandler = async (event) => {
 	if (!client) return quiet({ refreshed: 0, reason: 'off' });
 
 	const now = Date.now();
-	const games = await staleGames(db, body.groupId, now);
-	if (games.length === 0) return quiet({ refreshed: 0 });
-	// One batch per 10 minutes across the instance; the next shelf to open after that carries on.
+	// Nothing turns 30 days old before this (D82): one row, where finding the group's games costs thousands.
+	const due = await one<{ at: number }>(db, 'SELECT next_refresh_at AS at FROM groups WHERE id = ?1', body.groupId);
+	if (due && now < due.at) return quiet({ refreshed: 0 });
+	// One batch per 10 minutes across the instance, taken before looking, so the shelves that open
+	// meanwhile don't each pay for the search; the next one after that carries on.
 	if (!(await take(db, now, [INSTANCE, LIMITS.bggRefresh])).ok) return quiet({ refreshed: 0, reason: 'later' });
+	const { games, nextAt } = await refreshDue(db, body.groupId, now);
+	await run(db, 'UPDATE groups SET next_refresh_at = ?1 WHERE id = ?2', nextAt, body.groupId);
+	if (games.length === 0) return quiet({ refreshed: 0 });
 	try {
 		return quiet({ refreshed: await refreshGames(db, client, games, now) });
 	} catch (e) {

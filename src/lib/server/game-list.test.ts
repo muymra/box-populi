@@ -55,6 +55,13 @@ describe('matching lines', () => {
 		expect(byLine['Secret Homebrew']).toMatchObject({ status: 'new', suggestion: null });
 	});
 
+	it('matches a game this group renamed by its new name, and only here (D35, D82)', async () => {
+		await run(db, `INSERT INTO game_corrections (group_id, game_id, name, search_text, edited_at) VALUES ('g1', 1, 'Supper Table', 'supper table', 0), ('g2', 3, 'Renamed Elsewhere', 'renamed elsewhere', 0)`);
+		const rows = await matchLines(db, 'g1', 'ada', ['Supper Table', 'Kitchen Table Game', 'Renamed Elsewhere'], null, NOW);
+		expect(rows.map((r) => r.status)).toEqual(['group', 'group', 'new']);
+		expect(rows[0]).toMatchObject({ game: { gameId: 1, name: 'Supper Table' } });
+	});
+
 	it('matches long titles and short ones exactly (D1 refuses LIKE patterns over 50 bytes)', async () => {
 		const long = 'Twilight Imperium: Fourth Edition – Prophecy of Kings';
 		await run(db, `INSERT INTO games (id, bgg_id, name, search_text) VALUES (20, 20, ?1, ?2)`, long, normalize(long));
@@ -95,7 +102,8 @@ describe('adding a list', () => {
 		const counted = countQueries(db);
 		const lines = Array.from({ length: MATCH_CHUNK }, (_, i) => `Pasted Game ${i} | 2-4`);
 		await matchLines(counted.db, 'g1', 'ada', lines, null, NOW);
-		expect(counted.reset()).toBe(3);
+		// Their copies and the matches; a third asks which matches the group has, when any line matched (D82).
+		expect(counted.reset()).toBe(2);
 		const items = Array.from({ length: ADD_CHUNK }, (_, i) => (i % 2 ? { gameId: 2 } : { line: `Typed ${i}` }));
 		expect(await addListItems(counted.db, 'g1', 'ada', items, NOW)).toEqual({ added: 14, skipped: 11 });
 		expect(counted.reset()).toBe(2);

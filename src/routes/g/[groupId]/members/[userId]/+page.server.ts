@@ -3,7 +3,7 @@ import { requireRead, requireRole } from '#lib/server/authz.ts';
 import { membersRead } from '#lib/server/catalog.ts';
 import { readAll } from '#lib/server/db.ts';
 import { getDb } from '#lib/server/platform.ts';
-import { playOutcomesRead, playsRead, playRulesRead, standingsRead } from '#lib/server/plays.ts';
+import { cachedOutcomesRead, cachedStandingsRead, outcomesFor, playsRead, playRulesRead, standingsFor } from '#lib/server/plays.ts';
 import { assembleNightsBeen, assemblePlaySoon, assembleProfileGames, assembleWants, profileReads, setOwnMark, type ProfileGame } from '#lib/server/profile.ts';
 import type { CubeGame } from '#lib/catalog/types.ts';
 import { standingsFromCounts } from '#lib/plays.ts';
@@ -29,11 +29,11 @@ export const load: PageServerLoad = async (event) => {
 	const together = viewerId && viewerId !== userId ? viewerId : undefined;
 	const r = await readAll(db, {
 		members: membersRead(db, groupId),
-		// The figures need only who finished where, and the year's standings are counted in SQL; the three
-		// plays the page lists are read in full (D70).
-		plays: playOutcomesRead(db, groupId, { withUser: userId }),
+		// The figures need only who finished where, and the year's standings are counted in SQL (D70) and
+		// kept until plays change (D82); the three plays the page lists are read in full.
+		plays: cachedOutcomesRead(db, groupId, userId),
 		latestPlays: playsRead(db, groupId, { withUser: userId, alsoWith: together, limit: 3 }),
-		yearStandings: standingsRead(db, groupId, `${year}-01-01`),
+		yearStandings: cachedStandingsRead(db, groupId, `${year}-01-01`),
 		rules: playRulesRead(db, groupId, event.locals.config.defaultPoints),
 		...profileReads(db, groupId, userId, viewerId, today, now, event.locals.config.playSoon)
 	});
@@ -41,16 +41,18 @@ export const load: PageServerLoad = async (event) => {
 	if (!subject || !r.membership) error(404, 'Not in this group');
 
 	const memberIds = new Set(r.members.map((m) => m.id));
-	const table = standingsFromCounts(r.yearStandings, r.rules);
+	const table = standingsFromCounts(await standingsFor(db, r.yearStandings), r.rules);
+	// Their play history, kept until plays change (D82).
+	const history = await outcomesFor(db, r.plays);
 	const rank = table.findIndex((s) => s.userId === userId);
 	const games = assembleProfileGames(r.gameRows, r.copyRows, r.corrections);
 	const own = games.filter((g) => g.subjectOwns);
 	const hearts = games.filter((g) => g.subjectLoves);
-	const playedAt = (plays: typeof r.plays) => new Set(plays.flatMap((p) => (p.nightId ? [p.nightId] : [])));
-	const subjectPlayed = playedAt(r.plays);
+	const playedAt = (plays: typeof history) => new Set(plays.flatMap((p) => (p.nightId ? [p.nightId] : [])));
+	const subjectPlayed = playedAt(history);
 	const nights = assembleNightsBeen(r.nightRows, r.membership.joined_at, subjectPlayed, together ? new Set(r.viewerPlayNights.map((n) => n.night_id)) : subjectPlayed);
 	const went = nights.filter((n) => n.subjectWent);
-	const { plays, wins } = record(r.plays, userId, r.rules);
+	const { plays, wins } = record(history, userId, r.rules);
 	const ownBase = own.filter((g) => !g.isExpansion);
 	// The shelves send only what a cube draws: a whole catalog game is about 570 bytes, and a long
 	// shelf ran to hundreds of kilobytes of page data (D70).
@@ -88,7 +90,7 @@ export const load: PageServerLoad = async (event) => {
 		},
 		// The latest plays with the viewer in them; on your own profile, or for a visitor, the person's latest.
 		latest: r.latestPlays,
-		together: viewerId && !self ? headToHead(r.plays, viewerId, userId) : null,
+		together: viewerId && !self ? headToHead(history, viewerId, userId) : null,
 		nightsTogether: viewerId && !self ? nights.filter((n) => n.subjectWent && n.viewerWent).length : 0,
 		// Someone else's page: games you both love, and their games here you haven't played (base games;
 		// an expansion is played with its game). A visitor gets their shelf and hearts as they are.
@@ -100,9 +102,9 @@ export const load: PageServerLoad = async (event) => {
 		// Your own page: the figures under "Only you see this".
 		mine: self
 			? {
-					months: byMonth(r.plays, went.map((n) => n.nightOn), userId, year),
-					sizes: winRateBySize(r.plays, userId),
-					coPlayers: coPlayers(r.plays, userId, memberIds),
+					months: byMonth(history, went.map((n) => n.nightOn), userId, year),
+					sizes: winRateBySize(history, userId),
+					coPlayers: coPlayers(history, userId, memberIds),
 					shelfPlayed: ownBase.filter((g) => g.playedHere).length,
 					shelfTotal: ownBase.length,
 					neverPlayed: cubes(ownBase.filter((g) => !g.playedHere)),

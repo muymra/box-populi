@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
 import { deleteGroupStatements, deletePersonStatements, one, readAll, run } from './db.ts';
-import { deletePlay, loadPlays, parsePlayForm, playOutcomesRead, playsPageRead, playsRead, playRules, savePlay, setCoopRules, setPodiumPoints, playYearsRead, standingsRead, type Actor } from './plays.ts';
+import { deletePlay, loadPlays, parsePlayForm, playOutcomesRead, playsPageRead, playsRead, playRules, savePlay, setCoopRules, setPodiumPoints, playYearsRead, standingsRead, cachedStandingsRead, standingsFor, cachedOutcomesRead, outcomesFor, type Actor } from './plays.ts';
 import { assembleNights, nightReads } from './nights.ts';
 import { loadCatalog } from './catalog.ts';
 import {
@@ -410,6 +410,62 @@ describe('the leaderboard counted in SQL (D70)', () => {
 		expect(standingsFromCounts(r.counts, DEFAULT_PLAY_RULES)).toEqual(standings(in2025, DEFAULT_PLAY_RULES, new Set(['ada', 'bo', 'cy', 'dee'])));
 		expect(r.years).toEqual({ first: '2025-12-20', lastYear: true });
 		expect(r.later).toEqual({ first: '2025-12-20', lastYear: false });
+	});
+
+	it('keeps the counts until plays, seats or members change (D82)', async () => {
+		const fresh = async () => (await readAll(db, { c: standingsRead(db, 'g1', '2026-01-01') })).c;
+		const cached = async () => (await readAll(db, { c: cachedStandingsRead(db, 'g1', '2026-01-01') })).c;
+		const stored = async () => (await one<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM plays_cache'))!.n;
+		// Nothing kept yet: counted, then kept.
+		expect((await cached()).value).toBeNull();
+		expect(await standingsFor(db, await cached())).toEqual(await fresh());
+		expect(await stored()).toBe(1);
+		// Kept: read back as counted, without counting.
+		expect((await cached()).value).toEqual(await fresh());
+		// Each change makes the next read count again, and the new count is what's kept.
+		const changes = [
+			`INSERT INTO plays (id, group_id, game_id, played_on, created_at) VALUES ('p10', 'g1', 1, '2026-05-01', 10)`,
+			`INSERT INTO play_players (play_id, seat, user_id, place) VALUES ('p10', 0, 'ada', 1)`,
+			`UPDATE play_players SET user_id = 'bo' WHERE play_id = 'p10'`, // a merge
+			`UPDATE plays SET played_on = '2025-06-01' WHERE id = 'p10'`, // its night moved
+			`DELETE FROM play_players WHERE play_id = 'p3' AND seat = 1`,
+			`DELETE FROM play_players WHERE play_id = 'p9'`,
+			`DELETE FROM plays WHERE id = 'p9'`,
+			`DELETE FROM memberships WHERE group_id = 'g1' AND user_id = 'dee'`, // someone left
+			`INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES ('g1', 'eve', 'member', 9, 0)` // and came back
+		];
+		for (const change of changes) {
+			await run(db, change);
+			const after = await cached();
+			expect(after.value, change).toBeNull();
+			expect(await standingsFor(db, after)).toEqual(await fresh());
+			expect((await cached()).value).toEqual(await fresh());
+		}
+		// A period of its own, kept apart; and the group's deletion takes its rows.
+		await standingsFor(db, (await readAll(db, { c: cachedStandingsRead(db, 'g1') })).c);
+		expect(await stored()).toBe(2);
+		await db.batch(deleteGroupStatements(db, 'g1'));
+		expect(await stored()).toBe(0);
+	});
+
+	it('keeps a member’s play history for their profile the same way (D82)', async () => {
+		const fresh = async () => (await readAll(db, { c: playOutcomesRead(db, 'g1', { withUser: 'dee' }) })).c;
+		const cached = async () => (await readAll(db, { c: cachedOutcomesRead(db, 'g1', 'dee') })).c;
+		expect((await cached()).value).toBeNull();
+		expect(await outcomesFor(db, await cached())).toEqual(await fresh());
+		expect((await cached()).value).toEqual(await fresh());
+		await run(db, `UPDATE play_players SET place = 2 WHERE play_id = 'p8' AND user_id = 'dee'`);
+		expect((await cached()).value).toBeNull();
+		expect(await outcomesFor(db, await cached())).toEqual(await fresh());
+		// Kept apart from the leaderboard's counts and from other members' histories.
+		await standingsFor(db, (await readAll(db, { c: cachedStandingsRead(db, 'g1') })).c);
+		expect((await readAll(db, { c: cachedOutcomesRead(db, 'g1', 'ada') })).c.value).toBeNull();
+	});
+
+	it('forgets a group’s counts when one of its members deletes their account', async () => {
+		await standingsFor(db, (await readAll(db, { c: cachedStandingsRead(db, 'g1') })).c);
+		await db.batch(deletePersonStatements(db, 'bo'));
+		expect(await one(db, 'SELECT 1 AS x FROM plays_cache')).toBeNull();
 	});
 });
 

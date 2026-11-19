@@ -17,7 +17,9 @@ export const GET: RequestHandler = async (event) => {
 	// 304 for a copy in the old shape (a reseeded demo also restarts at the same version).
 	const etag = `"${groupId}.${version}.${build}"`;
 	const headers = { etag, 'cache-control': 'private, no-cache', vary: 'cookie' };
-	if (event.request.headers.get('if-none-match') === etag) {
+	// Compared without a W/ prefix: Cloudflare can mark a tag weak when it compresses a response, and a
+	// weak tag sent back would never match, making every revalidation a full answer (D82).
+	if (event.request.headers.get('if-none-match')?.replace(/^W\//, '') === etag) {
 		return new Response(null, { status: 304, headers });
 	}
 	return new Response(await catalogJson(db, groupId, version, build), { headers: { ...headers, 'content-type': 'application/json' } });

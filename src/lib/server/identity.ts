@@ -207,6 +207,8 @@ export async function leaveGroup(db: DB, userId: string, groupId: string): Promi
 			? deleteGroupStatements(db, groupId)
 			: [
 					stmt(db, 'UPDATE groups SET catalog_version = catalog_version + 1 WHERE id = ?1', groupId),
+					// The kept catalog has their name and games until the next build (D82).
+					stmt(db, 'DELETE FROM catalog_cache WHERE group_id = ?1', groupId),
 					stmt(db, 'DELETE FROM memberships WHERE group_id = ?1 AND user_id = ?2', groupId, userId)
 				]
 	);

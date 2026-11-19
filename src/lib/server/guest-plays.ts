@@ -24,15 +24,18 @@ export async function guestHistory(db: DB, groupId: string): Promise<GuestHistor
 
 /**
  * guestHistory's two reads, for a caller batching them with others (`readAll`, D59); then
- * `assembleGuestHistory`. Both start from this group's plays and nights (CROSS JOIN keeps SQLite to
- * that order), not from every group's seats and guest lists (D65).
+ * `assembleGuestHistory`. Both start from the partial indexes of guests' rows (D82, migration 0025),
+ * the instance's guest seats and guest night rows, and keep this group's: a few hundred rows. D65 had
+ * them start from the group's plays and nights instead, since without those indexes starting from the
+ * seats meant every group's seats; that still read every seat of the group's plays, about 25,000 rows
+ * on the Group tab at the planned scale. CROSS JOIN keeps SQLite to that order.
  */
 export function guestHistoryReads(db: DB, groupId: string) {
 	return {
 		guestPlays: rowsOf<GuestPlayRow>(
 			db,
 			`SELECT pp.guest_name, p.id, p.played_on AS "on", COALESCE(gc.name, g.name) AS game
-			 FROM plays p CROSS JOIN play_players pp
+			 FROM play_players pp INDEXED BY play_players_guest CROSS JOIN plays p
 			 JOIN games g ON g.id = p.game_id
 			 LEFT JOIN game_corrections gc ON gc.group_id = p.group_id AND gc.game_id = g.id
 			 WHERE p.group_id = ?1 AND pp.play_id = p.id AND pp.guest_name IS NOT NULL
@@ -42,10 +45,10 @@ export function guestHistoryReads(db: DB, groupId: string) {
 		// A guest on a night: going, or bringing a game.
 		guestNights: rowsOf<GuestNightRow>(
 			db,
-			`SELECT np.guest_name, n.id, n.night_on AS "on", n.name FROM game_nights n CROSS JOIN night_people np
+			`SELECT np.guest_name, n.id, n.night_on AS "on", n.name FROM night_people np INDEXED BY night_people_guest CROSS JOIN game_nights n
 			 WHERE n.group_id = ?1 AND np.night_id = n.id AND np.guest_name IS NOT NULL
 			 UNION
-			 SELECT ng.guest_name, n.id, n.night_on AS "on", n.name FROM game_nights n CROSS JOIN night_games ng
+			 SELECT ng.guest_name, n.id, n.night_on AS "on", n.name FROM night_games ng INDEXED BY night_games_guest CROSS JOIN game_nights n
 			 WHERE n.group_id = ?1 AND ng.night_id = n.id AND ng.guest_name IS NOT NULL
 			 ORDER BY 3 DESC`,
 			groupId

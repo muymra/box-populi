@@ -3,6 +3,7 @@
 import { all, run, type DB } from './db.ts';
 import { applyCorrection, groupCorrections } from './corrections.ts';
 import { gameUsableInGroup } from './games.ts';
+import { onShelf } from './shelf.ts';
 
 /** Adds a game to the person's wishlist, under the same rule as adding a copy (`gameUsableInGroup`). */
 export async function addWish(db: DB, groupId: string, userId: string, gameId: number, now: number): Promise<boolean> {
@@ -49,7 +50,7 @@ export async function wantedGames(db: DB, groupId: string): Promise<WantedGame[]
 		 FROM wishlist w
 		 JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1
 		 JOIN games g ON g.id = w.game_id
-		 WHERE NOT EXISTS (SELECT 1 FROM group_copies gc WHERE gc.group_id = ?1 AND gc.game_id = w.game_id)
+		 WHERE NOT ${onShelf('?1', 'w.game_id')}
 		 GROUP BY g.id
 		 ORDER BY COUNT(*) DESC, g.name`,
 		groupId

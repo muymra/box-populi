@@ -84,6 +84,8 @@ export function deleteGroupStatements(db: DB, groupId: string): D1PreparedStatem
 		stmt(db, 'DELETE FROM sign_in_codes WHERE group_id = ?1', groupId),
 		stmt(db, 'DELETE FROM hidden_copies WHERE group_id = ?1', groupId),
 		stmt(db, 'DELETE FROM memberships WHERE group_id = ?1', groupId),
+		stmt(db, 'DELETE FROM plays_cache WHERE group_id = ?1', groupId),
+		stmt(db, 'DELETE FROM catalog_cache WHERE group_id = ?1', groupId),
 		stmt(db, 'DELETE FROM groups WHERE id = ?1', groupId)
 	];
 }
@@ -101,6 +103,9 @@ const ORPHANED_OWN_GAMES = `SELECT g.id FROM games g
 /** Deleting a person and their data (the privacy page's promise), explicitly, for the same reason. */
 export function deletePersonStatements(db: DB, userId: string): D1PreparedStatement[] {
 	return [
+		// The caches of their groups hold their name and numbers (D82); the next read rebuilds them.
+		stmt(db, 'DELETE FROM plays_cache WHERE group_id IN (SELECT group_id FROM memberships WHERE user_id = ?1)', userId),
+		stmt(db, 'DELETE FROM catalog_cache WHERE group_id IN (SELECT group_id FROM memberships WHERE user_id = ?1)', userId),
 		stmt(db, 'DELETE FROM sessions WHERE user_id = ?1', userId),
 		stmt(db, 'DELETE FROM personal_links WHERE user_id = ?1', userId),
 		stmt(db, 'DELETE FROM sign_in_codes WHERE user_id = ?1', userId),

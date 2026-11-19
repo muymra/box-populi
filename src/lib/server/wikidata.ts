@@ -239,10 +239,13 @@ export async function cacheWikidataGames(db: DB, found: WikidataGame[], now: num
 				now
 			);
 		}
+		// Only when something differs (D82): every search rewrote each hit's row and its Wikidata index
+		// entry, about 40 rows written a search, against the free plan's 100,000 a day.
 		if (row.source === 'wikidata' && row.edited_at == null && (own || row.wikidata_id == null)) {
 			return stmt(
 				db,
-				`UPDATE games SET wikidata_id = ?1, name = ?2, search_text = ?3, year = ?4, min_players = ?5, max_players = ?6, fetched_at = ?7 WHERE id = ?8`,
+				`UPDATE games SET wikidata_id = ?1, name = ?2, search_text = ?3, year = ?4, min_players = ?5, max_players = ?6, fetched_at = ?7
+				 WHERE id = ?8 AND (wikidata_id IS NOT ?1 OR name IS NOT ?2 OR search_text IS NOT ?3 OR year IS NOT ?4 OR min_players IS NOT ?5 OR max_players IS NOT ?6)`,
 				g.wikidataId,
 				g.name,
 				searchText,
@@ -253,7 +256,7 @@ export async function cacheWikidataGames(db: DB, found: WikidataGame[], now: num
 				row.id
 			);
 		}
-		return stmt(db, 'UPDATE games SET wikidata_id = COALESCE(wikidata_id, ?1) WHERE id = ?2', g.wikidataId, row.id);
+		return stmt(db, 'UPDATE games SET wikidata_id = ?1 WHERE id = ?2 AND wikidata_id IS NULL', g.wikidataId, row.id);
 	});
 	await db.batch(statements);
 

@@ -18,6 +18,7 @@ import { jsonArray, known, readAll, rowOf, rowsOf } from '#lib/server/db.ts';
 import { getDb } from '#lib/server/platform.ts';
 import type { PollSource } from '#lib/catalog/types.ts';
 import type { Actions, PageServerLoad } from './$types';
+import { onShelf } from '#lib/server/shelf.ts';
 
 type GameDetail = {
 	id: number;
@@ -67,7 +68,7 @@ export const load: PageServerLoad = async (event) => {
 		shared: rowOf<GameDetail>(
 			db,
 			`SELECT g.* FROM games g WHERE g.id = ?2 AND (
-			EXISTS (SELECT 1 FROM group_copies gc WHERE gc.group_id = ?1 AND gc.game_id = g.id)
+			${onShelf('?1', 'g.id')}
 			OR EXISTS (SELECT 1 FROM copies c WHERE c.user_id = ?3 AND c.game_id = g.id)
 			OR EXISTS (SELECT 1 FROM wishlist w JOIN memberships m ON m.user_id = w.user_id AND m.group_id = ?1 WHERE w.game_id = g.id)
 			OR EXISTS (SELECT 1 FROM night_games ng JOIN game_nights n ON n.id = ng.night_id AND n.group_id = ?1 WHERE ng.game_id = g.id)
@@ -115,7 +116,7 @@ export const load: PageServerLoad = async (event) => {
 			`SELECT g.id, g.name, g.year, g.min_players, g.max_players
 			 FROM game_bases b JOIN games g ON g.id = b.game_id
 			 WHERE b.base_bgg_id = (SELECT bgg_id FROM games WHERE id = ?2) AND g.is_expansion = 1
-			   AND EXISTS (SELECT 1 FROM group_copies gc WHERE gc.group_id = ?1 AND gc.game_id = g.id)
+			   AND ${onShelf('?1', 'g.id')}
 			 ORDER BY g.name`,
 			groupId,
 			gameId

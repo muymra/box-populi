@@ -148,6 +148,14 @@ export async function confirmImport(
 // A typed-in row that somehow carries a BGG id counts too (seen on a live instance, 2026-11-09): the
 // upsert on its BGG id turns it into the BGG game, the way it turns a Wikidata one.
 const NEEDS_BGG_DETAILS = `g.bgg_id IS NOT NULL AND (g.fetched_at IS NULL OR g.source <> 'bgg' OR g.is_manual = 1)`;
+/**
+ * The person's games still waiting for BGG details, read from the partial index of such games (D82,
+ * migration 0025, whose WHERE is NEEDS_BGG_DETAILS word for word): nearly always none. Read from their
+ * copies instead, it cost about 2.5 rows per copy on every group page. INDEXED BY, because SQLite
+ * without statistics scanned the whole table rather than use a partial index.
+ */
+const WAITING_FOR_DETAILS = `FROM games g INDEXED BY games_needs_details
+	 WHERE ${NEEDS_BGG_DETAILS} AND EXISTS (SELECT 1 FROM copies c WHERE c.user_id = ?1 AND c.game_id = g.id)`;
 
 export async function pendingDetails(db: DB, userId: string): Promise<number> {
 	return (await readAll(db, { n: pendingDetailsRead(db, userId) })).n;
@@ -158,8 +166,7 @@ export function pendingDetailsRead(db: DB, userId: string): Read<number> {
 	return mapRead(
 		rowOf<{ n: number }>(
 			db,
-			`SELECT COUNT(DISTINCT g.id) AS n FROM copies c JOIN games g ON g.id = c.game_id
-			 WHERE c.user_id = ?1 AND ${NEEDS_BGG_DETAILS}`,
+			`SELECT COUNT(*) AS n ${WAITING_FOR_DETAILS}`,
 			userId
 		),
 		(row) => row?.n ?? 0
@@ -173,8 +180,7 @@ export function pendingDetailsRead(db: DB, userId: string): Read<number> {
 export async function hydrateStep(db: DB, client: BggClient, userId: string, now: number): Promise<{ updated: number; remaining: number }> {
 	const rows = await all<{ id: number; bgg_id: number }>(
 		db,
-		`SELECT DISTINCT g.id, g.bgg_id FROM copies c JOIN games g ON g.id = c.game_id
-		 WHERE c.user_id = ?1 AND ${NEEDS_BGG_DETAILS}
+		`SELECT g.id, g.bgg_id ${WAITING_FOR_DETAILS}
 		 ORDER BY g.bgg_id LIMIT ?2`,
 		userId,
 		THINGS_PER_REQUEST

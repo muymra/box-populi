@@ -1,7 +1,7 @@
 import { requireRead } from '#lib/server/authz.ts';
 import { membersRead } from '#lib/server/catalog.ts';
 import { can } from '#lib/server/permissions.ts';
-import { canChangePlay, playYearsRead, playsPageRead, playsRead, playRulesRead, standingsRead } from '#lib/server/plays.ts';
+import { cachedStandingsRead, canChangePlay, playYearsRead, playsPageRead, playsRead, playRulesRead, standingsFor } from '#lib/server/plays.ts';
 import { beforeParam, lastDayOf, parsePeriod } from '#lib/server/log-pages.ts';
 import { coopAction, deletePlayAction, pointsAction, savePlayAction } from '#lib/server/play-actions.ts';
 import { getDb } from '#lib/server/platform.ts';
@@ -30,9 +30,9 @@ export const load: PageServerLoad = async (event) => {
 	const r = await readAll(db, {
 		// The nights a play can be put on (STATUS item 42).
 		nightList: nightListRead(db, groupId, Date.now()),
-		// The leaderboard counted in SQL, and one page of the timeline: its plays, whole days of them, and
-		// the nights of the same dates. "All time" read every play and ran over the CPU allowance (D70).
-		standings: standingsRead(db, groupId, since, period.before),
+		// The leaderboard counted in SQL (D70) and kept until plays change (D82), and one page of the
+		// timeline: its plays, whole days of them, and the nights of the same dates.
+		standings: cachedStandingsRead(db, groupId, since, period.before),
 		years: playYearsRead(db, groupId, year),
 		page: playsPageRead(db, groupId, { since, before, until, n: LISTED }),
 		plays: playsRead(db, groupId, { since, before, page: LISTED }),
@@ -87,7 +87,7 @@ export const load: PageServerLoad = async (event) => {
 		lastYear: r.years.lastYear,
 		earlierYears,
 		rules,
-		standings: standingsFromCounts(r.standings, rules),
+		standings: standingsFromCounts(await standingsFor(db, r.standings), rules),
 		entries,
 		totalPlays: r.page.plays,
 		nightCount: r.page.nights,

@@ -1,7 +1,7 @@
 // Creating and joining groups. The caller resolves who the person is (existing session, or a
 // new person whose statements are passed in) so these run as one batch.
 import { generateCode, generateLinkKey } from './codes.ts';
-import { bumpCatalogForGroup } from './catalog.ts';
+import { bumpCatalogForGroup, shelfSizeSql } from './catalog.ts';
 import { all, one, readAll, rowsOf, stmt, type DB } from './db.ts';
 
 export function cleanGroupName(raw: unknown): string | null {
@@ -132,13 +132,9 @@ export async function touchLastSeen(db: DB, groupId: string, userId: string, now
 		.run();
 }
 
-/** How many games are on a group's shelf (each game once, however many members own it). */
+/** How many games are on a group's shelf (each game once, however many members own it), as last kept (D82). */
 export async function groupGameCount(db: DB, groupId: string): Promise<number> {
-	const row = await one<{ n: number }>(
-		db,
-		'SELECT COUNT(DISTINCT game_id) AS n FROM group_copies WHERE group_id = ?1',
-		groupId
-	);
+	const row = await one<{ n: number }>(db, shelfSizeSql('?1'), groupId);
 	return row?.n ?? 0;
 }
 
@@ -164,12 +160,8 @@ export async function groupGlances(db: DB, userId: string, from: string): Promis
 /** groupGlances' reads, to share a round trip with others (`readAll`, D59, D65); then `assembleGlances`. */
 export function groupGlancesReads(db: DB, userId: string, from: string) {
 	return {
-		glanceGames: rowsOf<{ group_id: string; n: number }>(
-			db,
-			`SELECT group_id, COUNT(DISTINCT game_id) AS n FROM group_copies
-			 WHERE group_id IN (${GLANCE_GROUPS}) GROUP BY group_id`,
-			userId
-		),
+		// As last kept with the catalog (D82): counted from the shelf, 4,000 rows a group at the planned scale.
+		glanceGames: rowsOf<{ group_id: string; n: number }>(db, shelfSizeSql(GLANCE_GROUPS), userId),
 		glanceMembers: rowsOf<{ group_id: string; color_index: number | null }>(
 			db,
 			`SELECT group_id, color_index FROM memberships WHERE group_id IN (${GLANCE_GROUPS})`,

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
 import { all, one, run } from './db.ts';
-import { REFRESH_DAYS, refreshGames, staleGames } from './refresh.ts';
+import { REFRESH_DAYS, refreshDue, refreshGames, staleGames } from './refresh.ts';
 import type { BggClient, BggThing } from './bgg/types.ts';
 
 let db: ReturnType<typeof createTestDb>;
@@ -76,11 +76,23 @@ describe('refreshing BGG details (D80)', () => {
 		expect(await staleGames(db, 'g1', fresh + (REFRESH_DAYS + 2) * DAY)).toHaveLength(5); // the fresh one too, later on
 	});
 
+	it('says when to look again: when the oldest game left turns 30 days old (D82)', async () => {
+		// 2, 1, 4 and 5 are due; 3, fetched `fresh`, is next.
+		expect((await refreshDue(db, 'g1', NOW)).nextAt).toBe(fresh + REFRESH_DAYS * DAY);
+		// Nothing due: still when the oldest turns 30.
+		expect(await refreshDue(db, 'g1', old + DAY)).toEqual({ games: [], nextAt: old - DAY + REFRESH_DAYS * DAY });
+		// A group with no BGG games looks again in 30 days.
+		await run(db, `INSERT INTO groups (id, name, code, created_at) VALUES ('g3', 'E', 'CCCCC', 0)`);
+		expect(await refreshDue(db, 'g3', NOW)).toEqual({ games: [], nextAt: NOW + REFRESH_DAYS * DAY });
+	});
+
 	it('takes at most one request’s worth', async () => {
 		const values = Array.from({ length: 25 }, (_, i) => `(${200 + i}, ${300 + i}, 'G${i}', 'g${i}', 0, 'bgg', ${old})`).join(', ');
 		await run(db, `INSERT INTO games (id, bgg_id, name, search_text, is_manual, source, fetched_at) VALUES ${values}`);
 		await run(db, `INSERT INTO copies (user_id, game_id, added_at) SELECT 'ada', id, 0 FROM games WHERE id >= 200`);
 		expect(await staleGames(db, 'g1', NOW)).toHaveLength(20);
+		// More than a request's worth is due: look again at once.
+		expect((await refreshDue(db, 'g1', NOW)).nextAt).toBe(NOW);
 	});
 
 	it('writes BGG’s new details, keeps a game BGG no longer returns, and bumps the catalogs', async () => {

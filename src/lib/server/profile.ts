@@ -10,6 +10,7 @@ import type { PlaySoonRule } from './instance.ts';
 import { addWish, removeWish } from './wishlist.ts';
 import { OWN_MARKS, type OwnMark } from '#lib/profile.ts';
 import type { CatalogGame, Role } from '#lib/catalog/types.ts';
+import { copyOnShelf, onShelf } from './shelf.ts';
 
 /** A game a profile shows from the group's shelf, with how it stands with the person and the viewer. */
 export type ProfileGame = CatalogGame & {
@@ -30,7 +31,7 @@ export type PlaySoonHere = { gameId: number; name: string; until: number };
 // the shelf here, and the games on the shelf they hearted.
 const PROFILE_GAMES = `SELECT c.game_id FROM group_copies c WHERE c.group_id = ?1 AND c.user_id = ?2
 	UNION SELECT f.game_id FROM favourites f
-	WHERE f.user_id = ?2 AND EXISTS (SELECT 1 FROM group_copies c WHERE c.group_id = ?1 AND c.game_id = f.game_id)`;
+	WHERE f.user_id = ?2 AND ${onShelf('?1', 'f.game_id')}`;
 
 type NightMarkRow = { id: string; night_on: string; subject_mark: number | null; viewer_mark: number | null };
 type FlagRow = GameRow & { subject_owns: number; subject_loves: number; viewer_loves: number; played_here: number; viewer_played: number };
@@ -61,10 +62,11 @@ export function profileReads(db: DB, groupId: string, subjectId: string, viewerI
 		copyRows: rowsOf<CopyRow>(
 			db,
 			// From the profile's games to their copies: led by members instead, SQLite probed every member's
-			// copies for every game, about 32,000 rows for a heavy player at the planned scale (D70).
+			// copies for every game, about 32,000 rows for a heavy player at the planned scale (D70). Through
+			// the view it still did, about 100 rows a game, so the copies come by game (D82).
 			`SELECT c.game_id, c.user_id AS owner_id, c.lent_to_user_id, c.lent_to_text, c.added_at
-			 FROM (${PROFILE_GAMES}) ids CROSS JOIN group_copies c
-			 WHERE c.group_id = ?1 AND c.game_id = ids.game_id
+			 FROM (${PROFILE_GAMES}) ids CROSS JOIN copies c
+			 WHERE c.game_id = ids.game_id AND ${copyOnShelf('?1', 'c')}
 			 ORDER BY c.game_id, c.id`,
 			groupId,
 			subjectId
@@ -75,7 +77,7 @@ export function profileReads(db: DB, groupId: string, subjectId: string, viewerI
 			db,
 			`SELECT ${GAME_COLUMNS}, EXISTS (SELECT 1 FROM wishlist v WHERE v.user_id = ?3 AND v.game_id = g.id) AS viewer_wants
 			 FROM wishlist w JOIN games g ON g.id = w.game_id
-			 WHERE w.user_id = ?2 AND NOT EXISTS (SELECT 1 FROM group_copies c WHERE c.group_id = ?1 AND c.game_id = w.game_id)
+			 WHERE w.user_id = ?2 AND NOT ${onShelf('?1', 'w.game_id')}
 			 ORDER BY w.added_at DESC`,
 			groupId,
 			subjectId,
@@ -117,7 +119,7 @@ export function profileReads(db: DB, groupId: string, subjectId: string, viewerI
 						`SELECT s.game_id, s.marked_at, COALESCE(gc.name, g.name) AS name
 						 FROM play_soon s JOIN games g ON g.id = s.game_id
 						 LEFT JOIN game_corrections gc ON gc.group_id = ?1 AND gc.game_id = s.game_id
-						 WHERE s.user_id = ?2 AND EXISTS (SELECT 1 FROM group_copies c WHERE c.group_id = ?1 AND c.game_id = s.game_id)
+						 WHERE s.user_id = ?2 AND ${onShelf('?1', 's.game_id')}
 						   AND ${activeMark('?3', '?4')}
 						 ORDER BY s.marked_at`,
 						groupId,

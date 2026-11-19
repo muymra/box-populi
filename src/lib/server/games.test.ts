@@ -6,6 +6,9 @@ import { LiveBggClient, userAgent, BggAuthError } from './bgg/client.ts';
 import { BggBusyError, type BggSearchHit } from './bgg/types.ts';
 import { addCopy, addManualGame, cachedSearch, gameUsableInGroup, parseManualGame, rankHits, removeCopy, SEARCH_CACHE_MS, searchBgg, setPlayersWith } from './games.ts';
 import { basesOnShelf, catalogJson, loadCatalog } from './catalog.ts';
+import { groupGameCount, groupGlances } from './groups.ts';
+import { leaveGroup } from './identity.ts';
+import { gameCounts } from './group-admin.ts';
 
 let db: ReturnType<typeof createTestDb>;
 const NOW = 1_800_000_000_000;
@@ -70,6 +73,52 @@ describe('catalogJson', () => {
 		expect(JSON.parse(await catalogJson(db, 'gj', 8, 'b1')).games[0].name).toBe('Changed');
 		await run(db, `UPDATE games SET name = 'Again' WHERE id = 60`);
 		expect(JSON.parse(await catalogJson(db, 'gj', 8, 'b2')).games[0].name).toBe('Again');
+	});
+});
+
+describe('the kept catalog (D82)', () => {
+	beforeEach(async () => {
+		await run(db, `INSERT INTO users (id, name, created_at) VALUES ('bo', 'Bo', 0)`);
+		await run(db, `INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES ('g1', 'bo', 'member', 1, 0)`);
+		await run(db, `INSERT INTO games (id, name, search_text) VALUES (80, 'One', 'one'), (81, 'Two', 'two')`);
+		await run(db, `INSERT INTO copies (user_id, game_id, added_at) VALUES ('ada', 80, 0), ('ada', 81, 0), ('bo', 81, 0)`);
+		await run(db, `UPDATE groups SET catalog_version = 5 WHERE id = 'g1'`);
+	});
+	const kept = () => one<{ version: number; build: string; game_count: number; copy_count: number; member_counts: string; body: string }>(db, `SELECT * FROM catalog_cache WHERE group_id = 'g1'`);
+
+	it('keeps what it builds, with its counts, and serves it to an instance that didn’t build it', async () => {
+		const json = await catalogJson(db, 'g1', 5, 'k1');
+		expect(await kept()).toMatchObject({ version: 5, build: 'k1', game_count: 2, copy_count: 3, body: json });
+		expect(JSON.parse((await kept())!.member_counts)).toEqual({ ada: 2, bo: 1 });
+		// Another instance: nothing in its memory for this version, so it reads the row instead of building.
+		await run(db, `UPDATE catalog_cache SET version = 6, body = '{"kept":true}' WHERE group_id = 'g1'`);
+		expect(await catalogJson(db, 'g1', 6, 'k1')).toBe('{"kept":true}');
+		// Another build's row isn't used: the payload's shape may differ.
+		expect(JSON.parse(await catalogJson(db, 'g1', 6, 'k2')).games).toHaveLength(2);
+		expect(await kept()).toMatchObject({ version: 6, build: 'k2' });
+	});
+
+	it('gives the home page, the join page and the Group tab its counts', async () => {
+		// Nothing kept yet: counted from the shelf.
+		expect(await groupGameCount(db, 'g1')).toBe(2);
+		expect((await groupGlances(db, 'ada', '2026-01-01')).get('g1')?.games).toBe(2);
+		expect(Object.fromEntries(await gameCounts(db, 'g1'))).toEqual({ ada: 2, bo: 1 });
+		await catalogJson(db, 'g1', 5, 'k3');
+		await run(db, `UPDATE catalog_cache SET game_count = 9, member_counts = '{"ada":7}' WHERE group_id = 'g1'`);
+		expect(await groupGameCount(db, 'g1')).toBe(9);
+		expect((await groupGlances(db, 'ada', '2026-01-01')).get('g1')?.games).toBe(9);
+		expect(Object.fromEntries(await gameCounts(db, 'g1'))).toEqual({ ada: 7 });
+		// Once the shelf changes, the Group tab counts again; the cards keep the last count until the next build.
+		await run(db, `UPDATE groups SET catalog_version = 6 WHERE id = 'g1'`);
+		expect(Object.fromEntries(await gameCounts(db, 'g1'))).toEqual({ ada: 2, bo: 1 });
+		expect(await groupGameCount(db, 'g1')).toBe(9);
+	});
+
+	it('forgets the kept catalog when someone leaves, since it has their name', async () => {
+		await catalogJson(db, 'g1', 5, 'k4');
+		expect(await kept()).not.toBeNull();
+		await leaveGroup(db, 'bo', 'g1');
+		expect(await kept()).toBeNull();
 	});
 });
 

@@ -154,6 +154,12 @@ describe('caching Wikidata games', () => {
 			max_players: 4,
 			year: 2019
 		});
+		// The same details again write nothing (D82): the row and its date stay as they were.
+		const changes = async () => ((await db.batch([db.prepare('SELECT total_changes() AS n')]))[0].results[0] as { n: number }).n;
+		const before = await changes();
+		await cacheWikidataGames(db, [lantern], NOW + 1);
+		expect(await changes()).toBe(before);
+		expect((await one<{ f: number }>(db, 'SELECT fetched_at AS f FROM games WHERE id = ?1', id))?.f).toBe(NOW);
 		await cacheWikidataGames(db, [{ ...lantern, maxPlayers: 5 }], NOW + 1);
 		expect((await one<{ max_players: number }>(db, 'SELECT max_players FROM games WHERE id = ?1', id))?.max_players).toBe(5);
 		await run(db, 'UPDATE games SET max_players = 6, edited_at = 1 WHERE id = ?1', id);
@@ -171,6 +177,11 @@ describe('caching Wikidata games', () => {
 			source: 'bgg',
 			wikidata_id: 'Q9900003'
 		});
+		// Linked once; the next search leaves it alone.
+		const changes = async () => ((await db.batch([db.prepare('SELECT total_changes() AS n')]))[0].results[0] as { n: number }).n;
+		const before = await changes();
+		await cacheWikidataGames(db, [FakeWikidataClient.GAMES[2]], NOW + 1);
+		expect(await changes()).toBe(before);
 	});
 
 	it('treats Wikidata items that share a BGG id as one game', async () => {

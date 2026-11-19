@@ -4,7 +4,7 @@
 import { generateCode, generateLinkKey } from './codes.ts';
 import { bumpCatalogForGroup } from './catalog.ts';
 import { cleanGroupName } from './groups.ts';
-import { all, deleteGroupStatements, mapRead, one, readAll, rowsOf, run, stmt, type DB, type Read } from './db.ts';
+import { all, deleteGroupStatements, mapRead, one, readAll, rowOf, rowsOf, run, stmt, type DB, type Read } from './db.ts';
 import { can, type GroupAction } from './permissions.ts';
 import type { Role } from '#lib/catalog/types.ts';
 import { isThemeId } from '#lib/themes.ts';
@@ -157,6 +157,8 @@ export async function removeMember(db: DB, groupId: string, actor: Actor, target
 	if (isRefusal(check)) return check;
 	await db.batch([
 		stmt(db, 'DELETE FROM memberships WHERE group_id = ?1 AND user_id = ?2', groupId, targetId),
+		// The kept catalog has their name and games until the next build (D82).
+		stmt(db, 'DELETE FROM catalog_cache WHERE group_id = ?1', groupId),
 		bumpCatalogForGroup(db, groupId)
 	]);
 	return { ok: true };
@@ -278,15 +280,21 @@ export async function gameCounts(db: DB, groupId: string): Promise<Map<string, n
 	return (await readAll(db, { c: gameCountsRead(db, groupId) })).c;
 }
 
-/** gameCounts as a read, to share a round trip with others (`readAll`, D59). */
+/**
+ * gameCounts as a read, to share a round trip with others (`readAll`, D59): kept with the catalog
+ * while it's the current version (D82), else counted from the shelf (8,000 rows at the planned scale).
+ */
 export function gameCountsRead(db: DB, groupId: string): Read<Map<string, number>> {
 	return mapRead(
-		rowsOf<{ user_id: string; n: number }>(
+		rowOf<{ counts: string | null }>(
 			db,
-			`SELECT user_id, COUNT(*) AS n FROM group_copies WHERE group_id = ?1 GROUP BY user_id`,
+			`SELECT COALESCE(
+			   (SELECT cc.member_counts FROM catalog_cache cc JOIN groups g ON g.id = cc.group_id AND g.catalog_version = cc.version WHERE cc.group_id = ?1),
+			   (SELECT json_group_object(user_id, n) FROM (SELECT user_id, COUNT(*) AS n FROM group_copies WHERE group_id = ?1 GROUP BY user_id))
+			 ) AS counts`,
 			groupId
 		),
-		(rows) => new Map(rows.map((r) => [r.user_id, r.n]))
+		(row) => new Map(Object.entries(JSON.parse(row?.counts ?? '{}') as Record<string, number>))
 	);
 }
 
