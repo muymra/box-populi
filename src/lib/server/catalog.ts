@@ -90,7 +90,7 @@ export async function loadCatalog(db: DB, groupId: string, version: number): Pro
 	// from this group (D66), so the payload is the same for every viewer, owner included. Games and
 	// copies are read apart: joined, each game's 21 columns
 	// came back once per copy, and turning those rows into objects was most of the CPU a build cost (D65).
-	const { members, corrections, played, favourites, gameRows, copyRows, bases } = await readAll(db, {
+	const { members, corrections, played, favourites, gameRows, copyRows } = await readAll(db, {
 		members: membersRead(db, groupId),
 		corrections: correctionsRead(db, groupId),
 		// For "not played lately" (PRD "Play log").
@@ -101,9 +101,10 @@ export async function loadCatalog(db: DB, groupId: string, version: number): Pro
 			'SELECT f.game_id, f.user_id FROM favourites f JOIN memberships m ON m.user_id = f.user_id AND m.group_id = ?1',
 			groupId
 		),
-		gameRows: rowsOf<GameRow>(
+		// With each game's `base_bgg_ids`, for the expansion links below.
+		gameRows: rowsOf<GameRow & { base_bgg_ids: string }>(
 			db,
-			`SELECT ${GAME_COLUMNS} FROM games g
+			`SELECT ${GAME_COLUMNS}, g.base_bgg_ids FROM games g
 			 WHERE g.id IN (SELECT game_id FROM group_copies WHERE group_id = ?1)
 			 ORDER BY g.id`,
 			groupId
@@ -113,17 +114,6 @@ export async function loadCatalog(db: DB, groupId: string, version: number): Pro
 			`SELECT c.game_id, c.user_id AS owner_id, c.lent_to_user_id, c.lent_to_text, c.added_at, c.max_players_with
 			 FROM group_copies c WHERE c.group_id = ?1
 			 ORDER BY c.game_id, c.id`,
-			groupId
-		),
-		// Which of the group's games each of its expansions expands, through `game_bases` (D65), so an
-		// expansion's player count can widen its base's (STATUS item 30). Both have to be on the shelf.
-		bases: rowsOf<{ expansion_id: number; base_id: number }>(
-			db,
-			`SELECT b.game_id AS expansion_id, g.id AS base_id
-			 FROM game_bases b JOIN games g ON g.bgg_id = b.base_bgg_id
-			 WHERE b.game_id IN (SELECT game_id FROM group_copies WHERE group_id = ?1)
-			   AND g.id IN (SELECT game_id FROM group_copies WHERE group_id = ?1)
-			 ORDER BY b.game_id, g.id`,
 			groupId
 		)
 	});
@@ -149,11 +139,31 @@ export async function loadCatalog(db: DB, groupId: string, version: number): Pro
 			...(row.max_players_with != null ? { maxWith: row.max_players_with } : {})
 		});
 	}
-	for (const row of bases) {
-		const expansion = games.get(row.expansion_id);
-		if (expansion?.isExpansion && row.base_id !== row.expansion_id) expansion.baseIds = [...(expansion.baseIds ?? []), row.base_id];
+	// Which of the group's games each of its expansions expands, so an expansion's player count can
+	// widen its base's (STATUS item 30). Both have to be on the shelf. Matched here from the rows above:
+	// a join through `game_bases` probed its index once per pair of the group's games, about 61,000 rows
+	// a build for a shelf of 250, and spent D1's free daily reads in under a hundred builds (2026-11-19).
+	const idByBgg = new Map(gameRows.flatMap((r) => (r.bgg_id != null ? [[r.bgg_id, r.id] as const] : [])));
+	for (const row of gameRows) {
+		const expansion = games.get(row.id);
+		if (!expansion?.isExpansion) continue;
+		const baseIds = basesOnShelf(row.base_bgg_ids, idByBgg).filter((id) => id !== row.id);
+		if (baseIds.length) expansion.baseIds = baseIds;
 	}
 	return { version, members, games: [...games.values()] };
+}
+
+/** The ids of an expansion's base games that are on the shelf, from its `base_bgg_ids`, lowest first. */
+export function basesOnShelf(baseBggIds: string, idByBgg: ReadonlyMap<number, number>): number[] {
+	let listed: unknown;
+	try {
+		listed = JSON.parse(baseBggIds);
+	} catch {
+		return [];
+	}
+	if (!Array.isArray(listed)) return [];
+	const ids = new Set(listed.flatMap((b) => (typeof b === 'number' && idByBgg.has(b) ? [idByBgg.get(b)!] : [])));
+	return [...ids].sort((a, b) => a - b);
 }
 
 /** Groups whose catalog JSON this server instance keeps; the least recently built goes first. */

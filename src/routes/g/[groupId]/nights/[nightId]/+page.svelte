@@ -25,7 +25,7 @@
 	import { DEFAULT_FILTERS, filterGames } from '#lib/catalog/filter.ts';
 	import { formatPlayerRange } from '#lib/catalog/players.ts';
 	import { formatPlaytime } from '#lib/catalog/buckets.ts';
-	import { favouritesAmong, pick, pickWeight, withInterest } from '#lib/catalog/pick.ts';
+	import { favouritesAmong, fillerLine, fillersToSuggest, fillerWeight, pick, pickWeight, withInterest, withoutFillers } from '#lib/catalog/pick.ts';
 	import type { CatalogGame } from '#lib/catalog/types.ts';
 	import { bringList, cameChecked, cameList, chatText, goingMembers, nightDate, nightExpansions, nightGuests, nightPlayers, nightPoolIds, playOutcome, recapText } from '#lib/nights.ts';
 	import { linkHost } from '#lib/link-kinds.ts';
@@ -116,11 +116,35 @@
 		if (soonMine.has(g.id)) return 'On your Play soon list';
 		return null;
 	}
+	// "Fillers too" (PRD "Game night"): up to three fillers in their own row, by the group's filler rule
+	// (D71), drawn as Play tonight draws them. With it ticked, the three leave fillers to that row.
+	let withFillers = $state(false);
+	let fillerSuggestions = $state<CatalogGame[]>([]);
+	let fillerSeen = $state<number[]>([]);
+	let fillersDrawn = $state(false);
+	const weighFiller = $derived(withInterest((g: CatalogGame, n: number | null) => fillerWeight(g, n, data.filler), interest));
 	function suggest() {
-		const fit = filterGames(candidates, { ...DEFAULT_FILTERS, players, availableOnly: false }, memberIds, { onHand });
-		const result = pick(fit.length ? fit : candidates, players, Math.random, new Set(seen), 3, withInterest(pickWeight, interest));
+		const from = withFillers ? withoutFillers(candidates, data.filler) : candidates;
+		const fit = filterGames(from, { ...DEFAULT_FILTERS, players, availableOnly: false }, memberIds, { onHand });
+		const result = pick(fit.length ? fit : from, players, Math.random, new Set(seen), 3, withInterest(pickWeight, interest));
 		suggestions = result.games;
 		seen = result.reset ? result.games.map((g) => g.id) : [...seen, ...result.games.map((g) => g.id)];
+		if (withFillers) suggestFillers();
+	}
+	function suggestFillers() {
+		const from = fillersToSuggest(candidates, players, data.filler, new Set(suggestions.map((g) => g.id)), onHand);
+		const result = pick(from, players, Math.random, new Set(fillerSeen), 3, weighFiller);
+		fillerSuggestions = result.games;
+		fillerSeen = result.reset ? result.games.map((g) => g.id) : [...fillerSeen, ...result.games.map((g) => g.id)];
+		fillersDrawn = true;
+	}
+	/** Ticking it with suggestions showing draws both rows again, so the three hold no filler; unticking takes the fillers' row away. */
+	function toggleFillers() {
+		if (withFillers && suggestions.length) suggest();
+		if (!withFillers) {
+			fillerSuggestions = [];
+			fillersDrawn = false;
+		}
 	}
 	let query = $state('');
 	// Matched like the shelf's search: accents and case ignored, alternate names included.
@@ -528,8 +552,21 @@
 					<span class="hint">Three at random from their shelves.</span>
 				</div>
 				<div class="form-body">
-					<div><button type="button" class="btn" disabled={!catalog || candidates.length === 0} onclick={suggest}><Dices size={18} aria-hidden="true" /> Suggest three</button></div>
+					<div class="suggest-actions">
+						<button type="button" class="btn" disabled={!catalog || candidates.length === 0} onclick={suggest}><Dices size={18} aria-hidden="true" /> Suggest three</button>
+						<label class="fillers-check"><input type="checkbox" bind:checked={withFillers} onchange={toggleFillers} /> Fillers too</label>
+					</div>
 					{#if suggestions.length}<ul class="found">{#each suggestions as g (g.id)}{@render gameRow(g)}{/each}</ul>{/if}
+					{#if withFillers && fillersDrawn}
+						<div class="filler-row" aria-live="polite">
+							<p class="form-sub">Fillers <span class="hint">{fillerLine(data.filler)}, for while people arrive or between longer games.</span></p>
+							{#if fillerSuggestions.length}
+								<ul class="found">{#each fillerSuggestions as g (g.id)}{@render gameRow(g)}{/each}</ul>
+							{:else}
+								<p class="muted small">No fillers on their shelves.</p>
+							{/if}
+						</div>
+					{/if}
 				</div>
 			</div>
 
@@ -942,6 +979,36 @@
 	/* A form panel is a grid of its own rows, not the sections' spaced stack. */
 	section.form-panel {
 		display: block;
+	}
+	.suggest-actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--s-2) var(--s-4);
+	}
+	.fillers-check {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--s-2);
+		min-height: 44px;
+		padding: 0 4px;
+		font-weight: 650;
+		cursor: pointer;
+	}
+	.fillers-check input {
+		width: 18px;
+		height: 18px;
+		margin: 0;
+		accent-color: var(--ink);
+	}
+	.filler-row {
+		display: grid;
+		gap: var(--s-2);
+		margin-top: var(--s-3);
+	}
+	.filler-row .form-sub {
+		margin: 0;
+		color: var(--ink);
 	}
 	.found {
 		list-style: none;

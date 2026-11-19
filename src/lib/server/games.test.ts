@@ -5,7 +5,7 @@ import { FakeBggClient } from './bgg/fake.ts';
 import { LiveBggClient, userAgent, BggAuthError } from './bgg/client.ts';
 import { BggBusyError, type BggSearchHit } from './bgg/types.ts';
 import { addCopy, addManualGame, cachedSearch, gameUsableInGroup, parseManualGame, rankHits, removeCopy, SEARCH_CACHE_MS, searchBgg, setPlayersWith } from './games.ts';
-import { catalogJson, loadCatalog } from './catalog.ts';
+import { basesOnShelf, catalogJson, loadCatalog } from './catalog.ts';
 
 let db: ReturnType<typeof createTestDb>;
 const NOW = 1_800_000_000_000;
@@ -91,6 +91,18 @@ describe('expansion links in the catalog (STATUS item 30)', () => {
 		expect(byId.get(72)?.baseIds).toEqual([70]); // its other base isn't on the shelf
 		expect(byId.get(73)?.baseIds).toBeUndefined(); // Pandemic isn't on the shelf
 		expect(byId.get(70)?.baseIds).toBeUndefined();
+	});
+	it('lists every base on the shelf, lowest id first, and ignores a list it can’t read', () => {
+		const idByBgg = new Map([
+			[13, 70],
+			[30549, 74],
+			[926, 71]
+		]);
+		expect(basesOnShelf('[30549, 13, 999]', idByBgg)).toEqual([70, 74]);
+		expect(basesOnShelf('[13, 13]', idByBgg)).toEqual([70]);
+		expect(basesOnShelf('[]', idByBgg)).toEqual([]);
+		expect(basesOnShelf('not json', idByBgg)).toEqual([]);
+		expect(basesOnShelf('{"13": 1}', idByBgg)).toEqual([]);
 	});
 });
 

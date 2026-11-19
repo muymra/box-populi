@@ -26,6 +26,7 @@ import {
 	chooseOrder,
 	favouritesAmong,
 	fillerLine,
+	fillersToSuggest,
 	fillerWeight,
 	fitsPlayers,
 	INTEREST_CAP,
@@ -41,7 +42,8 @@ import {
 	refill,
 	seededRng,
 	splitFillers,
-	tableSizes
+	tableSizes,
+	withoutFillers
 } from './pick.ts';
 import { copy, game } from './testing.ts';
 import { colorBeside, playerColor } from './colors.ts';
@@ -388,6 +390,27 @@ describe('picker', () => {
 		expect(fillerLine(hour)).toBe('60 minutes or less and under 3 / 5 complexity');
 		const fillers = pick([sushi, typed], 4, seededRng(3), new Set(), 3, fillerWeight).games;
 		expect(new Set(fillers)).toEqual(new Set([sushi, typed]));
+	});
+
+	it('suggests a night’s fillers in their own row, never a game twice (PRD "Game night")', () => {
+		const rule = { maxMinutes: 30, maxWeight: 2 };
+		const long = game({ minPlaytime: 60, maxPlaytime: 90, weight: 2.8, minPlayers: 2, maxPlayers: 5 });
+		const duel = game({ minPlaytime: 15, maxPlaytime: 15, weight: 1.3, minPlayers: 2, maxPlayers: 2 });
+		const party = game({ minPlaytime: 20, maxPlaytime: 20, weight: 1.1, minPlayers: 3, maxPlayers: 8 });
+		const unrated = game({ minPlaytime: 10, maxPlaytime: 10, weight: null, minPlayers: 2, maxPlayers: 6 });
+		const shelf = [long, duel, party, unrated];
+		// The three leave fillers to their row, unless fillers are all there is.
+		expect(withoutFillers(shelf, rule)).toEqual([long]);
+		expect(withoutFillers([duel, party], rule)).toEqual([duel, party]);
+		// Fillers that seat everyone going, without the ones already suggested.
+		expect(fillersToSuggest(shelf, 5, rule)).toEqual([party, unrated]);
+		expect(fillersToSuggest(shelf, 5, rule, new Set([party.id]))).toEqual([unrated]);
+		// Nobody counted yet: every filler.
+		expect(fillersToSuggest(shelf, null, rule)).toEqual([duel, party, unrated]);
+		// Nine going and no filler seats nine: every filler, as Play tonight splits the tables on the night.
+		expect(fillersToSuggest(shelf, 9, rule)).toEqual([duel, party, unrated]);
+		// The group's own rule decides what a filler is (D71).
+		expect(fillersToSuggest(shelf, 4, { maxMinutes: 90, maxWeight: 3 })).toEqual([long, party, unrated]);
 	});
 
 	it('keeps games at hand for the people present', () => {

@@ -57,6 +57,33 @@ export function fillerLine(rule: FillerRule): string {
 }
 
 /**
+ * What a night's "Suggest three" draws from when fillers have their own row (PRD "Game night"): the
+ * games that aren't fillers, or all of them when every one is.
+ */
+export function withoutFillers(games: CatalogGame[], rule: FillerRule): CatalogGame[] {
+	const others = games.filter((g) => !isFiller(g, rule));
+	return others.length ? others : games;
+}
+
+/**
+ * Fillers to suggest for a night (PRD "Game night"), leaving out games already suggested (`taken`):
+ * those that seat `players` when any do, otherwise every filler, since Play tonight splits a big group
+ * into tables on the night.
+ */
+export function fillersToSuggest(
+	games: CatalogGame[],
+	players: number | null,
+	rule: FillerRule,
+	taken: ReadonlySet<number> = new Set(),
+	onHand: OnHand = NOTHING_ON_HAND
+): CatalogGame[] {
+	const fillers = games.filter((g) => !taken.has(g.id) && isFiller(g, rule));
+	if (players == null) return fillers;
+	const seating = fillers.filter((g) => fitsPlayers(g, players, onHand));
+	return seating.length ? seating : fillers;
+}
+
+/**
  * What the people here care about (D63, D64), per game: how many of them have it as a favourite, and
  * how many marked it Play soon.
  */
