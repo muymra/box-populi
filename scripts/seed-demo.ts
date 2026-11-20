@@ -310,6 +310,9 @@ const statements = [
 	"DELETE FROM game_links WHERE group_id = 'demo';",
 	"DELETE FROM games WHERE created_by LIKE 'demo-%' AND id >= 9000000;",
 	"DELETE FROM memberships WHERE group_id = 'demo';",
+	// The kept standings and catalog (D82) point at the group, so they go before it does.
+	"DELETE FROM plays_cache WHERE group_id = 'demo';",
+	"DELETE FROM catalog_cache WHERE group_id = 'demo';",
 	"DELETE FROM groups WHERE id = 'demo';",
 	"DELETE FROM users WHERE id LIKE 'demo-%';",
 	insert('users', members.map((m) => ({ id: m.id, name: m.name, created_at: NOW }))),

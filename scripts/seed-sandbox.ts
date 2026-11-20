@@ -318,6 +318,9 @@ const statements = [
 	"DELETE FROM sessions WHERE user_id LIKE 'sbx-%';",
 	"DELETE FROM personal_links WHERE user_id LIKE 'sbx-%';",
 	`DELETE FROM memberships WHERE group_id = '${GROUP}' OR user_id LIKE 'sbx-%';`,
+	// The kept standings and catalog (D82) point at the group, so they go before it does.
+	`DELETE FROM plays_cache WHERE group_id = '${GROUP}';`,
+	`DELETE FROM catalog_cache WHERE group_id = '${GROUP}';`,
 	`DELETE FROM groups WHERE id = '${GROUP}';`,
 	`DELETE FROM games WHERE id BETWEEN ${FIRST_ID} AND ${LAST_ID};`,
 	"DELETE FROM users WHERE id LIKE 'sbx-%';",
