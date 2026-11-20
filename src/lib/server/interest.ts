@@ -218,20 +218,36 @@ export const GAME_PLAY_SOON_SQL = `SELECT COUNT(*) AS marks, MAX(s.user_id = ?3)
 export type NightPlaySoon = { others: number[]; mine: number[] };
 
 /**
- * For a night's page: games someone going would like to play soon, without who or how many (D64),
- * apart from the viewer's own marks, which come back as theirs. Only members of the night's group, and
- * only games on its shelf.
+ * nightPlaySoonRead's statement: ?1 the group, ?2 the viewer, ?3 now, ?4 the night, ?5 `playSoonSince`.
+ * The second half starts from the marks of the few people going and keeps those on games the viewer
+ * has (the copies' (user, game) key), set aside first (MATERIALIZED) so `activeMark` runs only on marks
+ * the viewer may hear about.
+ * Exported for its plan test.
+ */
+export const NIGHT_PLAY_SOON_SQL = `WITH theirs AS MATERIALIZED (
+	   SELECT s.user_id, s.game_id, s.marked_at FROM night_people np
+	   JOIN memberships nm ON nm.user_id = np.user_id AND nm.group_id = ?1
+	   JOIN play_soon s ON s.user_id = np.user_id
+	   WHERE np.night_id = ?4 AND np.going = 1 AND np.user_id <> ?2
+	     AND EXISTS (SELECT 1 FROM night_people vp WHERE vp.night_id = ?4 AND vp.user_id = ?2 AND vp.going = 1)
+	     AND EXISTS (SELECT 1 FROM copies vc WHERE vc.user_id = ?2 AND vc.game_id = s.game_id AND ${copyOnShelf('?1', 'vc')})
+	 )
+	 SELECT s.game_id, 1 AS is_mine FROM play_soon s
+	 WHERE s.user_id = ?2 AND ${ON_GROUP_SHELF} AND ${activeMark('?3', '?5')}
+	 UNION ALL
+	 SELECT s.game_id, 0 AS is_mine FROM theirs s WHERE ${activeMark('?3', '?5')}`;
+
+/**
+ * For a night's page: the viewer's own marks, as theirs, and (D64) the viewer's own games on this shelf
+ * that someone else going would like to play soon, without who or how many, only when the viewer is going
+ * too. Other people's marks on games the viewer doesn't own never reach the page, so its data can't say
+ * which games the people going marked. Only members of the night's group.
  */
 export function nightPlaySoonRead(db: DB, groupId: string, nightId: string, viewerId: string | null, now: number, rule: PlaySoonRule): Read<NightPlaySoon> {
 	return mapRead(
 		rowsOf<{ game_id: number; is_mine: number }>(
 			db,
-			`SELECT s.game_id, (s.user_id = ?2) AS is_mine FROM play_soon s
-			 WHERE (s.user_id = ?2 OR s.user_id IN (
-			   SELECT np.user_id FROM night_people np
-			   JOIN memberships nm ON nm.user_id = np.user_id AND nm.group_id = ?1
-			   WHERE np.night_id = ?4 AND np.going = 1))
-			   AND ${ON_GROUP_SHELF} AND ${activeMark('?3', '?5')}`,
+			NIGHT_PLAY_SOON_SQL,
 			groupId,
 			viewerId ?? '',
 			now,

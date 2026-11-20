@@ -3,7 +3,7 @@ import { createTestDb } from './testing/d1.ts';
 import { all, deletePersonStatements, readAll, run } from './db.ts';
 import { loadCatalog } from './catalog.ts';
 import { DEFAULT_PLAY_SOON } from './instance.ts';
-import { GAME_PLAY_SOON_SQL, GROUP_PLAY_SOON_SQL, gamePlaySoonRead, groupPlaySoonRead, myPlaySoonRead, nightPlaySoonRead, playSoonOfPeople, setFavourite, setPlaySoon } from './interest.ts';
+import { GAME_PLAY_SOON_SQL, GROUP_PLAY_SOON_SQL, NIGHT_PLAY_SOON_SQL, gamePlaySoonRead, groupPlaySoonRead, myPlaySoonRead, nightPlaySoonRead, playSoonOfPeople, setFavourite, setPlaySoon } from './interest.ts';
 import { queryPlan } from './testing/plan.ts';
 
 const PLAY_SOON_MAX = DEFAULT_PLAY_SOON.max;
@@ -167,6 +167,28 @@ describe('Play soon (D64)', () => {
 		expect({ others: asBo.others.sort(), mine: asBo.mine }).toEqual({ others: [1, 2], mine: [] });
 		const asAda = (await readAll(db, { s: nightPlaySoonRead(db, 'g1', 'n1', 'ada', NOW, DEFAULT_PLAY_SOON) })).s;
 		expect({ others: asAda.others, mine: asAda.mine.sort() }).toEqual({ others: [], mine: [1, 2] });
+	});
+
+	it('tells a night’s page only about the viewer’s own games, and only when they’re going', async () => {
+		const night = async (viewer: string) => {
+			const r = (await readAll(db, { s: nightPlaySoonRead(db, 'g1', 'n1', viewer, NOW, DEFAULT_PLAY_SOON) })).s;
+			return { others: r.others.sort(), mine: r.mine.sort() };
+		};
+		await run(db, `INSERT INTO game_nights (id, group_id, name, night_on, created_at) VALUES ('n1', 'g1', 'Friday', '2026-11-13', 0)`);
+		await run(db, `INSERT INTO night_people (night_id, user_id, going) VALUES ('n1', 'ada', 1), ('n1', 'bo', 1), ('n1', 'cy', 0)`);
+		await run(db, `INSERT INTO copies (user_id, game_id, added_at) VALUES ('ada', 5, 0), ('ada', 6, 0), ('cy', 4, 0)`);
+		await run(db, `INSERT INTO hidden_copies (group_id, user_id, game_id, hidden_at) VALUES ('g1', 'ada', 6, 0)`);
+		await setPlaySoon(db, 'g1', 'bo', 4, true, NOW, DEFAULT_PLAY_SOON); // Cy's and Bo's own game
+		await setPlaySoon(db, 'g1', 'bo', 5, true, NOW, DEFAULT_PLAY_SOON); // Ada has it too
+		await setPlaySoon(db, 'g1', 'bo', 6, true, NOW, DEFAULT_PLAY_SOON); // Ada's copy is hidden from g1
+		await setPlaySoon(db, 'g1', 'ada', 3, true, NOW, DEFAULT_PLAY_SOON); // Bo's game
+		expect(await night('ada')).toEqual({ others: [5], mine: [3] }); // not 4: Bo's mark on a game Ada doesn't have
+		expect(await night('bo')).toEqual({ others: [3], mine: [4, 5, 6] });
+		expect(await night('cy')).toEqual({ others: [], mine: [] }); // has game 4, but isn't going
+		const plan = await queryPlan(db, NIGHT_PLAY_SOON_SQL, 'g1', 'ada', NOW, 'n1', NOW - PLAY_SOON_MS);
+		expect(plan).not.toMatch(/SCAN (c|vc|np|play_soon|copies|night_people)\b/);
+		expect(plan.match(/SEARCH s USING INDEX sqlite_autoindex_play_soon_1 \(user_id=\?\)/g)).toHaveLength(2); // both halves reach marks by person
+		expect(plan).toContain('MATERIALIZE theirs'); // the viewer's games picked out before any mark is checked; its only scan is of those
 	});
 });
 

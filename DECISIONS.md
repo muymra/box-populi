@@ -428,6 +428,7 @@ A member can mark a game they'd like to try, or get to the table again soon (`pl
 **Trade-offs accepted:** anyone who sets who's here in Play tonight can see whose marks a game has, and with one other person going, "someone going" is easy to guess. Clearing after a night where the game didn't get played means marking it again. The game page shows the end date only to its person.
 **Revisit if:** owners feel nudged anyway, or people want their list shown to the group.
 **Changed by D65:** a night counts only if planned on or before its date; the reads stay within the group; the cap is checked inside the insert.
+**Changed 2026-11-20 (Carlo: "fix the leak"):** a night's page sent every member the games anyone going had marked, though it showed the hint only on the viewer's own copies; with two people going that named a person. It now gets only the viewer's own marks and, when the viewer is going, other people's marks on the viewer's own games. The night's suggestions lean towards those alone, no longer towards marks on other people's games.
 **Changed by D83:** the group now sees how many members marked each game on its shelf, on the Wanted tab, still never who.
 
 ## D65. Fixes from the 2026-11-09 audit (2026-11-09)
