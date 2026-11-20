@@ -4,7 +4,12 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
-- Pages read much less of the database once a group is large: at 50 members and 1,500 games, the Group tab reads about 1,000 rows where it read 35,000, a profile about 6,000 where it read 31,000, the plays page 3,700 where it read 22,000, Wanted 1,750 where it read 17,400, and the shelf's 30-day refresh check one row until something is due. Counts and the built catalog are kept until something changes. Hosters on Cloudflare's free plan stay further from the 5 million daily reads. Needs migration `0025_read_costs.sql`. The group cards on the home page can show a game count from just before a change, until someone opens that group's shelf.
+## 0.10.0 (2026-11-20)
+
+**Upgrading:** one migration, `0025_read_costs.sql`. On Cloudflare, note a Time Travel bookmark and export a backup first, then apply it before deploying (SELF_HOSTING.md "Upgrading" has the commands and how to roll back). Docker, Vercel and Netlify apply it on their first request. It adds indexes, two columns on groups and two tables where the app keeps counts and the built catalog, filled in as pages are opened; nothing anyone sees changes. No new settings, and a demo group needs no reseed.
+
+- Pages read much less of the database once a group is large: at 50 members and 1,500 games, the Group tab reads about 1,000 rows where it read 35,000, a profile about 6,000 where it read 31,000, the plays page 3,700 where it read 22,000, Wanted 1,750 where it read 17,400, and the shelf's 30-day refresh check one row until something is due. Counts and the built catalog are kept until something changes. Hosters on Cloudflare's free plan stay further from the 5 million daily reads. The group cards on the home page can show a game count from just before a change, until someone opens that group's shelf.
+
 ## 0.9.0 (2026-11-19)
 
 **Upgrading:** no migrations and no new settings, so no backup or demo reseed is needed: pull and deploy. Hosters on Cloudflare's free plan should take this release soon, for the first line below.
