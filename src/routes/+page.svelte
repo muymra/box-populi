@@ -200,7 +200,7 @@
 	<section class="moment" aria-labelledby="want-h">
 		<div class="say">
 			<h2 id="want-h">Play what people want</h2>
-			<p>Heart the games you love, and keep a short list of ones you’d like to play soon. Play tonight leans towards both for whoever’s there. Nobody gets asked to bring anything: an owner only sees that someone going would like to play theirs.</p>
+			<p>Heart the games you love, and keep a short list of ones you’d like to play soon. Play tonight leans towards both for whoever’s there. Nobody gets asked to bring anything: the group sees how many would like to play a game, never who.</p>
 			{#if data.demoExists}<a class="go" href="/g/demo?sort=loved">See the demo’s most loved <ArrowRight size={16} aria-hidden="true" /></a>{/if}
 		</div>
 		<figure class="piece" aria-label="Example: Play tonight's three games, with whose favourites they are and who'd like to play one soon">

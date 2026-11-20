@@ -453,6 +453,14 @@
 						Favourite of {#each data.favourites as f, i (f.id)}{i ? ', ' : ''}<a href={profileHref(f.id)}>{f.name}</a>{/each}
 					</p>
 				{/if}
+				<!-- Play soon as the group sees it (D83): a count, never who. Left out when the viewer is the only one, which their own button already says. -->
+				{#if data.soonCount.marks > (data.soonCount.mine ? 1 : 0)}
+					{@const others = data.soonCount.marks - (data.soonCount.mine ? 1 : 0)}
+					<p class="muted favoured soon-count">
+						<CalendarClock size={14} aria-hidden="true" />
+						<span>{data.soonCount.mine ? `You and ${others} more` : others === 1 ? '1 person' : `${others} people`} would like to play it soon</span>
+					</p>
+				{/if}
 				<!-- Someone waiting to be let in (D79) manages their own copy here; the rest waits for a full member. -->
 				{#if data.shelfOpen}
 					<div class="copy-actions">
@@ -514,7 +522,7 @@
 					{:else if data.playSoonFull}
 						<p class="hint soon-hint">Your Play soon list has {data.playSoonMax} {data.playSoonMax === 1 ? 'game' : 'games'}. Clear one to add this.</p>
 					{:else}
-						<p class="hint soon-hint">Play soon: you’d like to try it, or get it to the table again soon. Play tonight leans towards it when you’re there; owners planning a night see only that someone going would like to play it.</p>
+						<p class="hint soon-hint">Play soon: you’d like to try it, or get it to the table again soon. Play tonight leans towards it when you’re there, and the group sees how many would like to play it, here and on Wanted, without your name.</p>
 					{/if}
 					{/if}
 					{#if form?.lent}<p class="banner" {@attach announce}>Marked as lent.</p>{:else if form?.returned}<p class="banner" {@attach announce}>Marked as returned.</p>{/if}

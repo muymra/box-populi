@@ -133,9 +133,13 @@
 	/** This group's filler rule (D71), from the layout. */
 	const fillerOf = $derived((game: CatalogGame, players: number | null) => fillerWeight(game, players, data.filler));
 	const weighFiller = $derived(withInterest(fillerOf, interest));
+	/** Who here marked a game Play soon, by name. */
+	function soonNames(game: CatalogGame): string[] {
+		return (soonMarks.get(game.id) ?? []).filter((id) => present.includes(id)).map((id) => memberMap.get(id)?.name ?? 'Someone');
+	}
 	/** "Ada would like to play this soon", for a game someone here marked. */
 	function soonLine(game: CatalogGame): string | null {
-		const names = (soonMarks.get(game.id) ?? []).filter((id) => present.includes(id)).map((id) => memberMap.get(id)?.name ?? 'Someone');
+		const names = soonNames(game);
 		if (!names.length) return null;
 		const who = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 		return `${who} would like to play this soon`;
@@ -867,6 +871,7 @@
 						chosen={kept}
 						{players}
 						why={whyMain}
+						soon={soonNames}
 						{addingOf}
 						full={mainFull}
 						onchoose={chooseMain}
@@ -934,6 +939,7 @@
 								chosen={keptFillers}
 								{players}
 								why={whyFiller}
+								soon={soonNames}
 								{addingOf}
 								blocked={fillerBlocked}
 								full={fillerFull}

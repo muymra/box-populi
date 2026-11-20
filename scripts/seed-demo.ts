@@ -282,6 +282,21 @@ for (const m of members) {
 	for (const gameId of picks) favouriteRows.push({ user_id: m.id, game_id: gameId, added_at: NOW - rand(1, 300) * DAY });
 }
 
+// Play soon (D64, D83): nine games on the shelf that members would like to play soon, so the Wanted tab
+// shows its Play soon shelf with counts. Marked when this file is made, not at NOW, so the marks last
+// their eight weeks from each reseed and no play or night in the seed has cleared them. Drawn last.
+const MADE = Date.now();
+const soonRows: Array<Record<string, string | number>> = [];
+const soonGames = [...new Set(playedMost)].slice(0, 9);
+const soonLeft = new Map(members.map((m) => [m.id, 5])); // PLAY_SOON_MAX
+[4, 3, 2, 2, 1, 1, 1, 1, 1].forEach((count, i) => {
+	if (!soonGames[i]) return;
+	for (const m of sample(members.filter((p) => soonLeft.get(p.id)! > 0), count)) {
+		soonRows.push({ user_id: m.id, game_id: soonGames[i], marked_at: MADE - rand(1, 600) * 60_000 });
+		soonLeft.set(m.id, soonLeft.get(m.id)! - 1);
+	}
+});
+
 // Columns that are NOT NULL with a default: rows that don't set them get the default, not NULL.
 const GAME_DEFAULTS = { best_mask: 0, rec_mask: 0, mechanics: '[]', categories: '[]', base_bgg_ids: '[]', is_expansion: 0, is_manual: 0 };
 
@@ -328,9 +343,10 @@ const statements = [
 	insert('night_games', nightGames),
 	insert('plays', plays),
 	insert('play_players', playPlayers),
-	insert('favourites', favouriteRows)
+	insert('favourites', favouriteRows),
+	insert('play_soon', soonRows)
 ];
 
 mkdirSync('seed', { recursive: true });
 writeFileSync('seed/demo.sql', statements.join('\n\n') + '\n');
-console.log(`Wrote seed/demo.sql: ${games.length + wanted.length} games, ${copies.length} copies, ${members.length} members, ${plays.length} plays, ${nights.length} game nights, ${favouriteRows.length} favourites.`);
+console.log(`Wrote seed/demo.sql: ${games.length + wanted.length} games, ${copies.length} copies, ${members.length} members, ${plays.length} plays, ${nights.length} game nights, ${favouriteRows.length} favourites, ${soonRows.length} Play soon marks.`);

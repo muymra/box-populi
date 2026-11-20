@@ -5,7 +5,7 @@ import { addCopy, gameUsableInGroup, gameVisibleInGroup, MAX_PLAYERS_WITH, remov
 import { addLink, canDeleteLink, deleteLink, parseLink } from '#lib/server/links.ts';
 import { addWish, removeWish } from '#lib/server/wishlist.ts';
 import { hiddenHereRead, setCopyHidden } from '#lib/server/hiding.ts';
-import { myPlaySoonRead, setFavourite, setPlaySoon } from '#lib/server/interest.ts';
+import { gamePlaySoonRead, myPlaySoonRead, setFavourite, setPlaySoon } from '#lib/server/interest.ts';
 import { lendCopy, returnCopy } from '#lib/server/lending.ts';
 import { editGame, mayEditGame } from '#lib/server/game-edit.ts';
 import { applyCorrection, correctionsRead } from '#lib/server/corrections.ts';
@@ -152,6 +152,8 @@ export const load: PageServerLoad = async (event) => {
 		),
 		// The viewer's own Play soon list (D64): whether this game is on it, until when, and whether it's full.
 		myPlaySoon: me ? myPlaySoonRead(db, me.id, Date.now(), event.locals.config.playSoon) : known([]),
+		// How many members would like to play it soon, never who (D83), as the Wanted tab counts it.
+		soonCount: gamePlaySoonRead(db, groupId, gameId, me?.id ?? null, Date.now(), event.locals.config.playSoon),
 		members: membersRead(db, groupId),
 		plays: playsRead(db, groupId, { gameId }),
 		myCopy: me
@@ -219,6 +221,8 @@ export const load: PageServerLoad = async (event) => {
 		playSoon: myPlaySoon.find((m) => m.gameId === gameId) ?? null,
 		playSoonFull: myPlaySoon.filter((m) => m.gameId !== gameId).length >= event.locals.config.playSoon.max,
 		playSoonMax: event.locals.config.playSoon.max,
+		// Counted only for a game on the shelf, as on the Wanted tab (D83).
+		soonCount: owners.length ? r.soonCount : { marks: 0, mine: false },
 		canEditDetails,
 		editedByName,
 		myLoan: myCopy && (myCopy.lent_to_user_id || myCopy.lent_to_text) ? { toUserId: myCopy.lent_to_user_id, toText: myCopy.lent_to_text } : null,

@@ -8,11 +8,12 @@
 	import { BUCKET_LABELS, formatPlaytime, weightBucket } from '#lib/catalog/buckets.ts';
 	import { formatPlayersShort } from '#lib/catalog/players.ts';
 	import { isCopyAvailable } from '#lib/catalog/filter.ts';
+	import CalendarClock from '@lucide/svelte/icons/calendar-clock';
 	import Puzzle from '@lucide/svelte/icons/puzzle';
 	import { addedCounts } from '#lib/catalog/extensions.ts';
 	import type { CatalogGame, CatalogMember } from '#lib/catalog/types.ts';
 
-	/** `unknown`, `via` and `adding`: as on a cube (Cube.svelte). */
+	/** `unknown`, `via` and `adding`: as on a cube (Cube.svelte). `soon`: who here would like to play it soon (D64), for Play tonight. */
 	let {
 		game,
 		href,
@@ -20,7 +21,8 @@
 		memberIds,
 		unknown = false,
 		via = null,
-		adding = []
+		adding = [],
+		soon = []
 	}: {
 		game: CatalogGame;
 		href: string;
@@ -29,6 +31,7 @@
 		unknown?: boolean;
 		via?: string | null;
 		adding?: readonly CatalogGame[];
+		soon?: readonly string[];
 	} = $props();
 
 	const color = $derived(boxColor(game.name));
@@ -46,6 +49,9 @@
 			.join(' · ')
 	);
 	const ownerLabel = $derived(`Owned by ${owners.map((o) => o.name).join(', ')}`);
+	// "Ada would like to play this soon": the flag shows the names, two at most and then "+1".
+	const soonSaid = $derived(soon.length ? `${soon.length === 1 ? soon[0] : `${soon.slice(0, -1).join(', ')} and ${soon[soon.length - 1]}`} would like to play this soon` : '');
+	const soonShort = $derived(soon.length > 2 ? `${soon.slice(0, 2).join(', ')} +${soon.length - 2}` : soon.join(', '));
 </script>
 
 <a class="spine" class:out={unavailable} {href} style:--spine-bg={color.bg} style:--spine-ink={color.ink}>
@@ -59,6 +65,9 @@
 		{#if unavailable}<span class="flag">Lent out</span>{/if}
 		{#if via}<span class="flag" title={via}>With expansion</span>{/if}
 		{#if unknown}<span class="flag">Info missing</span>{/if}
+		{#if soon.length}<span class="flag soon" title={soonSaid}
+				><span class="soon-short" aria-hidden="true"><CalendarClock size={12} />{soonShort}</span><span class="visually-hidden">{soonSaid}</span></span
+			>{/if}
 	</span>
 	<span class="end" role="img" aria-label={ownerLabel} title={ownerLabel}>
 		{#each shown as o (o.id)}<span style:background={playerColor(o.colorIndex).fill}></span>{/each}
@@ -120,6 +129,11 @@
 		font-size: 0.75rem;
 		font-weight: 700;
 	}
+	.soon-short {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+	}
 	/* the spine's end, painted in the owners' colours */
 	.end {
 		align-self: stretch;
@@ -145,8 +159,11 @@
 		.title {
 			padding: 0;
 		}
+		/* A narrow spine lets its flags wrap under the facts instead of running into the owners' end. */
 		.facts {
 			grid-row: 2;
+			flex-wrap: wrap;
+			row-gap: 4px;
 		}
 		.end {
 			grid-row: 1 / 3;

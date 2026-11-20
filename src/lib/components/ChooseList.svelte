@@ -1,7 +1,8 @@
 <!--
 	Choosing games by hand in Play tonight (PRD "Picker"), search first: a room of 12 games or fewer is
 	listed whole; in a bigger one nothing shows until someone types, then the best 8 matches. Games
-	outside the limits come last, tagged with why, so the group can still choose one.
+	outside the limits come last, tagged with why, so the group can still choose one. A game someone
+	here would like to play soon carries a flag with their name on its spine (D64).
 -->
 <script lang="ts">
 	import Search from '@lucide/svelte/icons/search';
@@ -17,6 +18,7 @@
 		players,
 		why,
 		blocked = () => null,
+		soon = () => [],
 		addingOf = () => [],
 		full = null,
 		onchoose,
@@ -37,6 +39,8 @@
 		why: (game: CatalogGame) => string[];
 		/** Why this one game can't be chosen now, shown as a tag. */
 		blocked?: (game: CatalogGame) => string | null;
+		/** Who here would like to play the game soon (D64), shown as a flag on its spine. */
+		soon?: (game: CatalogGame) => readonly string[];
 		/** The expansions here that add to the game's range, each shown with its own count (D74). */
 		addingOf?: (game: CatalogGame) => readonly CatalogGame[];
 		/** Why nothing more can be chosen, shown above the matches. */
@@ -81,7 +85,7 @@
 				{@const reason = isChosen ? null : (blocked(game) ?? (full ? 'full' : null))}
 				{@const tags = [...why(game), ...(reason && reason !== 'full' ? [reason] : [])]}
 				<li>
-					<ListRow {game} href="/g/{groupId}/game/{game.id}" {members} {memberIds} adding={addingOf(game)} />
+					<ListRow {game} href="/g/{groupId}/game/{game.id}" {members} {memberIds} adding={addingOf(game)} soon={soon(game)} />
 					<button
 						type="button"
 						class="toggle"
@@ -129,12 +133,13 @@
 	.hint {
 		margin: 0;
 	}
+	/* More room between games than between a game and its tags, so each tag reads as its own row's. */
 	ul {
 		list-style: none;
 		margin: var(--s-1, 4px) 0 0;
 		padding: 0;
 		display: grid;
-		gap: 6px;
+		gap: 10px;
 	}
 	li {
 		display: grid;
@@ -147,7 +152,7 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: 4px;
-		margin-top: 4px;
+		margin-top: 2px;
 	}
 	/* A toggle like a person in who's here: marigold once chosen (Marigold Means Chosen). */
 	.toggle {

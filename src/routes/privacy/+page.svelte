@@ -73,7 +73,8 @@
 	<p>
 		Members of a group see each other's names, games, loans, wishlists and favourites, the links added to games, the group's game nights and its plays.
 		Your Play soon list isn't shown to them as a list: Play tonight leans towards it and says it's yours when you're marked as here,
-		and when someone going to a night you're going to picks what to bring, their own games on your list say only that someone going would like to play them.
+		when someone going to a night you're going to picks what to bring, their own games on your list say only that someone going would like to play them,
+		and the Wanted tab and a game's page show how many members marked each game on the group's shelf, never who.
 		A game you hide from a group is gone from that group's shelf: its members don't see it, or that you've hidden anything. Your other groups still see it.
 		Any member can download the plays and game nights as spreadsheet files, which name everyone in them. Anyone with a group's code sees
 		its members' names on its join page, so they can tap their own. A group's owner and co-admins see who hasn't set a PIN yet.

@@ -1,12 +1,14 @@
 // Favourites (DECISIONS D63) and Play soon (D64): what people love, and what they'd like to try or get
 // to the table again soon. A favourite is seen by the group, like the wishlist. A Play soon mark is the
-// person's own: it nudges Play tonight when they're there, and an owner planning what to bring only
-// ever sees "someone going would like to play this", never who.
+// person's own: it nudges Play tonight when they're there, an owner planning what to bring sees only
+// "someone going would like to play this", and the Wanted tab counts the marks on the shelf's games
+// (D83). None of them says who.
 import { all, mapRead, rowsOf, run, stmt, type DB, type Read } from './db.ts';
 import { bumpCatalogForUser } from './catalog.ts';
 import { gameVisibleInGroup } from './games.ts';
 import type { PlaySoonRule } from './instance.ts';
-import { onShelf } from './shelf.ts';
+import { copyOnShelf, onShelf } from './shelf.ts';
+import { fullMember } from './standing.ts';
 
 /**
  * How long a Play soon mark lasts when nothing else clears it (8 weeks unless the instance sets
@@ -147,6 +149,71 @@ export async function playSoonOfPeople(db: DB, groupId: string, userIds: string[
 	for (const r of rows) byGame.set(r.game_id, [...(byGame.get(r.game_id) ?? []), r.user_id]);
 	return [...byGame.entries()].map(([gameId, ids]) => ({ gameId, userIds: ids }));
 }
+
+/** A game on the Wanted tab's Play soon shelf (D83), as the group sees it: how many marked it, never who. */
+export type GroupPlaySoonRow = {
+	id: number;
+	bgg_id: number | null;
+	name: string;
+	year: number | null;
+	thumb_url: string | null;
+	is_expansion: number;
+	source: string;
+	is_manual: number;
+	/** Members of the group with a live mark on it. */
+	marks: number;
+	/** 1 when one of them is the viewer. */
+	mine: number;
+	/** The ids of the members whose copies put it on this shelf, as a JSON array. */
+	owners: string;
+};
+
+/**
+ * For the Wanted tab (D83): the games on the group's shelf that its members would like to play soon, the
+ * most marked first, then the most recently marked. The group sees how many marked each, never who; the
+ * viewer also learns which are theirs. A game nobody here owns stays off it, so a mark on a game the
+ * group doesn't have stays its person's own, and so do the marks of someone waiting to be let in or
+ * suspended (D79). Every live mark is checked, since the count orders the list
+ * (about 8 rows a mark at the planned scale, D82); each game's owners cost a few more.
+ */
+export function groupPlaySoonRead(db: DB, groupId: string, viewerId: string | null, now: number, rule: PlaySoonRule): Read<GroupPlaySoonRow[]> {
+	return rowsOf<GroupPlaySoonRow>(db, GROUP_PLAY_SOON_SQL, groupId, viewerId ?? '', now, playSoonSince(now, rule));
+}
+
+/** groupPlaySoonRead's statement: ?1 the group, ?2 the viewer, ?3 now, ?4 `playSoonSince`. Exported for its plan test. */
+export const GROUP_PLAY_SOON_SQL = `WITH soon AS (
+	   SELECT s.game_id, COUNT(*) AS marks, MAX(s.user_id = ?2) AS mine, MAX(s.marked_at) AS latest
+	   FROM play_soon s
+	   JOIN memberships m ON m.user_id = s.user_id AND m.group_id = ?1 AND ${fullMember('m')}
+	   WHERE ${activeMark('?3', '?4')}
+	   GROUP BY s.game_id
+	 ),
+	 owned AS MATERIALIZED (
+	   SELECT soon.*, (SELECT json_group_array(c.user_id) FROM copies c WHERE c.game_id = soon.game_id AND ${copyOnShelf('?1', 'c')}) AS owners
+	   FROM soon
+	 )
+	 SELECT g.id, g.bgg_id, g.name, g.year, g.thumb_url, g.is_expansion, g.source, g.is_manual, owned.marks, owned.mine, owned.owners
+	 FROM owned JOIN games g ON g.id = owned.game_id
+	 WHERE owned.owners <> '[]'
+	 ORDER BY owned.marks DESC, owned.latest DESC, g.name`;
+
+/**
+ * For a game's page (D83): how many full members of the group have a live mark on it, and whether the
+ * viewer is one, the same count the Wanted tab shows. The page shows it only for a game on the shelf.
+ * One game's marks come through `play_soon_game`, so it reads a few rows a mark.
+ */
+export function gamePlaySoonRead(db: DB, groupId: string, gameId: number, viewerId: string | null, now: number, rule: PlaySoonRule): Read<{ marks: number; mine: boolean }> {
+	return mapRead(
+		rowsOf<{ marks: number; mine: number | null }>(db, GAME_PLAY_SOON_SQL, groupId, gameId, viewerId ?? '', now, playSoonSince(now, rule)),
+		(rows) => ({ marks: rows[0]?.marks ?? 0, mine: rows[0]?.mine === 1 })
+	);
+}
+
+/** gamePlaySoonRead's statement: ?1 the group, ?2 the game, ?3 the viewer, ?4 now, ?5 `playSoonSince`. Exported for its plan test. */
+export const GAME_PLAY_SOON_SQL = `SELECT COUNT(*) AS marks, MAX(s.user_id = ?3) AS mine
+	 FROM play_soon s
+	 JOIN memberships m ON m.user_id = s.user_id AND m.group_id = ?1 AND ${fullMember('m')}
+	 WHERE s.game_id = ?2 AND ${activeMark('?4', '?5')}`;
 
 export type NightPlaySoon = { others: number[]; mine: number[] };
 

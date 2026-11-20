@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
-import { all, run } from './db.ts';
-import { addWish, removeWish, wantedGames } from './wishlist.ts';
+import { all, readAll, run } from './db.ts';
+import { queryPlan } from './testing/plan.ts';
+import { LANDED_SQL, addWish, landedRead, removeWish, wantedGames } from './wishlist.ts';
 
 let db: ReturnType<typeof createTestDb>;
 const NOW = 1_800_000_000_000;
@@ -54,5 +55,38 @@ describe('wantedGames', () => {
 		await addWish(db, 'g1', 'ada', 1, NOW);
 		await run(db, `INSERT INTO copies (user_id, game_id, added_at) VALUES ('bo', 1, 0)`);
 		expect(await wantedGames(db, 'g1')).toEqual([]);
+	});
+});
+
+describe('wishes on the shelf now (D84)', () => {
+	const landed = async (user: string) =>
+		(await readAll(db, { r: landedRead(db, 'g1', user) })).r.map((r) => [r.name, (JSON.parse(r.owners) as string[]).sort()]);
+
+	it('lists the viewer’s own wishes that someone in the group has, with who', async () => {
+		await addWish(db, 'g1', 'ada', 1, NOW); // nobody has it
+		await addWish(db, 'g1', 'ada', 5, NOW); // Bo has it
+		await addWish(db, 'g1', 'ada', 2, NOW);
+		await run(db, `INSERT INTO copies (user_id, game_id, added_at) VALUES ('ada', 2, 0), ('bo', 2, 0)`); // Ada got it too
+		await addWish(db, 'g1', 'bo', 1, NOW);
+		await run(db, `INSERT INTO copies (user_id, game_id, added_at) VALUES ('bo', 1, 0)`); // Bo's own wish, Bo's own copy
+		expect(await landed('ada')).toEqual([
+			['Alpha', ['bo']],
+			['Beta', ['ada', 'bo']],
+			['Our Homebrew', ['bo']]
+		]);
+		expect(await landed('bo')).toEqual([['Alpha', ['bo']]]);
+	});
+
+	it('leaves out copies hidden from the group and owners outside it', async () => {
+		await addWish(db, 'g1', 'ada', 5, NOW);
+		await run(db, `INSERT INTO wishlist (user_id, game_id, added_at) VALUES ('ada', 4, 0)`); // Out has it, in another group
+		await run(db, `INSERT INTO hidden_copies (group_id, user_id, game_id, hidden_at) VALUES ('g1', 'bo', 5, 0)`);
+		expect(await landed('ada')).toEqual([]);
+	});
+
+	it('starts from the person’s wishes and each game’s copies, never a whole table', async () => {
+		const plan = await queryPlan(db, LANDED_SQL, 'g1', 'ada');
+		expect(plan).not.toMatch(/SCAN (w|c|g|wishlist|copies|memberships|games|shelf_m|shelf_h)\b/);
+		expect(plan).toContain('MATERIALIZE mine');
 	});
 });

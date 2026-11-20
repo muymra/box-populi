@@ -3,7 +3,8 @@ import { createTestDb } from './testing/d1.ts';
 import { all, deletePersonStatements, readAll, run } from './db.ts';
 import { loadCatalog } from './catalog.ts';
 import { DEFAULT_PLAY_SOON } from './instance.ts';
-import { myPlaySoonRead, nightPlaySoonRead, playSoonOfPeople, setFavourite, setPlaySoon } from './interest.ts';
+import { GAME_PLAY_SOON_SQL, GROUP_PLAY_SOON_SQL, gamePlaySoonRead, groupPlaySoonRead, myPlaySoonRead, nightPlaySoonRead, playSoonOfPeople, setFavourite, setPlaySoon } from './interest.ts';
+import { queryPlan } from './testing/plan.ts';
 
 const PLAY_SOON_MAX = DEFAULT_PLAY_SOON.max;
 const PLAY_SOON_MS = DEFAULT_PLAY_SOON.days * 86_400_000;
@@ -166,6 +167,70 @@ describe('Play soon (D64)', () => {
 		expect({ others: asBo.others.sort(), mine: asBo.mine }).toEqual({ others: [1, 2], mine: [] });
 		const asAda = (await readAll(db, { s: nightPlaySoonRead(db, 'g1', 'n1', 'ada', NOW, DEFAULT_PLAY_SOON) })).s;
 		expect({ others: asAda.others, mine: asAda.mine.sort() }).toEqual({ others: [], mine: [1, 2] });
+	});
+});
+
+describe('Play soon on the Wanted tab (D83)', () => {
+	const shelf = async (viewer: string | null, now = NOW) => (await readAll(db, { s: groupPlaySoonRead(db, 'g1', viewer, now, DEFAULT_PLAY_SOON) })).s;
+	const mark = (who: string, game: number, at: number) => run(db, 'INSERT INTO play_soon (user_id, game_id, marked_at) VALUES (?1, ?2, ?3)', who, game, at);
+
+	it('counts members’ live marks on the shelf’s games, the most marked first, then the latest', async () => {
+		await mark('ada', 1, NOW - 2 * DAY);
+		await mark('cy', 1, NOW - DAY);
+		await mark('ada', 2, NOW - 3 * DAY);
+		await mark('cy', 3, NOW);
+		await mark('out', 1, NOW); // not in g1
+		await mark('ada', 7, NOW); // only on g2's shelf
+		await mark('bo', 4, NOW - PLAY_SOON_MS - DAY); // ran out
+		await mark('cy', 5, NOW - 5 * DAY);
+		await run(db, `INSERT INTO plays (id, group_id, game_id, played_on, created_at) VALUES ('p5', 'g1', 5, '2026-11-08', 0)`);
+		await run(db, `INSERT INTO play_players (play_id, seat, user_id, guest_name) VALUES ('p5', 0, 'cy', NULL)`); // played since
+		const rows = await shelf('ada');
+		expect(rows.map((r) => [r.id, r.marks, r.mine])).toEqual([
+			[1, 2, 1],
+			[3, 1, 0],
+			[2, 1, 1]
+		]);
+		expect(JSON.parse(rows[0].owners)).toEqual(['bo']);
+		expect((await shelf(null)).every((r) => r.mine === 0)).toBe(true);
+	});
+
+	it('leaves out a game whose only copy is hidden from the group, and games nobody here owns', async () => {
+		await mark('ada', 2, NOW);
+		await mark('cy', 6, NOW);
+		await run(db, `INSERT INTO hidden_copies (group_id, user_id, game_id, hidden_at) VALUES ('g1', 'bo', 2, 0)`);
+		await run(db, `DELETE FROM copies WHERE user_id = 'bo' AND game_id = 6`);
+		expect(await shelf('ada')).toEqual([]);
+	});
+
+	it('leaves out the marks of someone waiting to be let in or suspended (D79)', async () => {
+		await mark('ada', 1, NOW);
+		await mark('cy', 1, NOW);
+		await run(db, `UPDATE memberships SET waiting_since = 1 WHERE group_id = 'g1' AND user_id = 'cy'`);
+		expect((await shelf('ada')).map((r) => r.marks)).toEqual([1]);
+		await run(db, `UPDATE memberships SET waiting_since = NULL, suspended_at = 1 WHERE group_id = 'g1' AND user_id = 'cy'`);
+		expect((await shelf('ada')).map((r) => r.marks)).toEqual([1]);
+	});
+
+	it('reads marks through the group’s members and plays through the game, never a whole table', async () => {
+		const plan = await queryPlan(db, GROUP_PLAY_SOON_SQL, 'g1', 'ada', NOW, NOW - PLAY_SOON_MS);
+		expect(plan).not.toMatch(/SCAN (s|p|pp|c|np|play_soon|plays|play_players|copies|night_people)\b/);
+		expect(plan).toContain('MATERIALIZE owned'); // each game's owners worked out once, not again for the filter
+	});
+
+	it('counts one game for its page the same way, through that game’s marks', async () => {
+		const count = async (viewer: string | null) => (await readAll(db, { c: gamePlaySoonRead(db, 'g1', 1, viewer, NOW, DEFAULT_PLAY_SOON) })).c;
+		expect(await count('ada')).toEqual({ marks: 0, mine: false });
+		await mark('ada', 1, NOW);
+		await mark('cy', 1, NOW - DAY);
+		await mark('bo', 1, NOW - PLAY_SOON_MS - DAY); // ran out
+		await mark('out', 1, NOW); // not in g1
+		expect(await count('ada')).toEqual({ marks: 2, mine: true });
+		expect(await count('bo')).toEqual({ marks: 2, mine: false });
+		await run(db, `UPDATE memberships SET suspended_at = 1 WHERE group_id = 'g1' AND user_id = 'cy'`);
+		expect(await count(null)).toEqual({ marks: 1, mine: false });
+		const plan = await queryPlan(db, GAME_PLAY_SOON_SQL, 'g1', 1, 'ada', NOW, NOW - PLAY_SOON_MS);
+		expect(plan).toMatch(/SEARCH s USING (COVERING )?INDEX play_soon_game/);
 	});
 });
 
