@@ -29,6 +29,18 @@
 	// The browser's own bar around the installed app takes the page's colour (D76).
 	const bar = $derived(themeBarColors(theme, data.customPage));
 
+	// app.html preloads a link's data on "tap", which SvelteKit starts on `touchstart`: a finger that
+	// lands on a game tile only to scroll the shelf loaded that game's page (D85). A mouse press nearly
+	// always ends in a click, so it keeps the head start; a touch or a pen loads on the click.
+	// `pointerdown` comes before `touchstart` and `mousedown`, and a tap's copied mouse events have none.
+	$effect(() => {
+		const pick = (e: PointerEvent) => {
+			document.body.dataset.sveltekitPreloadData = e.pointerType === 'mouse' ? 'tap' : 'off';
+		};
+		addEventListener('pointerdown', pick, { capture: true, passive: true });
+		return () => removeEventListener('pointerdown', pick, { capture: true });
+	});
+
 	// Group pages draw their own top bar with the group's name in it. When the group itself failed
 	// to load (a wrong or removed group), there's no group bar, so this one shows with the error.
 	const inGroup = $derived((page.route.id?.startsWith('/g/') ?? false) && (page.data as { group?: unknown }).group != null);
