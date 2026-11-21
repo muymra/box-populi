@@ -4,6 +4,10 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+## 0.11.0 (2026-11-21)
+
+**Upgrading:** no migrations and no new settings, so no backup is needed: pull and deploy. Reseed a demo group to give its Wanted tab Play soon marks; nothing breaks without it.
+
 - The Wanted tab opens with **Play soon**: the games on the shelf that people here would like to play soon, the most marked first, each with how many marked it ("3 want to play it", or "You and 2 more"), never who. "Me too" under a game puts it on your own Play soon list. Games nobody in the group owns stay off it, as before.
 - The games nobody in the group owns are now headed **Wishlist**, under Play soon, and both lists show their first eight games, then "Show all", so a long wishlist no longer runs down the whole page.
 - A game's page says how many people would like to play it soon ("3 people would like to play it soon"), never who, and in Play tonight's "choose one yourself" list a game someone here marked carries a small flag with their name, as its picks already said in a line. On a phone, flags on a game's row there wrap inside the row instead of running past it.
