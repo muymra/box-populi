@@ -1,7 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { nightListRead } from '#lib/server/nights.ts';
 import { requireRead, requireRole } from '#lib/server/authz.ts';
-import { addCopy, gameUsableInGroup, gameVisibleInGroup, MAX_PLAYERS_WITH, removeCopy, setPlayersWith } from '#lib/server/games.ts';
+import { addCopy, expansionOwnersRead, gameUsableInGroup, gameVisibleInGroup, MAX_PLAYERS_WITH, removeCopy, setPlayersWith } from '#lib/server/games.ts';
 import { addLink, canDeleteLink, deleteLink, parseLink } from '#lib/server/links.ts';
 import { addWish, removeWish } from '#lib/server/wishlist.ts';
 import { hiddenHereRead, setCopyHidden } from '#lib/server/hiding.ts';
@@ -121,17 +121,8 @@ export const load: PageServerLoad = async (event) => {
 			groupId,
 			gameId
 		),
-		// Who in the group owns each of them, for "Up to 6 with the 5-6 Player Extension (Bram's)" (STATUS item 30).
-		expansionOwners: rowsOf<{ game_id: number; user_id: string; name: string }>(
-			db,
-			`SELECT gc.game_id, gc.user_id, u.name
-			 FROM group_copies gc JOIN users u ON u.id = gc.user_id
-			 WHERE gc.group_id = ?1
-			   AND gc.game_id IN (SELECT b.game_id FROM game_bases b WHERE b.base_bgg_id = (SELECT bgg_id FROM games WHERE id = ?2))
-			 ORDER BY u.name`,
-			groupId,
-			gameId
-		),
+		// Who in the group owns each of them.
+		expansionOwners: expansionOwnersRead(db, groupId, gameId),
 		// For an expansion, its base games; none otherwise.
 		bases: rowsOf<{ id: number; name: string; bgg_id: number }>(
 			db,

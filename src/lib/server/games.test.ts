@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
-import { all, one, run } from './db.ts';
+import { all, one, readAll, run } from './db.ts';
+import { queryPlan } from './testing/plan.ts';
 import { FakeBggClient } from './bgg/fake.ts';
 import { LiveBggClient, userAgent, BggAuthError } from './bgg/client.ts';
 import { BggBusyError, type BggSearchHit } from './bgg/types.ts';
-import { addCopy, addManualGame, cachedSearch, gameUsableInGroup, parseManualGame, rankHits, removeCopy, SEARCH_CACHE_MS, searchBgg, setPlayersWith } from './games.ts';
+import { addCopy, addManualGame, cachedSearch, EXPANSION_OWNERS_SQL, expansionOwnersRead, gameUsableInGroup, parseManualGame, rankHits, removeCopy, SEARCH_CACHE_MS, searchBgg, setPlayersWith } from './games.ts';
 import { basesOnShelf, catalogJson, loadCatalog } from './catalog.ts';
 import { groupGameCount, groupGlances } from './groups.ts';
 import { leaveGroup } from './identity.ts';
@@ -362,3 +363,49 @@ describe('cachedSearch (D58)', () => {
 	});
 });
 
+
+describe('expansionOwnersRead', () => {
+	beforeEach(async () => {
+		await run(db, `INSERT INTO users (id, name, created_at) VALUES ('bo', 'Bo', 0), ('cy', 'Cy', 0)`);
+		await run(db, `INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES ('g1', 'bo', 'member', 0, 0)`);
+		// 10 is the base game; 11 and 12 are its expansions, 13 another game's.
+		await run(
+			db,
+			`INSERT INTO games (id, bgg_id, name, search_text, base_bgg_ids, is_expansion) VALUES
+			 (10, 100, 'Base', 'base', '[]', 0), (11, 101, 'Five-six', 'five six', '[100]', 1),
+			 (12, 102, 'Seafarers', 'seafarers', '[100]', 1), (13, 103, 'Other', 'other', '[200]', 1)`
+		);
+		// Bo's Seafarers is hidden from g1, Cy isn't in g1, and Ada's 13 isn't for this game.
+		await run(db, `INSERT INTO copies (user_id, game_id, added_at) VALUES ('bo', 11, 0), ('ada', 11, 0), ('bo', 12, 0), ('cy', 12, 0), ('ada', 13, 0)`);
+		await run(db, `INSERT INTO hidden_copies (group_id, user_id, game_id, hidden_at) VALUES ('g1', 'bo', 12, 0)`);
+	});
+
+	const owners = async (gameId: number) => (await readAll(db, { o: expansionOwnersRead(db, 'g1', gameId) })).o;
+
+	it('lists the group’s owners of each expansion, the way group_copies does', async () => {
+		expect(await owners(10)).toEqual([
+			{ game_id: 11, user_id: 'ada', name: 'Ada' },
+			{ game_id: 11, user_id: 'bo', name: 'Bo' }
+		]);
+		const view = await all(
+			db,
+			`SELECT gc.game_id, gc.user_id, u.name FROM group_copies gc JOIN users u ON u.id = gc.user_id
+			 WHERE gc.group_id = ?1 AND gc.game_id IN (SELECT b.game_id FROM game_bases b WHERE b.base_bgg_id = 100) ORDER BY u.name`,
+			'g1'
+		);
+		expect(await owners(10)).toEqual(view);
+	});
+
+	it('finds nothing for an expansion or a game without a BGG id', async () => {
+		expect(await owners(11)).toEqual([]);
+		await run(db, `INSERT INTO games (id, name, search_text) VALUES (14, 'Typed in', 'typed in')`);
+		expect(await owners(14)).toEqual([]);
+	});
+
+	it('starts from the game’s expansions and their copies, not from the group’s members', async () => {
+		const plan = await queryPlan(db, EXPANSION_OWNERS_SQL, 'g1', 10);
+		expect(plan).toMatch(/SEARCH b USING (COVERING )?INDEX sqlite_autoindex_game_bases_1 \(base_bgg_id=\?\)/);
+		expect(plan).toContain('copies_game');
+		expect(plan).not.toMatch(/SCAN|group_copies/);
+	});
+});

@@ -1,11 +1,11 @@
 // Writing games and copies. BGG fields are stored exactly as parsed; nothing edits them later
 // (TECH.md "No modification"). Every change to a person's copies bumps their groups' catalogs.
-import { all, jsonArray, one, stmt, type DB } from './db.ts';
+import { all, jsonArray, one, rowsOf, stmt, type DB, type Read } from './db.ts';
 import { bumpCatalogForGames, bumpCatalogForUser } from './catalog.ts';
 import { buildSearchText, normalize } from '#lib/catalog/normalize.ts';
 import { wholeNumberIn } from '#lib/numbers.ts';
 import type { BggClient, BggSearchHit, BggThing } from './bgg/types.ts';
-import { onShelf } from './shelf.ts';
+import { copyOnShelf, onShelf } from './shelf.ts';
 
 const UPSERT_THING = `INSERT INTO games (bgg_id, name, search_text, year, description, image_url, thumb_url,
 	min_players, max_players, best_mask, rec_mask, poll_source, min_playtime, max_playtime, weight, users_rated,
@@ -199,6 +199,26 @@ export async function gameVisibleInGroup(db: DB, groupId: string, gameId: number
 	);
 	return row != null;
 }
+
+/**
+ * Who in the group owns each expansion of game `gameId`, for "Up to 6 with the 5-6 Player Extension
+ * (Bram's)" on its page (STATUS item 30); nothing for a game without a BGG id. Starts from the game's
+ * expansions in `game_bases` and their few copies (D82): 2 rows for a game with none. Read through
+ * `group_copies`, it started from the group's members: 42 rows a run on a live group, about 1,000 runs
+ * a day, mostly finding nothing (STATUS item 69).
+ */
+export function expansionOwnersRead(db: DB, groupId: string, gameId: number): Read<{ game_id: number; user_id: string; name: string }[]> {
+	return rowsOf(db, EXPANSION_OWNERS_SQL, groupId, gameId);
+}
+
+/** `expansionOwnersRead`'s query: ?1 the group, ?2 the base game. */
+export const EXPANSION_OWNERS_SQL = `SELECT c.game_id, c.user_id, u.name
+	 FROM game_bases b
+	 JOIN copies c ON c.game_id = b.game_id
+	 JOIN users u ON u.id = c.user_id
+	 WHERE b.base_bgg_id = (SELECT bgg_id FROM games WHERE id = ?2)
+	   AND ${copyOnShelf('?1', 'c')}
+	 ORDER BY u.name`;
 
 /** D1 binds at most 100 parameters; usableGames spends two on the group and the person. */
 const MAX_USABLE_IDS = 98;

@@ -10,6 +10,7 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 - When a game you wished for reaches the group's shelf, the Wanted tab asks you about it: "Wished for, now on the shelf" (only you see it) lists those games with whose shelf they're on, a Play soon button and "Take off my wishlist". Your wish never turns into a Play soon mark by itself.
 - A game night's page no longer sends each member which games the people going marked Play soon. You get your own marks, and when you're going, other people's marks on your own games, which is all the page ever showed. Its suggestions now lean only towards those, and the page reads about a quarter of the database rows it did.
 - On a phone or tablet, a finger that lands on a game to scroll the shelf no longer loads that game's page in the background; a page loads when you tap it. A mouse press still starts loading before the click. On one group of 12 those background loads were close to half the database rows read in a day.
+- A game's page finds who in the group owns its expansions from the expansions' own copies: 2 database rows for a game with no expansions, where it read a few for each member (42 on a group of 12).
 - The game page's Play soon hint, the privacy page, the home page and the README now say that the group sees how many people marked a game, never who.
 
 ## 0.10.0 (2026-11-20)
