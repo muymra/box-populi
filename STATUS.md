@@ -163,3 +163,4 @@ None open.
 ## Session log
 
 Entries since the last release; older ones are in [docs/history/session-log.md](./docs/history/session-log.md).
+- 2026-11-21: Testers asked what a night's Here and ✕ buttons do (the bring list on the night's date: whether a game stayed home, and taking it off the list). "Here" names the game's state, not what a tap does, and only a tooltip explains it, which phones don't show; a clearer label such as a "Stayed home?" toggle was suggested to Carlo, not built.
