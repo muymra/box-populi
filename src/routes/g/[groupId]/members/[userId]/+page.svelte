@@ -10,7 +10,7 @@
 	import ProfileShelf from './ProfileShelf.svelte';
 	import OwnMarks from './OwnMarks.svelte';
 	import { colorBeside, playerColor } from '#lib/catalog/colors.ts';
-	import { ordinal } from '#lib/plays.ts';
+	import { isTeamPlay, isWin, ordinal, teamsOf, type PlayPlayer } from '#lib/plays.ts';
 	import { TABLE_SIZES } from '#lib/profile.ts';
 	import type { PageProps } from './$types';
 
@@ -33,6 +33,15 @@
 	// The head-to-head bar: competitive plays together split by who won.
 	const t = $derived(data.together);
 	const decided = $derived(t ? t.youWon + t.theyWon + t.othersWon : 0);
+	// Plays on the same team (D87) and co-op plays, said under the bar rather than in it.
+	const sideNotes = $derived(
+		t
+			? [
+					t.sameTeam ? `${plural(t.sameTeam, 'play', 'plays')} on the same team, ${t.sameTeamWon} won` : '',
+					t.coop ? `${plural(t.coop, 'co-op play', 'co-op plays')}, ${t.coopWon} won` : ''
+				].filter(Boolean)
+			: []
+	);
 	const barLabel = $derived(
 		t && data.viewer ? `Of the competitive plays together, you won ${t.youWon}, ${s.name} won ${t.theyWon}${t.othersWon ? `, and someone else won ${t.othersWon}` : ''}.` : ''
 	);
@@ -58,6 +67,12 @@
 	/** Players in finishing order for a competitive play, as entered for co-op (DESIGN.md "Play rows"). */
 	const ordered = (p: (typeof data.latest)[number]) => (p.coop ? p.players : [...p.players].sort((a, b) => (a.place ?? 99) - (b.place ?? 99)));
 </script>
+
+<!-- One player in a listed play: their colour, and their name, linked unless it's this profile's. -->
+{#snippet person(x: PlayPlayer)}
+	{@const m = x.userId ? byId.get(x.userId) : null}
+	<span class="sq" class:guest={!m} style:background={m ? fill(m.colorIndex) : null}></span>{#if m && m.id !== s.id}<a href={profileHref(m.id)}>{m.name}</a>{:else}{m?.name ?? x.guestName ?? 'a former member'}{/if}
+{/snippet}
 
 <svelte:head><title>{s.name} · {data.group.name}</title></svelte:head>
 
@@ -101,13 +116,13 @@
 						{#if t.theyWon}<span style:flex-grow={t.theyWon} style:background={theirs}>{t.theyWon}</span>{/if}
 					</div>
 					<p class="note">
-						{[t.othersWon ? `${t.othersWon} went to someone else` : '', t.coop ? `${plural(t.coop, 'co-op play', 'co-op plays')}, ${t.coopWon} won` : '']
-							.filter(Boolean)
-							.join(' · ')}
+						{[t.othersWon ? `${t.othersWon} went to someone else` : '', ...sideNotes].filter(Boolean).join(' · ')}
 					</p>
 				{:else}
 					<p class="muted quiet">
-						{t.together ? `No competitive plays together yet${t.coop ? `; ${plural(t.coop, 'co-op play', 'co-op plays')}, ${t.coopWon} won` : ''}.` : `You and ${s.name} haven’t played together here yet.`}
+						{t.together
+							? `${t.sameTeam ? 'Nobody has won on opposite sides yet' : 'No competitive plays together yet'}${sideNotes.length ? `; ${sideNotes.join('; ')}` : ''}.`
+							: `You and ${s.name} haven’t played together here yet.`}
 					</p>
 				{/if}
 			</div>
@@ -182,12 +197,20 @@
 								<span class="when muted">{day(p.playedOn)}{p.night ? ` · ${p.night.name}` : ''}</span>
 								<a class="game" href="{base}/game/{p.gameId}">{p.gameName}</a>
 								<span class="who">
-									{#each ordered(p) as x, i (i)}
-										{@const m = x.userId ? byId.get(x.userId) : null}
-										<span class:win={p.coop == null && x.place === 1 && places.some((q) => q != null && q > 1)}>
-											<span class="sq" class:guest={!m} style:background={m ? fill(m.colorIndex) : null}></span>{#if m && m.id !== s.id}<a href={profileHref(m.id)}>{m.name}</a>{:else}{m?.name ?? x.guestName ?? 'a former member'}{/if}{p.coop == null && x.place ? ` ${ordinal(x.place)}` : ''}
-										</span>
-									{/each}
+									{#if isTeamPlay(p.players)}
+										<!-- A team play (D87): each team together, in finishing order. -->
+										{#each teamsOf(p.players) as team (team.team)}
+											<span class:win={isWin(team.place, places)}>
+												{#each team.players as x, j (j)}{@render person(x)}{j < team.players.length - 2 ? ', ' : j === team.players.length - 2 ? ' & ' : ''}{/each}{team.place ? ` ${ordinal(team.place)}` : ''}
+											</span>
+										{/each}
+									{:else}
+										{#each ordered(p) as x, i (i)}
+											<span class:win={p.coop == null && isWin(x.place, places)}>
+												{@render person(x)}{p.coop == null && x.place ? ` ${ordinal(x.place)}` : ''}
+											</span>
+										{/each}
+									{/if}
 									{#if p.coop}<span>Co-op, {p.coop}</span>{/if}
 								</span>
 							</li>

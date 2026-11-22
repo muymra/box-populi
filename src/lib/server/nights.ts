@@ -3,6 +3,7 @@
 import { all, known, mapRead, one, readAll, rowOf, rowsOf, stmt, type DB, type Read } from './db.ts';
 import { can } from './permissions.ts';
 import { fullMember } from './standing.ts';
+import { aroundNightStatements, aroundStatements, dayAt } from './away.ts';
 import { GAME_COLUMNS, bumpCatalogForGroup, toCatalogGame } from './catalog.ts';
 import { FIRST_DAY, LAST_DAY, pageStart } from './log-pages.ts';
 import { buildSearchText, normalize } from '#lib/catalog/normalize.ts';
@@ -135,7 +136,9 @@ export async function createNight(db: DB, groupId: string, actor: Actor, input: 
 			input.description,
 			picturesColumn(input.pictures)
 		),
-		stmt(db, 'INSERT INTO night_people (night_id, user_id, going) VALUES (?1, ?2, 1)', id, actor.id)
+		stmt(db, 'INSERT INTO night_people (night_id, user_id, going) VALUES (?1, ?2, 1)', id, actor.id),
+		// Planning a night is being around (D86).
+		...aroundStatements(db, groupId, [actor.id], now, now)
 	]);
 	return ok(id);
 }
@@ -165,7 +168,9 @@ export async function updateNight(db: DB, groupId: string, actor: Actor, nightId
 		...(hasPlays
 			? [
 					stmt(db, 'UPDATE plays SET played_on = ?1 WHERE night_id = ?2 AND +group_id = ?3', input.nightOn, nightId, groupId),
-					bumpCatalogForGroup(db, groupId)
+					bumpCatalogForGroup(db, groupId),
+					// Its players were around on the night's new day (D86); a day earlier changes nothing.
+					...aroundNightStatements(db, groupId, nightId, input.nightOn, now)
 				]
 			: [])
 	]);
@@ -202,7 +207,9 @@ export async function setGoing(db: DB, groupId: string, actor: Actor, nightId: s
 			nightId,
 			userId,
 			going ? 1 : 0
-		)
+		),
+		// Saying they'd go is being around (D86); saying they won't isn't.
+		...(going ? aroundStatements(db, groupId, [userId], now, now) : [])
 	]);
 	return done;
 }
@@ -268,7 +275,9 @@ export async function setCame(
 			nightId,
 			userId,
 			came ? 1 : 0
-		)
+		),
+		// Coming to a night is being around on its day (D86).
+		...(came ? aroundStatements(db, groupId, [userId], dayAt(r.night.night_on), now) : [])
 	]);
 	return done;
 }
@@ -279,7 +288,11 @@ export async function confirmCame(db: DB, groupId: string, actor: Actor, nightId
 	if (!night) return no('That night is gone. Reload the page.');
 	if (!nightHasCome(night.night_on, now)) return no('Who came can be checked from the night itself on.');
 	if (!canMarkCame(actor, null)) return no('Only co-admins can check who came for everyone.');
-	await stmt(db, 'UPDATE night_people SET came = going WHERE night_id = ?1 AND came IS NULL', nightId).run();
+	await db.batch([
+		stmt(db, 'UPDATE night_people SET came = going WHERE night_id = ?1 AND came IS NULL', nightId),
+		// Everyone now marked as having come was around on its day (D86).
+		...aroundNightStatements(db, groupId, nightId, night.night_on, now)
+	]);
 	return done;
 }
 

@@ -5,6 +5,8 @@ import { error, redirect, type RequestEvent } from '@sveltejs/kit';
 import { one, type DB } from './db.ts';
 import { atLeast } from './permissions.ts';
 import { touchLastSeen } from './groups.ts';
+import { awayRefreshDue, refreshAwayStatements } from './away.ts';
+import type { AwaySetting } from '#lib/away.ts';
 import type { FillerRule } from '#lib/catalog/pick.ts';
 import type { Role } from '#lib/catalog/types.ts';
 import { standingOf, type Standing } from '#lib/standing.ts';
@@ -74,6 +76,9 @@ async function loadGroup(db: DB, groupId: string, userId: string | null) {
 		catalog_version: number;
 		chat_url: string | null;
 		probation: number;
+		away_months: number | null;
+		away_hides: number;
+		away_checked_at: number;
 		role: Role | null;
 		joined_at: number | null;
 		waiting_since: number | null;
@@ -81,12 +86,14 @@ async function loadGroup(db: DB, groupId: string, userId: string | null) {
 		member_suspended_note: string | null;
 		suspended_by_name: string | null;
 		last_seen_at: number | null;
+		off_shelf: number | null;
 		pin_set_at: number | null;
 	}>(
 		db,
 		`SELECT g.id, g.name, g.is_demo, g.suspended_at, g.suspended_reason, g.archived_at, u.name AS archived_by_name,
 		        g.code, g.link_key, g.theme, g.nights_by, g.filler_max_minutes, g.filler_max_weight, g.stale_days, g.catalog_version, g.chat_url, g.probation,
-		        m.role, m.joined_at, m.last_seen_at, m.waiting_since,
+		        g.away_months, g.away_hides, g.away_checked_at,
+		        m.role, m.joined_at, m.last_seen_at, m.off_shelf, m.waiting_since,
 		        -- Aliased: the group has a suspended_at of its own (the host's, D53), and a second column of
 		        -- the same name would overwrite it in the row.
 		        m.suspended_at AS member_suspended_at, m.suspended_note AS member_suspended_note, sb.name AS suspended_by_name, me.pin_set_at
@@ -135,6 +142,8 @@ export type GroupExtras = {
 	joinedAt: number | null;
 	/** Whether people who join wait to be let in (D79). */
 	probation: boolean;
+	/** Members who've been away (D86): the group's months, null while off, and whether their games leave the shelf. */
+	away: AwaySetting;
 };
 
 /** Members of the group, or anyone for the demo group. */
@@ -179,7 +188,8 @@ async function checkGroup(event: RequestEvent, db: DB, groupId: string): Promise
 		catalogVersion: row.catalog_version,
 		chatUrl: row.chat_url,
 		joinedAt: row.joined_at,
-		probation: row.probation === 1
+		probation: row.probation === 1,
+		away: { months: row.away_months, hides: row.away_hides === 1 }
 	};
 
 	if (group.isDemo) return { access: { group, role: row.role ?? null, readonly: true, standing: 'full', shelfOpen: false, suspension: null }, extras };
@@ -188,7 +198,16 @@ async function checkGroup(event: RequestEvent, db: DB, groupId: string): Promise
 	if (!row.role) error(404, 'Group not found');
 	// A write only when it's due, rather than an UPDATE that usually matches nothing on every request.
 	const now = Date.now();
-	if ((row.last_seen_at ?? 0) < now - SEEN_EVERY_MS) await touchLastSeen(db, groupId, user.id, now);
+	const touched = (row.last_seen_at ?? 0) < now - SEEN_EVERY_MS;
+	if (touched) await touchLastSeen(db, groupId, user.id, now);
+	// Who's away (D86), brought up to date at most once a day by whoever visits: there's no cron.
+	const refreshed = awayRefreshDue(extras.away, row.away_checked_at, now);
+	if (refreshed) await db.batch(refreshAwayStatements(db, groupId, now));
+	// Either may have put games back on the shelf or taken them off, which moves the catalog's version:
+	// this request answers with the new one, so a shelf fetched now doesn't keep the old games.
+	if ((touched && row.off_shelf === 1) || refreshed) {
+		extras.catalogVersion = (await one<{ v: number }>(db, 'SELECT catalog_version AS v FROM groups WHERE id = ?1', groupId))?.v ?? extras.catalogVersion;
+	}
 	const standing = standingOf({ waiting_since: row.waiting_since, suspended_at: row.member_suspended_at });
 	const groupClosed = group.suspended || group.archived;
 	return {

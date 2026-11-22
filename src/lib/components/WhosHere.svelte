@@ -13,7 +13,7 @@
 	import { foldMembers, nightOf, rankMembers } from '#lib/table/regulars.ts';
 	import type { HereSelection } from '#lib/table/table.svelte.ts';
 
-	type Member = { id: string; name: string; colorIndex: number };
+	type Member = { id: string; name: string; colorIndex: number; away?: boolean };
 	let { members, table }: { members: Member[]; table: HereSelection } = $props();
 	const id = $props.id();
 

@@ -156,3 +156,35 @@ describe('0019: member colours stored (D69)', () => {
 	});
 });
 
+
+describe('0027: members who have been away (D86)', () => {
+	it('fills when each member was last around from their plays and the nights they came to or said they’d go to', () => {
+		const raw = new DatabaseSync(':memory:');
+		applyMigrationsSync(
+			raw,
+			MIGRATIONS.filter((m) => m.name < '0027')
+		);
+		raw.exec(`
+			INSERT INTO users (id, name, created_at) VALUES ('ada', 'Ada', 0), ('bo', 'Bo', 0), ('cy', 'Cy', 0), ('di', 'Di', 0), ('ed', 'Ed', 0);
+			INSERT INTO groups (id, name, code, created_at) VALUES ('g1', 'One', 'K7M4P', 0), ('g2', 'Two', 'K7M4Q', 0);
+			INSERT INTO memberships (group_id, user_id, role, joined_at, last_seen_at) VALUES
+				('g1', 'ada', 'owner', 0, 0), ('g1', 'bo', 'member', 0, 0), ('g1', 'cy', 'member', 0, 0), ('g1', 'di', 'member', 0, 0), ('g1', 'ed', 'member', 0, 0), ('g2', 'ada', 'owner', 0, 0);
+			INSERT INTO games (id, name, search_text) VALUES (1, 'A', 'a');
+			INSERT INTO plays (id, group_id, game_id, played_on, created_at) VALUES ('p1', 'g1', 1, '2026-03-01', 0), ('p2', 'g1', 1, '2026-05-01', 0), ('p3', 'g2', 1, '2026-09-01', 0);
+			INSERT INTO play_players (play_id, seat, user_id, place) VALUES ('p1', 0, 'ada', 1), ('p2', 0, 'ada', 1), ('p1', 1, 'bo', 2), ('p3', 0, 'ada', 1);
+			INSERT INTO game_nights (id, group_id, name, night_on, created_at) VALUES ('n1', 'g1', 'Café', '2026-04-01', 0), ('n2', 'g1', 'Later', '2099-01-01', 0);
+			INSERT INTO night_people (night_id, user_id, going, came) VALUES ('n1', 'bo', 0, 1), ('n1', 'cy', 0, NULL), ('n1', 'ed', 1, 0), ('n2', 'di', 1, NULL);
+		`);
+		applyMigrationsSync(raw);
+		const at = (group: string, user: string) => (raw.prepare('SELECT active_at FROM memberships WHERE group_id = ? AND user_id = ?').get(group, user) as { active_at: number }).active_at;
+		expect(at('g1', 'ada')).toBe(Date.parse('2026-05-01T00:00:00Z')); // the latest play here, not g2's
+		expect(at('g2', 'ada')).toBe(Date.parse('2026-09-01T00:00:00Z'));
+		expect(at('g1', 'bo')).toBe(Date.parse('2026-04-01T00:00:00Z')); // came to a night after the play
+		expect(at('g1', 'cy')).toBe(0); // said no and didn't come
+		expect(at('g1', 'ed')).toBe(0); // said yes, and was marked as not having come
+		const di = at('g1', 'di'); // going to a night still to come: counted from now
+		expect(di).toBeGreaterThan(Date.now() - 60_000);
+		expect(di).toBeLessThanOrEqual(Date.now());
+		expect(raw.prepare(`SELECT COUNT(*) AS n FROM memberships WHERE off_shelf = 1`).get()).toEqual({ n: 0 });
+	});
+});

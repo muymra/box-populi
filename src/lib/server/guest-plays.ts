@@ -2,6 +2,7 @@
 // names, not people, so the owner or a co-admin says which names were this member, and unticks any
 // play or night that was someone else with the same name. Their places and scores then count on the
 // leaderboard, which works points out from the plays. Only this group's plays and nights move.
+import { aroundStatements, dayAt } from './away.ts';
 import { all, readAll, rowsOf, stmt, type DB } from './db.ts';
 import { standingOf } from '#lib/standing.ts';
 import { can } from './permissions.ts';
@@ -145,6 +146,8 @@ export async function linkGuestPlays(
 		...r.nights.filter((n) => n.guests > 1 || n.member).map((n) => ({ on: n.on, label: n.name }))
 	].sort((a, b) => b.on.localeCompare(a.on));
 
+	// The member was around on the latest of those days (D86).
+	const latest = [...r.plays.filter((p) => plays.includes(p.id)), ...r.nights.filter((n) => nights.includes(n.id))].reduce((d, x) => (x.on > d ? x.on : d), '');
 	await db.batch([
 		stmt(
 			db,
@@ -169,7 +172,8 @@ export async function linkGuestPlays(
 			input.userId,
 			namesJson,
 			JSON.stringify(nights)
-		)
+		),
+		...(latest ? aroundStatements(db, groupId, [input.userId], dayAt(latest), Date.now()) : [])
 	]);
 	return { ok: true, plays: plays.length, nights: nights.length, skipped };
 }

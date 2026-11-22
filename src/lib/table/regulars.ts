@@ -58,10 +58,11 @@ export function recentNights(nights: readonly string[] | undefined, tonight: str
  * Most nights here first. Ties keep the order given, which is the server's most recently active
  * first, so a device with no history still starts with the people who use the app.
  */
-export function rankMembers<T extends { id: string }>(members: readonly T[], regulars: Regulars, tonight: string): T[] {
+export function rankMembers<T extends { id: string; away?: boolean }>(members: readonly T[], regulars: Regulars, tonight: string): T[] {
+	// Anyone who's been away (D86) comes after everyone else, so a big group folds them behind "N more".
 	return members
 		.map((m, i) => ({ m, i, n: recentNights(regulars[m.id], tonight) }))
-		.sort((a, b) => b.n - a.n || a.i - b.i)
+		.sort((a, b) => Number(!!a.m.away) - Number(!!b.m.away) || b.n - a.n || a.i - b.i)
 		.map((x) => x.m);
 }
 

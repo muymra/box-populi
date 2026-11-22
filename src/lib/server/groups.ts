@@ -125,9 +125,10 @@ export async function joinGroup(
 }
 
 /** Records that a member used the group, at most once an hour (one write per member per hour). */
+/** A visit: `last_seen_at` moves on, and a member who was away has their games back on the shelf (D86). */
 export async function touchLastSeen(db: DB, groupId: string, userId: string, now: number): Promise<void> {
 	await db
-		.prepare('UPDATE memberships SET last_seen_at = ?1 WHERE group_id = ?2 AND user_id = ?3 AND last_seen_at < ?4')
+		.prepare('UPDATE memberships SET last_seen_at = ?1, off_shelf = 0 WHERE group_id = ?2 AND user_id = ?3 AND last_seen_at < ?4')
 		.bind(now, groupId, userId, now - 3_600_000)
 		.run();
 }

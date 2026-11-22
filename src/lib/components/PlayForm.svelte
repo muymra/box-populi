@@ -1,7 +1,8 @@
 <script lang="ts">
 	// Logging or editing a play (PRD "Play log"). Players start from who's here tonight; picking them
 	// here doesn't change tonight's list. Results are places (just the winner is enough), scores
-	// (places follow from them), or a co-op win or loss. Who played comes first, then the result as a
+	// (places follow from them), teams with a place each (D87: just the winning team is enough), or a
+	// co-op win or loss. Who played comes first, then the result as a
 	// scoresheet right under it; the date folds to "Played today · Change" beside the buttons, and
 	// "Change" opens the last seven days as chips above them, with "Earlier…" for a grid of weeks.
 	// When the day had a game night, the play is at it ("Played Fri 6 Nov at Café"), ticked to start
@@ -13,16 +14,17 @@
 	import WhosHere from './WhosHere.svelte';
 	import DayGrid from './DayGrid.svelte';
 	import { playerColor } from '#lib/catalog/colors.ts';
-	import { ordinal, placesFromScores, type Coop, type PlayPlayer } from '#lib/plays.ts';
+	import { MAX_PLAY_PLAYERS, ordinal, placesFromScores, type Coop, type PlayPlayer } from '#lib/plays.ts';
 	import { nightOptions } from '#lib/nights.ts';
 	import { nightOf } from '#lib/table/regulars.ts';
 	import { addDays, dayName, shortDay } from '#lib/days.ts';
 	import { Selection, type Table } from '#lib/table/table.svelte.ts';
 
 	/** `active` false: waiting to be let in or suspended (D79), so not offered as a new player. */
-	type Member = { id: string; name: string; colorIndex: number; active?: boolean };
+	type Member = { id: string; name: string; colorIndex: number; active?: boolean; away?: boolean };
 	type Initial = { id: string; playedOn: string; coop: Coop | null; lowestWins: boolean; players: PlayPlayer[]; night?: { id: string; name: string } | null };
 	type NightOption = { id: string; name: string; nightOn: string };
+	type Mode = 'places' | 'scores' | 'teams';
 	let {
 		action,
 		game,
@@ -78,10 +80,13 @@
 			night: initial ? (initial.night?.id ?? null) : (night?.id ?? null),
 			// An existing play that wasn't at its day's night stays off it until someone ticks it.
 			untickedDay: initial && !initial.night ? initial.playedOn : null,
-			result: (initial?.coop ?? (from.some((p) => p.score != null) ? 'scores' : 'places')) as 'places' | 'scores' | Coop,
+			result: (initial?.coop ?? (from.some((p) => p.team != null) ? 'teams' : from.some((p) => p.score != null) ? 'scores' : 'places')) as Mode | Coop,
 			lowestWins: initial?.lowestWins ?? false,
 			scores: Object.fromEntries(from.map((p) => [keyOf(p), p.score == null ? '' : String(p.score)])),
-			places: Object.fromEntries((initial?.coop ? [] : from).map((p) => [keyOf(p), p.place == null ? '' : String(p.place)]))
+			places: Object.fromEntries((initial?.coop ? [] : from).map((p) => [keyOf(p), p.place == null ? '' : String(p.place)])),
+			teams: Object.fromEntries(from.flatMap((p) => (p.team != null ? [[keyOf(p), String(p.team)]] : []))),
+			teamCount: Math.max(2, ...from.map((p) => p.team ?? 0)),
+			teamPlaces: Object.fromEntries(from.flatMap((p) => (p.team != null ? [[String(p.team), p.place == null ? '' : String(p.place)]] : [])))
 		};
 	});
 	const selection = start.selection;
@@ -90,6 +95,10 @@
 	let lowestWins = $state(start.lowestWins);
 	let scores = $state<Record<string, string>>(start.scores);
 	let places = $state<Record<string, string>>(start.places);
+	// A team play (D87): each player's team and each team's place, by number as text, as the fields send them.
+	let teams = $state<Record<string, string>>(start.teams);
+	let teamCount = $state(start.teamCount);
+	let teamPlaces = $state<Record<string, string>>(start.teamPlaces);
 	let error = $state<string | null>(null);
 	// The game night on the play's day: ticked unless unticked for that day; with two that day, the one picked.
 	let chosenNight = $state(start.night);
@@ -104,10 +113,23 @@
 			untickedDay = null;
 		} else untickedDay = playedOn;
 	}
-	// Places, Scores or Co-op; co-op then says won or lost.
+	// Places, Scores, Teams or Co-op; co-op then says won or lost.
 	const mode = $derived(result === 'won' || result === 'lost' ? 'coop' : result);
-	function setMode(next: 'places' | 'scores' | 'coop') {
+	function setMode(next: Mode | 'coop') {
 		result = next === 'coop' ? (result === 'lost' ? 'lost' : 'won') : next;
+	}
+	// Up to four teams, a player's team is a row of numbers; beyond that a dropdown, so the row fits a phone.
+	const TEAM_CHIPS = 4;
+	/** Takes out an empty team; the teams after it move up a number, with their places. */
+	function removeTeam(team: number) {
+		// Someone taken out of the play may still be down for it; they come back without a team.
+		for (const [key, t] of Object.entries(teams)) {
+			if (Number(t) === team) delete teams[key];
+			else if (Number(t) > team) teams[key] = String(Number(t) - 1);
+		}
+		for (let t = team; t < teamCount; t++) teamPlaces[String(t)] = teamPlaces[String(t + 1)] ?? '';
+		delete teamPlaces[String(teamCount)];
+		teamCount -= 1;
 	}
 	// The date folds away while it's today; an edit of an older play shows its date. Opened, it offers
 	// the last seven days, since most plays are logged that night or soon after; "Earlier…" swaps them
@@ -199,8 +221,8 @@
 		<legend>Result</legend>
 		<div class="modes">
 			<div class="segments" role="radiogroup" aria-label="How it ended">
-				{#each [['places', 'Places'], ['scores', 'Scores'], ['coop', 'Co-op']] as [value, label] (value)}
-					<label><input type="radio" name="{id}-mode" checked={mode === value} onchange={() => setMode(value as 'places' | 'scores' | 'coop')} /><span>{label}</span></label>
+				{#each [['places', 'Places'], ['scores', 'Scores'], ['teams', 'Teams'], ['coop', 'Co-op']] as [value, label] (value)}
+					<label><input type="radio" name="{id}-mode" checked={mode === value} onchange={() => setMode(value as Mode | 'coop')} /><span>{label}</span></label>
 				{/each}
 			</div>
 			{#if mode === 'coop'}
@@ -246,6 +268,23 @@
 									<option value="">–</option>
 									{#each { length: most } as _, n (n)}<option value={String(n + 1)}>{ordinal(n + 1)}</option>{/each}
 								</select>
+							{:else if result === 'teams'}
+								{#if teamCount <= TEAM_CHIPS}
+									<div class="segments team-pick" role="radiogroup" aria-label="{row.name}’s team">
+										{#each { length: teamCount } as _, n (n)}
+											<label
+												><input type="radio" name="team:{row.key}" value={String(n + 1)} checked={teams[row.key] === String(n + 1)} onchange={() => (teams[row.key] = String(n + 1))} /><span
+													>{n + 1}</span
+												></label
+											>
+										{/each}
+									</div>
+								{:else}
+									<select class="field place-pick" name="team:{row.key}" aria-label="{row.name}’s team" bind:value={teams[row.key]}>
+										<option value="">–</option>
+										{#each { length: teamCount } as _, n (n)}<option value={String(n + 1)}>Team {n + 1}</option>{/each}
+									</select>
+								{/if}
 							{:else}
 								<span class="coop muted">{result === 'won' ? 'Won' : 'Lost'}</span>
 							{/if}
@@ -257,6 +296,33 @@
 			{/if}
 		</div>
 		{#if rows.length && result === 'places'}<p class="hint">Picking just the winner is enough; anyone left blank shares last place.</p>{/if}
+		{#if rows.length && result === 'teams'}
+			<!-- Each team's place: the teams in number order, with who's on them. -->
+			<ol class="sheet rows teams">
+				{#each { length: teamCount } as _, n (n)}
+					{@const t = String(n + 1)}
+					{@const on = rows.filter((r) => teams[r.key] === t)}
+					{@const most = Math.max(teamCount, Number(teamPlaces[t]) || 0)}
+					<li>
+						<span class="who team">
+							<span class="team-name">Team {n + 1}</span>
+							<span class="name muted">{on.length ? on.map((r) => r.name).join(', ') : 'No one yet'}</span>
+							{#if teamCount > 2 && on.length === 0}
+								<button type="button" class="remove" aria-label="Take out team {n + 1}" onclick={() => removeTeam(n + 1)}><X size={16} aria-hidden="true" /></button>
+							{/if}
+						</span>
+						<select class="field place-pick" name="teamPlace:{t}" aria-label="Team {n + 1}’s place" bind:value={teamPlaces[t]}>
+							<option value="">–</option>
+							{#each { length: most } as _, k (k)}<option value={String(k + 1)}>{ordinal(k + 1)}</option>{/each}
+						</select>
+					</li>
+				{/each}
+			</ol>
+			<div class="team-foot">
+				<p class="hint">Picking just the winning team is enough; teams left blank share last place.</p>
+				{#if teamCount < Math.min(rows.length, MAX_PLAY_PLAYERS)}<button type="button" class="btn small" onclick={() => (teamCount += 1)}>Add a team</button>{/if}
+			</div>
+		{/if}
 		{#if rows.length && result === 'scores'}
 			<label class="check"><input type="checkbox" name="lowestWins" value="1" bind:checked={lowestWins} /> Lowest score wins</label>
 		{/if}
@@ -330,6 +396,10 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--s-2);
+	}
+	/* Four results fit a 360px phone's form (310px) only with less padding than the usual segments. */
+	.modes .segments span {
+		padding-inline: 10px;
 	}
 	/* The scoresheet: a laminate well with a row per player, the place or score at the right. */
 	.sheet {
@@ -407,6 +477,24 @@
 	.coop {
 		grid-column: 2 / -1;
 		font-weight: 650;
+	}
+	.team-pick {
+		grid-column: 2 / -1;
+		justify-self: end;
+	}
+	.team-pick span {
+		min-width: max(40px, var(--tap));
+		padding: 0 8px;
+	}
+	.team-name {
+		flex: none;
+	}
+	.team-foot {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--s-2) var(--s-3);
 	}
 	.empty {
 		margin: 0;

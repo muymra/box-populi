@@ -77,9 +77,19 @@ describe('readGroup (D59)', () => {
 			catalogVersion: 0,
 			chatUrl: 'https://chat.whatsapp.com/K7M4P',
 			joinedAt: 0,
-			probation: false
+			probation: false,
+			away: { months: null, hides: false }
 		});
 		expect(await requireRead(as('ada'), db, 'open')).toEqual(access);
+	});
+
+	it('answers with the catalog version a visit just moved, when an away member comes back (D86)', async () => {
+		await run(db, `UPDATE groups SET away_months = 6, away_hides = 1, away_checked_at = ?1 WHERE id = 'open'`, Date.now());
+		await run(db, `UPDATE memberships SET off_shelf = 1 WHERE group_id = 'open' AND user_id = 'ada'`);
+		const before = (await one<{ v: number }>(db, `SELECT catalog_version AS v FROM groups WHERE id = 'open'`))!.v;
+		const { extras } = await readGroup(as('ada'), db, 'open');
+		expect(await one(db, `SELECT off_shelf FROM memberships WHERE group_id = 'open' AND user_id = 'ada'`)).toEqual({ off_shelf: 0 });
+		expect(extras.catalogVersion).toBe(before + 1);
 	});
 
 	it('keeps the demo open to anyone, with no role for visitors, and hides other groups', async () => {

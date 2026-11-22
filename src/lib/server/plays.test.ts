@@ -7,8 +7,10 @@ import { loadCatalog } from './catalog.ts';
 import {
 	csvField,
 	fillPlaces,
+	isTeamPlay,
 	isWin,
 	ordinal,
+	teamsOf,
 	parsePoints,
 	placesFromScores,
 	playPoints,
@@ -17,6 +19,7 @@ import {
 	standingsFromCounts,
 	DEFAULT_PLAY_RULES,
 	type Play,
+	type PlayPlayer,
 	type PlayRules
 } from '#lib/plays.ts';
 
@@ -28,6 +31,18 @@ describe('play rules', () => {
 		expect(placesFromScores([10, 30, 30, 5], false)).toEqual([3, 1, 1, 4]);
 		expect(placesFromScores([10, 30, 5], true)).toEqual([2, 3, 1]);
 		expect(placesFromScores([10, null, 20], false)).toEqual([2, 3, 1]);
+	});
+	it('lists a team play’s teams in finishing order, then by number (D87)', () => {
+		const seat = (userId: string, team: number, place: number) => ({ userId, guestName: null, place, score: null, team });
+		const teams = teamsOf([seat('ada', 1, 2), seat('bo', 2, 1), seat('cy', 3, 2), seat('dee', 2, 1), seat('eve', 1, 2)]);
+		expect(teams.map((t) => [t.team, t.place, t.players.map((p) => p.userId)])).toEqual([
+			[2, 1, ['bo', 'dee']],
+			[1, 2, ['ada', 'eve']],
+			[3, 2, ['cy']]
+		]);
+		expect(isTeamPlay([seat('ada', 1, 1)])).toBe(true);
+		const plain: PlayPlayer = { userId: 'ada', guestName: null, place: 1, score: null };
+		expect(isTeamPlay([plain])).toBe(false);
 	});
 	it('puts unplaced players after the last place given', () => {
 		expect(fillPlaces([1, null, null])).toEqual([1, 2, 2]);
@@ -100,16 +115,19 @@ describe('play rules', () => {
 			DEFAULT_PLAY_RULES,
 			(id) => (id === 'ada' ? 'Ada' : null)
 		);
-		expect(csv.startsWith('﻿date,game_night,night_id,game,game_data_from,bgg_id,play_id,player,player_type,place,score,won,coop_result,points\r\n')).toBe(true);
+		expect(csv.startsWith('﻿date,game_night,night_id,game,game_data_from,bgg_id,play_id,player,player_type,place,score,won,coop_result,points,team\r\n')).toBe(true);
 		const lines = csv.slice(1).trim().split('\r\n');
-		expect(lines[1]).toBe('2026-11-07,,,"Alpha, the ""Game""",typed in,,p1,Ada,member,1,40,yes,,3');
-		expect(lines[2]).toBe(`2026-11-07,,,"Alpha, the ""Game""",typed in,,p1,'=cmd(),guest,2,30,no,,0`);
-		expect(lines[3]).toBe("2026-11-07,,,'=Typed,typed in,,p2,a former member,former member,,,no,lost,0");
-		expect(lines[4]).toBe('2026-11-07,,,Alpha,typed in,,p3,Ada,member,,,yes,won,1');
-		expect(lines[5]).toBe('2026-11-07,,,Alpha,typed in,,p3,Sam,guest,,,yes,won,1');
+		expect(lines[1]).toBe('2026-11-07,,,"Alpha, the ""Game""",typed in,,p1,Ada,member,1,40,yes,,3,');
+		expect(lines[2]).toBe(`2026-11-07,,,"Alpha, the ""Game""",typed in,,p1,'=cmd(),guest,2,30,no,,0,`);
+		expect(lines[3]).toBe("2026-11-07,,,'=Typed,typed in,,p2,a former member,former member,,,no,lost,0,");
+		expect(lines[4]).toBe('2026-11-07,,,Alpha,typed in,,p3,Ada,member,,,yes,won,1,');
+		expect(lines[5]).toBe('2026-11-07,,,Alpha,typed in,,p3,Sam,guest,,,yes,won,1,');
 		// A group that doesn't count co-op wins still exports a co-op win as won (D71).
 		const notCounted = playsCsv([play({ id: 'p4', coop: 'won', players: [p('ada', null)] })], { ...DEFAULT_PLAY_RULES, coopWinsCount: false, coopWinPoints: 0 }, () => 'Ada');
-		expect(notCounted.slice(1).trim().split('\r\n')[1]).toBe('2026-11-07,,,Alpha,typed in,,p4,Ada,member,,,yes,won,0');
+		expect(notCounted.slice(1).trim().split('\r\n')[1]).toBe('2026-11-07,,,Alpha,typed in,,p4,Ada,member,,,yes,won,0,');
+		// A team play (D87): each row ends with the player's team.
+		const teams = playsCsv([play({ id: 't', players: [{ ...p('ada', 1), team: 2 }, { ...p('bo', 2), team: 1 }] })], DEFAULT_PLAY_RULES, (id) => id);
+		expect(teams.slice(1).trim().split('\r\n').slice(1)).toEqual(['2026-11-07,,,Alpha,typed in,,t,ada,member,1,,yes,,3,2', '2026-11-07,,,Alpha,typed in,,t,bo,member,2,,no,,0,1']);
 		expect(csvField(-5)).toBe('-5');
 		expect(csvField('-5')).toBe("'-5");
 	});
@@ -172,6 +190,47 @@ describe('the log form', () => {
 			['cy', 2]
 		]);
 	});
+	it('reads teams, numbers them from 1 and gives every player their team’s place (D87)', () => {
+		const r = parsePlayForm(
+			form([
+				['playedOn', '2026-11-07'],
+				['result', 'teams'],
+				...players('m:ada', 'm:bo', 'm:cy', 'g:Sam', 'm:dee'),
+				['team:m:ada', '3'],
+				['team:m:bo', '5'],
+				['team:m:cy', '3'],
+				['team:g:Sam', '7'],
+				['team:m:dee', '5'],
+				['teamPlace:5', '1'],
+				['teamPlace:3', '2'],
+				// Left over from another result: ignored.
+				['score:m:ada', '10'],
+				['place:m:ada', '1']
+			]),
+			'2026-11-08'
+		);
+		expect(r.ok && r.value).toMatchObject({ coop: null, lowestWins: false });
+		expect(r.ok && r.value.players.map((p) => [p.userId ?? p.guestName, p.team, p.place, p.score])).toEqual([
+			['ada', 1, 2, null],
+			['bo', 2, 1, null],
+			['cy', 1, 2, null],
+			['Sam', 3, 3, null],
+			['dee', 2, 1, null]
+		]);
+	});
+	it('takes just the winning team, and refuses one team, a player without a team and no winner', () => {
+		const base = (extra: Array<[string, string]>) => parsePlayForm(form([['playedOn', '2026-11-07'], ['result', 'teams'], ...players('m:ada', 'm:bo', 'm:cy'), ...extra]), '2026-11-08');
+		const winner = base([['team:m:ada', '1'], ['team:m:bo', '2'], ['team:m:cy', '2'], ['teamPlace:2', '1']]);
+		expect(winner.ok && winner.value.players.map((p) => p.place)).toEqual([2, 1, 1]);
+		// Three teams of one, two tied for first: the third shares last.
+		const tied = base([['team:m:ada', '1'], ['team:m:bo', '2'], ['team:m:cy', '3'], ['teamPlace:1', '1'], ['teamPlace:2', '1']]);
+		expect(tied.ok && tied.value.players.map((p) => p.place)).toEqual([1, 1, 2]);
+		expect(base([['team:m:ada', '1'], ['team:m:bo', '1'], ['team:m:cy', '1'], ['teamPlace:1', '1']]).ok).toBe(false); // one team
+		expect(base([['team:m:ada', '1'], ['team:m:bo', '2'], ['teamPlace:1', '1']]).ok).toBe(false); // Cy has none
+		expect(base([['team:m:ada', '1'], ['team:m:bo', '2'], ['team:m:cy', '2']]).ok).toBe(false); // no winner
+		expect(base([['team:m:ada', 'x'], ['team:m:bo', '2'], ['team:m:cy', '2'], ['teamPlace:2', '1']]).ok).toBe(false);
+		expect(base([['team:m:ada', '1'], ['team:m:bo', '2'], ['team:m:cy', '2'], ['teamPlace:2', '0']]).ok).toBe(false);
+	});
 	it('refuses bad dates, missing results, duplicates and junk scores', () => {
 		const base = (extra: Array<[string, string]>, date = '2026-11-07') => parsePlayForm(form([['playedOn', date], ...extra]), '2026-11-08');
 		expect(base([['result', 'places'], ...players('m:ada'), ['place:m:ada', '1']], '2026-11-09').ok).toBe(false); // the future
@@ -190,7 +249,7 @@ describe('saving plays', () => {
 	const ada: Actor = { id: 'ada', role: 'member' };
 	const bo: Actor = { id: 'bo', role: 'member' };
 	const cy: Actor = { id: 'cy', role: 'admin' };
-	const input = (players = [{ userId: 'ada', guestName: null, place: 1, score: null }, { userId: null, guestName: 'Sam', place: 2, score: null }]) => ({
+	const input = (players: PlayPlayer[] = [{ userId: 'ada', guestName: null, place: 1, score: null }, { userId: null, guestName: 'Sam', place: 2, score: null }]) => ({
 		playedOn: '2026-11-07',
 		coop: null,
 		lowestWins: false,
@@ -241,6 +300,25 @@ describe('saving plays', () => {
 		// The full read for two people at once: the plays with both in them.
 		const both = await readAll(db, { p: playsRead(db, 'g1', { withUser: 'ada', alsoWith: 'bo' }) });
 		expect(both.p.map((p) => p.playedOn)).toEqual(['2026-01-03']);
+	});
+
+	it('keeps a team play’s teams and scores each player their team’s place (D87)', async () => {
+		const seat = (userId: string | null, team: number, place: number) => ({ userId, guestName: userId ? null : 'Sam', place, score: null, team });
+		await savePlay(db, 'g1', ada, 1, input([seat('ada', 1, 1), seat('bo', 2, 2), seat(null, 2, 2), seat('cy', 3, 3)]), undefined, 2);
+		await savePlay(db, 'g1', ada, 1, input(), undefined, 1);
+		const [teamPlay, plain] = await loadPlays(db, 'g1');
+		expect(teamPlay.players.map((p) => p.team)).toEqual([1, 2, 2, 3]);
+		expect(plain.players.some((p) => 'team' in p)).toBe(false);
+		const outcomes = (await readAll(db, { o: playOutcomesRead(db, 'g1') })).o;
+		expect(outcomes[0].players.map((p) => p.team)).toEqual([1, 2, 2, 3]);
+		expect(outcomes[1].players.some((p) => 'team' in p)).toBe(false);
+		// Three teams: 1st, 2nd and last, as places would be (3, 2, 0 points).
+		const rows = (await readAll(db, { s: standingsRead(db, 'g1') })).s;
+		expect(standingsFromCounts(rows, DEFAULT_PLAY_RULES)).toEqual([
+			{ userId: 'ada', points: 6, wins: 2, plays: 2 },
+			{ userId: 'bo', points: 2, wins: 0, plays: 1 },
+			{ userId: 'cy', points: 0, wins: 0, plays: 1 }
+		]);
 	});
 
 	it('refuses games off the shelf and players from outside the group', async () => {

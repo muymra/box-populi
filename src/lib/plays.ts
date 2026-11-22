@@ -2,7 +2,8 @@
 // export. Pure, so the form, the pages and the tests share them.
 
 export type Coop = 'won' | 'lost';
-export type PlayPlayer = { userId: string | null; guestName: string | null; place: number | null; score: number | null };
+/** `team`: the player's team in a team play (D87), numbered from 1; null or missing in a play without teams. */
+export type PlayPlayer = { userId: string | null; guestName: string | null; place: number | null; score: number | null; team?: number | null };
 import { csvField, csvFile, SOURCE_LABEL, type GameSource } from './csv.ts';
 
 export type { GameSource } from './csv.ts';
@@ -30,7 +31,7 @@ export type PlayOutcome = {
 	playedOn: string;
 	coop: Coop | null;
 	nightId: string | null;
-	players: Array<Pick<PlayPlayer, 'userId' | 'guestName' | 'place'>>;
+	players: Array<Pick<PlayPlayer, 'userId' | 'guestName' | 'place' | 'team'>>;
 };
 
 export const DEFAULT_POINTS = [3, 2, 1];
@@ -159,6 +160,26 @@ export function standingsFromCounts(rows: readonly StandingCounts[], rules: Play
 		.map(({ userId, points, wins, plays }) => ({ userId, points, wins, plays }));
 }
 
+/** A team play (D87): its players carry their team. */
+export function isTeamPlay(players: readonly Pick<PlayPlayer, 'team'>[]): boolean {
+	return players.some((p) => p.team != null);
+}
+
+/**
+ * A team play's teams in finishing order, then by number: each with its place (shared by its players)
+ * and its players as entered.
+ */
+export function teamsOf<P extends Pick<PlayPlayer, 'team' | 'place'>>(players: readonly P[]): Array<{ team: number; place: number | null; players: P[] }> {
+	const teams = new Map<number, { team: number; place: number | null; players: P[] }>();
+	for (const p of players) {
+		if (p.team == null) continue;
+		const t = teams.get(p.team) ?? { team: p.team, place: p.place, players: [] };
+		t.players.push(p);
+		teams.set(p.team, t);
+	}
+	return [...teams.values()].sort((a, b) => (a.place ?? 99) - (b.place ?? 99) || a.team - b.team);
+}
+
 /** "1st", "2nd", "3rd", "4th", "11th", "22nd" */
 export function ordinal(n: number): string {
 	const tens = n % 100;
@@ -166,7 +187,7 @@ export function ordinal(n: number): string {
 	return `${n}${{ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] ?? 'th'}`;
 }
 
-export const CSV_COLUMNS = ['date', 'game_night', 'night_id', 'game', 'game_data_from', 'bgg_id', 'play_id', 'player', 'player_type', 'place', 'score', 'won', 'coop_result', 'points'];
+export const CSV_COLUMNS = ['date', 'game_night', 'night_id', 'game', 'game_data_from', 'bgg_id', 'play_id', 'player', 'player_type', 'place', 'score', 'won', 'coop_result', 'points', 'team'];
 
 /**
  * The export: one row per player per play, newest play first. `nameOf` gives a member's name, or
@@ -200,7 +221,9 @@ export function playsCsv(plays: readonly Play[], rules: PlayRules, nameOf: (user
 					csvField(player.score),
 					csvField(won[i] ? 'yes' : 'no'),
 					csvField(play.coop),
-					csvField(points[i])
+					csvField(points[i]),
+					// Last, so spreadsheets made before teams (D87) keep their columns.
+					csvField(player.team ?? null)
 				].join(',')
 			);
 		});

@@ -1,3 +1,4 @@
+import { isAway } from '#lib/away.ts';
 import { readGroup } from '#lib/server/authz.ts';
 import { rememberGroup } from '#lib/server/cookies.ts';
 import { invitePath } from '#lib/server/codes.ts';
@@ -46,8 +47,16 @@ export const load: LayoutServerLoad = async (event) => {
 		pastNight: rowOf<{ x: number }>(db, 'SELECT 1 AS x FROM game_nights WHERE group_id = ?1 AND night_on < ?2 LIMIT 1', access.group.id, day(0))
 	});
 	// `active`: a full member (D79). Only they're offered as here, going, players, hosts or borrowers;
-	// everyone stays in what already happened.
-	const tableMembers = reads.members.map((m) => ({ id: m.id, name: m.name, colorIndex: m.colorIndex, active: m.standing === 'full' }));
+	// everyone stays in what already happened. `away` (D86): listed last in those pickers, still pickable;
+	// the members come most recently around first.
+	const now = Date.now();
+	const tableMembers = reads.members.map((m) => ({
+		id: m.id,
+		name: m.name,
+		colorIndex: m.colorIndex,
+		active: m.standing === 'full',
+		away: isAway(m.activeAt, extras.away.months, now)
+	}));
 	// For the owner and co-admins, a note on every page while anyone waits to be let in (D79).
 	const waiting = access.role && access.role !== 'member' && access.standing === 'full' ? reads.members.filter((m) => m.standing === 'waiting').length : 0;
 	const nights = assembleNights(reads.nights, reads.people, reads.games);

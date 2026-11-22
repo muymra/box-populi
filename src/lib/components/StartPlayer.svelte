@@ -10,7 +10,7 @@
 	import { randomInt } from '#lib/table/random.ts';
 	import type { Table } from '#lib/table/table.svelte.ts';
 
-	type Member = { id: string; name: string; colorIndex: number };
+	type Member = { id: string; name: string; colorIndex: number; away?: boolean };
 	type Person = { key: string; name: string; color: string | null };
 	let { members, table }: { members: Member[]; table: Table } = $props();
 

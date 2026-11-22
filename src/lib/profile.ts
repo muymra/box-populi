@@ -24,10 +24,13 @@ export type HeadToHead = {
 	together: number;
 	/** The newest of those (YYYY-MM-DD), or null. */
 	last: string | null;
-	/** Competitive plays together that each of you won (a shared first counts for both), and that someone else won. */
+	/** Competitive plays together that each of you won (a shared first counts for both), and that someone else won. Not plays on the same team. */
 	youWon: number;
 	theyWon: number;
 	othersWon: number;
+	/** Team plays with both on the same team (D87), and how many of them that team won. */
+	sameTeam: number;
+	sameTeamWon: number;
 	/** Co-op plays together, and how many of them the table won. */
 	coop: number;
 	coopWon: number;
@@ -35,7 +38,7 @@ export type HeadToHead = {
 
 /** How `viewerId` and `subjectId` do when they play together. Plays newest first, as `playsRead` gives them. */
 export function headToHead(plays: readonly Played[], viewerId: string, subjectId: string): HeadToHead {
-	const out: HeadToHead = { together: 0, last: null, youWon: 0, theyWon: 0, othersWon: 0, coop: 0, coopWon: 0 };
+	const out: HeadToHead = { together: 0, last: null, youWon: 0, theyWon: 0, othersWon: 0, sameTeam: 0, sameTeamWon: 0, coop: 0, coopWon: 0 };
 	for (const play of plays) {
 		const you = play.players.find((p) => p.userId === viewerId);
 		const them = play.players.find((p) => p.userId === subjectId);
@@ -48,6 +51,11 @@ export function headToHead(plays: readonly Played[], viewerId: string, subjectId
 			continue;
 		}
 		const places = play.players.map((p) => p.place);
+		if (you.team != null && you.team === them.team) {
+			out.sameTeam += 1;
+			if (isWin(you.place, places)) out.sameTeamWon += 1;
+			continue;
+		}
 		const youWin = isWin(you.place, places);
 		const theyWin = isWin(them.place, places);
 		if (youWin) out.youWon += 1;

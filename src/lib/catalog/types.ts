@@ -11,6 +11,8 @@ export type CatalogMember = {
 	name: string;
 	role: Role;
 	lastSeenAt: number;
+	/** When they were last around here (D86): the latest of a visit, a play, a night, being marked as around, and joining. */
+	activeAt: number;
 	/** Index into PLAYER_COLORS, assigned by join order so it never changes. */
 	colorIndex: number;
 	/** Waiting to be let in, suspended, or a full member (D79). Only full members are offered as players, going or here. */

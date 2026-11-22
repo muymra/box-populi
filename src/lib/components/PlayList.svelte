@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Logged plays, newest first (PRD "Play log"): the date, the game when it's a list of several,
-	// and who finished where. Whoever logged a play, its players and co-admins can edit or delete it.
+	// and who finished where; a team play lists its teams in finishing order (D87). Whoever logged a play, its players and co-admins can edit or delete it.
 	import { profileHref } from '#lib/profiles.svelte.ts';
 	import { enhance } from '$app/forms';
 	import Pencil from '@lucide/svelte/icons/pencil';
@@ -8,7 +8,7 @@
 	import Modal from './Modal.svelte';
 	import PlayForm from './PlayForm.svelte';
 	import { playerColor } from '#lib/catalog/colors.ts';
-	import { isWin, ordinal, type Coop, type PlayPlayer } from '#lib/plays.ts';
+	import { isTeamPlay, isWin, ordinal, teamsOf, type Coop, type PlayPlayer } from '#lib/plays.ts';
 	import type { Table } from '#lib/table/table.svelte.ts';
 
 	type Member = { id: string; name: string; colorIndex: number };
@@ -73,7 +73,7 @@
 			<div class="head">
 				{#if showDate}<span class="when num">{dateLabel(play.playedOn)}</span>{/if}
 				{#if showGame}<a class="game" href="/g/{groupId}/game/{play.gameId}">{play.gameName}</a>{/if}
-				{#if play.coop}<span class="tag">Co-op, {play.coop}</span>{/if}
+				{#if play.coop}<span class="tag">Co-op, {play.coop}</span>{:else if isTeamPlay(play.players)}<span class="tag">Teams</span>{/if}
 				{#if play.canChange}
 					<span class="tools">
 						<button
@@ -92,6 +92,20 @@
 				{/if}
 			</div>
 			<ul class="result">
+				{#if isTeamPlay(play.players)}
+					{#each teamsOf(play.players) as team (team.team)}
+						<li class:winner={isWin(team.place, places)}>
+							{#each team.players as p, j (j)}
+								{@const who = nameOf(p)}
+								<span class="member">
+									<span class="dot" class:guest={!who.color} style:background={who.color}></span>
+									<span class="name">{#if who.id}<a href={profileHref(who.id)}>{who.name}</a>{:else}{who.name}{/if}</span>{j < team.players.length - 2 ? ',' : j === team.players.length - 2 ? ' &' : ''}
+								</span>
+							{/each}
+							{#if team.place != null}<span class="num muted">{ordinal(team.place)}</span>{/if}
+						</li>
+					{/each}
+				{:else}
 				{#each ordered(play) as p, i (i)}
 					{@const who = nameOf(p)}
 					<li class:winner={!play.coop && isWin(p.place, places)}>
@@ -101,6 +115,7 @@
 						{#if p.score != null}<span class="num muted">· {p.score}</span>{/if}
 					</li>
 				{/each}
+				{/if}
 			</ul>
 			{#if deleteError?.id === play.id}<p class="banner error" role="alert">{deleteError.message}</p>{/if}
 			{#if confirming === play.id}
@@ -201,6 +216,11 @@
 	}
 	.result .winner .name {
 		font-weight: 700;
+	}
+	.member {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
 	}
 	.dot {
 		flex: none;

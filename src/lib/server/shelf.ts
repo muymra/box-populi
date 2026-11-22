@@ -9,9 +9,9 @@
 // they keep the view's hidden-copies check. `group`, `game` and `copy` are SQL: a parameter such as
 // `?1`, a column such as `w.game_id`, a table alias such as `c`.
 
-/** The copy `copy` (an alias of `copies`) counts for group `group`: its owner is a member, and it isn't hidden there. */
+/** The copy `copy` (an alias of `copies`) counts for group `group`: its owner is a member whose games are on the shelf (D86), and it isn't hidden there. */
 export function copyOnShelf(group: string, copy: string): string {
-	return `EXISTS (SELECT 1 FROM memberships shelf_m WHERE shelf_m.group_id = ${group} AND shelf_m.user_id = ${copy}.user_id)
+	return `EXISTS (SELECT 1 FROM memberships shelf_m WHERE shelf_m.group_id = ${group} AND shelf_m.user_id = ${copy}.user_id AND shelf_m.off_shelf = 0)
 	 AND NOT EXISTS (SELECT 1 FROM hidden_copies shelf_h WHERE shelf_h.group_id = ${group} AND shelf_h.user_id = ${copy}.user_id AND shelf_h.game_id = ${copy}.game_id)`;
 }
 

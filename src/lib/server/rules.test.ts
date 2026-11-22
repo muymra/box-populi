@@ -103,7 +103,16 @@ describe('permissions', () => {
 		['admin', 'suspend_member', 'admin', false, false],
 		['admin', 'suspend_member', 'owner', false, false],
 		['member', 'suspend_member', 'member', false, false],
-		['admin', 'let_in', 'member', false, false] // only someone waiting, below
+		['admin', 'let_in', 'member', false, false], // only someone waiting, below
+		// members who've been away (D86): the setting and marking someone as around are the co-admins' and owner's
+		['member', 'set_away', undefined, false, false],
+		['admin', 'set_away', undefined, false, true],
+		['owner', 'set_away', undefined, false, true],
+		['member', 'mark_around', 'member', false, false],
+		['admin', 'mark_around', 'member', false, true],
+		['admin', 'mark_around', 'owner', false, true],
+		['owner', 'mark_around', 'admin', false, true],
+		['owner', 'mark_around', 'owner', true, false]
 	];
 	it.each(cases)('%s %s on %s (self=%s) → %s', (actor, action, targetRole, targetIsSelf, expected) => {
 		expect(can(actor, action, { targetRole, targetIsSelf })).toBe(expected);

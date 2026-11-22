@@ -695,7 +695,7 @@
 					<span id="who-q" class="form-q">Who’s here</span>
 					<span class="hint">{bigRoom ? 'Nobody is put at a table.' : 'Guests count as players.'}</span>
 				</div>
-				<div class="form-body"><WhosHere members={payload.members.filter((m) => m.standing === 'full')} {table} /></div>
+				<div class="form-body"><WhosHere members={data.tableMembers.filter((m) => m.active)} {table} /></div>
 			</div>
 
 			{#if !tonight}

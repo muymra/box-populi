@@ -15,6 +15,7 @@
 	import { chatLink } from '#lib/group-chat.ts';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { lastActive } from '#lib/time.ts';
+	import { AWAY_MONTHS, isAway, lastHere, namesOf } from '#lib/away.ts';
 	import { refreshAll } from '$app/navigation';
 	import { AUTO_THEME, CUSTOM_THEME, THEME_IDS, THEME_LABELS } from '#lib/themes.ts';
 	import type { PageProps } from './$types';
@@ -61,6 +62,27 @@
 	const shown = $derived.by(() => {
 		const q = query.trim().toLocaleLowerCase();
 		return q ? inGroup.filter((m) => m.name.toLocaleLowerCase().includes(q)) : inGroup;
+	});
+	type GroupMember = PageProps['data']['members'][number];
+	// Members who've been away (D86) are listed apart, under the rest.
+	const here = $derived(shown.filter((m) => !m.away));
+	const awayShown = $derived(shown.filter((m) => m.away));
+	// The setting says who it would mark away, and how many games would leave the shelf, before it's saved.
+	let awayChoice = $state(untrack(() => (data.awaySetting.months != null ? 'on' : 'off')));
+	let awayMonths = $state(untrack(() => String(data.awaySetting.months ?? AWAY_MONTHS.fallback)));
+	let awayHides = $state(untrack(() => data.awaySetting.hides));
+	const awayPreview = $derived.by(() => {
+		const months = Number(awayMonths.trim());
+		if (awayChoice !== 'on' || !Number.isInteger(months) || months < AWAY_MONTHS.min || months > AWAY_MONTHS.max) return null;
+		const willBe = inGroup.filter((m) => isAway(m.activeAt, months, data.now));
+		const goes = willBe.filter((m) => !m.away);
+		// Games already off the shelf don't leave again.
+		const leaving = awayHides ? willBe.filter((m) => !(data.awaySetting.hides && m.away)) : [];
+		const named = awayHides ? willBe.filter((m) => goes.includes(m) || leaving.includes(m)) : goes;
+		if (named.length === 0) return null;
+		const who = `${namesOf(named.map((m) => m.name))} ${named.length === 1 ? 'has' : 'have'} been away over ${months} ${months === 1 ? 'month' : 'months'}`;
+		const games = leaving.reduce((n, m) => n + m.games, 0);
+		return games ? `${who}; ${games} ${games === 1 ? 'game leaves' : 'games leave'} the shelf until they’re back.` : `${who}, so they’re listed as away.`;
 	});
 	const sinceDay = (at: number | null) => (at ? new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '');
 	// New members (D79): turning probation off with people waiting lets them in, so the form says so first.
@@ -139,6 +161,231 @@
 		</section>
 	{/snippet}
 
+	<!-- One member in the list, with Manage for whoever may act on them. -->
+	{#snippet memberRow(m: GroupMember)}
+		{@const c = playerColor(m.colorIndex)}
+		{#snippet person()}
+			<span class="cube-chip" style:background={c.fill} style:color={c.ink} aria-hidden="true">{m.name.slice(0, 1).toUpperCase()}</span>
+			<span class="who">
+				<strong
+					><a class="profile-link" href={profileHref(m.id)}>{m.name}</a>{#if m.isMe}<span class="muted">{' (you)'}</span>{/if}{#if m.standing === 'suspended'}{' '}<span
+							class="tag"
+							title="Suspended {sinceDay(m.since)}">Suspended</span
+						>{/if}{#if m.noPin}{' '}<span class="tag">No PIN yet</span>{/if}</strong
+				>
+				<span class="muted">
+					{ROLE[m.role]}{' · '}{#if m.gamesOff}<span class="num">{m.gamesOff}</span> {m.gamesOff === 1 ? 'game' : 'games'} off the shelf{:else}<span class="num">{m.games}</span>
+						{m.games === 1 ? 'game' : 'games'}{/if}{' · '}{c.pattern === 'solid' ? '' : `${c.pattern} `}{c.name.toLowerCase()}{' · '}<span class="nowrap"
+						>{m.away ? lastHere(m.activeAt, data.now) : lastActive(m.lastSeenAt, data.now)}</span
+					>
+				</span>
+			</span>
+		{/snippet}
+		<li>
+			{#if m.actions.length || m.tools.length}
+				{@const roleChange = m.actions.includes('promote') || m.actions.includes('demote')}
+				{@const codeHere = form?.signInCode?.userId === m.id ? form.signInCode : null}
+				{@const mine = confirmFor?.id === m.id && !(confirmFor.kind === 'code' && codeHere) ? confirmFor.kind : null}
+				<details class="manage" open={openRows.includes(m.id) || !!codeHere} ontoggle={(e) => keepOpen(m.id, e.currentTarget.open)}>
+					<summary>
+						{@render person()}
+						<span class="manage-label">Manage <ChevronDown size={16} aria-hidden="true" /></span>
+					</summary>
+					<!-- One panel in three parts (Carlo's pick): the role, getting in, and the irreversible ones in the foot; one confirmation open at a time. -->
+					<div class="manage-panel">
+						<div class="prow">
+							<span class="plabel" id="role-{m.id}">Role</span>
+							<div class="pbody">
+								{#if roleChange}
+									<!-- The other segment asks first (Carlo: too easy to make someone a co-admin by accident). -->
+									<div class="role-seg" role="group" aria-labelledby="role-{m.id}">
+										{#each [['member', 'Member'], ['admin', 'Co-admin']] as const as [role, label] (role)}
+											{#if m.role === role}
+												<span class="seg on" aria-current="true">{label}</span>
+											{:else}
+												<button type="button" class="seg" aria-expanded={mine === 'role'} onclick={() => toggle(m.id, 'role')}
+													>{label}<span class="visually-hidden">: make {m.name} {role === 'admin' ? 'a co-admin' : 'a regular member'}…</span></button
+												>
+											{/if}
+										{/each}
+									</div>
+								{:else}
+									<span>{ROLE[m.role]}</span>
+								{/if}
+								{#if m.actions.includes('transfer_ownership')}
+									<button type="button" class="link-button" aria-expanded={mine === 'owner'} onclick={() => toggle(m.id, 'owner')}>Make owner…</button>
+								{/if}
+							</div>
+						</div>
+						<div class="prow">
+							<span class="plabel">Getting in</span>
+							<div class="pbody">
+								{#if codeHere}
+									<span class="sign-in-code num">{codeHere.code}</span>
+									<span class="muted code-note">
+										Works once, until {new Date(codeHere.expiresAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}. Give it to {m.name}
+										yourself: at the group’s link they tap their name and choose “use a sign-in code”.
+									</span>
+								{:else}
+									<span>{m.noPin ? 'No PIN yet.' : 'Has a PIN.'}</span>
+									{#if m.tools.includes('sign_in_code')}
+										<button type="button" class="btn small" aria-expanded={mine === 'code'} onclick={() => toggle(m.id, 'code')}>Make a sign-in code</button>
+									{:else if m.helpNote === 'other_group'}
+										<span class="muted">In another group too, so only {m.name} can change how they get in.</span>
+									{:else if m.helpNote === 'role'}
+										<span class="muted">Only the owner can help a co-admin back in.</span>
+									{/if}
+								{/if}
+							</div>
+						</div>
+						{#if m.actions.includes('mark_around')}
+							<!-- Members who've been away (D86): for someone who still comes but whom nothing records. -->
+							<div class="prow">
+								<span class="plabel">Away</span>
+								<div class="pbody">
+									<span>{lastHere(m.activeAt, data.now)}.</span>
+									<form method="POST" action="?/around" use:enhance={closeAfter}>
+										<input type="hidden" name="userId" value={m.id} />
+										<button class="btn small">Mark as around</button>
+									</form>
+									<span class="muted">If {m.name} still comes but doesn’t open Box Populi or get logged in plays. Their {data.awaySetting.months} months start again.</span>
+								</div>
+							</div>
+						{/if}
+						{#if m.tools.includes('merge') || m.canLinkGuests || m.actions.includes('remove_member') || m.actions.includes('suspend_member')}
+							<div class="pfoot">
+								<!-- Suspending (D79): a step before removing someone, undone with Reinstate. -->
+								{#if m.actions.includes('suspend_member') && m.standing === 'suspended'}
+									<form method="POST" action="?/reinstate" use:enhance={closeAfter}>
+										<input type="hidden" name="userId" value={m.id} />
+										<button class="btn small">Reinstate {m.name}</button>
+									</form>
+								{:else if m.actions.includes('suspend_member')}
+									<button type="button" class="link-button" aria-expanded={mine === 'suspend'} onclick={() => toggle(m.id, 'suspend')}>Suspend…</button>
+								{/if}
+								{#if m.tools.includes('merge')}
+									<button type="button" class="link-button" aria-expanded={mine === 'merge'} onclick={() => toggle(m.id, 'merge')}>Merge into another entry…</button>
+								{/if}
+								{#if m.canLinkGuests}
+									<button type="button" class="link-button" aria-expanded={mine === 'guest'} onclick={() => toggle(m.id, 'guest')}>Plays as a guest…</button>
+								{/if}
+								{#if m.actions.includes('remove_member')}
+									<button type="button" class="link-button danger-link" aria-expanded={mine === 'remove'} onclick={() => toggle(m.id, 'remove')}>Remove from the group…</button>
+								{/if}
+							</div>
+						{/if}
+						{#if mine}
+							<div class="confirm-well">
+								{#if mine === 'role' && m.role === 'member'}
+									<p>
+										Make {m.name} a co-admin? Co-admins can rename the group, make a new join code, remove members, change any play or night, and help
+										members back in. If you’re away for {data.ownerAwayDays} days, they can also archive or restore the group, or take over as owner.
+									</p>
+									<div class="cbtns">
+										<form method="POST" action="?/promote" use:enhance={closeAfter}>
+											<input type="hidden" name="userId" value={m.id} />
+											<button class="btn small">Make {m.name} a co-admin</button>
+										</form>
+										<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
+									</div>
+								{:else if mine === 'role'}
+									<p>Make {m.name} a regular member? They’ll no longer be able to manage the group.</p>
+									<div class="cbtns">
+										<form method="POST" action="?/demote" use:enhance={closeAfter}>
+											<input type="hidden" name="userId" value={m.id} />
+											<button class="btn small">Make {m.name} a regular member</button>
+										</form>
+										<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
+									</div>
+								{:else if mine === 'owner'}
+									<p>
+										{m.name} becomes the owner: they can delete the group and hand it on again. You become a co-admin, and only {m.name} can make you the
+										owner again.
+									</p>
+									<form method="POST" action="?/transfer" use:enhance={closeAfter} class="cbtns">
+										<input type="hidden" name="userId" value={m.id} />
+										<label class="into">
+											<span>Type <strong>{m.name}</strong> to confirm</span>
+											<input class="field" name="confirmName" required autocomplete="off" bind:value={ownerTyped} />
+										</label>
+										<button class="btn small" disabled={ownerTyped.replace(/\s+/g, ' ').trim().toLocaleLowerCase() !== m.name.toLocaleLowerCase()}>Make {m.name} the owner</button>
+										<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
+									</form>
+								{:else if mine === 'code'}
+									<p>
+										For when {m.name} has lost their PIN and every device. The code works once, for 10 minutes, and signs in as {m.name}, so give it to
+										them yourself.
+									</p>
+									<div class="cbtns">
+										<form method="POST" action="?/signInCode" use:enhance={closeAfter}>
+											<input type="hidden" name="userId" value={m.id} />
+											<button class="btn small">Make the code</button>
+										</form>
+										<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
+									</div>
+								{:else if mine === 'merge'}
+									{@const others = data.members
+										.filter((o) => o.id !== m.id && !o.isMe && o.onlyHere)
+										.sort((a, b) => Number(b.name === m.name) - Number(a.name === m.name) || b.joinedAt - a.joinedAt)}
+									<p>
+										If {m.name} joined again as someone new, this moves this entry’s games, plays, nights and wishlist to the new one and deletes this one.
+										The new one keeps this entry’s colour.
+									</p>
+									{#if others.length === 0}
+										<p class="muted">There’s no entry to merge into. The new entry has to be in this group only, since its games show in every group it’s in.</p>
+										<div class="cbtns"><button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button></div>
+									{:else}
+									<form method="POST" action="?/merge" use:enhance={closeAfter} class="cbtns">
+										<input type="hidden" name="userId" value={m.id} />
+										<label class="into">
+											<span>Into</span>
+											<select class="field" name="intoId" required>
+												{#each others as o (o.id)}
+													<option value={o.id}>{o.name}, joined {new Date(o.joinedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</option>
+												{/each}
+											</select>
+										</label>
+										<button class="btn small danger">Merge and delete this entry</button>
+										<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
+									</form>
+									{/if}
+								{:else if mine === 'guest'}
+									<GuestPlays member={m} guests={data.guests} onclose={() => (confirmFor = null)} done={closeAfter} />
+								{:else if mine === 'suspend'}
+									<p>
+										{m.name} can still sign in and look around, but can’t change anything here: no plays, nights, loans or marks, and no shelf changes
+										from this group. Their games stay on the shelf and their plays in the log. They see that you suspended them and when, with your note
+										if you leave one. Reinstate them, or remove them, later.
+									</p>
+									<form method="POST" action="?/suspend" use:enhance={closeAfter} class="cbtns">
+										<input type="hidden" name="userId" value={m.id} />
+										<label class="into">
+											<span>A note for {m.name} (optional)</span>
+											<input class="field" name="note" maxlength={MAX_SUSPENDED_NOTE} autocomplete="off" />
+										</label>
+										<button class="btn small danger">Suspend {m.name}</button>
+										<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
+									</form>
+								{:else if mine === 'remove'}
+									<p>{m.name}’s games leave the shelf. They can rejoin with the code unless you make a new one.</p>
+									<div class="cbtns">
+										<form method="POST" action="?/remove" use:enhance={closeAfter}>
+											<input type="hidden" name="userId" value={m.id} />
+											<button class="btn small danger">Remove {m.name}</button>
+										</form>
+										<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
+									</div>
+								{/if}
+							</div>
+						{/if}
+					</div>
+				</details>
+			{:else}
+				<div class="row">{@render person()}</div>
+			{/if}
+		</li>
+	{/snippet}
+
 	{#snippet memberList()}
 		{#if inGroup.length > 8}
 			<label class="find">
@@ -157,215 +404,28 @@
 			</p>
 		{/if}
 		<ul class="members">
-			{#each shown as m (m.id)}
-				{@const c = playerColor(m.colorIndex)}
-				{#snippet person()}
-					<span class="cube-chip" style:background={c.fill} style:color={c.ink} aria-hidden="true">{m.name.slice(0, 1).toUpperCase()}</span>
-					<span class="who">
-						<strong
-							><a class="profile-link" href={profileHref(m.id)}>{m.name}</a>{#if m.isMe}<span class="muted">{' (you)'}</span>{/if}{#if m.standing === 'suspended'}{' '}<span
-									class="tag"
-									title="Suspended {sinceDay(m.since)}">Suspended</span
-								>{/if}{#if m.noPin}{' '}<span class="tag">No PIN yet</span>{/if}</strong
-						>
-						<span class="muted">
-							{ROLE[m.role]}{' · '}<span class="num">{m.games}</span> {m.games === 1 ? 'game' : 'games'}{' · '}{c.pattern === 'solid' ? '' : `${c.pattern} `}{c.name.toLowerCase()}{' · '}<span class="nowrap">{lastActive(m.lastSeenAt, data.now)}</span>
-						</span>
-					</span>
-				{/snippet}
-				<li>
-					{#if m.actions.length || m.tools.length}
-						{@const roleChange = m.actions.includes('promote') || m.actions.includes('demote')}
-						{@const codeHere = form?.signInCode?.userId === m.id ? form.signInCode : null}
-						{@const mine = confirmFor?.id === m.id && !(confirmFor.kind === 'code' && codeHere) ? confirmFor.kind : null}
-						<details class="manage" open={openRows.includes(m.id) || !!codeHere} ontoggle={(e) => keepOpen(m.id, e.currentTarget.open)}>
-							<summary>
-								{@render person()}
-								<span class="manage-label">Manage <ChevronDown size={16} aria-hidden="true" /></span>
-							</summary>
-							<!-- One panel in three parts (Carlo's pick): the role, getting in, and the irreversible ones in the foot; one confirmation open at a time. -->
-							<div class="manage-panel">
-								<div class="prow">
-									<span class="plabel" id="role-{m.id}">Role</span>
-									<div class="pbody">
-										{#if roleChange}
-											<!-- The other segment asks first (Carlo: too easy to make someone a co-admin by accident). -->
-											<div class="role-seg" role="group" aria-labelledby="role-{m.id}">
-												{#each [['member', 'Member'], ['admin', 'Co-admin']] as const as [role, label] (role)}
-													{#if m.role === role}
-														<span class="seg on" aria-current="true">{label}</span>
-													{:else}
-														<button type="button" class="seg" aria-expanded={mine === 'role'} onclick={() => toggle(m.id, 'role')}
-															>{label}<span class="visually-hidden">: make {m.name} {role === 'admin' ? 'a co-admin' : 'a regular member'}…</span></button
-														>
-													{/if}
-												{/each}
-											</div>
-										{:else}
-											<span>{ROLE[m.role]}</span>
-										{/if}
-										{#if m.actions.includes('transfer_ownership')}
-											<button type="button" class="link-button" aria-expanded={mine === 'owner'} onclick={() => toggle(m.id, 'owner')}>Make owner…</button>
-										{/if}
-									</div>
-								</div>
-								<div class="prow">
-									<span class="plabel">Getting in</span>
-									<div class="pbody">
-										{#if codeHere}
-											<span class="sign-in-code num">{codeHere.code}</span>
-											<span class="muted code-note">
-												Works once, until {new Date(codeHere.expiresAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}. Give it to {m.name}
-												yourself: at the group’s link they tap their name and choose “use a sign-in code”.
-											</span>
-										{:else}
-											<span>{m.noPin ? 'No PIN yet.' : 'Has a PIN.'}</span>
-											{#if m.tools.includes('sign_in_code')}
-												<button type="button" class="btn small" aria-expanded={mine === 'code'} onclick={() => toggle(m.id, 'code')}>Make a sign-in code</button>
-											{:else if m.helpNote === 'other_group'}
-												<span class="muted">In another group too, so only {m.name} can change how they get in.</span>
-											{:else if m.helpNote === 'role'}
-												<span class="muted">Only the owner can help a co-admin back in.</span>
-											{/if}
-										{/if}
-									</div>
-								</div>
-								{#if m.tools.includes('merge') || m.canLinkGuests || m.actions.includes('remove_member') || m.actions.includes('suspend_member')}
-									<div class="pfoot">
-										<!-- Suspending (D79): a step before removing someone, undone with Reinstate. -->
-										{#if m.actions.includes('suspend_member') && m.standing === 'suspended'}
-											<form method="POST" action="?/reinstate" use:enhance={closeAfter}>
-												<input type="hidden" name="userId" value={m.id} />
-												<button class="btn small">Reinstate {m.name}</button>
-											</form>
-										{:else if m.actions.includes('suspend_member')}
-											<button type="button" class="link-button" aria-expanded={mine === 'suspend'} onclick={() => toggle(m.id, 'suspend')}>Suspend…</button>
-										{/if}
-										{#if m.tools.includes('merge')}
-											<button type="button" class="link-button" aria-expanded={mine === 'merge'} onclick={() => toggle(m.id, 'merge')}>Merge into another entry…</button>
-										{/if}
-										{#if m.canLinkGuests}
-											<button type="button" class="link-button" aria-expanded={mine === 'guest'} onclick={() => toggle(m.id, 'guest')}>Plays as a guest…</button>
-										{/if}
-										{#if m.actions.includes('remove_member')}
-											<button type="button" class="link-button danger-link" aria-expanded={mine === 'remove'} onclick={() => toggle(m.id, 'remove')}>Remove from the group…</button>
-										{/if}
-									</div>
-								{/if}
-								{#if mine}
-									<div class="confirm-well">
-										{#if mine === 'role' && m.role === 'member'}
-											<p>
-												Make {m.name} a co-admin? Co-admins can rename the group, make a new join code, remove members, change any play or night, and help
-												members back in. If you’re away for {data.ownerAwayDays} days, they can also archive or restore the group, or take over as owner.
-											</p>
-											<div class="cbtns">
-												<form method="POST" action="?/promote" use:enhance={closeAfter}>
-													<input type="hidden" name="userId" value={m.id} />
-													<button class="btn small">Make {m.name} a co-admin</button>
-												</form>
-												<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
-											</div>
-										{:else if mine === 'role'}
-											<p>Make {m.name} a regular member? They’ll no longer be able to manage the group.</p>
-											<div class="cbtns">
-												<form method="POST" action="?/demote" use:enhance={closeAfter}>
-													<input type="hidden" name="userId" value={m.id} />
-													<button class="btn small">Make {m.name} a regular member</button>
-												</form>
-												<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
-											</div>
-										{:else if mine === 'owner'}
-											<p>
-												{m.name} becomes the owner: they can delete the group and hand it on again. You become a co-admin, and only {m.name} can make you the
-												owner again.
-											</p>
-											<form method="POST" action="?/transfer" use:enhance={closeAfter} class="cbtns">
-												<input type="hidden" name="userId" value={m.id} />
-												<label class="into">
-													<span>Type <strong>{m.name}</strong> to confirm</span>
-													<input class="field" name="confirmName" required autocomplete="off" bind:value={ownerTyped} />
-												</label>
-												<button class="btn small" disabled={ownerTyped.replace(/\s+/g, ' ').trim().toLocaleLowerCase() !== m.name.toLocaleLowerCase()}>Make {m.name} the owner</button>
-												<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
-											</form>
-										{:else if mine === 'code'}
-											<p>
-												For when {m.name} has lost their PIN and every device. The code works once, for 10 minutes, and signs in as {m.name}, so give it to
-												them yourself.
-											</p>
-											<div class="cbtns">
-												<form method="POST" action="?/signInCode" use:enhance={closeAfter}>
-													<input type="hidden" name="userId" value={m.id} />
-													<button class="btn small">Make the code</button>
-												</form>
-												<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
-											</div>
-										{:else if mine === 'merge'}
-											{@const others = data.members
-												.filter((o) => o.id !== m.id && !o.isMe && o.onlyHere)
-												.sort((a, b) => Number(b.name === m.name) - Number(a.name === m.name) || b.joinedAt - a.joinedAt)}
-											<p>
-												If {m.name} joined again as someone new, this moves this entry’s games, plays, nights and wishlist to the new one and deletes this one.
-												The new one keeps this entry’s colour.
-											</p>
-											{#if others.length === 0}
-												<p class="muted">There’s no entry to merge into. The new entry has to be in this group only, since its games show in every group it’s in.</p>
-												<div class="cbtns"><button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button></div>
-											{:else}
-											<form method="POST" action="?/merge" use:enhance={closeAfter} class="cbtns">
-												<input type="hidden" name="userId" value={m.id} />
-												<label class="into">
-													<span>Into</span>
-													<select class="field" name="intoId" required>
-														{#each others as o (o.id)}
-															<option value={o.id}>{o.name}, joined {new Date(o.joinedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</option>
-														{/each}
-													</select>
-												</label>
-												<button class="btn small danger">Merge and delete this entry</button>
-												<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
-											</form>
-											{/if}
-										{:else if mine === 'guest'}
-											<GuestPlays member={m} guests={data.guests} onclose={() => (confirmFor = null)} done={closeAfter} />
-										{:else if mine === 'suspend'}
-											<p>
-												{m.name} can still sign in and look around, but can’t change anything here: no plays, nights, loans or marks, and no shelf changes
-												from this group. Their games stay on the shelf and their plays in the log. They see that you suspended them and when, with your note
-												if you leave one. Reinstate them, or remove them, later.
-											</p>
-											<form method="POST" action="?/suspend" use:enhance={closeAfter} class="cbtns">
-												<input type="hidden" name="userId" value={m.id} />
-												<label class="into">
-													<span>A note for {m.name} (optional)</span>
-													<input class="field" name="note" maxlength={MAX_SUSPENDED_NOTE} autocomplete="off" />
-												</label>
-												<button class="btn small danger">Suspend {m.name}</button>
-												<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
-											</form>
-										{:else if mine === 'remove'}
-											<p>{m.name}’s games leave the shelf. They can rejoin with the code unless you make a new one.</p>
-											<div class="cbtns">
-												<form method="POST" action="?/remove" use:enhance={closeAfter}>
-													<input type="hidden" name="userId" value={m.id} />
-													<button class="btn small danger">Remove {m.name}</button>
-												</form>
-												<button type="button" class="link-button" onclick={() => (confirmFor = null)}>Cancel</button>
-											</div>
-										{/if}
-									</div>
-								{/if}
-							</div>
-						</details>
-					{:else}
-						<div class="row">{@render person()}</div>
-					{/if}
-				</li>
+			{#each here as m (m.id)}
+				{@render memberRow(m)}
 			{:else}
-				<li class="muted none">Nobody by that name.</li>
+				{#if !awayShown.length}<li class="muted none">Nobody by that name.</li>{/if}
 			{/each}
 		</ul>
+		{#if awayShown.length}
+			<!-- Members who've been away (D86), folded under the rest; a search opens it. -->
+			<details class="away-fold" open={!!query.trim()}>
+				<summary><span class="away-h">Away</span> <span class="muted num">{awayShown.length}</span> <ChevronDown size={16} aria-hidden="true" /></summary>
+				<p class="muted small away-note">
+					Not here, in a play or at a game night for {data.awaySetting.months} {data.awaySetting.months === 1 ? 'month' : 'months'}. {data.awaySetting.hides
+						? 'Their games are off the shelf until they’re back.'
+						: 'Their games stay on the shelf.'} Visiting or playing brings them back.
+				</p>
+				<ul class="members">
+					{#each awayShown as m (m.id)}
+						{@render memberRow(m)}
+					{/each}
+				</ul>
+			</details>
+		{/if}
 		{#if data.role}
 			<p class="muted small">To leave this group, go to <a href="/me">your account</a>.</p>
 		{/if}
@@ -470,6 +530,27 @@
 		{#if form?.staleSaved}<p class="muted small" {@attach announce}>Saved.</p>{/if}
 		{#if form?.staleError}<p class="banner error" role="alert">{form.staleError}</p>{/if}
 	{/snippet}
+	{#snippet awayForm()}
+		<form method="POST" action="?/away" class="away-form" use:enhance={() => async ({ update }) => update({ reset: false })}>
+			<label class="visually-hidden" for="away">Mark members as away</label>
+			<select id="away" class="field" name="away" bind:value={awayChoice}>
+				<option value="off">Off</option>
+				<option value="on">After some months</option>
+			</select>
+			{#if awayChoice === 'on'}
+				<label class="filler-field">
+					<span>After</span>
+					<input class="field num" name="awayMonths" bind:value={awayMonths} inputmode="numeric" autocomplete="off" />
+					<span>months, from 1 to {AWAY_MONTHS.max}</span>
+				</label>
+				<label class="check"><input type="checkbox" name="awayHides" bind:checked={awayHides} /> Their games leave the shelf until they’re back</label>
+			{/if}
+			{#if awayPreview}<p class="banner">{awayPreview}</p>{/if}
+			<button class="btn">Save</button>
+		</form>
+		{#if form?.awaySaved}<p class="muted small" {@attach announce}>Saved.</p>{/if}
+		{#if form?.awayError}<p class="banner error" role="alert">{form.awayError}</p>{/if}
+	{/snippet}
 	{#snippet themeForm()}
 		<form method="POST" action="?/theme" class="rename" use:enhance={() => async ({ update }) => update({ reset: false })}>
 			<label class="visually-hidden" for="group-theme">Group theme</label>
@@ -558,6 +639,14 @@
 			value="The last {data.staleDays} days"
 			hint="How far back the shelf’s filter looks. Games never logged here always count."
 			error={!!form?.staleError}>{@render staleForm()}</SettingRow
+		>
+		<SettingRow
+			label="Away members"
+			value={data.awaySetting.months == null
+				? 'Off'
+				: `After ${data.awaySetting.months} ${data.awaySetting.months === 1 ? 'month' : 'months'}${data.awaySetting.hides ? ', their games off the shelf' : ''}`}
+			hint="Members who haven’t visited, been in a play or come to a game night for that long are listed apart as away, and last when picking who’s playing. Visiting or playing brings them back."
+			error={!!form?.awayError}>{@render awayForm()}</SettingRow
 		>
 		<SettingRow
 			label="Theme"
@@ -1073,6 +1162,50 @@
 		flex-wrap: wrap;
 		align-items: center;
 		gap: var(--s-2) var(--s-4);
+	}
+	.away-form {
+		display: grid;
+		justify-items: start;
+		gap: var(--s-3);
+		max-width: 30rem;
+		margin-top: var(--s-3);
+	}
+	.away-form .field.num {
+		width: 4.5rem;
+	}
+	.away-form .banner {
+		margin: 0;
+	}
+	.check {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--s-2);
+		min-height: 44px;
+	}
+	.check input {
+		width: 18px;
+		height: 18px;
+		accent-color: var(--ink);
+	}
+	.away-fold > summary {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--s-2);
+		min-height: 44px;
+		cursor: pointer;
+		list-style: none;
+	}
+	.away-fold > summary::-webkit-details-marker {
+		display: none;
+	}
+	.away-fold[open] > summary :global(svg) {
+		transform: rotate(180deg);
+	}
+	.away-h {
+		font-weight: 750;
+	}
+	.away-note {
+		margin: 0;
 	}
 	.filler-field {
 		display: inline-flex;

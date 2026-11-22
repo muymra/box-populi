@@ -31,6 +31,8 @@ import { formatSignInCode, makeSignInCode, memberReachRead, mergeMember, recover
 import { assembleGuestHistory, guestHistoryReads, linkGuestPlays } from '#lib/server/guest-plays.ts';
 import { can } from '#lib/server/permissions.ts';
 import { getDb } from '#lib/server/platform.ts';
+import { markAround, setAway } from '#lib/server/away.ts';
+import { isAway } from '#lib/away.ts';
 import type { Actions, PageServerLoad, RequestEvent } from './$types';
 
 export const load: PageServerLoad = async (event) => {
@@ -53,15 +55,31 @@ export const load: PageServerLoad = async (event) => {
 			groupId
 		),
 		away: access.role === 'admin' ? ownerAwayRead(db, groupId, Date.now(), event.locals.config.ownerAwayDays) : known(false),
+		// Members who've been away (D86): how many of their games are off the shelf while they are. The one
+		// read here that joins copies to memberships, since group_copies leaves these copies out.
+		offShelf: extras.away.hides
+			? rowsOf<{ user_id: string; n: number }>(
+					db,
+					`SELECT m.user_id, COUNT(*) AS n FROM memberships m JOIN copies c ON c.user_id = m.user_id
+					 WHERE m.group_id = ?1 AND m.off_shelf = 1
+					   AND NOT EXISTS (SELECT 1 FROM hidden_copies h WHERE h.group_id = m.group_id AND h.user_id = c.user_id AND h.game_id = c.game_id)
+					 GROUP BY m.user_id`,
+					groupId
+				)
+			: known([]),
 		// Guest plays to a member (D37): the guest names and what they were in, for the owner and co-admins.
 		...(manages ? guestHistoryReads(db, groupId) : { guestPlays: known([]), guestNights: known([]) })
 	});
 	const { members, counts, reach, away } = r;
+	const now = Date.now();
+	const offShelf = new Map(r.offShelf.map((o) => [o.user_id, o.n]));
 	const since = new Map(r.since.map((s) => [s.user_id, s.waiting_since ?? s.suspended_at ?? 0]));
 	const guests = manages ? assembleGuestHistory(r.guestPlays, r.guestNights) : [];
 	return {
 		guests,
-		now: Date.now(),
+		now,
+		// Members who've been away (D86): the group's months (null while off) and whether their games leave the shelf.
+		awaySetting: extras.away,
 		nightsBy: extras.nightsBy === 'admins' ? ('admins' as const) : ('members' as const),
 		// New members wait to be let in (D79). Everyone sees who's waiting; the owner and co-admins act.
 		probationOn: extras.probation,
@@ -93,9 +111,19 @@ export const load: PageServerLoad = async (event) => {
 			since: since.get(m.id) ?? null,
 			colorIndex: m.colorIndex,
 			lastSeenAt: m.lastSeenAt,
+			/** When they were last around (D86), and whether that makes them away here. */
+			activeAt: m.activeAt,
+			away: isAway(m.activeAt, extras.away.months, now),
+			/** Their games on the shelf, and those off it while they're away (D86). */
 			games: counts.get(m.id) ?? 0,
+			gamesOff: offShelf.get(m.id) ?? 0,
 			isMe: m.id === me?.id,
-			actions: actor ? memberActions(actor, m) : [],
+			actions: actor
+				? [
+						...memberActions(actor, m),
+						...(isAway(m.activeAt, extras.away.months, now) && can(actor.role, 'mark_around', { targetIsSelf: m.id === actor.id }) ? (['mark_around'] as const) : [])
+					]
+				: [],
 			// For the owner and co-admins only: who still needs a PIN, and who can be helped back in (D48).
 			noPin: actor != null && actor.role !== 'member' && reach.get(m.id)?.hasPin === false,
 			tools: actor ? recoveryTools(actor, m, reach.get(m.id)?.groups ?? 0) : [],
@@ -217,6 +245,19 @@ export const actions: Actions = {
 		if (!result.ok) return fail(400, { memberError: result.error });
 		const name = (await one<{ name: string }>(db, 'SELECT name FROM users WHERE id = ?1', target(form)))?.name ?? 'them';
 		return { guestLinked: { name, plays: result.plays, nights: result.nights, skipped: result.skipped } };
+	},
+
+	// Members who've been away (D86): the setting, and marking one as around.
+	away: async (event) => {
+		const result = await act(event, 'admin', (db, id, actor, form) =>
+			setAway(db, id, actor, { away: form.get('away'), months: form.get('awayMonths'), hides: form.get('awayHides') }, Date.now())
+		);
+		return result.ok ? { awaySaved: true } : fail(400, { awayError: result.error });
+	},
+
+	around: async (event) => {
+		const result = await act(event, 'admin', (db, id, actor, form) => markAround(db, id, actor, target(form), Date.now()));
+		return result.ok ? { memberChanged: true } : fail(400, { memberError: result.error });
 	},
 
 	// New members wait to be let in (D79). Turning it off lets everyone waiting in, once the form confirms it.

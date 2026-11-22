@@ -1,5 +1,6 @@
 // Server side of the catalog: builds the payload the browser filters (TECH.md "Catalog delivery")
 // and keeps `groups.catalog_version` current so the ETag changes when the payload does.
+import { aroundAt } from './away.ts';
 import { standingOf } from '#lib/standing.ts';
 import { jsonArray, mapRead, one, readAll, rowsOf, run, stmt, type DB, type Read } from './db.ts';
 import { applyCorrection, correctionsRead } from './corrections.ts';
@@ -72,16 +73,17 @@ export async function loadMembers(db: DB, groupId: string): Promise<CatalogMembe
 /** loadMembers as a read, to share a round trip with others (`readAll`, D59). */
 export function membersRead(db: DB, groupId: string): Read<CatalogMember[]> {
 	return mapRead(
-		rowsOf<{ id: string; name: string; role: Role; last_seen_at: number; color_index: number | null; waiting_since: number | null; suspended_at: number | null }>(
+		rowsOf<{ id: string; name: string; role: Role; last_seen_at: number; active_at: number; color_index: number | null; waiting_since: number | null; suspended_at: number | null }>(
 			db,
-			`SELECT u.id, u.name, m.role, m.last_seen_at, m.color_index, m.waiting_since, m.suspended_at
+			// Most recently around first (D86), so anyone who's been away comes last in every list built from it.
+			`SELECT u.id, u.name, m.role, m.last_seen_at, ${aroundAt('m')} AS active_at, m.color_index, m.waiting_since, m.suspended_at
 			 FROM memberships m JOIN users u ON u.id = m.user_id
 			 WHERE m.group_id = ?1
-			 ORDER BY m.last_seen_at DESC, u.name`,
+			 ORDER BY active_at DESC, u.name`,
 			groupId
 		),
 		// Each member's colour is stored when they join (D69), so nobody's changes when someone leaves.
-		(rows) => rows.map((r) => ({ id: r.id, name: r.name, role: r.role, lastSeenAt: r.last_seen_at, colorIndex: r.color_index ?? 0, standing: standingOf(r) }))
+		(rows) => rows.map((r) => ({ id: r.id, name: r.name, role: r.role, lastSeenAt: r.last_seen_at, activeAt: r.active_at, colorIndex: r.color_index ?? 0, standing: standingOf(r) }))
 	);
 }
 

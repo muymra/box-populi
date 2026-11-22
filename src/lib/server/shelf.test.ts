@@ -38,6 +38,17 @@ describe('the shelf check (D66, D82)', () => {
 		expect(ours).toEqual(view);
 	});
 
+	it('leaves out the games of a member who’s away where the group takes them off the shelf, as the view does (D86)', async () => {
+		await run(db, `UPDATE memberships SET off_shelf = 1 WHERE group_id = 'g2' AND user_id = 'bo'`);
+		for (const group of ['g1', 'g2']) {
+			const ours = await all(db, `SELECT c.user_id, c.game_id FROM copies c WHERE ${copyOnShelf('?1', 'c')} ORDER BY 1, 2`, group);
+			const view = await all(db, `SELECT user_id, game_id FROM group_copies WHERE group_id = ?1 ORDER BY 1, 2`, group);
+			expect(ours).toEqual(view);
+		}
+		const on = await all<{ game_id: number }>(db, `SELECT g.id AS game_id FROM games g WHERE ${onShelf('?1', 'g.id')} ORDER BY 1`, 'g2');
+		expect(on.map((r) => r.game_id)).toEqual([3]); // Bo's 2 and 4 are off g2's shelf, still on g1's
+	});
+
 	it('starts from the game’s copies, not from every member of the group', async () => {
 		const plan = await queryPlan(db, `SELECT w.game_id FROM wishlist w WHERE NOT ${onShelf('?1', 'w.game_id')}`, 'g1');
 		expect(plan).toContain('copies_game');

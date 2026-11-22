@@ -150,6 +150,11 @@ describe('regulars', () => {
 		expect(rankMembers(members.slice(0, 5), regulars, '2026-11-07').map((m) => m.id)).toEqual(['c', 'd', 'a', 'b', 'e']);
 		expect(recentNights(regulars.e, '2026-11-07')).toBe(0);
 	});
+	it('puts members who’ve been away last, however often they were here on this device (D86)', () => {
+		const regulars = { c: ['2026-11-07', '2026-10-31'], d: ['2026-11-07'] };
+		const list = members.slice(0, 5).map((m) => ({ ...m, away: m.id === 'c' || m.id === 'a' }));
+		expect(rankMembers(list, regulars, '2026-11-07').map((m) => m.id)).toEqual(['d', 'b', 'e', 'c', 'a']);
+	});
 	it('folds a big group to the first few plus anyone kept, and leaves a small one whole', () => {
 		const big = foldMembers(members, new Set(['k']));
 		expect(big.shown.map((m) => m.id)).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'k']);

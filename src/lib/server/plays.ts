@@ -2,6 +2,7 @@
 // plays, and the group's podium points. Every function takes the group, and nothing crosses groups.
 import { all, mapRead, one, readAll, rowOf, rowsOf, run, stmt, type DB, type Read } from './db.ts';
 import { fullMember } from './standing.ts';
+import { aroundStatements, dayAt } from './away.ts';
 import { bumpCatalogForGroup } from './catalog.ts';
 import { can } from './permissions.ts';
 import { gameOnNight, nightDay } from './nights.ts';
@@ -52,20 +53,23 @@ function optionalInt(raw: FormDataEntryValue | undefined, min: number, max: numb
 /**
  * Reads the log form. `player` lists "m:<member id>" or "g:<guest name>" in order, and each player's
  * score and place come in `score:<key>` and `place:<key>`, named after them rather than paired by
- * position, because a select with no matching option sends nothing. `result` is scores, places, won
- * or lost. `latest` is the newest allowed date.
+ * position, because a select with no matching option sends nothing. `result` is scores, places, teams,
+ * won or lost. A team play (D87) gives each player's team in `team:<key>` and each team's place in
+ * `teamPlace:<team>`; teams are numbered again from 1 without gaps, and every player takes their
+ * team's place. `latest` is the newest allowed date.
  */
 export function parsePlayForm(form: FormData, latest: string): Result<PlayInput> {
 	const playedOn = String(form.get('playedOn') ?? '');
 	if (!validDate(playedOn, latest)) return { ok: false, error: 'Pick the date it was played, today or earlier.' };
 	const result = String(form.get('result') ?? '');
-	if (!['scores', 'places', 'won', 'lost'].includes(result)) return { ok: false, error: 'Say how it ended.' };
+	if (!['scores', 'places', 'teams', 'won', 'lost'].includes(result)) return { ok: false, error: 'Say how it ended.' };
 
 	const keys = form.getAll('player').map(String);
 	if (keys.length === 0) return { ok: false, error: 'Add who played.' };
 	if (keys.length > MAX_PLAY_PLAYERS) return { ok: false, error: `A play can have up to ${MAX_PLAY_PLAYERS} players.` };
 
 	const players: PlayPlayer[] = [];
+	const teams: number[] = [];
 	const seen = new Set<string>();
 	for (let i = 0; i < keys.length; i++) {
 		const key = keys[i];
@@ -81,6 +85,12 @@ export function parsePlayForm(form: FormData, latest: string): Result<PlayInput>
 		const place = optionalInt(form.get(`place:${key}`) ?? undefined, 1, MAX_PLAY_PLAYERS);
 		if (score === 'bad') return { ok: false, error: `Scores are whole numbers up to ${MAX_SCORE.toLocaleString('en')}.` };
 		if (place === 'bad') return { ok: false, error: 'A place is a number from 1 up.' };
+		if (result === 'teams') {
+			const team = optionalInt(form.get(`team:${key}`) ?? undefined, 1, MAX_PLAY_PLAYERS);
+			if (team === 'bad') return { ok: false, error: 'A team is a number from 1 up.' };
+			if (team == null) return { ok: false, error: `Put ${guestName ?? 'everyone'} in a team.` };
+			teams.push(team);
+		}
 		players.push({ userId, guestName, score, place });
 	}
 
@@ -88,6 +98,31 @@ export function parsePlayForm(form: FormData, latest: string): Result<PlayInput>
 	const nightId = String(form.get('nightId') ?? '') || null;
 	if (result === 'won' || result === 'lost') {
 		return { ok: true, value: { playedOn, coop: result, lowestWins: false, nightId, players: players.map((p) => ({ ...p, place: null })) } };
+	}
+	if (result === 'teams') {
+		const used = [...new Set(teams)].sort((a, b) => a - b);
+		if (used.length < 2) return { ok: false, error: 'Make at least two teams.' };
+		const given: (number | null)[] = [];
+		for (const team of used) {
+			const place = optionalInt(form.get(`teamPlace:${team}`) ?? undefined, 1, MAX_PLAY_PLAYERS);
+			if (place === 'bad') return { ok: false, error: 'A place is a number from 1 up.' };
+			given.push(place);
+		}
+		if (given.every((p) => p == null)) return { ok: false, error: 'Pick at least the winning team.' };
+		const teamPlaces = fillPlaces(given);
+		return {
+			ok: true,
+			value: {
+				playedOn,
+				coop: null,
+				lowestWins: false,
+				nightId,
+				players: players.map((p, i) => {
+					const n = used.indexOf(teams[i]);
+					return { ...p, score: null, team: n + 1, place: teamPlaces[n] };
+				})
+			}
+		};
 	}
 	if (result === 'scores') {
 		if (players.every((p) => p.score == null)) return { ok: false, error: 'Enter at least one score, or pick places instead.' };
@@ -143,13 +178,14 @@ function playerInserts(db: DB, playId: string, players: PlayPlayer[]): D1Prepare
 	return players.map((p, seat) =>
 		stmt(
 			db,
-			'INSERT INTO play_players (play_id, seat, user_id, guest_name, place, score) VALUES (?1, ?2, ?3, ?4, ?5, ?6)',
+			'INSERT INTO play_players (play_id, seat, user_id, guest_name, place, score, team) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)',
 			playId,
 			seat,
 			p.userId,
 			p.guestName,
 			p.place,
-			p.score
+			p.score,
+			p.team ?? null
 		)
 	);
 }
@@ -192,7 +228,9 @@ export async function savePlay(db: DB, groupId: string, actor: Actor, gameId: nu
 			),
 			stmt(db, 'DELETE FROM play_players WHERE play_id = ?1', playId),
 			...playerInserts(db, playId, input.players),
-			bumpCatalogForGroup(db, groupId)
+			bumpCatalogForGroup(db, groupId),
+			// Its players were around that day (D86).
+			...aroundStatements(db, groupId, input.players.map((p) => p.userId), dayAt(input.playedOn), now)
 		]);
 		return { ok: true, value: playId };
 	}
@@ -213,7 +251,8 @@ export async function savePlay(db: DB, groupId: string, actor: Actor, gameId: nu
 			nightId
 		),
 		...playerInserts(db, id, input.players),
-		bumpCatalogForGroup(db, groupId)
+		bumpCatalogForGroup(db, groupId),
+		...aroundStatements(db, groupId, input.players.map((p) => p.userId), dayAt(input.playedOn), now)
 	]);
 	return { ok: true, value: id };
 }
@@ -276,13 +315,14 @@ export function playsRead(db: DB, groupId: string, q: PlayQuery = {}): Read<Stor
 		guest_name: string | null;
 		place: number | null;
 		score: number | null;
+		team: number | null;
 	};
 	return mapRead(
 		rowsOf<PlayRow>(
 			db,
 			`SELECT p.id, p.game_id, COALESCE(gc.name, g.name) AS game_name, g.bgg_id, g.source, g.is_manual, p.played_on, p.coop, p.lowest_wins, p.logged_by,
 			        p.night_id, n.name AS night_name,
-			        pp.user_id, pp.guest_name, pp.place, pp.score
+			        pp.user_id, pp.guest_name, pp.place, pp.score, pp.team
 			 FROM (SELECT * FROM plays WHERE ${where.join(' AND ')} ORDER BY played_on DESC, created_at DESC${limit}) p
 			 JOIN games g ON g.id = p.game_id
 			 LEFT JOIN game_corrections gc ON gc.group_id = p.group_id AND gc.game_id = p.game_id
@@ -312,7 +352,7 @@ export function playsRead(db: DB, groupId: string, q: PlayQuery = {}): Read<Stor
 					};
 					plays.set(r.id, play);
 				}
-				play.players.push({ userId: r.user_id, guestName: r.guest_name, place: r.place, score: r.score });
+				play.players.push({ userId: r.user_id, guestName: r.guest_name, place: r.place, score: r.score, ...(r.team != null && { team: r.team }) });
 			}
 			return [...plays.values()];
 		}
@@ -331,11 +371,11 @@ export function playOutcomesRead(db: DB, groupId: string, q: { since?: string; w
 		? `play_players me CROSS JOIN plays p CROSS JOIN play_players pp
 		   WHERE me.user_id = ?${params.push(q.withUser)} AND p.id = me.play_id AND p.group_id = ?1${since} AND pp.play_id = p.id`
 		: `plays p CROSS JOIN play_players pp WHERE p.group_id = ?1${since} AND pp.play_id = p.id`;
-	type Row = { id: string; played_on: string; coop: Coop | null; night_id: string | null; user_id: string | null; guest_name: string | null; place: number | null };
+	type Row = { id: string; played_on: string; coop: Coop | null; night_id: string | null; user_id: string | null; guest_name: string | null; place: number | null; team: number | null };
 	return mapRead(
 		rowsOf<Row>(
 			db,
-			`SELECT p.id, p.played_on, p.coop, p.night_id, pp.user_id, pp.guest_name, pp.place FROM ${from}
+			`SELECT p.id, p.played_on, p.coop, p.night_id, pp.user_id, pp.guest_name, pp.place, pp.team FROM ${from}
 			 ORDER BY p.played_on DESC, p.created_at DESC, p.id, pp.seat`,
 			...params
 		),
@@ -344,7 +384,8 @@ export function playOutcomesRead(db: DB, groupId: string, q: { since?: string; w
 			for (const r of rows) {
 				let play = plays.get(r.id);
 				if (!play) plays.set(r.id, (play = { id: r.id, playedOn: r.played_on, coop: r.coop, nightId: r.night_id, players: [] }));
-				play.players.push({ userId: r.user_id, guestName: r.guest_name, place: r.place });
+				// `team` only in a team play, so the kept histories in plays_cache don't grow by a field per seat.
+				play.players.push({ userId: r.user_id, guestName: r.guest_name, place: r.place, ...(r.team != null && { team: r.team }) });
 			}
 			return [...plays.values()];
 		}

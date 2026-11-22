@@ -9,6 +9,7 @@ import { sha256Hex, type Person } from './identity.ts';
 import type { Actor, AdminResult } from './group-admin.ts';
 import { memberRole } from './group-admin.ts';
 import { can } from './permissions.ts';
+import { refreshAwayStatements } from './away.ts';
 import { giveBack, groupSubject, ipSubject, LIMITS, take } from './ratelimit.ts';
 import type { Role } from '#lib/catalog/types.ts';
 
@@ -231,6 +232,7 @@ export async function mergeMember(
 			                      THEN (SELECT color_index FROM memberships WHERE group_id = ?1 AND user_id = ?2) ELSE color_index END,
 			   joined_at = MIN(joined_at, (SELECT joined_at FROM memberships WHERE group_id = ?1 AND user_id = ?2)),
 			   last_seen_at = MAX(last_seen_at, (SELECT last_seen_at FROM memberships WHERE group_id = ?1 AND user_id = ?2)),
+			   active_at = MAX(active_at, (SELECT active_at FROM memberships WHERE group_id = ?1 AND user_id = ?2)),
 			   role = ?4,
 			   -- Standing (D79): let in if either entry was; suspended if either was, keeping who did it and the note.
 			   waiting_since = CASE WHEN (SELECT waiting_since FROM memberships WHERE group_id = ?1 AND user_id = ?2) IS NULL THEN NULL ELSE waiting_since END,
@@ -245,7 +247,9 @@ export async function mergeMember(
 		),
 		...deletePersonStatements(db, oldId),
 		bumpCatalogForGroup(db, groupId),
-		bumpCatalogForUser(db, newId)
+		bumpCatalogForUser(db, newId),
+		// The merged entry has the later dates of the two, so whether it's away (D86) may have changed.
+		...refreshAwayStatements(db, groupId, Date.now())
 	]);
 	return { ok: true };
 }

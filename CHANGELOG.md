@@ -4,6 +4,11 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+**Upgrading:** two migrations, `0026_play_teams.sql` (a column on `play_players`) and `0027_away_members.sql` (columns on `groups` and `memberships`, filled from the plays and nights already logged, a trigger, and the `group_copies` view recreated). On Cloudflare, note a Time Travel bookmark and export a backup first, then apply it before deploying (SELF_HOSTING.md "Upgrading"). Docker, Vercel and Netlify apply it on their first request.
+
+- Plays can be logged as **Teams**, two or more: put each player in a team, then pick the winning team (and with three or more, the next places if you like). Everyone on a team gets its place and points, so three teams now score 1st, 2nd and last, where scores shared out between seats gave the middle team third-place points. A team can be one player, for a traitor or one against the rest. Plays lists show "Ada & Kai 1st · Bram & Chen 2nd", a profile's "You and Bram" counts plays on the same team apart instead of as a win over each other, and the plays export gains a `team` column at the end.
+- A group can mark members as **away**: on the Group tab, under Settings, "Away members" (off unless turned on) counts someone away after some months (6 to start with, 1 to 24) without visiting, being in a play or coming to a game night. They fold into an "Away" list under the members and come last when picking who's here, players, who's going, a host or a borrower. A second switch, also off, takes their games off the group's shelf until they're back; nothing is deleted, and a visit or a play brings them back at once. Before saving, the setting names who'd go away and how many games would leave. The owner or a co-admin can mark an away member as around.
+
 ## 0.11.0 (2026-11-21)
 
 **Upgrading:** no migrations and no new settings, so no backup is needed: pull and deploy. Reseed a demo group to give its Wanted tab Play soon marks; nothing breaks without it.

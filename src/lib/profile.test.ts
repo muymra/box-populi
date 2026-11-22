@@ -46,13 +46,28 @@ describe('headToHead', () => {
 			youWon: 3, // 2026-11-06, the shared first, 2025-12-31
 			theyWon: 2, // 2026-11-06, the shared first
 			othersWon: 1, // Dewi on 2026-10-23
+			sameTeam: 0,
+			sameTeamWon: 0,
 			coop: 1,
 			coopWon: 1
 		});
 	});
 
 	it('is all zeros for two people who never played together', () => {
-		expect(headToHead(plays, 'eli', 'dewi')).toEqual({ together: 0, last: null, youWon: 0, theyWon: 0, othersWon: 0, coop: 0, coopWon: 0 });
+		expect(headToHead(plays, 'eli', 'dewi')).toEqual({ together: 0, last: null, youWon: 0, theyWon: 0, othersWon: 0, sameTeam: 0, sameTeamWon: 0, coop: 0, coopWon: 0 });
+	});
+});
+
+describe('headToHead in team plays (D87)', () => {
+	const t = (userId: string, team: number, place: number): PlayPlayer => ({ userId, guestName: null, place, score: null, team });
+	const teamPlays = [
+		play('2026-11-20', [t('ada', 1, 1), t('bram', 1, 1), t('chen', 2, 2)]), // won together
+		play('2026-11-13', [t('ada', 1, 2), t('bram', 1, 2), t('chen', 2, 1)]), // lost together
+		play('2026-11-06', [t('ada', 1, 1), t('chen', 1, 1), t('bram', 2, 2)]), // Ada's team beat Bram's
+		play('2026-10-30', [t('ada', 1, 3), t('bram', 2, 2), t('chen', 3, 1)]) // three teams, Chen's won
+	];
+	it('counts the same team apart, and opposite teams as a play against each other', () => {
+		expect(headToHead(teamPlays, 'ada', 'bram')).toEqual({ together: 4, last: '2026-11-20', youWon: 1, theyWon: 0, othersWon: 1, sameTeam: 2, sameTeamWon: 1, coop: 0, coopWon: 0 });
 	});
 });
 

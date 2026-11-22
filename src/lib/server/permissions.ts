@@ -26,7 +26,9 @@ export type GroupAction =
 	| 'link_guest_plays'
 	| 'set_probation'
 	| 'let_in'
-	| 'suspend_member';
+	| 'suspend_member'
+	| 'set_away'
+	| 'mark_around';
 
 export type PermissionContext = {
 	/** Role of the member being acted on, for member-targeted actions. */
@@ -59,7 +61,12 @@ export function can(actor: Role, action: GroupAction, ctx: PermissionContext = {
 		case 'set_points':
 		case 'set_night_planners':
 		case 'set_probation':
+		// Members who've been away (D86): the setting, its months and whether their games leave the shelf.
+		case 'set_away':
 			return atLeast(actor, 'admin');
+		// Marking an away member as around (D86): the owner or a co-admin, for anyone but themselves (being here is being around).
+		case 'mark_around':
+			return atLeast(actor, 'admin') && !targetIsSelf;
 		// Letting in someone waiting (D79): the owner or a co-admin. Declining is removing them.
 		case 'let_in':
 			return atLeast(actor, 'admin') && !targetIsSelf && targetStanding === 'waiting';

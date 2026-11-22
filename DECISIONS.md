@@ -664,3 +664,35 @@ Carlo, 2026-11-21, picking the first of three options after `wrangler d1 insight
 **Why:** a mouse press nearly always ends in a click, so its head start costs nothing; a touch often doesn't. The other options were no data preloading anywhere (desktop clicks lose about 100ms as well) and turning it off on the long lists only (a list missed keeps the problem).
 **Trade-offs accepted:** a tap on a phone starts loading about 100ms later than before. A touchscreen laptop preloads on a mouse press and not on a touch.
 **Revisit if:** SvelteKit stops preloading on `touchstart`, or the next `d1 insights` still shows game pages far ahead of shelf loads.
+
+## D86. Members who've been away, and their games off the shelf if a group chooses (2026-11-22)
+
+Carlo, 2026-11-22: "admin setting toggle for inactive members, be able to set number of months before a member is considered inactive, additional toggle if inactive member has their games hidden from shelf. think about the safest, friendliest defaults." He took the seven defaults offered (STATUS item 70):
+1. **Off unless a group turns it on**, on the Group tab under Settings, by the owner and co-admins (`can('rename')`). Until then nothing changes, as with probation (D79).
+2. **"Away", not "inactive"**, the word the owner's 60 days already use (D51).
+3. **6 months by default, 1 to 24.**
+4. **Being around is more than opening the app**: the latest of a visit to the group, a play they were in, a night they came to or said they'd go to, and joining. A new `memberships.active_at` holds it, filled from existing plays and nights; `last_seen_at` stays the owner's away clock (D51).
+5. **Away with their games kept**: folded into an "Away" list on the Group tab, and listed last (still pickable) for who's here, players, going, host and borrower. Picking them for a play or a night brings them back. Plays, the leaderboard, nights and profiles don't change, and the member isn't told.
+6. **Their games leave the shelf only with a second switch, off by default.** Nothing is deleted or written to `hidden_copies`, so their own choices stay and the games come back when they do. Saving either switch, or fewer months, first names who goes away and counts the games that leave.
+7. **"Mark as around"** for the owner and co-admins, which sets `active_at` to now.
+It applies to everyone, the owner and co-admins too, without changing roles.
+**Why:** a shelf that lists games of people who moved away or stopped coming offers games nobody can bring, and long member lists slow the pickers at the table. Counting plays and nights keeps someone who comes every week, while another member logs the plays, from going away.
+**Changes D66:** a copy's owner was the only one who could take it off a group's shelf. With the second switch on, the owner and co-admins can, for every member at once and only while they're away. PRD open question 2 (co-admins removing others' copies) stays at no: nothing is removed.
+**Trade-offs accepted:** a member who comes to nights that nobody records, and never opens the app, goes away after the months pass, until someone marks them as around or picks them for a play. With no cron, who's away is worked out at most once a day, on a visit to the group.
+**Revisit if:** groups want the away member told, or want a per-member exception that never expires.
+**From the 2026-11-22 audit (before release):** the daily check takes its cutoff from the group's row as it runs, since a visit could read the setting, the owner turn it off, and the visit's check then hide games with nothing left to bring them back; "That's right" on a night, moving a night with plays, and linking guest plays count as being around; a merge brings `off_shelf` up to date; the request that changes `off_shelf` answers with the new catalog version; the backfill doesn't count a night someone was marked as missing. Measured at the planned scale (50 members, 4,000 games), every existing read costs the same rows as before (the catalog 28,116, Wanted 1,140, a profile 3,871); the daily check reads 75 rows, a visit 1, a play's activity 16; the migration's backfill 37,870 once.
+**Also accepted after the audit:** while an away member's games are off the shelf, a game only they own can't be logged, even if they bring it to a night. The member opening the app, or "Mark as around", brings their games back first. Carlo chose this over letting "who's here" bring them back for the evening (2026-11-22).
+
+## D87. Teams in the play log: a fourth result, ranked by place (2026-11-22)
+
+Carlo asked how logged plays handle team games, then: "take into account also more than 2 teams in a game, it's not common but possible." Until now a team was a tie (winners share 1st, the rest blank share last), which fails with three or more teams: Scores mode ranks seats (1, 1, 3, 3, 5, 5), so the middle team gets third-place points. Of three shapes (a fourth result ranked by place; a "Played in teams" switch that also takes team scores, about twice the work; a hint on today's ties), Carlo chose the first, then took the defaults for the rest (STATUS item 71):
+1. **Teams is a fourth result** beside Places, Scores and Co-op. Players go in Team 1, Team 2, or "+ Team", up to one team per player; a team of one is allowed, for a traitor or one against the rest.
+2. **Teams are ranked, not scored.** Pick the winning team, and with three or more, 2nd and further if you like; teams left blank share last, and tied teams share a place. Each player's row stores their team's place, in a new `play_players.team`, so the leaderboard SQL and the standings don't change.
+3. **Numbered, not named.**
+4. **Every player on a team gets the team's place points**, and the last team none. Uneven teams aren't adjusted.
+5. **"You and Bram" counts the same team apart** ("On the same team 4 times, won 3"); "you won" and "they won" count only plays on opposite sides or without teams.
+6. **The plays export gains a `team` column at the end**, empty for plays without teams.
+Plays already logged stay as they are, since a tie can't be told from a team.
+**Why:** a team ranked by place covers two teams, three or more, traitors and one against many in one form, and keeps the scoring the leaderboard already does.
+**Trade-offs accepted:** no team scores are kept, so a team play's export has no score. Four who beat one each get first-place points; the leaderboard is for fun (D37), and splitting would make fractions.
+**Revisit if:** groups want team scores recorded, or team names.
