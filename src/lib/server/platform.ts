@@ -21,3 +21,13 @@ export function getDb(): D1Database {
 export function afterResponse(promise: Promise<unknown>): void {
 	waitUntil(promise.catch((e) => console.error('background task failed', e)));
 }
+
+/**
+ * The data centre's HTTP cache, for the demo's pages that every signed-out visitor sees alike (D88).
+ * None in dev, where `vite dev` emulates bindings but not the Cache API. On `*.workers.dev` it's
+ * there but keeps nothing, which only means every request renders.
+ */
+export function pageCache(): Cache | null {
+	if (dev) return null;
+	return (globalThis as { caches?: { default?: Cache } }).caches?.default ?? null;
+}

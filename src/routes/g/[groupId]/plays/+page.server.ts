@@ -12,7 +12,7 @@ import { cameList, nightPlayers } from '#lib/nights.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 /** Plays on a page of the timeline, widened to whole days; "Show older" pages back (D70). */
-const LISTED = 100;
+const LISTED = 25;
 
 export const load: PageServerLoad = async (event) => {
 	const db = getDb();

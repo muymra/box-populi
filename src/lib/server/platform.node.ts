@@ -35,3 +35,8 @@ export function getDb(): D1Database {
 export function afterResponse(promise: Promise<unknown>): void {
 	promise.catch((e) => console.error('background task failed', e));
 }
+
+/** No shared page cache here; every request renders (D88). */
+export function pageCache(): Cache | null {
+	return null;
+}

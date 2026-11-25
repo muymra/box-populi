@@ -1,6 +1,8 @@
 import type { Handle, HandleServerError } from '@sveltejs/kit/hooks';
 import { errorRef, errorStatus } from '#lib/error-ref.ts';
-import { getConfig, getDb } from '#lib/server/platform.ts';
+import { version } from '$app/env';
+import { afterResponse, getConfig, getDb, pageCache } from '#lib/server/platform.ts';
+import { demoCacheKey, demoCacheable, forCache, fromCache, storable } from '#lib/server/page-cache.ts';
 import { resolveSession, SESSION_COOKIE } from '#lib/server/identity.ts';
 import { clearAdminCookie, clearSessionCookie, setSessionCookie, THEME_COOKIE } from '#lib/server/cookies.ts';
 import { AUTO_THEME, isDeviceTheme, isThemeId, resolveTheme } from '#lib/themes.ts';
@@ -28,6 +30,15 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const config = getConfig();
 	if (!config.ok) return configErrorPage(config.errors);
 	event.locals.config = config.config;
+
+	// The demo's pages look the same to every signed-out visitor, so a data centre keeps each for a
+	// few minutes and answers from it before any query runs (D88).
+	const cache = demoCacheable(event.request.method, event.url.pathname, (name) => event.cookies.get(name)) ? pageCache() : null;
+	const cacheKey = cache ? demoCacheKey(event.request.url, version) : '';
+	if (cache) {
+		const hit = await cache.match(cacheKey);
+		if (hit) return fromCache(hit);
+	}
 
 	// Who is this device? (DECISIONS D25)
 	const token = event.cookies.get(SESSION_COOKIE);
@@ -96,6 +107,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 	response.headers.set('content-security-policy', "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'");
 	// SEARCH_ENGINES=block: an instance meant only for the people who have its links.
 	if (config.config.searchEngines === 'block') response.headers.set('x-robots-tag', 'noindex, nofollow');
+	if (cache && storable(response, event.isDataRequest)) {
+		afterResponse(cache.put(cacheKey, forCache(response.clone())));
+		response.headers.set('x-box-cache', 'miss');
+	}
 	return response;
 };
 
