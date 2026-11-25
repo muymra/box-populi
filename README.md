@@ -82,6 +82,10 @@ Forgot your PIN and have no device that's still signed in? Ask your group's owne
 
 Everyone can pick the default look or one of twelve other themes at the bottom of any page, a group can choose its own, and the person running the copy can add their own colours and logo.
 
+### Can I ask for a feature?
+
+You can open an issue, but Box Populi is a side project Carlo builds in his spare time for his own board game group, and what gets built next comes from what that group runs into. A request may wait a long time or not happen at all. Bug reports are welcome, especially anything that breaks a self-hosted copy. If you'd like to send a pull request, ask in an issue first. The code is MIT-licensed, so you're free to fork it and build what your group needs.
+
 ## For developers
 
 Box Populi is built with SvelteKit 3 and SQLite: Cloudflare D1 on Cloudflare, a plain file in Docker, or Turso on Vercel and Netlify. It runs Carlo's group, on live BoardGameGeek data since BGG approved its application on 2026-11-09, and the public demo. Progress is in [STATUS.md](./STATUS.md).

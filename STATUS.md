@@ -2,7 +2,7 @@
 
 Last updated 2026-11-25. Everything under Done is built, and 681 tests pass. Two instances run on Cloudflare Pages: the public demo at `box-populi.pages.dev` (`INSTANCE_MODE=demo`) and Carlo's private instance for his own groups, whose address stays out of this public repo. Both run v0.12.0. **Migrations 0001 to 0027 are applied to production, so they're frozen: schema changes go in new migration files.**
 
-**Next up:** 0.12.0 is live on both instances (2026-11-25) with items 70 (away members, D86) and 71 (teams, D87). The private instance's shelf hasn't been opened signed in since 0.10.0: open it, then delete the exports outside the repo, the two taken before 0025 and, once 0.12.0 checks out, the two taken before 0026. Testers' question about a night's Here button (session log, 2026-11-21) waits on Carlo; a "Stayed home?" toggle was suggested, not built. Next, a plan for the ranks-file search index; item 46 (moving a group between instances, D68) is low priority. Passkeys and the two-ended complexity range are off the list, and the catalog CSV export went back to the PRD's list (Carlo, 2026-11-11 and 2026-11-12). The PRD's "Planned or possible" list also has filling in details with an AI chatbot (a maybe).
+**Next up:** 0.12.0 is live on both instances (2026-11-25) with items 70 (away members, D86) and 71 (teams, D87). The private instance's shelf hasn't been opened signed in since 0.10.0: open it, then delete the two exports taken before 0026, which sit outside the repo (the two from before 0025 were deleted 2026-11-25). Testers' question about a night's Here button (session log, 2026-11-21) waits on Carlo; a "Stayed home?" toggle was suggested, not built. Next, a plan for the ranks-file search index; item 46 (moving a group between instances, D68) is low priority. Passkeys and the two-ended complexity range are off the list, and the catalog CSV export went back to the PRD's list (Carlo, 2026-11-11 and 2026-11-12). The PRD's "Planned or possible" list also has filling in details with an AI chatbot (a maybe).
 
 Agents: tick items as they're done, add a line to the session log at the bottom, and move assumptions to "Verified" with a date and source when you confirm them.
 
@@ -165,3 +165,4 @@ None open.
 ## Session log
 
 Entries since the last release; older ones are in [docs/history/session-log.md](./docs/history/session-log.md).
+- 2026-11-25: README "Can I ask for a feature?" (Carlo, before announcing the app on Threads): a side project built for his own group, bug reports welcome, ask in an issue before a pull request, fork freely under MIT.
