@@ -4,6 +4,10 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
+## 0.12.1 (2026-11-25)
+
+**Upgrading:** no migrations and no new settings, so no backup is needed: pull and deploy. No demo reseed.
+
 - The plays page shows the newest 25 plays at a time, down from 100, and "Show older" brings the rest. It reads about a quarter of the database rows it did.
 - On Cloudflare, a demo group's pages are kept by each Cloudflare data centre for five minutes and served to signed-out visitors without reading the database, so a rush of visitors to the demo no longer uses up the account's daily D1 reads. After a reseed the demo can be up to five minutes behind. Signed-in visitors, and anyone who picked their own theme, always get a fresh page.
 
