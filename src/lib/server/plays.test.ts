@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './testing/d1.ts';
-import { deleteGroupStatements, deletePersonStatements, one, readAll, run } from './db.ts';
-import { deletePlay, loadPlays, parsePlayForm, playOutcomesRead, playsPageRead, playsRead, playRules, savePlay, setCoopRules, setPodiumPoints, playYearsRead, standingsRead, cachedStandingsRead, standingsFor, cachedOutcomesRead, outcomesFor, type Actor } from './plays.ts';
+import { all, deleteGroupStatements, deletePersonStatements, one, readAll, run } from './db.ts';
+import { deletePlay, loadPlays, parsePlayForm, playOutcomesRead, playsPageRead, playsRead, playRules, savePlay, setCoopRules, setPodiumPoints, setPointsByComplexity, playYearsRead, standingsRead, cachedStandingsRead, standingsFor, cachedOutcomesRead, outcomesFor, LEVEL_OR_ONE, type Actor } from './plays.ts';
+import { complexityLevel } from '#lib/catalog/buckets.ts';
 import { assembleNights, nightReads } from './nights.ts';
 import { loadCatalog } from './catalog.ts';
 import {
@@ -15,6 +16,7 @@ import {
 	placesFromScores,
 	playPoints,
 	playsCsv,
+	seatPoints,
 	standings,
 	standingsFromCounts,
 	DEFAULT_PLAY_RULES,
@@ -103,6 +105,37 @@ describe('play rules', () => {
 		const coop = plays.slice(3);
 		expect(standings(coop, { ...DEFAULT_PLAY_RULES, coopWinPoints: 2, coopWinsCount: false }, new Set(['ada']))).toEqual([{ userId: 'ada', points: 2, wins: 0, plays: 2 }]);
 		expect(standings(coop, { ...DEFAULT_PLAY_RULES, coopWinPoints: 0, coopWinsCount: false }, new Set(['ada']))).toEqual([{ userId: 'ada', points: 0, wins: 0, plays: 2 }]);
+	});
+
+	it('multiplies a play’s points by its game’s level only when the group says so, a game with none by 1 (D89)', () => {
+		const on = { ...DEFAULT_PLAY_RULES, byComplexity: true };
+		const podium = { players: [p('ada', 1), p('bo', 2), p('cy', 3)] };
+		expect(seatPoints({ ...podium, coop: null, level: 4 }, DEFAULT_PLAY_RULES)).toEqual([3, 2, 0]);
+		expect(seatPoints({ ...podium, coop: null, level: 4 }, on)).toEqual([12, 8, 0]);
+		expect(seatPoints({ ...podium, coop: null, level: null }, on)).toEqual([3, 2, 0]);
+		expect(seatPoints({ ...podium, coop: null }, on)).toEqual([3, 2, 0]);
+		expect(seatPoints({ coop: 'won', players: [p('ada', null), p('bo', null)], level: 2 }, on)).toEqual([2, 2]);
+		expect(seatPoints({ coop: 'lost', players: [p('ada', null)], level: 5 }, on)).toEqual([0]);
+		// Wins and plays don't change.
+		const plays = [play({ level: 3, players: [p('ada', 1), p('bo', 2), p('cy', 3)] })];
+		expect(standings(plays, on, new Set(['ada', 'bo']))).toEqual([
+			{ userId: 'ada', points: 9, wins: 1, plays: 1 },
+			{ userId: 'bo', points: 6, wins: 0, plays: 1 }
+		]);
+		// The export's points are the leaderboard's.
+		const csv = playsCsv(plays, on, (id) => id);
+		expect(csv.slice(1).trim().split('\r\n')[1]).toBe('2026-11-07,,,Alpha,typed in,,p,ada,member,1,,yes,,9,');
+	});
+
+	it('reads a weight’s level the same in code and in SQL, the weight rounded to the nearest whole number (D89)', async () => {
+		const db = createTestDb();
+		const weights = [null, 1, 1.25, 1.49, 1.5, 2.31, 2.49, 2.5, 3.49, 3.5, 3.6, 4.49, 4.5, 5];
+		expect(weights.map(complexityLevel)).toEqual([null, 1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 4, 5, 5]);
+		for (const w of weights) {
+			const row = await one<{ level: number }>(db, `SELECT ${LEVEL_OR_ONE('?1')} AS level`, w);
+			expect(row!.level, String(w)).toBe(complexityLevel(w) ?? 1);
+			if (w != null) expect(complexityLevel(w)).toBe(Math.round(w));
+		}
 	});
 
 	it('exports one CSV row per player, defusing formulas in typed text and quoting', () => {
@@ -392,13 +425,30 @@ describe('saving plays', () => {
 	});
 
 	it('keeps the co-op rule per group, set by co-admins (D71)', async () => {
-		expect(await playRules(db, 'g1', [3, 2, 1])).toEqual({ points: [3, 2, 1], coopWinPoints: 1, coopWinsCount: true });
+		expect(await playRules(db, 'g1', [3, 2, 1])).toEqual({ points: [3, 2, 1], coopWinPoints: 1, coopWinsCount: true, byComplexity: false });
 		expect((await setCoopRules(db, 'g1', bo, { points: '2', counts: null })).ok).toBe(false);
 		for (const bad of ['', '-1', '101', '1.5', 'two', null]) expect((await setCoopRules(db, 'g1', cy, { points: bad, counts: 'on' })).ok).toBe(false);
 		expect((await setCoopRules(db, 'g1', cy, { points: ' 2 ', counts: null })).ok).toBe(true);
 		expect(await playRules(db, 'g1', [3, 2, 1])).toMatchObject({ coopWinPoints: 2, coopWinsCount: false });
 		expect((await setCoopRules(db, 'g1', cy, { points: '0', counts: 'on' })).ok).toBe(true);
 		expect(await playRules(db, 'g1', [3, 2, 1])).toMatchObject({ coopWinPoints: 0, coopWinsCount: true });
+	});
+
+	it('keeps whether points follow complexity per group, set by co-admins, off to start (D89)', async () => {
+		expect((await playRules(db, 'g1', [3, 2, 1])).byComplexity).toBe(false);
+		expect((await setPointsByComplexity(db, 'g1', bo, 'on')).ok).toBe(false);
+		expect((await playRules(db, 'g1', [3, 2, 1])).byComplexity).toBe(false);
+		expect((await setPointsByComplexity(db, 'g1', cy, 'on')).ok).toBe(true);
+		expect((await playRules(db, 'g1', [3, 2, 1])).byComplexity).toBe(true);
+		expect((await setPointsByComplexity(db, 'g1', cy, null)).ok).toBe(true);
+		expect((await playRules(db, 'g1', [3, 2, 1])).byComplexity).toBe(false);
+	});
+
+	it('gives each play its game’s complexity level (D89)', async () => {
+		await savePlay(db, 'g1', ada, 1, input([{ userId: 'ada', guestName: null, place: 1, score: null }, { userId: 'bo', guestName: null, place: 2, score: null }]));
+		expect((await loadPlays(db, 'g1'))[0].level).toBeNull();
+		await run(db, 'UPDATE games SET weight = 3.6 WHERE id = 1');
+		expect((await loadPlays(db, 'g1'))[0].level).toBe(4);
 	});
 
 	it('clears plays with their group, and a deleted person’s results from the rest', async () => {
@@ -467,13 +517,78 @@ describe('the leaderboard counted in SQL (D70)', () => {
 		];
 		for (const points of [[3, 2, 1], [5, 1], [10, 6, 4, 2, 1], [0]]) {
 			for (const coop of coopRules) {
-				const rules = { points, ...coop };
+				const rules = { points, ...coop, byComplexity: false };
 				for (const since of [undefined, '2026-01-01', '2026-03-01']) {
 					const r = await readAll(db, { counts: standingsRead(db, 'g1', since), plays: playOutcomesRead(db, 'g1', { since }) });
 					expect(standingsFromCounts(r.counts, rules)).toEqual(standings(r.plays, rules, members));
 				}
 			}
 		}
+	});
+
+	it('multiplies every point by the game’s level when the group’s points follow complexity, as the rules in plain code do (D89)', async () => {
+		const members = new Set(['ada', 'bo', 'cy', 'dee']);
+		// A game at each kind of level: none (1), rounded down (2.31 is 2), rounded up (3.6 is 4), a member's level (5).
+		await run(db, `INSERT INTO games (id, name, search_text, weight) VALUES (2, 'Beta', 'beta', 2.31), (3, 'Gamma', 'gamma', 3.6), (4, 'Delta', 'delta', 5)`);
+		await run(db, `UPDATE plays SET game_id = 2 WHERE id IN ('p1', 'p4')`);
+		await run(db, `UPDATE plays SET game_id = 3 WHERE id IN ('p2', 'p7')`);
+		await run(db, `UPDATE plays SET game_id = 4 WHERE id IN ('p3', 'p9')`);
+		const weights = new Map((await all<{ id: string; weight: number | null }>(db, 'SELECT p.id, g.weight FROM plays p JOIN games g ON g.id = p.game_id')).map((r) => [r.id, r.weight]));
+		const counted = async (since?: string) => {
+			const r = await readAll(db, { counts: standingsRead(db, 'g1', since), plays: playOutcomesRead(db, 'g1', { since }) });
+			return { counts: r.counts, plays: r.plays.map((play) => ({ ...play, level: complexityLevel(weights.get(play.id) ?? null) })) };
+		};
+		for (const byComplexity of [false, true]) {
+			await run(db, `UPDATE groups SET points_by_complexity = ${byComplexity ? 1 : 0} WHERE id = 'g1'`);
+			for (const points of [[3, 2, 1], [10, 6, 4, 2, 1]]) {
+				for (const coop of [{ coopWinPoints: 1, coopWinsCount: true }, { coopWinPoints: 7, coopWinsCount: false }]) {
+					const rules = { points, ...coop, byComplexity };
+					for (const since of [undefined, '2026-03-01']) {
+						const r = await counted(since);
+						expect(standingsFromCounts(r.counts, rules)).toEqual(standings(r.plays, rules, members));
+					}
+				}
+			}
+		}
+		// Ada with it on, all time: 1st in p1 (×2) and p2 (×4), a co-op win in p4 (×2), 2nd in p5 (unplaced
+		// seat, nothing), 4th of 7 in p7 (nothing past 3rd). Wins and plays as before.
+		const r = await counted();
+		const rules = { ...DEFAULT_PLAY_RULES, byComplexity: true };
+		expect(standingsFromCounts(r.counts, rules).find((s) => s.userId === 'ada')).toEqual({ userId: 'ada', points: 3 * 2 + 3 * 4 + 1 * 2, wins: 3, plays: 5 });
+	});
+
+	it('counts again when the setting changes, or a played game’s level does, in groups that have it on (D89)', async () => {
+		await run(db, `INSERT INTO groups (id, name, code, created_at) VALUES ('g2', 'H', 'BBBBB', 0)`);
+		await run(db, `INSERT INTO plays (id, group_id, game_id, played_on, created_at) VALUES ('q1', 'g2', 1, '2026-01-01', 1)`);
+		const version = async (group: string) => (await one<{ v: number }>(db, 'SELECT standings_version AS v FROM groups WHERE id = ?1', group))!.v;
+		const kept = async () => (await readAll(db, { c: cachedStandingsRead(db, 'g1') })).c;
+		await standingsFor(db, await kept());
+		expect((await kept()).value).not.toBeNull();
+
+		// Turned on: counted again, now with levels; saving it unchanged leaves the kept counts alone.
+		await setPointsByComplexity(db, 'g1', { id: 'ada', role: 'owner' }, 'on');
+		expect((await kept()).value).toBeNull();
+		await standingsFor(db, await kept());
+		await setPointsByComplexity(db, 'g1', { id: 'ada', role: 'owner' }, 'on');
+		expect((await kept()).value).not.toBeNull();
+
+		const before = { g1: await version('g1'), g2: await version('g2') };
+		// Within a level (unknown and 1.4 both count as 1; 1.6 and 2.4 are both 2): nothing moves.
+		await run(db, 'UPDATE games SET weight = 1.4 WHERE id = 1');
+		expect(await version('g1')).toBe(before.g1);
+		await run(db, 'UPDATE games SET weight = 1.6 WHERE id = 1');
+		const crossed = await version('g1');
+		expect(crossed).toBe(before.g1 + 1);
+		await run(db, 'UPDATE games SET weight = 2.4 WHERE id = 1');
+		expect(await version('g1')).toBe(crossed);
+		// Across a line, as BGG's refresh might: g1 counts again; g2 played it too but has the setting off.
+		await run(db, 'UPDATE games SET weight = 2.5 WHERE id = 1');
+		expect(await version('g1')).toBe(crossed + 1);
+		expect(await version('g2')).toBe(before.g2);
+		// A game nobody in g1 played moves nothing.
+		await run(db, `INSERT INTO games (id, name, search_text, weight) VALUES (9, 'Unplayed', 'unplayed', 1)`);
+		await run(db, 'UPDATE games SET weight = 5 WHERE id = 9');
+		expect(await version('g1')).toBe(crossed + 1);
 	});
 
 	it('stops at a past year’s end, and says which years have plays (STATUS item 45)', async () => {

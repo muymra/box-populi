@@ -9,6 +9,7 @@
 	import PlayList from '#lib/components/PlayList.svelte';
 	import { playerColor } from '#lib/catalog/colors.ts';
 	import { formatPoints, ordinal } from '#lib/plays.ts';
+	import { BUCKET_LABELS, BUCKET_WEIGHTS, WEIGHT_BUCKETS } from '#lib/catalog/buckets.ts';
 	import { getTable } from '#lib/table/table.svelte.ts';
 	import type { PageProps } from './$types';
 
@@ -26,6 +27,8 @@
 		if (n > 0) return `A co-op win ${scores}, but doesn’t count as a win.`;
 		return 'A co-op win scores nothing and doesn’t count as a win.';
 	});
+	/** Each complexity level's multiplier when points follow complexity (D89): "Light ×1, …, Heavy ×5". */
+	const levelsLine = WEIGHT_BUCKETS.map((b) => `${BUCKET_LABELS[b]} ×${BUCKET_WEIGHTS[b]}`).join(', ');
 	const podium = $derived(data.standings.slice(0, 3));
 	const rest = $derived(data.standings.slice(3));
 	/** Second, first, third, left to right, as a podium stands; places that don't exist are left out. */
@@ -103,6 +106,7 @@
 					</tbody>
 				</table>
 			{/if}
+			{#if data.rules.byComplexity}<p class="muted small board-note">Points are multiplied by each game’s complexity, from Light ×1 to Heavy ×5.</p>{/if}
 		{:else}
 			<p class="muted">Nobody has scored {data.period === 'all' ? 'yet' : `in ${data.periodLabel}`}. Log a play from a game’s page, or from a game Play tonight pulls.</p>
 		{/if}
@@ -197,6 +201,31 @@
 					</details>
 					{#if form?.coopSaved}<p class="banner" {@attach announce}>Saved. The leaderboard uses it for every co-op play.</p>{/if}
 					{#if form?.coopError}<p class="banner error" role="alert">{form.coopError}</p>{/if}
+				{/if}
+			</div>
+		</div>
+		<div class="form-row">
+			<div class="form-label">
+				<span class="form-q">Complexity</span>
+				<span class="hint">Whether heavier games score more.</span>
+			</div>
+			<div class="form-body">
+				{#if data.rules.byComplexity}
+					<p>Points are multiplied by the game’s complexity: {levelsLine}. A game with no complexity counts as Light. Co-op wins are multiplied too.</p>
+				{:else}
+					<p>Every game scores the same, light or heavy.</p>
+				{/if}
+				{#if data.canSetPoints}
+					<details class="points" open={!!form?.complexityError}>
+						<summary class="link-button">Change the complexity rule…</summary>
+						<form method="POST" action="?/complexity" use:enhance={() => async ({ update }) => update({ reset: false })} class="inline complexity">
+							<label class="check"><input type="checkbox" name="byComplexity" checked={data.rules.byComplexity} /> Multiply points by the game’s complexity</label>
+							<button class="btn small">Save</button>
+						</form>
+						<p class="hint">Light ×1 up to Heavy ×5, the level on each game’s page. Changing it rescores every play.</p>
+					</details>
+					{#if form?.complexitySaved}<p class="banner" {@attach announce}>Saved. The leaderboard uses it for every play.</p>{/if}
+					{#if form?.complexityError}<p class="banner error" role="alert">{form.complexityError}</p>{/if}
 				{/if}
 			</div>
 		</div>
@@ -468,6 +497,9 @@
 	.form-body p {
 		margin: 0;
 	}
+	.board-note {
+		margin-top: var(--s-3);
+	}
 	.points summary {
 		cursor: pointer;
 	}
@@ -480,7 +512,8 @@
 	.points .field {
 		width: 10rem;
 	}
-	.points .coop {
+	.points .coop,
+	.points .complexity {
 		flex-wrap: wrap;
 		align-items: center;
 		max-width: none;

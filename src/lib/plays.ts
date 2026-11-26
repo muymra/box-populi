@@ -20,6 +20,8 @@ export type Play = {
 	players: PlayPlayer[];
 	/** The game night it belongs to, if any (D38). */
 	night?: { id: string; name: string } | null;
+	/** Its game's complexity level, 1 to 5 (`complexityLevel`), null when it has none: what its points are multiplied by when the group's points follow complexity (D89). */
+	level?: number | null;
 };
 
 /**
@@ -67,21 +69,30 @@ export function playPoints(places: readonly number[], scheme: readonly number[])
 /**
  * A group's scoring (D37, D71): its podium points, what a co-op win gives each player at the table
  * (a fixed number, not scaled by the podium points), and whether a co-op win counts as a win. A co-op
- * loss gives nothing.
+ * loss gives nothing. `byComplexity`: every point a play gives is multiplied by its game's level (D89).
  */
-export type PlayRules = { points: readonly number[]; coopWinPoints: number; coopWinsCount: boolean };
+export type PlayRules = { points: readonly number[]; coopWinPoints: number; coopWinsCount: boolean; byComplexity: boolean };
 
 export const DEFAULT_COOP_WIN_POINTS = 1;
-export const DEFAULT_PLAY_RULES: PlayRules = { points: DEFAULT_POINTS, coopWinPoints: DEFAULT_COOP_WIN_POINTS, coopWinsCount: true };
+export const DEFAULT_PLAY_RULES: PlayRules = { points: DEFAULT_POINTS, coopWinPoints: DEFAULT_COOP_WIN_POINTS, coopWinsCount: true, byComplexity: false };
+
+/** What a play's points are multiplied by (D89): its game's level when the group's points follow complexity, 1 for a game with none, else 1. */
+export function pointsMultiplier(level: number | null | undefined, rules: PlayRules): number {
+	return rules.byComplexity ? (level ?? 1) : 1;
+}
+
+/** A play as the points read it: who finished where, and its game's level (D89). */
+export type ScoredPlay = Pick<PlayOutcome, 'coop' | 'players'> & { level?: number | null };
 
 /**
  * Each seat's points in one play: podium points when it's competitive and everyone has a place, the
- * group's co-op points each for a co-op win, and nothing otherwise.
+ * group's co-op points each for a co-op win, and nothing otherwise; times `pointsMultiplier`.
  */
-export function seatPoints(play: Pick<PlayOutcome, 'coop' | 'players'>, rules: PlayRules): number[] {
-	if (play.coop === 'won') return play.players.map(() => rules.coopWinPoints);
+export function seatPoints(play: ScoredPlay, rules: PlayRules): number[] {
+	const times = pointsMultiplier(play.level, rules);
+	if (play.coop === 'won') return play.players.map(() => rules.coopWinPoints * times);
 	const places = play.players.map((p) => p.place);
-	return play.coop == null && places.every((p) => p != null) ? playPoints(places as number[], rules.points) : play.players.map(() => 0);
+	return play.coop == null && places.every((p) => p != null) ? playPoints(places as number[], rules.points).map((n) => n * times) : play.players.map(() => 0);
 }
 
 /** A win: first place in a competitive play where someone finished below. Ties for first share it. */
@@ -121,7 +132,7 @@ export type Standing = { userId: string; points: number; wins: number; plays: nu
  * the group's rules say (`seatPoints`, `seatWins`). The pages count in SQL instead (`standingsRead`, then `standingsFromCounts`); this is the rule in plain code, which the
  * tests hold the SQL to.
  */
-export function standings(plays: readonly Pick<PlayOutcome, 'coop' | 'players'>[], rules: PlayRules, memberIds: ReadonlySet<string>): Standing[] {
+export function standings(plays: readonly ScoredPlay[], rules: PlayRules, memberIds: ReadonlySet<string>): Standing[] {
 	const table = new Map<string, Standing>();
 	for (const play of plays) {
 		const points = seatPoints(play, rules);
@@ -142,16 +153,19 @@ export function standings(plays: readonly Pick<PlayOutcome, 'coop' | 'players'>[
  * One member's numbers for the leaderboard, counted in SQL (`standingsRead`, D70): their plays,
  * competitive wins, co-op wins, and how often they finished 1st to 5th in a play that scores (competitive, everyone
  * placed, not last).
+ * When the group's points follow complexity (D89), each play in `scored` and `coopScored` counts its
+ * game's level times instead of once; the SQL reads the setting itself, and turning it on or off counts
+ * again (migration 0028). `coopScored` is missing from counts kept before it, which never counted levels.
  * `latest` orders exact ties: whoever played most recently first, as `standings()` meets them.
  */
-export type StandingCounts = { userId: string; plays: number; wins: number; coopWins: number; scored: readonly number[]; latest: string };
+export type StandingCounts = { userId: string; plays: number; wins: number; coopWins: number; coopScored?: number; scored: readonly number[]; latest: string };
 
 /** The leaderboard from `StandingCounts`, by the same rules and order as `standings()`. */
 export function standingsFromCounts(rows: readonly StandingCounts[], rules: PlayRules): Standing[] {
 	return rows
 		.map((r) => ({
 			userId: r.userId,
-			points: r.scored.reduce((sum, n, i) => sum + n * (rules.points[i] ?? 0), r.coopWins * rules.coopWinPoints),
+			points: r.scored.reduce((sum, n, i) => sum + n * (rules.points[i] ?? 0), (r.coopScored ?? r.coopWins) * rules.coopWinPoints),
 			wins: r.wins + (rules.coopWinsCount ? r.coopWins : 0),
 			plays: r.plays,
 			latest: r.latest

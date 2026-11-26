@@ -3,7 +3,7 @@
 import { fail, type RequestEvent } from '@sveltejs/kit';
 import { requireRole } from './authz.ts';
 import { getDb } from '#lib/server/platform.ts';
-import { deletePlay, parsePlayForm, savePlay, setCoopRules, setPodiumPoints } from './plays.ts';
+import { deletePlay, parsePlayForm, savePlay, setCoopRules, setPodiumPoints, setPointsByComplexity } from './plays.ts';
 import { nightOf } from '#lib/table/regulars.ts';
 
 type Event = RequestEvent<{ groupId: string }>;
@@ -54,4 +54,13 @@ export async function coopAction(event: Event) {
 	const form = await event.request.formData();
 	const result = await setCoopRules(db, event.params.groupId, { id: event.locals.user!.id, role: access.role }, { points: form.get('coopPoints'), counts: form.get('coopCounts') });
 	return result.ok ? { coopSaved: true } : fail(400, { coopError: result.error });
+}
+
+/** Whether points follow each game's complexity (D89); the same people as the points. */
+export async function complexityAction(event: Event) {
+	const db = getDb();
+	const access = await requireRole(event, db, event.params.groupId, 'admin');
+	const form = await event.request.formData();
+	const result = await setPointsByComplexity(db, event.params.groupId, { id: event.locals.user!.id, role: access.role }, form.get('byComplexity'));
+	return result.ok ? { complexitySaved: true } : fail(400, { complexityError: result.error });
 }

@@ -30,6 +30,15 @@ export function weightBucket(weight: number | null): WeightBucket | null {
 	return 'heavy';
 }
 
+/**
+ * A weight's level as its vote, 1 to 5 (`BUCKET_WEIGHTS`): the weight rounded to the nearest whole
+ * number, as `weightBucket` reads it. Null without a weight. Points that follow complexity use it (D89).
+ */
+export function complexityLevel(weight: number | null): number | null {
+	const bucket = weightBucket(weight);
+	return bucket && BUCKET_WEIGHTS[bucket];
+}
+
 /** BGG shows weight to two decimals, so the app does too: "2.31 / 5". */
 export function formatWeight(weight: number | null): string | null {
 	return weight == null ? null : `${weight.toFixed(2)} / 5`;

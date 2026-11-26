@@ -25,6 +25,7 @@ import {
 	type StandingCounts
 } from '#lib/plays.ts';
 import type { Role } from '#lib/catalog/types.ts';
+import { complexityLevel } from '#lib/catalog/buckets.ts';
 import { wholeNumberIn } from '#lib/numbers.ts';
 
 export type Actor = { id: string; role: Role };
@@ -316,11 +317,12 @@ export function playsRead(db: DB, groupId: string, q: PlayQuery = {}): Read<Stor
 		place: number | null;
 		score: number | null;
 		team: number | null;
+		weight: number | null;
 	};
 	return mapRead(
 		rowsOf<PlayRow>(
 			db,
-			`SELECT p.id, p.game_id, COALESCE(gc.name, g.name) AS game_name, g.bgg_id, g.source, g.is_manual, p.played_on, p.coop, p.lowest_wins, p.logged_by,
+			`SELECT p.id, p.game_id, COALESCE(gc.name, g.name) AS game_name, g.bgg_id, g.source, g.is_manual, g.weight, p.played_on, p.coop, p.lowest_wins, p.logged_by,
 			        p.night_id, n.name AS night_name,
 			        pp.user_id, pp.guest_name, pp.place, pp.score, pp.team
 			 FROM (SELECT * FROM plays WHERE ${where.join(' AND ')} ORDER BY played_on DESC, created_at DESC${limit}) p
@@ -348,6 +350,7 @@ export function playsRead(db: DB, groupId: string, q: PlayQuery = {}): Read<Stor
 						lowestWins: r.lowest_wins === 1,
 						loggedBy: r.logged_by,
 						night: r.night_id ? { id: r.night_id, name: r.night_name ?? '' } : null,
+						level: complexityLevel(r.weight),
 						players: []
 					};
 					plays.set(r.id, play);
@@ -393,32 +396,43 @@ export function playOutcomesRead(db: DB, groupId: string, q: { since?: string; w
 }
 
 /**
+ * `complexityLevel()` in SQL, with 1 for a game without a weight: what a play's points are multiplied by
+ * when its group's points follow complexity (D89). Migration 0028's trigger has the same CASE.
+ */
+export const LEVEL_OR_ONE = (weight: string) =>
+	`CASE WHEN ${weight} IS NULL OR ${weight} < 1.5 THEN 1 WHEN ${weight} < 2.5 THEN 2 WHEN ${weight} < 3.5 THEN 3 WHEN ${weight} < 4.5 THEN 4 ELSE 5 END`;
+
+/**
  * The leaderboard's numbers per member of the group, counted in SQL from every play since `since`
  * (D70): about 50 rows back however long the history, where reading every play's players cost a group
  * at the planned scale over 10ms of Worker CPU on "All time". `standingsFromCounts` applies the scheme.
  * A play scores when it's competitive and everyone has a place; a place scores unless it's the worst.
  * Co-op wins are counted apart (`coop_wins`), so `standingsFromCounts` can apply the group's rules to them.
+ * When the group's points follow complexity (D89), each play counts its game's level times in the place
+ * counts and `coop_scored`; with the setting off, `games` isn't read.
  */
 export function standingsRead(db: DB, groupId: string, since?: string, before?: string): Read<StandingCounts[]> {
-	type Row = { user_id: string; plays: number; wins: number; coop_wins: number; s1: number; s2: number; s3: number; s4: number; s5: number; latest: string };
-	const scores = (k: number) => `SUM(s.coop IS NULL AND s.unplaced = 0 AND s.place < s.worst AND s.place = ${k}) AS s${k}`;
+	type Row = { user_id: string; plays: number; wins: number; coop_wins: number; coop_scored: number; s1: number; s2: number; s3: number; s4: number; s5: number; latest: string };
+	const scores = (k: number) => `SUM((s.coop IS NULL AND s.unplaced = 0 AND s.place < s.worst AND s.place = ${k}) * s.times) AS s${k}`;
 	return mapRead(
 		rowsOf<Row>(
 			db,
 			// Each play's worst place and unplaced seats first, then its seats: at the planned scale this reads
 			// about 53,000 rows for "All time", where window functions read 64,000.
 			`WITH per AS (
-			   SELECT p.id, p.coop, p.played_on, p.created_at, MAX(pp.place) AS worst, COUNT(*) - COUNT(pp.place) AS unplaced
+			   SELECT p.id, p.coop, p.played_on, p.created_at, MAX(pp.place) AS worst, COUNT(*) - COUNT(pp.place) AS unplaced,
+			          CASE WHEN (SELECT points_by_complexity FROM groups WHERE id = ?1) = 1
+			               THEN COALESCE((SELECT ${LEVEL_OR_ONE('weight')} FROM games WHERE id = p.game_id), 1) ELSE 1 END AS times
 			   FROM plays p CROSS JOIN play_players pp
 			   WHERE p.group_id = ?1 AND p.played_on >= ?2 AND p.played_on < ?3 AND pp.play_id = p.id
 			   GROUP BY p.id
 			 ),
 			 seats AS (
-			   SELECT per.coop, per.played_on, per.created_at, per.worst, per.unplaced, pp.user_id, pp.place
+			   SELECT per.coop, per.played_on, per.created_at, per.worst, per.unplaced, per.times, pp.user_id, pp.place
 			   FROM per CROSS JOIN play_players pp WHERE pp.play_id = per.id
 			 )
 			 SELECT s.user_id, COUNT(*) AS plays, SUM(s.coop IS NULL AND s.place = 1 AND s.worst > 1) AS wins,
-			        SUM(s.coop IS 'won') AS coop_wins,
+			        SUM(s.coop IS 'won') AS coop_wins, SUM((s.coop IS 'won') * s.times) AS coop_scored,
 			        ${[1, 2, 3, 4, 5].map(scores).join(', ')},
 			        MAX(s.played_on || printf('%016d', s.created_at)) AS latest
 			 FROM seats s
@@ -428,7 +442,7 @@ export function standingsRead(db: DB, groupId: string, since?: string, before?: 
 			since ?? FIRST_DAY,
 			before ?? LAST_DAY
 		),
-		(rows) => rows.map((r) => ({ userId: r.user_id, plays: r.plays, wins: r.wins ?? 0, coopWins: r.coop_wins ?? 0, scored: [r.s1 ?? 0, r.s2 ?? 0, r.s3 ?? 0, r.s4 ?? 0, r.s5 ?? 0], latest: r.latest }))
+		(rows) => rows.map((r) => ({ userId: r.user_id, plays: r.plays, wins: r.wins ?? 0, coopWins: r.coop_wins ?? 0, coopScored: r.coop_scored ?? 0, scored: [r.s1 ?? 0, r.s2 ?? 0, r.s3 ?? 0, r.s4 ?? 0, r.s5 ?? 0], latest: r.latest }))
 	);
 }
 
@@ -561,15 +575,16 @@ export async function playRules(db: DB, groupId: string, defaultPoints: readonly
 /** playRules as a read, to share a round trip with others (`readAll`, D59). */
 export function playRulesRead(db: DB, groupId: string, defaultPoints: readonly number[]): Read<PlayRules> {
 	return mapRead(
-		rowsOf<{ podium_points: string | null; coop_win_points: number; coop_wins_count: number }>(
+		rowsOf<{ podium_points: string | null; coop_win_points: number; coop_wins_count: number; points_by_complexity: number }>(
 			db,
-			'SELECT podium_points, coop_win_points, coop_wins_count FROM groups WHERE id = ?1',
+			'SELECT podium_points, coop_win_points, coop_wins_count, points_by_complexity FROM groups WHERE id = ?1',
 			groupId
 		),
 		(rows) => ({
 			points: parsePoints(rows[0]?.podium_points ?? null) ?? defaultPoints,
 			coopWinPoints: rows[0]?.coop_win_points ?? DEFAULT_COOP_WIN_POINTS,
-			coopWinsCount: (rows[0]?.coop_wins_count ?? 1) === 1
+			coopWinsCount: (rows[0]?.coop_wins_count ?? 1) === 1,
+			byComplexity: rows[0]?.points_by_complexity === 1
 		})
 	);
 }
@@ -588,5 +603,12 @@ export async function setCoopRules(db: DB, groupId: string, actor: Actor, form: 
 	const points = wholeNumberIn(form.points, 0, MAX_POINTS);
 	if (points == null) return { ok: false, error: `Give a whole number from 0 to ${MAX_POINTS} for a co-op win.` };
 	await stmt(db, 'UPDATE groups SET coop_win_points = ?1, coop_wins_count = ?2 WHERE id = ?3', points, form.counts === 'on' ? 1 : 0, groupId).run();
+	return { ok: true, value: undefined };
+}
+
+/** Whether every point a play gives is multiplied by its game's level (D89). Same people as the points; a trigger counts the leaderboard again. */
+export async function setPointsByComplexity(db: DB, groupId: string, actor: Actor, on: unknown): Promise<Result> {
+	if (!can(actor.role, 'set_points')) return { ok: false, error: 'Only co-admins and the owner can change the points.' };
+	await stmt(db, 'UPDATE groups SET points_by_complexity = ?1 WHERE id = ?2', on === 'on' ? 1 : 0, groupId).run();
 	return { ok: true, value: undefined };
 }

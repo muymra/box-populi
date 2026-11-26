@@ -3,7 +3,7 @@ import { membersRead } from '#lib/server/catalog.ts';
 import { can } from '#lib/server/permissions.ts';
 import { cachedStandingsRead, canChangePlay, playYearsRead, playsPageRead, playsRead, playRulesRead, standingsFor } from '#lib/server/plays.ts';
 import { beforeParam, lastDayOf, parsePeriod } from '#lib/server/log-pages.ts';
-import { coopAction, deletePlayAction, pointsAction, savePlayAction } from '#lib/server/play-actions.ts';
+import { complexityAction, coopAction, deletePlayAction, pointsAction, savePlayAction } from '#lib/server/play-actions.ts';
 import { getDb } from '#lib/server/platform.ts';
 import { standingsFromCounts } from '#lib/plays.ts';
 import { assembleNights, nightListRead, nightReads } from '#lib/server/nights.ts';
@@ -104,5 +104,6 @@ export const actions: Actions = {
 	editPlay: savePlayAction,
 	deletePlay: deletePlayAction,
 	points: pointsAction,
-	coop: coopAction
+	coop: coopAction,
+	complexity: complexityAction
 };

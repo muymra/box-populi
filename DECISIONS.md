@@ -707,3 +707,19 @@ Before announcing the app on Threads and Reddit, Carlo asked whether the traffic
 **Why:** the demo is read-only and the same for every signed-out visitor, so after the first visitor in a data centre each five minutes its pages read nothing. The plays page was the costliest page a visitor opens, about 1,200 rows on the demo's 140 plays; at 25 it reads about a quarter of that, on every instance.
 
 **Trade-offs accepted:** demo pages can be up to five minutes behind a reseed. Signed-in visitors and anyone with their own theme pay full price. Each data centre keeps its own copies, so the first visitor in each location renders. A crawler walking many distinct addresses (`?before=`) misses every time. The demo still shares the account's limits with any other instance on it; only a separate account isolates it. The last-group cookie (D76) reaches only visitors whose page was a miss. A group with a long history clicks "Show older" more often. Cloudflare's docs say Pages Functions on `*.pages.dev` can use the cache; one forum report from 2023 says it kept nothing after deploy, so the first deploy checks `x-box-cache` on the live demo.
+
+## D89. Points can follow a game's complexity (2026-11-26)
+
+Carlo's idea: leaderboard points by a game's weight. He took the five defaults offered ("build with your recommendations"):
+
+1. **A group setting, off to start**, on the plays page beside the podium points and the co-op rule, set by the same people (`set_points`). Turning it on or off rescores every play, as changing the points does.
+2. **The multiplier is the game's complexity level** (D62), 1 to 5: its weight rounded to the nearest whole number, the level its page shows. Carlo asked about always rounding down; it stayed at nearest, because rounding down would score a 3.6 game labelled "Medium heavy" at ×3, while typed-in games, stored as whole levels, wouldn't move at all.
+3. **A game with no complexity counts as 1**, so no bonus.
+4. **Co-op wins scale too**: everything a play scores is multiplied. Wins and plays are counted as before.
+5. **The current level counts.** Nothing is stored per play, so a level changing rescores that game's plays in every group with the setting on that played it.
+
+**Why:** without it a play scores the same whatever the game, so points reward playing often (D37): four plays of a light game earn about four times what one long game does. The level keeps points whole, treats BGG and typed-in games alike, and keeps BGG's weight out of the plays export, whose `points` column reveals at most Box Populi's own label.
+
+**Trade-offs accepted:** heavy games tend to have small tables, which already score more per seat, so the setting leans further toward them. D54 shares a typed-in game's details across groups, so a member who raises its level raises everyone's points for it in each group with the setting on. BGG's 30-day refresh (D80) rescores old plays when a weight crosses a level line. Counting the leaderboard again (D82) reads one row more for the setting, and with it on one `games` row per play in the period: on the demo's 140 plays, 2,307 rows before, 2,308 with it off, 2,448 with it on (measured locally, 2026-11-26).
+
+**Revisit if:** a group wants a gentler curve (the level plus one, ×2 to ×6, was the flatter option offered) or its own multiplier per level.
