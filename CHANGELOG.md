@@ -4,7 +4,11 @@ Box Populi uses semantic versioning and stays at 0.x until Carlo calls a 1.0 (DE
 
 ## Unreleased
 
-- Points can follow a game's complexity. On the plays page, under Points and export, co-admins and the owner can turn on "Multiply points by the game's complexity": every point a play gives, co-op wins included, is multiplied by its game's level, Light ×1 up to Heavy ×5 (the level on the game's page). A game with no complexity counts as Light. It's off unless a group turns it on, and turning it on or off rescores every play. Wins and plays don't change. Needs migration `0028_points_by_complexity.sql`.
+## 0.13.0 (2026-11-26)
+
+**Upgrading:** one migration, `0028_points_by_complexity.sql` (a column on `groups` and two triggers). On Cloudflare, note a Time Travel bookmark and export a backup first, then apply it before deploying (SELF_HOSTING.md "Upgrading"). Docker, Vercel and Netlify apply it on their first request. No new settings, and no demo reseed.
+
+- Points can follow a game's complexity. On the plays page, under Points and export, co-admins and the owner can turn on "Multiply points by the game's complexity": every point a play gives, co-op wins included, is multiplied by its game's level, Light ×1 up to Heavy ×5 (the level on the game's page). A game with no complexity counts as Light. It's off unless a group turns it on, and turning it on or off rescores every play. Wins and plays don't change.
 
 ## 0.12.1 (2026-11-25)
 
